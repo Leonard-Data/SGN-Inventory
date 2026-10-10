@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-10-10T11:17:44.379Z",
+  "checkedAt": "2026-10-10T13:51:56.417Z",
   "environment": "authorized hosted development Supabase / local real Next.js application",
   "projectRef": "tneucwzcrzteeixvttpu",
   "observations": [
@@ -48,10 +48,10 @@
       "name": "real archived reviewer detail surface without physical-visit creation"
     }
   ],
-  "recoveryEmailDelivery": "not executed: user paused acceptance until an accessible mailbox is available",
+  "recoveryEmailDelivery": "not covered by this automated run; see docs/testing.md for separately recorded human-coordinated recovery evidence",
   "limitations": [
     "Not production/deployed application acceptance",
-    "Real request-to-mailbox-to-callback password recovery and recovery for denied identities remain unexecuted",
+    "This automated run does not exercise real delivered-mail callbacks or password recovery for denied identities",
     "Broader MVP/Storage/import/rental/concurrent reservation gates are out of scope"
   ]
 }

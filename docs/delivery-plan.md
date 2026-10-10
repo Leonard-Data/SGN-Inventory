@@ -4,7 +4,7 @@
 
 Replace the AppSheet/Google Sheets inventory profiled on 10 October 2026 with one Next.js App Router/TypeScript application, one Supabase Postgres database and Vercel hosting. Earlier Reflex/Cloudflare proposals are superseded. The company shares inventory and internal contacts; managers review company-wide, without branch/team isolation. Roles are sales, staff, manager and admin. See the domain glossary in [CONTEXT.md](../CONTEXT.md), the broader [architecture](architecture.md), [workbook findings](workbook-mapping.md) and [database contract](database-contract.md).
 
-VI/EN localization and rental agreement/month/manual receipt/refund handling were made mandatory on 10 October 2026. They remain broader MVP requirements even where the first employee-access slice excludes their management screens. The scoped employee-access UI and user-session data path are implemented; reviewed promotion ETL, broader workflow UI and full staging acceptance remain planned. Real recovery-email delivery acceptance is explicitly paused pending a test mailbox.
+VI/EN localization and rental agreement/month/manual receipt/refund handling were made mandatory on 10 October 2026. They remain broader MVP requirements even where the first employee-access slice excludes their management screens. The scoped employee-access UI and user-session data path are implemented; reviewed promotion ETL, broader workflow UI and full staging acceptance remain planned. Active-user delivered email/password recovery has passed; inactive/unlinked delivered recovery remains pending.
 
 GitHub publication of the initial package to <https://github.com/Leonard-Data/SGN-Inventory> was approved on 10 October 2026. The remote now contains `main` and the connected account has repository write access. Engineering setup does not itself authorize Supabase/Vercel provisioning, customer-data import or cloud deployment. Raw workbooks, customer records and secrets remain excluded.
 
@@ -90,7 +90,7 @@ History reads must project allowlisted property business fields, obey live acces
 
 - Current SQL supports direct property/address/contact writes, private audit snapshots and reservation approval, not the complete maintenance journey. No atomic create/code generator, correction workflow, ordinary unlink, scoped history endpoint or agreed stale-edit guard exists yet. Original legacy text is not database-enforced immutable.
 - Official address catalogs are not seeded. Unverified raw current entry is allowed without guessing units; optional verification requires reviewed catalog data and evidence. Catalog ingestion/provisioning is a separate prerequisite, not a reason to reject a known-address save.
-- Existing search uses wildcard `%`/`_`; the already approved literal-search correction remains required before accepting search integration. Address summaries remain bounded to the current result page.
+- Literal `%`, `_` and backslash search is implemented by the applied forward migration and verified against distinct hosted matching/nonmatching controls. Address summaries remain bounded to the current result page.
 - Existing record-review fields must not become a maintenance gate or misleading certification of changed facts. Preserve unrelated legal/sold/rented authority and active-rental protections.
 - Exclude legal-status review, new uploads, external notifications, contact merging, hard deletes, separate deal records, commission/payment calculations, maps, AI enrichment and multi-tenancy. Existing reservation/visit/rental approval requirements are unchanged.
 
@@ -127,7 +127,7 @@ Use representative sanitized fixtures in isolated staging with real Supabase Aut
 
 File viewing, record editing, reservation/rental management, employee administration UI and production workbook import are outside this slice, not removed from the broader MVP. Provisioning and deployment are not authorized by the journey agreement.
 
-The authorized development project received two forward fixes without rewriting deployed SQL: `20261010073738_literal_inventory_search.sql` implements literal wildcard/backslash matching, and `20261010085034_reviewer_archived_page_views.sql` allows active reviewer archived-detail page views while rejecting archived physical visits. Both have embedded regressions and real hosted API proof. Dev Data API exposure was separately authorized and verified as `public` only. These changes do not authorize production migration, import or deployment; keep the PR draft and issue #1 open until actual recovery-email delivery/callback/password-update acceptance is available.
+The authorized development project received two forward fixes without rewriting deployed SQL: `20261010073738_literal_inventory_search.sql` implements literal wildcard/backslash matching, and `20261010085034_reviewer_archived_page_views.sql` allows active reviewer archived-detail page views while rejecting archived physical visits. Both have embedded regressions and real hosted API proof. Dev Data API exposure was separately authorized and verified as `public` only. These changes do not authorize production migration, import or deployment. Active-user delivered recovery has passed; keep the PR draft and issue #1 open until inactive/unlinked delivered-recovery acceptance also passes.
 
 ## Vietnamese/English UX requirements
 

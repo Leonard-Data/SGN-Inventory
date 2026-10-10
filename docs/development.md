@@ -37,7 +37,7 @@ src/
     layout.tsx                 # Root rendering and metadata
     page.tsx                   # Redirect to protected inventory
     login/, access-denied/     # Localized sign-in and explicit membership denial
-    recover/, reset-password/  # Real Supabase recovery; mailbox acceptance paused
+    recover/, reset-password/  # Real Supabase recovery; denied-identity email gate pending
     properties/                # Protected browse and read-only details
     auth/                      # PKCE/token-hash recovery callbacks
     api/                       # Validated auth/session/inventory/locale + health
@@ -109,7 +109,7 @@ Embedded PostgreSQL and readiness HTTP checks are not real Supabase Auth/Data AP
 
 Use an already-running local build against the separately authorized dev project. Keep credentials and the private synthetic fixture manifest outside Git. An ignored `.env.acceptance.local` may contain only `SGN_ACCEPTANCE_FIXTURES=<absolute private manifest path>`; the manifest supplies accepted active/inactive/unlinked/operator identities, their private passwords and exact synthetic property IDs.
 
-Run `node --env-file=.env.local --env-file=.env.acceptance.local scripts/employee-access-acceptance.mjs --allow-deactivation --report docs/employee-access-acceptance.json` only with concrete authorization to deactivate/reactivate the named synthetic employee. The script verifies dev stage/project and fixture ownership, restores activation in `finally`, uses real user/publishable sessions and separate Chrome user-data directories, and never treats mocked RLS or generated recovery links as email delivery. Consult `chrome-devtools-axi --help` before use. The real-mailbox gate remains paused; a successful reachable-scenarios report is not issue #1 or production completion.
+Run `node --env-file=.env.local --env-file=.env.acceptance.local scripts/employee-access-acceptance.mjs --allow-deactivation --report docs/employee-access-acceptance.json` only with concrete authorization to deactivate/reactivate the named synthetic employee. The script verifies dev stage/project and fixture ownership, restores activation in `finally`, uses real user/publishable sessions and separate Chrome user-data directories, and never treats mocked RLS or generated recovery links as email delivery. Consult `chrome-devtools-axi --help` before use. Its automated report excludes human-coordinated mailbox recovery; the active-user case has separately passed, while inactive/unlinked delivered recovery remains pending. A successful automated report is not issue #1 or production completion.
 
 ## References
 

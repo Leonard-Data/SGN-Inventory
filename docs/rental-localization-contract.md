@@ -1,6 +1,6 @@
 # Required localization and rental contract — version 0.2.0
 
-This is a normative extension to `database-contract.md`, added on 10 October 2026. Migration 4 implements the rental/locale database foundation. Issue #1 implements the bounded employee-access VI/EN dictionaries and real user-session service path; rental-management UI and broader service acceptance remain planned, and actual recovery-email delivery is explicitly paused.
+This is a normative extension to `database-contract.md`, added on 10 October 2026. Migration 4 implements the rental/locale database foundation. Issue #1 implements the bounded employee-access VI/EN dictionaries and real user-session service path; rental-management UI and broader service acceptance remain planned. Active-user delivered email/password recovery has passed; inactive/unlinked delivered recovery remains pending.
 
 ## 1. Two required languages, Vietnamese regional data
 

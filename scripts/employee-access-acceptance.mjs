@@ -8,7 +8,7 @@ import { readEnvironment } from '../src/lib/environment.ts';
 
 if (process.argv.includes('--help')) {
   console.log(
-    'Real development acceptance: SGN_ACCEPTANCE_FIXTURES=<private JSON path> npm run test:acceptance -- --allow-deactivation [--report <sanitized JSON path>]. Requires the documented chrome-devtools-axi installation. Mutates only declared synthetic employee locale/access and records page views. Restores employee activation in finally. Real recovery email delivery is a separate, explicitly unexecuted gate until a mailbox is provided.',
+    'Real development acceptance: SGN_ACCEPTANCE_FIXTURES=<private JSON path> npm run test:acceptance -- --allow-deactivation [--report <sanitized JSON path>]. Requires the documented chrome-devtools-axi installation. Mutates only declared synthetic employee locale/access and records page views. Restores employee activation in finally. This automated run does not cover real mailbox recovery; see docs/testing.md for separately recorded human-coordinated acceptance.',
   );
   process.exit(0);
 }
@@ -672,10 +672,10 @@ const report = {
   projectRef: process.env.EXPECTED_SUPABASE_PROJECT_REF,
   observations,
   recoveryEmailDelivery:
-    'not executed: user paused acceptance until an accessible mailbox is available',
+    'not covered by this automated run; see docs/testing.md for separately recorded human-coordinated recovery evidence',
   limitations: [
     'Not production/deployed application acceptance',
-    'Real request-to-mailbox-to-callback password recovery and recovery for denied identities remain unexecuted',
+    'This automated run does not exercise real delivered-mail callbacks or password recovery for denied identities',
     'Broader MVP/Storage/import/rental/concurrent reservation gates are out of scope',
   ],
 };
@@ -688,5 +688,5 @@ if (reportIndex >= 0) {
   );
 }
 console.log(
-  'Reachable real browser/API gates passed. Issue #1 is NOT complete: real recovery email delivery remains paused.',
+  'Reachable automated browser/API gates passed. This run does not establish real-mailbox recovery acceptance; see docs/testing.md.',
 );
