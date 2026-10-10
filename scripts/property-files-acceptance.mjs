@@ -353,9 +353,9 @@ try {
   };
   const registered = await session.request(`/api/properties/${targetProperty.id}/files/register`, registerBody);
   assert.equal(registered.status, 200, 'File registration should succeed');
-  assert.ok(registered.body.id, 'Registration returns file ID');
+  assert.ok(registered.body.fileId || registered.body.id, 'Registration returns file ID');
   assert.ok(registered.body.objectPath, 'Registration returns object path');
-  const fileId = registered.body.id;
+  const fileId = registered.body.fileId ?? registered.body.id;
   const objectPath = registered.body.objectPath;
 
   // Upload bytes to Storage
@@ -719,6 +719,7 @@ try {
     upsert: false,
   });
   assert.equal(pendingUpload.error, null);
+  const pendingFileId = pendingReg.body.fileId ?? pendingReg.body.id;
 
   // Simulate browser closure: navigate away and back
   browser(['open', origin + '/properties'], primary);
@@ -726,24 +727,24 @@ try {
   browser(['open', origin + '/properties/' + targetProperty.id], primary);
   wait(targetProperty.code, primary);
 
-  // Recover pending upload
-  const recovery = await session.request(`/api/properties/${targetProperty.id}/files/recovery`);
+  // Recover pending upload — standalone endpoint (not nested under property)
+  const recovery = await session.request(`/api/property-files/recovery`);
   assert.equal(recovery.status, 200, 'Recovery endpoint accessible');
   assert.ok(
-    recovery.body.files.some((f) => f.id === pendingReg.body.id),
+    recovery.body.files.some((f) => (f.id ?? f.fileId) === pendingFileId),
     'Pending upload appears in recovery list',
   );
 
   // Complete via recovery
   const recoveryComplete = await session.request(
-    `/api/properties/${targetProperty.id}/files/${pendingReg.body.id}/complete`,
+    `/api/properties/${targetProperty.id}/files/${pendingFileId}/complete`,
   );
   assert.equal(recoveryComplete.status, 200, 'Recovery completion succeeds');
 
   // Verify in completed list
   const afterRecoveryList = await session.request(`/api/properties/${targetProperty.id}/files`);
   assert.ok(
-    afterRecoveryList.body.files.some((f) => f.id === pendingReg.body.id && f.upload_status === 'ready'),
+    afterRecoveryList.body.files.some((f) => f.id === pendingFileId && f.upload_status === 'ready'),
     'Recovered file appears as ready',
   );
 
