@@ -176,11 +176,7 @@ export function Workspace({
     } catch (failure) {
       if (denied(failure)) return;
       const message =
-        failure instanceof RequestError
-          ? failure.code === '23514'
-            ? 'coverRequiresPhoto'
-            : failure.code
-          : 'unavailable';
+        failure instanceof RequestError ? failure.code : 'unavailable';
       setCoverError(message);
     } finally {
       setCoverBusy(false);

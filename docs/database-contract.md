@@ -137,3 +137,26 @@ Migration `20261010195100_property_file_ascii_keys.sql` fixes a real hosted Stor
 
 Own pending metadata and bytes are visible only while the parent is unarchived, to support actual-byte inspection and later interruption recovery. Completed files retain the company-internal read boundary; pending bytes never appear in the shared read workspace. Anonymous/unlinked/inactive users have no file access. No category or cover schema is introduced by this migration.
 
+
+### Ticket #27 — Property cover photo
+
+Migration `20261010225135_property_cover_photo.sql` adds a nullable `cover_file_id` column to `properties` (FK to `property_files`), guarded by an invoker trigger that blocks direct INSERT/UPDATE by authenticated callers. A single `set_property_cover(p_property_id, p_file_id)` definer RPC (NULL = clear) handles set/clear after checking `private.can_edit_property()`, active employee, unarchived property, same-property validated photo.
+
+**Cover eligibility rules:**
+- `purpose = 'photo'`, `upload_status = 'ready'`, `validated_at IS NOT NULL`
+- Legacy ready photos (validated_at=null) are rejected — editors must complete validation first
+- Cross-property and non-photo files are rejected
+
+**Cover guard mechanism:**
+- The `property_cover_guard` trigger is `security invoker` so it runs as the definer's caller
+- The definer RPC sets `app.cover_authorized` to the target `cover_file_id` before the UPDATE
+- The trigger allows the change only when `current_setting('app.cover_authorized')` matches
+- The session variable is set with `true` (local), preventing reuse
+
+**API endpoint:**
+- `POST /api/properties/{id}/cover` with `{fileId: "uuid" | null}` — null/empty clears cover
+- Returns `{status: "ok"}` on success
+- `invalid-cover` error code for 23514 constraint violations (non-photo, unvalidated, unready)
+
+**Schema type dependency:**
+The generated `src/types/database.ts` needs `cover_file_id` in the `properties` table type. Regenerate after deploying the migration.
