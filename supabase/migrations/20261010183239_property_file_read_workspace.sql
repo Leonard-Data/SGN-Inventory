@@ -10,14 +10,13 @@ begin;
 drop policy if exists member_read on public.property_files;
 create policy files_read on public.property_files for select to authenticated using (
   private.employee_id() is not null
-  and (
-    upload_status = 'ready'
-    and exists (
-      select 1 from public.properties
-      where id = property_id
-        and (archived_at is null or private.is_reviewer())
-    )
-    or uploaded_by = private.employee_id()
+  and exists (
+    select 1 from public.properties p
+    where p.id = property_id
+      and (
+        upload_status = 'ready' and (p.archived_at is null or private.is_reviewer())
+        or uploaded_by = private.employee_id() and p.archived_at is null
+      )
   )
 );
 
