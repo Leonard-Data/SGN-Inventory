@@ -124,3 +124,11 @@ _Avoid_: Tag, folder, approval level
 **Category name**:
 A category's name, compared without case or surrounding whitespace while preserving Vietnamese accents as meaningful distinctions. Reusing an equivalent name reuses the category, not a duplicate.
 _Avoid_: Accent folding, translated custom category
+
+**Property photo**:
+An image attached to represent the property, distinct from an image of a certificate or other document.
+_Avoid_: Any image file, certificate photo
+
+**Property cover photo**:
+The one Property photo explicitly chosen by a current property editor to represent the property, or no choice. It belongs to that property and has technical file completion; uploading or checking a photo does not choose it automatically. Removing the choice retains the original attachment.
+_Avoid_: Public image, automatic first photo, document approval

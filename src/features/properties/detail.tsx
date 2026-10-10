@@ -7,6 +7,7 @@ import { api, RequestError } from '@/features/employees/api';
 import { Workspace } from '@/features/property-files/workspace';
 import type { PropertyDetail } from './detail-data';
 import { formatVnd, vietnamDate } from './format';
+
 const directionKeys: Record<string, string> = {
   N: 'north',
   NE: 'northeast',
@@ -82,6 +83,13 @@ export function Detail({
     }
   }, [employeeId, recordView]);
   const property = data?.property;
+  const canEdit =
+    !!employee &&
+    !!property &&
+    !property.archived_at &&
+    (employee.id === property.created_by ||
+      ['staff', 'manager', 'admin'].includes(employee.role));
+  const coverFileId = property?.cover_file_id ?? null;
   const numberFormat = useMemo(
     () => new Intl.NumberFormat(locale === 'vi' ? 'vi-VN' : 'en-GB'),
     [locale],
@@ -237,6 +245,9 @@ export function Detail({
                 employeeId={employeeId ?? null}
                 archived={!!property.archived_at}
                 onDenied={denyFiles}
+                canEdit={canEdit}
+                coverFileId={coverFileId}
+                onCoverChanged={reload}
               />
             </div>
             <p className="muted">{text.pageViewNote}</p>

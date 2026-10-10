@@ -14,7 +14,7 @@ export function POST(
     if (Object.keys(body).length !== 0)
       throw new ApiError(400, 'invalid-input');
     return NextResponse.json(
-      await validateAndCompleteFile(context, id, fileId, employee.id),
+      await validateAndCompleteFile(context, id, fileId, employee),
     );
   });
 }

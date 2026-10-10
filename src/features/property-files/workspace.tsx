@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { messages as globalMessages, type Locale } from '@/i18n/messages';
 import { fileMessages } from './messages';
 import { api, RequestError } from '@/features/employees/api';
+import { CoverImage } from './cover-image';
 import type {
   PropertyFileList,
   SignedFileResponse,
@@ -27,12 +28,18 @@ export function Workspace({
   employeeId,
   archived,
   onDenied,
+  canEdit,
+  coverFileId,
+  onCoverChanged,
 }: {
   propertyId: string;
   locale: Locale;
   employeeId: string | null;
   archived: boolean;
   onDenied: (status: number) => void;
+  canEdit: boolean;
+  coverFileId: string | null;
+  onCoverChanged: () => void;
 }) {
   const [files, setFiles] = useState<PropertyFileList['files']>([]);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +57,9 @@ export function Workspace({
   const [creatingCategory, setCreatingCategory] = useState(false);
   const generation = useRef(0);
   const controller = useRef<AbortController | null>(null);
+  const [coverBusy, setCoverBusy] = useState(false);
+  const [coverError, setCoverError] = useState<string | null>(null);
+  const [checkingPhoto, setCheckingPhoto] = useState<string | null>(null);
 
   const text = globalMessages[locale];
   const fileText = fileMessages[locale];
@@ -117,6 +127,37 @@ export function Workspace({
     return false;
   }
 
+  async function changeCover(fileId: string | null) {
+    const version = generation.current;
+    const signal = controller.current?.signal;
+    setCoverBusy(true);
+    setCoverError(null);
+    try {
+      await api(`/api/properties/${propertyId}/cover`, { fileId }, signal);
+      if (generation.current === version && !signal?.aborted) onCoverChanged();
+    } catch (failure) {
+      if (generation.current === version && !signal?.aborted && !denied(failure))
+        setCoverError(failure instanceof RequestError ? failure.code : 'unavailable');
+    } finally {
+      if (generation.current === version && !signal?.aborted) setCoverBusy(false);
+    }
+  }
+  async function checkPhoto(fileId: string) {
+    const version = generation.current;
+    const signal = controller.current?.signal;
+    setCheckingPhoto(fileId);
+    setCoverError(null);
+    try {
+      await api(`/api/properties/${propertyId}/files/${fileId}/complete`, {}, signal);
+      if (generation.current === version && !signal?.aborted)
+        setRevision((value) => value + 1);
+    } catch (failure) {
+      if (generation.current === version && !signal?.aborted && !denied(failure))
+        setCoverError(failure instanceof RequestError ? failure.code : 'unavailable');
+    } finally {
+      if (generation.current === version && !signal?.aborted) setCheckingPhoto(null);
+    }
+  }
   async function open(fileId: string, download: boolean) {
     setSigning(fileId);
     try {
@@ -497,6 +538,18 @@ export function Workspace({
           </ul>
         </section>
       ) : null}
+      <section className="cover-section" aria-label={fileText.cover}>
+        <h3>{fileText.cover}</h3>
+        <CoverImage propertyId={propertyId} fileId={coverFileId} locale={locale} onDenied={onDenied} />
+        {canEdit && !archived && coverFileId ? (
+          <button type="button" disabled={coverBusy || checkingPhoto !== null} onClick={() => void changeCover(null)}>
+            {coverBusy ? fileText.changingCover : fileText.clearCover}
+          </button>
+        ) : null}
+        {coverError ? (
+          <p role="alert">{fileText.errors[coverError] ?? text.unavailable}</p>
+        ) : null}
+      </section>
       {busy ? <p role="status">{text.loading}</p> : null}
       {error ? (
         <p role="alert">
@@ -535,6 +588,19 @@ export function Workspace({
               >
                 {fileText.download}
               </button>
+              {canEdit && !archived && file.purpose === 'photo' ? (
+                file.validated_at && file.validated_object_id ? (
+                  coverFileId === file.id ? <span className="badge">{fileText.selectedCover}</span> : (
+                    <button type="button" disabled={coverBusy || checkingPhoto !== null} onClick={() => void changeCover(file.id)}>
+                      {coverBusy ? fileText.changingCover : coverFileId ? fileText.replaceCover : fileText.setCover}
+                    </button>
+                  )
+                ) : (
+                  <button type="button" disabled={coverBusy || checkingPhoto !== null} onClick={() => void checkPhoto(file.id)}>
+                    {checkingPhoto === file.id ? fileText.validating : fileText.checkPhoto}
+                  </button>
+                )
+              ) : null}
             </li>
           ))}
         </ul>

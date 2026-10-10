@@ -49,6 +49,17 @@ const vi = {
     'PDF, JPEG, PNG hoặc WebP; lớn hơn 0 và tối đa 20 MiB mỗi tập tin. Không ghi đè tập tin đã có.',
   availabilityNote:
     'Tập tin đã kiểm tra kỹ thuật được chia sẻ nội bộ mà không cần duyệt tài liệu. Đây không phải xác minh tính xác thực, quyền sở hữu pháp lý hay quét mã độc.',
+  cover: 'Ảnh bìa',
+  setCover: 'Chọn làm ảnh bìa',
+  replaceCover: 'Thay ảnh bìa',
+  clearCover: 'Bỏ chọn ảnh bìa',
+  noCover: 'Chưa có ảnh bìa',
+  coverPlaceholder: 'Ảnh bìa bất động sản',
+  coverLoading: 'Đang tải ảnh bìa…',
+  coverImageFailed: 'Không tải được ảnh bìa. Thử lấy liên kết mới.',
+  changingCover: 'Đang lưu ảnh bìa…',
+  selectedCover: 'Ảnh bìa đã chọn',
+  checkPhoto: 'Kiểm tra kỹ thuật ảnh trước khi chọn',
 };
 
 const en: Record<keyof typeof vi, string> = {
@@ -98,6 +109,17 @@ const en: Record<keyof typeof vi, string> = {
     'PDF, JPEG, PNG or WebP; greater than zero and up to 20 MiB per file. Existing files are never overwritten.',
   availabilityNote:
     'Technically validated files are shared privately without document approval. This is not authenticity or legal ownership verification, or malware scanning.',
+  cover: 'Cover photo',
+  setCover: 'Set as cover',
+  replaceCover: 'Replace cover',
+  clearCover: 'Clear cover',
+  noCover: 'No cover selected',
+  coverPlaceholder: 'Property cover photo',
+  coverLoading: 'Loading cover…',
+  coverImageFailed: 'Could not load the cover. Retry with a newly authorized link.',
+  changingCover: 'Saving cover…',
+  selectedCover: 'Selected cover',
+  checkPhoto: 'Technically validate photo before selection',
 };
 
 const errorsVi: Record<string, string> = {
@@ -122,6 +144,7 @@ const errorsVi: Record<string, string> = {
     'Không xác định được dữ liệu đã lưu hay chưa. Tải lại trạng thái; không tải lên khi chưa rõ.',
   'replacement-required':
     'Đăng ký này không thể tiếp tục. Chọn nội dung thay thế thành một tập tin mới; giữ nguyên đăng ký cũ.',
+  'invalid-cover': 'Chọn ảnh bất động sản đã kiểm tra kỹ thuật và thuộc đúng bất động sản này.',
 };
 
 const errorsEn: Record<keyof typeof errorsVi, string> = {
@@ -145,6 +168,7 @@ const errorsEn: Record<keyof typeof errorsVi, string> = {
     'The stored object state is unknown. Reload state; do not upload blindly.',
   'replacement-required':
     'This registration cannot resume. Upload replacement content as a new attachment; the original registration is retained.',
+  'invalid-cover': 'Choose a technically validated Property photo belonging to this property.',
 };
 
 export const fileMessages: Record<

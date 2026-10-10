@@ -11,6 +11,7 @@ export type PropertySummary = {
   listingMode: string;
   status: string;
   addresses: AddressSummary[];
+  coverFileId: string | null;
 };
 export type PropertyPage = {
   properties: PropertySummary[];

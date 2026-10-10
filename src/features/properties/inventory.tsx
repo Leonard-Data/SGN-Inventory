@@ -1,10 +1,12 @@
 'use client';
-import { useState, type FormEvent } from 'react';
+import { useState, useCallback, type FormEvent } from 'react';
 import type { Locale } from '@/i18n/messages';
 import { label, messages } from '@/i18n/messages';
 import type { PropertyPage } from './types';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { SessionHeader } from '@/features/employees/session-header';
+import { CoverImage } from '@/features/property-files/cover-image';
+
 export function Inventory({
   initialLocale,
   initialQuery,
@@ -33,6 +35,10 @@ export function Inventory({
   const locale = employee?.locale ?? initialLocale;
   const text = messages[locale];
   const [searchError, setSearchError] = useState(false);
+  const denyFiles = useCallback((status: number) => {
+    clear();
+    window.location.replace(status === 401 ? '/login' : '/access-denied');
+  }, [clear]);
   const cursors = trail
     ? trail
         .split(',')
@@ -116,6 +122,12 @@ export function Inventory({
               <ul className="property-list">
                 {data.properties.map((property) => (
                   <li className="property-card" key={property.id}>
+                    <CoverImage
+                      propertyId={property.id}
+                      fileId={property.coverFileId}
+                      locale={locale}
+                      onDenied={denyFiles}
+                    />
                     <h2>
                       <a
                         translate="no"

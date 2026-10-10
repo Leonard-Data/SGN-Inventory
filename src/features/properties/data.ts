@@ -17,7 +17,7 @@ export async function browseProperties(
       p_limit: 30,
       ...(after ? { p_after: after } : {}),
     })
-    .select('id,property_code,listing_mode,status');
+    .select('id,property_code,listing_mode,status,cover_file_id');
   if (error)
     throw new ApiError(
       error.code === '42501' ? 403 : 503,
@@ -71,6 +71,7 @@ export async function browseProperties(
       propertyCode: row.property_code,
       listingMode: row.listing_mode,
       status: row.status,
+      coverFileId: row.cover_file_id ?? null,
       addresses: matching.get(row.id) ?? byProperty.get(row.id) ?? [],
     })),
     nextCursor: rows.length === 30 ? rows[rows.length - 1]!.id : null,
