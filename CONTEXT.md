@@ -116,3 +116,11 @@ _Avoid_: Permanent share link, public URL
 **Upload recovery**:
 Resuming an uploader's original registered attachment after interruption or a new login, using matching local content when no stored object exists. Recovery preserves the original identity and unfinished attempt; different content is a new attachment, not an overwrite.
 _Avoid_: Byte-by-byte transfer resumption, orphan cleanup
+
+**Document category**:
+A company-wide classification for a Property file. Active employees can create or reuse categories without approval. Each file has one category; Other is the localized default. Custom names retain their spelling in either language, and legacy classifications retain their original meaning.
+_Avoid_: Tag, folder, approval level
+
+**Category name**:
+A category's name, compared without case or surrounding whitespace while preserving Vietnamese accents as meaningful distinctions. Reusing an equivalent name reuses the category, not a duplicate.
+_Avoid_: Accent folding, translated custom category

@@ -1,10 +1,13 @@
 import type { Database } from '@/types/database';
 
+export type DocumentCategory = Database['public']['Tables']['document_categories']['Row'];
+
 export type PropertyFile = Pick<
   Database['public']['Tables']['property_files']['Row'],
   | 'id'
   | 'property_id'
   | 'document_type'
+  | 'category_id'
   | 'purpose'
   | 'object_path'
   | 'original_filename'
@@ -18,6 +21,7 @@ export type PropertyFile = Pick<
   | 'validated_object_id'
 >;
 export type PropertyFileList = { files: PropertyFile[] };
+export type DocumentCategoryList = { categories: DocumentCategory[] };
 export type SignedFileResponse = { url: string; expiresAt: number };
 export type FileRegistrationResult = {
   fileId: string;

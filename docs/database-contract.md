@@ -137,3 +137,16 @@ Migration `20261010195100_property_file_ascii_keys.sql` fixes a real hosted Stor
 
 Own pending metadata and bytes are visible only while the parent is unarchived, to support actual-byte inspection and later interruption recovery. Completed files retain the company-internal read boundary; pending bytes never appear in the shared read workspace. Anonymous/unlinked/inactive users have no file access. No category or cover schema is introduced by this migration.
 
+### Ticket #25 — Document categories
+
+Migration `20261010225118_document_categories.sql` adds company-wide `document_categories` table with explicit grants/RLS, a built-in `Other` category (uuid `ffffffff-ffff-ffff-ffff-ffffffffffff`), and `property_files.category_id` referencing it. Legacy `document_type` classifications are mapped to seeded categories with VI display names. `document_type` column is retained as historical field.
+
+- **`document_categories` table**: `id uuid PK`, trimmed nonblank `name text`, nullable known `builtin`, nullable `created_by uuid FK employees`, `created_at timestamptz`. Active employees can read through RLS. Direct table insert/update/delete and anonymous access are revoked; creation uses the guarded private function and public invoker wrapper.
+- **Uniqueness**: `lower(private.trim_unicode(name))`; surrounding whitespace matches JavaScript `trim()`, including tabs, form feeds, NBSP and FEFF. Vietnamese accents remain distinct. Concurrent normalized-name creation returns the existing identity.
+- **Built-in Other**: UUID `ffffffff-ffff-ffff-ffff-ffffffffffff`, `builtin='other'`; localized display, stored name `Other`.
+- **Legacy mapping**: Known `document_type` values map to seeded VI-named categories by `builtin`. Unmatched non-Other values retain a category named from their source classification with no builtin marker; original `document_type` is never overwritten.
+- **`category_id`**: Non-null FK defaulting to Other. Not part of file identity; controlled category correction does not change the original registration.
+- **`create_or_get_category(name)`** and **`list_document_categories()`**: Active-employee boundaries, with no category rename/delete/merge API. Custom names retain their trimmed spelling in either locale.
+- **`register_property_file`**: Optional `p_category_id uuid` defaults to Other. Unknown references are rejected. Same-identity retries preserve the existing category rather than reclassifying the file.
+
+

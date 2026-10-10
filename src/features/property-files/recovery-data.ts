@@ -22,7 +22,7 @@ export async function recoverFiles(
   let query = context.client
     .from('property_files')
     .select(
-      'id,property_id,document_type,purpose,object_path,original_filename,mime_type,size_bytes,sha256,upload_status,uploaded_by,created_at,validated_at,validated_object_id',
+      'id,property_id,document_type,category_id,purpose,object_path,original_filename,mime_type,size_bytes,sha256,upload_status,uploaded_by,created_at,validated_at,validated_object_id',
     )
     .eq('property_id', propertyId)
     .eq('uploaded_by', employeeId);

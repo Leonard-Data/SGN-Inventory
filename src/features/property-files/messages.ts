@@ -1,6 +1,18 @@
 import type { Locale } from '@/i18n/messages';
 
+const categoryBase = {
+  category: 'Danh mục tập tin',
+  otherCategory: 'Khác',
+  selectCategory: 'Chọn danh mục…',
+  newCategory: 'Danh mục mới',
+  createCategory: 'Tạo danh mục',
+  categoryName: 'Tên danh mục',
+  categoryCreated: 'Đã tạo danh mục',
+  categoryRequired: 'Vui lòng nhập tên danh mục.',
+};
+
 const vi = {
+  ...categoryBase,
   files: 'Tập tin đính kèm',
   noFiles: 'Chưa có tập tin đính kèm.',
   open: 'Mở',
@@ -38,7 +50,16 @@ const vi = {
   availabilityNote:
     'Tập tin đã kiểm tra kỹ thuật được chia sẻ nội bộ mà không cần duyệt tài liệu. Đây không phải xác minh tính xác thực, quyền sở hữu pháp lý hay quét mã độc.',
 };
+
 const en: Record<keyof typeof vi, string> = {
+  category: 'Document category',
+  otherCategory: 'Other',
+  selectCategory: 'Select category…',
+  newCategory: 'New category',
+  createCategory: 'Create category',
+  categoryName: 'Category name',
+  categoryCreated: 'Category created',
+  categoryRequired: 'Please enter a category name.',
   files: 'Attached files',
   noFiles: 'No attached files.',
   open: 'Open',
@@ -78,6 +99,7 @@ const en: Record<keyof typeof vi, string> = {
   availabilityNote:
     'Technically validated files are shared privately without document approval. This is not authenticity or legal ownership verification, or malware scanning.',
 };
+
 const errorsVi: Record<string, string> = {
   'unsupported-format':
     'Định dạng không hỗ trợ. Chọn PDF, JPEG, PNG hoặc WebP.',
@@ -101,6 +123,7 @@ const errorsVi: Record<string, string> = {
   'replacement-required':
     'Đăng ký này không thể tiếp tục. Chọn nội dung thay thế thành một tập tin mới; giữ nguyên đăng ký cũ.',
 };
+
 const errorsEn: Record<keyof typeof errorsVi, string> = {
   'unsupported-format': 'Unsupported format. Choose PDF, JPEG, PNG or WebP.',
   'empty-file': 'The file is empty.',
@@ -123,6 +146,7 @@ const errorsEn: Record<keyof typeof errorsVi, string> = {
   'replacement-required':
     'This registration cannot resume. Upload replacement content as a new attachment; the original registration is retained.',
 };
+
 export const fileMessages: Record<
   Locale,
   typeof en & { errors: Record<string, string> }
