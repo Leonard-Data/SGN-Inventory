@@ -167,6 +167,46 @@ Prepare distinct active sales/staff/manager/admin identities, an inactive and an
 Add embedded database regressions only for consumer-visible invariants and run `npm run test:schema` when implementing the schema/workflow changes. Browser, real Data API/Storage boundaries and separate-session contention remain distinct staging proof. Record sanitized observations without tokens, private source payloads or customer records; no scenario above has been executed by this documentation change.
 
 
+
+## Property files acceptance (not yet executed)
+
+Scope: [phase 4 private file protocol](delivery-plan.md#L50) and [document protocol](database-contract.md#document-storage-and-access). Use isolated development/staging with real Supabase Auth, Data API/RLS, Storage, and the actual browser UI. The dedicated `scripts/property-files-acceptance.mjs` runner exercises the planned API contract from contract.md (register → upload → complete → signed-read), category create/reuse, cover photo selection, interruption recovery, and direct-API bypass resistance. The runner adapts once the app endpoints are implemented; it never uses mocked data-access adapters.
+
+Prepare sanitized fixtures through authorized administration:
+
+- The five existing employee identities (`active`, `english`, `inactive`, `unlinked`, `operator`) — `active` and `english` serve as the two distinct sales employees for cross-owner upload tests; `operator` serves as the property editor for correction and cover photo tests.
+- Three property descriptors in `fileProperties`: `salesOwn` (actor: `active`), `salesOther` (actor: `english`), and `shared` (operator-owned, where three legacy files live).
+- `archivedProperty` for archived-property denial tests.
+- Three legacy files on the shared property, created before #23 migration: accepted certificate PDF, issue-flagged PDF, and unreviewed photo PNG. Exact records in `legacyFiles[]` with `bytes_fixture` paths and `sha256` hashes for content-integrity verification.
+- Synthetic valid/invalid upload bytes (see runner's built-in deterministic generators): minimal PDF, JPEG, PNG, WebP; truncated, empty, oversized (21 MiB), unsupported type, and spoofed-extension fixtures.
+
+| Scenario | Required observation |
+| --- | --- |
+| Active employee registers an attachment with safe filename, expected MIME/size/hash, and purpose (document or photo); uploads matching bytes; completion validates stored content type/count/hash | File appears in the property workspace as completed with original filename and purpose; a salesperson can upload to another employee's unarchived property without acquiring edit authority |
+| Register but never upload; upload but never complete; complete with mismatched hash/count/type | File does not appear in completed file list; pending/incomplete state is distinguishable; no ready file results from absent or invalid bytes |
+| Legacy files preserve identity, content hash (sha256), original filename, MIME type, size, uploader attribution, review status; signed URL returns exact bytes matching bytes_fixture | All three legacy files appear in the file list without additional gate; accepted and issue_flagged files listed alongside each other |
+| Attempt empty, oversized (>20 MiB), unsupported-format, and unsafe-path inputs | Localized validation failure before Storage; no partial state, no leaked diagnostics |
+| Uploader retries completion after a lost response; concurrent completion from two browser sessions | One authoritative attachment; exact stored content matches original bytes; no duplicate registration or object overwrite |
+| Network interruption before object creation, after bytes stored but before completion, after completion before response observed | Recovery across refresh, browser closure and subsequent login finds the same registered upload; reselecting matching content reuses same UUID/path; different content is rejected |
+| Uploader creates a company-wide Document category with accented name; another employee reuses it; Other default is applied when no category is selected | Category is available across employees and properties; normalized duplicate creation returns existing category; accented names are preserved; Other is localized per interface language |
+| Uploader corrects own file's category on unarchived property (no property-edit authority needed) | Fresh file list shows corrected category; original content/identity/readiness unchanged |
+| Authorized property editor (operator) corrects another uploader's file category | Same observation as uploader correction; an unrelated contributor (not uploader, not operator) is denied |
+| Authorized property editor sets a completed Property photo (purpose=photo) as the cover | Card and detail show the selected photo; a document scan (purpose=document, even if JPEG) is rejected as cover candidate |
+| Authorized property editor replaces the cover with another eligible photo, then clears it | Cover changes without deleting attachments; no selection shows a neutral placeholder |
+| Employee without property-edit authority attempts cover set/replace/clear | Denied; current cover unchanged |
+| Property reader opens/downloads a completed file through a signed URL; link expires and is renewed | Newly authorized link returned while access remains valid; expired link does not permanently block access |
+| Inactive/unlinked/anonymous attempts file operations | Denied through both browser and direct API; no protected file data exposed |
+| Archived-property file operations (upload, category change, cover) attempted by ordinary employee | Denied; reviewer (operator) can still read archived property files |
+| Live deactivation while file workspace is open | Subsequent requests deny access; protected request/refocus clears displayed file data; restored activation re-enables access |
+| Switch VI/EN during upload, category selection, recovery, and cover operations | Equivalent labels, validation and statuses; filenames, category names, and document bytes remain unchanged |
+| Direct API attempts: UPDATE property_files, INSERT with ready=true, Storage overwrite, legacy complete_property_upload RPC | All rejected; no bypass of validation, permission, or immutable-object rules |
+
+Add embedded database regressions only for consumer-visible invariants and run `npm run test:schema` when implementing the schema/workflow changes. Browser, real Data API/Storage/RLS boundaries and separate-session contention remain distinct staging proof. Record sanitized observations without tokens, private source payloads or customer records; no scenario above has been executed by this documentation change.
+
+### Executed property-files evidence
+
+No executed evidence yet. See `docs/property-files-acceptance.json` (future) and `scripts/property-files-acceptance.mjs` for the automated runner.
+
 ## Contention test procedure
 
 Prepare two pending requests from different employees. In session A use an authenticated reviewer JWT context, call `decide_property_lock(A, true, reason)` within a transaction and hold the transaction open. In session B use a different connection and reviewer context to approve B. B must wait on the same parent property row. Commit A; B must fail with reservation conflict. Query effective locks and audit/events to confirm one approval. Repeat with A rolling back: B may then succeed. Do not treat parallel calls in a single embedded DB connection as a proof of real multi-session locking.
