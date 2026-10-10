@@ -335,22 +335,23 @@ export function Workspace({
   async function handleCreateCategory() {
     const name = newCategoryName.trim();
     if (!name) return;
+    const version = generation.current;
+    const signal = controller.current?.signal;
+    setError(null);
     setCreatingCategory(true);
     try {
-      const result = await api<{ id: string }>('/api/document-categories', {
-        name,
-      });
-      setCategories((prev) => {
-        if (prev.some((c) => c.id === result.id)) return prev;
-        return [...prev, { id: result.id, name, builtin: null, created_by: '', created_at: '' }];
-      });
+      const result = await api<{ id: string }>('/api/document-categories', { name }, signal);
+      const fresh = await api<DocumentCategoryList>('/api/document-categories', undefined, signal);
+      if (generation.current !== version || signal?.aborted) return;
+      setCategories(fresh.categories);
       setSelectedCategoryId(result.id);
       setShowNewCategory(false);
       setNewCategoryName('');
-    } catch {
-      // Ignore creation errors; user can retry.
+    } catch (failure) {
+      if (generation.current === version && !signal?.aborted && !denied(failure))
+        setError(failure instanceof RequestError ? failure.code : 'unavailable');
     } finally {
-      setCreatingCategory(false);
+      if (generation.current === version) setCreatingCategory(false);
     }
   }
 
@@ -358,7 +359,7 @@ export function Workspace({
     <section className="panel" aria-label={fileText.files}>
       <h2>{fileText.files}</h2>
       {!archived && employeeId ? (
-        <fieldset disabled={uploading}>
+        <fieldset disabled={uploading || creatingCategory || busy}>
           <legend>{fileText.purpose}</legend>
           <label>
             <input
@@ -388,12 +389,10 @@ export function Workspace({
                   setShowNewCategory(true);
                 } else {
                   setSelectedCategoryId(e.target.value);
+                  setShowNewCategory(false);
                 }
               }}
             >
-              <option value={otherCategoryId} disabled>
-                {fileText.selectCategory}
-              </option>
               {categories.map((cat) => (
                 <option key={cat.id} value={cat.id}>
                   {categoryName(cat.id)}
