@@ -118,13 +118,17 @@ An uploader resumes the original registered file after interruption or a new log
 _Avoid_: Byte-by-byte transfer resumption, orphan cleanup
 
 **Document category**:
-A company-wide classification for Property files, created by any active employee without admin approval. Each file has exactly one category. The built-in `Other` category is the default and is localized in the UI (VI: "Khác", EN: "Other"); employee-created category names are stored verbatim and are not translated.
+A company-wide classification for Property files, created by any active employee without admin approval. Each file has exactly one category. The built-in `Other` category is the default and is localized in the UI (VI: "Khác", EN: "Other"); employee-created category names are stored verbatim and are not translated. Known legacy `document_type` codes are seeded as categories with VI display names and a non-null `builtin` marker; the UI localizes these known codes and leaves custom names verbatim.
 _Avoid_: Tag, label, folder, classification level
+
+**Category builtin marker**:
+The `builtin` column on `document_categories` is non-null only for system-seeded rows: `'other'` for the built-in Other, or a legacy `document_type` code (`land_certificate`, `sale_contract`, `planning`, `construction_permit`, `photo`) for seeded VI-named categories. Employee-created categories have `builtin = null`. The UI uses the `builtin` value to decide whether to show a localized label or the verbatim stored name.
+_Avoid_: Hard-coding category UUIDs, name-based matching
 
 **Category uniqueness**:
 Category names are compared case-insensitively and after trimming surrounding whitespace. Vietnamese accented characters are preserved as distinct. Whitespace-only names are rejected. Concurrent attempts to create the same normalized name return the existing row rather than creating a duplicate.
 _Avoid_: Case-sensitive matching, accent folding
 
 **Category immutability during registration**:
-A registered file's `category_id` is immutable through the `guard_file_identity` trigger. Same-ID registration retries do not overwrite an existing category assignment. Category correction is handled by a separate ticket (#26).
+A registered file's `category_id` is NOT immutable through the registration guard (unlike identity fields such as property_id, filename, hash). Same-ID registration retries do not overwrite an existing category assignment. Controlled recategorization is handled by ticket #26.
 _Avoid_: Recategorization through retry

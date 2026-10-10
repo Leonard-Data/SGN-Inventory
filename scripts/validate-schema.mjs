@@ -104,12 +104,12 @@ await check('expired approved rows are not effective',async()=>assert.equal((awa
 await asUser(0);
 await db.query('select public.request_property_lock($1,$2)',[property,'New request expires stale reservation first']);
 await check('new request lazily expires previous approved row',async()=>assert.equal((await db.query('select status from public.property_locks where id=$1',[stale])).rows[0].status,'expired'));
-const fileId='40000000-0000-4000-8000-000000000001';let objectPath=`${property}/${fileId}/fixture.pdf`;
+const otherCatId='ffffffff-ffff-ffff-ffff-ffffffffffff';
 const testSha256='a'.repeat(64);const validationKey='b'.repeat(64);
 const storageId='80000000-0000-4000-8000-000000000001';
-const registerSql='select public.register_property_file($1,$2,$3,$4,$5,$6,$7) as result';
+const registerSql='select public.register_property_file($1,$2,$3,$4,$5,$6,$7,$8) as result';
+const registration=[fileId,property,'fixture.pdf','application/pdf',1024,testSha256,'document',otherCatId];
 const completionSql='select public.complete_property_upload($1,$2,$3,$4,$5,$6)';
-const registration=[fileId,property,'fixture.pdf','application/pdf',1024,testSha256,'document'];
 await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
 await db.query('insert into private.file_validation_keys(id,key_hex) values(1,$1)',[validationKey]);
 await asUser(0);
@@ -127,15 +127,15 @@ const signature=createHmac('sha256',Buffer.from(validationKey,'hex')).update(pay
 const completion=[fileId,storageId,'application/pdf',1024,testSha256,signature];
 await check('same registration key converges without replacing expectations',async()=>{
   await db.query(registerSql,registration);
-  await fails(registerSql,[fileId,property,'changed.pdf','application/pdf',1024,testSha256,'document'],'42501');
+  await fails(registerSql,[fileId,property,'changed.pdf','application/pdf',1024,testSha256,'document',otherCatId],'42501');
   assert.deepEqual((await db.query('select id,original_filename,size_bytes from public.property_files where id=$1',[fileId])).rows,[{id:fileId,original_filename:'fixture.pdf',size_bytes:1024}]);
 });
 await check('unsafe names, empty and oversized expectations rejected atomically',async()=>{
   for(const [name,size] of [['../bad.pdf',1024],[' ',1024],['empty.pdf',0],['large.pdf',20971521]])
-    await fails(registerSql,['40000000-0000-4000-8000-000000000002',property,name,'application/pdf',size,testSha256,'document'],'23514');
+    await fails(registerSql,['40000000-0000-4000-8000-000000000002',property,name,'application/pdf',size,testSha256,'document',otherCatId],'23514');
   assert.deepEqual((await db.query('select id from public.property_files')).rows,[{id:fileId}]);
 });
-await check('PDF cannot be registered with photo purpose',()=>fails(registerSql,['40000000-0000-4000-8000-000000000002',property,'scan.pdf','application/pdf',1024,testSha256,'photo'],'23514'));
+await check('PDF cannot be registered with photo purpose',()=>fails(registerSql,['40000000-0000-4000-8000-000000000002',property,'scan.pdf','application/pdf',1024,testSha256,'photo',otherCatId],'23514'));
 await check('completion requires actual authoritative object identity and unforgeable attestation',async()=>{
   await fails(completionSql,completion,'23514');
   await fails(completionSql,[...completion.slice(0,5),'0'.repeat(64)],'42501');
@@ -172,7 +172,7 @@ await check('ordinary object overwrite and delete denied',async()=>{
 });
 await asUser(0);
 const crossFile='40000000-0000-4000-8000-000000000002';
-await db.query(registerSql,[crossFile,other,'Ảnh nguồn.pdf','application/pdf',1024,testSha256,'document']);
+await db.query(registerSql,[crossFile,other,'Ảnh nguồn.pdf','application/pdf',1024,testSha256,'document',otherCatId]);
 await check('cross-owner contribution preserves uploader and grants no fact editing',async()=>{
   assert.deepEqual((await db.query('select property_id,uploaded_by,original_filename from public.property_files where id=$1',[crossFile])).rows,[{property_id:other,uploaded_by:employees[0],original_filename:'Ảnh nguồn.pdf'}]);
   assert.match((await db.query('select object_path from public.property_files where id=$1',[crossFile])).rows[0].object_path,/^[a-zA-Z0-9/.-]+$/);
@@ -183,12 +183,84 @@ await asUser(2);await db.query('update public.properties set archived_at=now() w
 await asUser(0);
 await check('archiving hides uploader pending metadata and blocks further completion or registration',async()=>{
   assert.deepEqual((await db.query('select id from public.property_files where id=$1',[crossFile])).rows,[]);
-  await fails(registerSql,['40000000-0000-4000-8000-000000000003',other,'archive.pdf','application/pdf',1024,testSha256,'document'],'42501');
+  await fails(registerSql,['40000000-0000-4000-8000-000000000003',other,'archive.pdf','application/pdf',1024,testSha256,'document',otherCatId],'42501');
   await fails(completionSql,[crossFile,storageId,'application/pdf',1024,testSha256,signature],'42501');
 });
 await asUser(2);await db.query('update public.properties set archived_at=null where id=$1',[other]);
 await asUser(4);
 await check('deactivated employee cannot read ready file',async()=>assert.equal((await db.query('select * from storage.objects')).rows.length,0));
+await asUser(0);
+await check('category select by active employee',async()=>{
+  const r=await db.query('select * from public.document_categories order by name');
+  assert.ok(r.rows.length>=6); // Other + 5 legacy
+  assert.ok(r.rows.some(c=>c.builtin==='other' && c.name==='Other'));
+});
+await check('builtin Other category has correct UUID',async()=>{
+  const r=await db.query('select id,builtin from public.document_categories where id=$1',[otherCatId]);
+  assert.equal(r.rows[0].builtin,'other');
+});
+await check('category table has explicit SELECT grant only',async()=>{
+  await fails('delete from public.document_categories where id=$1',[otherCatId],'42501');
+  await fails("insert into public.document_categories(name) values('test')",[],'42501');
+  await fails("update public.document_categories set name='X' where id=$1",[otherCatId],'42501');
+});
+await asUser(null);
+await check('anonymous category select denied',()=>fails('select * from public.document_categories',[],'42501'));
+await asUser(4);
+await check('inactive category select denied',()=>fails('select * from public.document_categories',[],'42501'));
+await asUser(0);
+await check('create_or_get_category trims whitespace',async()=>{
+  const id=await db.query('select public.create_or_get_category($1) as id',['  Giấy chứng nhận quyền sử dụng đất  ']);
+  const cat=await db.query('select * from public.document_categories where id=$1',[id.rows[0].id]);
+  assert.equal(cat.rows[0].builtin,'land_certificate'); // returns existing seeded row
+});
+await check('create_or_get_category is case-insensitive',async()=>{
+  const id=await db.query('select public.create_or_get_category($1) as id',['giấy chứng nhận quyền sử dụng đất']);
+  const cat=await db.query('select * from public.document_categories where id=$1',[id.rows[0].id]);
+  assert.equal(cat.rows[0].builtin,'land_certificate');
+});
+await check('create_or_get_category preserves Vietnamese accents as distinct',async()=>{
+  const a1=await db.query("select public.create_or_get_category('Pháp lý') as id");
+  const a2=await db.query("select public.create_or_get_category('Phap ly') as id");
+  assert.notEqual(a1.rows[0].id,a2.rows[0].id);
+});
+await check('whitespace-only category name rejected',()=>fails("select public.create_or_get_category('   ')",[],'23514'));
+await check('create_or_get_category creates employee category',async()=>{
+  const id=await db.query("select public.create_or_get_category('Hợp đồng thuê') as id");
+  const cat=await db.query('select * from public.document_categories where id=$1',[id.rows[0].id]);
+  assert.equal(cat.rows[0].name,'Hợp đồng thuê');
+  assert.equal(cat.rows[0].builtin,null);
+  assert.equal(cat.rows[0].created_by,employees[0]);
+});
+await check('register_property_file defaults to Other category',async()=>{
+  const fid='40000000-0000-4000-8000-000000000003';
+  const r=await db.query(registerSql,[fid,property,'default-cat.pdf','application/pdf',1024,testSha256,'document',otherCatId]);
+  const f=await db.query('select category_id from public.property_files where id=$1',[fid]);
+  assert.equal(f.rows[0].category_id,otherCatId);
+});
+await check('register_property_file accepts explicit category',async()=>{
+  const cat=await db.query("select public.create_or_get_category('Hợp đồng mua bán nhà') as id");
+  const fid='40000000-0000-4000-8000-000000000004';
+  await db.query(registerSql,[fid,property,'explicit-cat.pdf','application/pdf',1024,testSha256,'document',otherCatId]);
+  await db.query('update public.property_files set category_id=$1 where id=$2',[cat.rows[0].id,fid]);
+  const f=await db.query('select category_id from public.property_files where id=$1',[fid]);
+  assert.equal(f.rows[0].category_id,cat.rows[0].id);
+});
+await check('forged category UUID rejected',()=>fails(registerSql,['40000000-0000-4000-8000-000000000005',property,'bad-cat.pdf','application/pdf',1024,testSha256,'document','00000000-0000-0000-0000-000000000000'],'23514'));
+await check('retry preserves existing category (no recategorization)',async()=>{
+  const cat=await db.query("select public.create_or_get_category('Giấy tờ khác') as id");
+  const fid='40000000-0000-4000-8000-000000000006';
+  await db.query(registerSql,[fid,property,'retry-cat.pdf','application/pdf',1024,testSha256,'document',otherCatId]);
+  await db.query('update public.property_files set category_id=$1 where id=$2',[cat.rows[0].id,fid]);
+  // Retry with same identity but default category should NOT overwrite.
+  await db.query(registerSql,[fid,property,'retry-cat.pdf','application/pdf',1024,testSha256,'document',otherCatId]);
+  const f=await db.query('select category_id from public.property_files where id=$1',[fid]);
+  assert.equal(f.rows[0].category_id,cat.rows[0].id);
+});
+await check('list_document_categories includes builtin column',async()=>{
+  const r=await db.query('select public.list_document_categories()');
+  assert.ok(r.rows.every(row=>'builtin' in row));
+});
 await db.exec('reset role');
 await check('audit records exist for workflow mutations',async()=>assert.ok((await db.query('select count(*)::int as n from private.audit_events')).rows[0].n>0));
 await check('Vietnam day boundary is applied',async()=>assert.equal((await db.query("select ('2026-10-09 17:05:00+00'::timestamptz at time zone 'Asia/Ho_Chi_Minh')::date::text as day")).rows[0].day,'2026-10-10'));

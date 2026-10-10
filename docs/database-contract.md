@@ -139,14 +139,16 @@ Own pending metadata and bytes are visible only while the parent is unarchived, 
 
 ### Ticket #25 — Document categories
 
-Migration `20261010225118_document_categories.sql` adds company-wide `document_categories` table with explicit grants/RLS, a built-in `Other` category (uuid `ffffffff-ffff-ffff-ffff-ffffffffffff`), and `property_files.category_id` referencing it. Legacy `document_type` classifications are mapped losslessly to categories. `document_type` column is retained as historical field.
+Migration `20261010225118_document_categories.sql` adds company-wide `document_categories` table with explicit grants/RLS, a built-in `Other` category (uuid `ffffffff-ffff-ffff-ffff-ffffffffffff`), and `property_files.category_id` referencing it. Legacy `document_type` classifications are mapped to seeded categories with VI display names. `document_type` column is retained as historical field.
 
-- **`document_categories` table**: `id uuid PK`, `name text` (unique via `lower(trim(name))`), `created_by uuid FK employees`, `created_at timestamptz`. RLS: active employees select/insert; no delete/update.
-- **Built-in "Other"**: Pre-inserted as `ffffffff-ffff-ffff-ffff-ffffffffffff`. UI-localized; DB stores `'Other'`.
-- **category_id** on `property_files`: Not-null FK defaulting to Other. Immutable through the `guard_file_identity` trigger.
-- **`create_or_get_category(name)`**: Normalizes whitespace (trim) and case (`lower`) for uniqueness while preserving Vietnamese accents. Concurrent normalized-name creation reuses existing row.
-- **`list_document_categories()`**: Returns all categories ordered by name.
+- **`document_categories` table**: `id uuid PK`, `name text`, `builtin text` (nullable: `'other'` or a legacy `document_type` code), `created_by uuid FK employees` (nullable for system-seeded rows), `created_at timestamptz`. RLS: active employees select/insert; no delete/update. Explicit `GRANT SELECT` to authenticated; all other table-level privileges revoked for `public`/`anon`/`authenticated`.
+- **Uniqueness**: Expression index on `lower(trim(both from name))` — case-insensitive, whitespace-trimmed; Vietnamese accents preserved. `btrim` used for Unicode-safe trimming.
+- **Built-in "Other"**: Pre-inserted as `ffffffff-ffff-ffff-ffff-ffffffffffff`, `builtin='other'`. UI-localized; DB stores `'Other'`.
+- **Seeded legacy categories**: Known `document_type` codes (`land_certificate`, `sale_contract`, `planning`, `construction_permit`, `photo`) are seeded with VI display names (matching existing UI messages) and `builtin` set to the code. Unmatched legacy values fall back to Other.
+- **category_id** on `property_files`: Not-null FK defaulting to Other. Mutable (ticket #26 adds controlled recategorization). Not included in `guard_file_identity` trigger.
+- **`create_or_get_category(name)`**: Normalizes whitespace (`btrim`) and case (`lower`) for uniqueness while preserving Vietnamese accents. Concurrent normalized-name creation reuses existing row.
+- **`list_document_categories()`**: Returns all categories (id, name, builtin, created_by, created_at) ordered by name.
 - **Updated `register_property_file`**: Accepts optional `p_category_id uuid` (defaults to Other). On same-ID retry, category differences are ignored (not identity conflict). Forged references rejected.
-- **Migration**: Updates `guard_file_identity` trigger to include `category_id` in the immutable column set. The file identity trigger still rejects updates to other immutable fields; category changes are covered by ticket #26.
-- **Legacy mapping**: Each distinct non-other `document_type` value gets a `document_categories` row with the same name. Existing `property_files` rows are updated to reference the matching category. Unmatched values fall back to Other.
+- **Legacy mapping**: Known `document_type` codes are mapped by `builtin` value, not by name comparison. Unmatched values fall back to Other.
+
 

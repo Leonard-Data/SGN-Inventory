@@ -3,6 +3,7 @@ import type { Database } from '@/types/database';
 export type DocumentCategory = {
   id: string;
   name: string;
+  builtin: string | null;
   created_by: string;
   created_at: string;
 };

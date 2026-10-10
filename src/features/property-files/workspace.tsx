@@ -135,7 +135,12 @@ export function Workspace({
   function categoryName(id: string): string {
     const cat = categories.find((c) => c.id === id);
     if (!cat) return fileText.otherCategory;
-    if (cat.id === otherCategoryId) return fileText.otherCategory;
+    if (cat.builtin === 'other') return fileText.otherCategory;
+    if (cat.builtin === 'land_certificate') return fileText.land_certificate;
+    if (cat.builtin === 'sale_contract') return fileText.sale_contract;
+    if (cat.builtin === 'planning') return fileText.planning;
+    if (cat.builtin === 'construction_permit') return fileText.construction_permit;
+    if (cat.builtin === 'photo') return fileText.photo;
     return cat.name;
   }
 
@@ -337,7 +342,7 @@ export function Workspace({
       });
       setCategories((prev) => {
         if (prev.some((c) => c.id === result.id)) return prev;
-        return [...prev, { id: result.id, name, created_by: '', created_at: '' }];
+        return [...prev, { id: result.id, name, builtin: null, created_by: '', created_at: '' }];
       });
       setSelectedCategoryId(result.id);
       setShowNewCategory(false);
@@ -391,7 +396,7 @@ export function Workspace({
               </option>
               {categories.map((cat) => (
                 <option key={cat.id} value={cat.id}>
-                  {cat.id === otherCategoryId ? fileText.otherCategory : cat.name}
+                  {categoryName(cat.id)}
                 </option>
               ))}
               <option value="__new__">{fileText.newCategory}</option>

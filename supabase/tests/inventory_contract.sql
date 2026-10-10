@@ -17,6 +17,6 @@ select ok(exists(select 1 from pg_indexes where schemaname='public' and indexnam
 select ok(not has_table_privilege('authenticated','public.document_categories','UPDATE'),'direct category mutation revoked');
 select ok(not has_table_privilege('authenticated','public.document_categories','DELETE'),'direct category deletion revoked');
 select ok(exists(select 1 from public.document_categories where id = 'ffffffff-ffff-ffff-ffff-ffffffffffff'),'built-in Other category exists');
-select ok((select bool_and(upper(name) = name) from public.document_categories where name <> 'Other'),'employee category names not upper-case coerced');
+select ok((select bool_and(created_by is null) from public.document_categories where builtin is not null),'system-seeded categories have null created_by');
 select * from finish();
 rollback;
