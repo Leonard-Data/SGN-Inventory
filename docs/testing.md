@@ -168,9 +168,9 @@ Add embedded database regressions only for consumer-visible invariants and run `
 
 
 
-## Property files acceptance (not yet executed)
+## Property files staging acceptance
 
-Scope: [phase 4 private file protocol](delivery-plan.md#L50) and [document protocol](database-contract.md#document-storage-and-access). Use isolated development/staging with real Supabase Auth, Data API/RLS, Storage, and the actual browser UI. The dedicated `scripts/property-files-acceptance.mjs` runner exercises the planned API contract from contract.md (register → upload → complete → signed-read), category create/reuse, cover photo selection, interruption recovery, and direct-API bypass resistance. The runner adapts once the app endpoints are implemented; it never uses mocked data-access adapters. Invoke: `SGN_ACCEPTANCE_FIXTURES=<manifest path> npm run test:files:acceptance -- --allow-deactivation [--report <path>]`.
+Scope: [private-file protocol](property-files-spec.md) and [document protocol](database-contract.md#document-storage-and-access). Use isolated development/staging with real Supabase Auth, Data API/RLS, Storage and the actual browser interface. The executed development evidence below is separate from these repeatable acceptance gates; embedded tests do not prove hosted permissions or concurrent transactions.
 
 Prepare sanitized fixtures through authorized administration:
 
@@ -178,7 +178,7 @@ Prepare sanitized fixtures through authorized administration:
 - Three property descriptors in `fileProperties`: `salesOwn` (actor: `active`), `salesOther` (actor: `english`), and `shared` (operator-owned, where three legacy files live).
 - `archivedProperty` for archived-property denial tests.
 - Three legacy files on the shared property, created before #23 migration: accepted certificate PDF, issue-flagged PDF, and unreviewed photo PNG. Exact records in `legacyFiles[]` with `bytes_fixture` paths and `sha256` hashes for content-integrity verification.
-- Synthetic valid/invalid upload bytes (see runner's built-in deterministic generators): minimal PDF, JPEG, PNG, WebP; truncated, empty, oversized (21 MiB), unsupported type, and spoofed-extension fixtures.
+- Synthetic genuinely decoded PDF, JPEG, PNG and WebP, exact 20 MiB supported content, truncated/empty/oversized/unsupported content and source filenames containing Vietnamese accents.
 
 | Scenario | Required observation |
 | --- | --- |
@@ -199,13 +199,13 @@ Prepare sanitized fixtures through authorized administration:
 | Archived-property file operations (upload, category change, cover) attempted by ordinary employee | Denied; reviewer (operator) can still read archived property files |
 | Live deactivation while file workspace is open | Subsequent requests deny access; protected request/refocus clears displayed file data; restored activation re-enables access |
 | Switch VI/EN during upload, category selection, recovery, and cover operations | Equivalent labels, validation and statuses; filenames, category names, and document bytes remain unchanged |
-| Direct API attempts: UPDATE property_files, INSERT with ready=true, Storage overwrite, legacy complete_property_upload RPC | All rejected; no bypass of validation, permission, or immutable-object rules |
+| Direct API attempts: metadata readiness mutation, forged completion attestation and old completion/review signatures | Denied without publishing unvalidated bytes; direct overwrite/delete probes need concrete authorization for a newly disposable synthetic object and subsequent exact-byte verification |
 
-Add embedded database regressions only for consumer-visible invariants and run `npm run test:schema` when implementing the schema/workflow changes. Browser, real Data API/Storage/RLS boundaries and separate-session contention remain distinct staging proof. Record sanitized observations without tokens, private source payloads or customer records; no scenario above has been executed by this documentation change.
+Add embedded database regressions only for consumer-visible invariants and run `npm run test:schema` for schema/workflow changes. Browser, real Data API/Storage/RLS and separate-session contention remain distinct proof. Record sanitized observations without tokens, signed URLs, private source payloads or customer records. Never run destructive probes on legacy or real objects or infer cleanup authority.
 
 ### Executed property-files evidence
 
-No executed evidence yet. See `docs/property-files-acceptance.json` (future) and `scripts/property-files-acceptance.mjs` for the automated runner.
+See the scoped development observations below. They distinguish actual browser/API/Storage and independent-session checks from embedded assertions and unexecuted production gates.
 
 ## Contention test procedure
 
@@ -224,6 +224,7 @@ The captain authorized only development project `tneucwzcrzteeixvttpu`, its decl
 - Before the PDF parser fix, an EOF/xref-looking payload with no PDF object graph was misclassified as PDF. Afterward the permanent regression and real browser upload rejected it without sharing; the exact 20 MiB genuine PDF still revalidated successfully.
 - Inactive/unlinked authenticated identities returned zero direct file rows and `403` registration; another employee could not read the uploader's pending metadata.
 - The earlier read slice exercised actual signed-link expiry, authorized renewal, original download filename/content, and live deactivation with an existing JWT: new signing returned `403`, direct metadata returned no rows, refocus removed private files, and the already-issued bearer remained usable until expiry. The employee was restored.
+- Temporary archive of the declared synthetic parent exposed no ordinary file metadata (`200` with empty API/Data API lists), denied ordinary Storage reads and signing (`404`), and denied recovery (`403`). The reviewer retained all three ready legacy records and exact PDF bytes, but could not read archived pending metadata. The original archive state was restored through the separately authorized owner connection and confirmed by a fresh user API read; ordinary archive-update permission cannot restore an already archived property.
 
 These are scoped development observations, not whole-spec acceptance. Categories, recategorization and covers remain separate ticket gates.
 

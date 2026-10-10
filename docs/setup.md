@@ -62,13 +62,14 @@ POSIX: `cp .env.example .env.local`. PowerShell: `Copy-Item .env.example .env.lo
 
 `.env.local` is ignored. Supply values from an authorized local Supabase instance or isolated dev project, never prod. The examples contain deliberately invalid placeholders, not credentials. Only `.env.example`, `.env.dev.example` and `.env.prod.example` may be committed.
 
-| Variable                               | Meaning                                                                              |
-| -------------------------------------- | ------------------------------------------------------------------------------------ |
-| `SGN_ENV`                              | Exactly `dev` or `prod`; local is `dev`                                              |
-| `NEXT_PUBLIC_SUPABASE_URL`             | Supabase origin; HTTPS hosted, HTTP loopback permitted only in dev                   |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Publishable key; local legacy `anon` JWT also accepted, secret/service-role rejected |
-| `NEXT_PUBLIC_APP_URL`                  | Canonical application origin, HTTPS hosted                                           |
-| `EXPECTED_SUPABASE_PROJECT_REF`        | Optional local check, required in releases to match selected hosted ref              |
+| Variable                               | Meaning                                                                                                                                           |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SGN_ENV`                              | Exactly `dev` or `prod`; local is `dev`                                                                                                           |
+| `NEXT_PUBLIC_SUPABASE_URL`             | Supabase origin; HTTPS hosted, HTTP loopback permitted only in dev                                                                                |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Publishable key; local legacy `anon` JWT also accepted, secret/service-role rejected                                                              |
+| `NEXT_PUBLIC_APP_URL`                  | Canonical application origin, HTTPS hosted                                                                                                        |
+| `EXPECTED_SUPABASE_PROJECT_REF`        | Optional local check, required in releases to match selected hosted ref                                                                           |
+| `SGN_FILE_VALIDATION_KEY`              | Server-only file-completion HMAC key: exactly 64 lowercase hex characters, matching that stage's private database singleton; never `NEXT_PUBLIC_` |
 
 ```bash
 npm run check:env
@@ -76,6 +77,8 @@ npm run dev
 ```
 
 `check:env` reads `.env.local` if present, validates configuration without contacting Supabase and never prints keys. `/api/health` returns `200` with `{"status":"ok","stage":"dev"}` for valid configuration, `503` with `{"status":"configuration-error"}` otherwise; responses are `no-store`. It does not verify network connectivity, key validity at Supabase or authorization. The home page runs without environment configuration; health intentionally does not.
+
+File completion also requires a separately authorized operator to generate a random 32-byte secret in private tooling, configure its lowercase hex value as `SGN_FILE_VALIDATION_KEY` in that stage's server environment, and install the same value in `private.file_validation_keys` (`id=1`, `key_hex`) through an owner-authorized database connection. Keep the key out of source, logs, browser variables, ordinary clients and service-role requests; the table revokes their access. Development and production use different keys. The migration intentionally does not seed a key. Missing/malformed server configuration fails file completion closed with `503`; the configuration-only health check is not a file-completion or database-key smoke. Provisioning production or rotating an existing key requires separate concrete authorization.
 
 Optional **local-only** Supabase, after Docker is installed and you have authorized local database initialization:
 
@@ -113,7 +116,7 @@ These dashboard actions remain external prerequisites, not actions performed by 
 1. Create/identify two Supabase projects and two Vercel projects with appropriate regions and ownership. Set Vercel framework Next.js, repository root, Node `24.x`, `npm ci` and `npm run build`.
 2. Disable Vercel automatic Git deployments; `vercel.json` also sets `git.deploymentEnabled: false`. Do not enable an alternate deployment path that bypasses GitHub reviews. Optional previews must stay on the dev project with dev configuration only.
 3. Populate each Vercel project's **Production** variables from its corresponding `.env.dev.example` or `.env.prod.example`, with actual values and matching `SGN_ENV`. Set dev project's optional Preview/Development variables to dev only. Never copy prod variables to dev.
-4. Configure each Supabase Auth site URL and exact invitation/recovery/callback allowlist for that stage when implementing auth; no broad prod wildcards. Disable public/anonymous signup, keep documents private, and expose only `public`. No ordinary app secret key is required.
+4. Configure each Supabase Auth site URL and exact invitation/recovery/callback allowlist for that stage when implementing auth; no broad prod wildcards. Disable public/anonymous signup, keep documents private and expose only `public`. Ordinary requests never need a Supabase secret/service-role key; file completion requires the separate server-only attestation configuration above.
 5. Create GitHub environments `dev` and `prod`. Restrict dev to `develop`, prod to `main`. Require a prod reviewer, prevent self-review and disable protection bypass where the account plan permits. Verify required-reviewer support on the repository's visibility/plan **before enabling deployment credentials**. If unavailable, do not activate prod delivery until an equivalent enforceable external approval gate is established.
 6. Protect `develop` and `main`: require pull requests, reviews and the CI `quality` status; block force pushes/deletion and restrict bypass. Run CI first to learn the exact status name GitHub presents. No deployment secrets on feature PRs or forks.
 7. Create `develop` from the reviewed baseline. Nothing in repository setup creates or pushes this branch automatically.
