@@ -37,7 +37,7 @@ src/
     layout.tsx                 # Root rendering and metadata
     page.tsx                   # Redirect to protected inventory
     login/, access-denied/     # Localized sign-in and explicit membership denial
-    recover/, reset-password/  # Real Supabase recovery; denied-identity email gate pending
+    recover/, reset-password/  # Real delivered recovery, including denied identities
     properties/                # Protected browse and read-only details
     auth/                      # PKCE/token-hash recovery callbacks
     api/                       # Validated auth/session/inventory/locale + health

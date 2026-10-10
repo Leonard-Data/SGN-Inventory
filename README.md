@@ -47,7 +47,7 @@ npm run build
 npm run dev
 ```
 
-Copy `.env.example` to ignored `.env.local`, supply the intended dev publishable credentials, expected project reference and exact local origin, then run `npm run check:env`. Open `/login` (VI by default) or `/login?lang=en`; successful login loads the employee's saved preference. The current PR worktree uses `http://localhost:3101` because the user's existing port-3000 server is left untouched. See [employee acceptance](docs/testing.md#confirmed-employee-access-slice-acceptance) for the private fixture pointer, browser prerequisites, exercised evidence and the pending real-mailbox gate.
+Copy `.env.example` to ignored `.env.local`, supply the intended dev publishable credentials, expected project reference and exact local origin, then run `npm run check:env`. Open `/login` (VI by default) or `/login?lang=en`; successful login loads the employee's saved preference. The current PR worktree uses `http://localhost:3101` because the user's existing port-3000 server is left untouched. See [employee acceptance](docs/testing.md#confirmed-employee-access-slice-acceptance) for the private fixture pointer, browser prerequisites, automated evidence and separately completed real-mailbox recovery.
 
 Authenticate the official GitHub CLI for GitHub work. Use `gh-axi` for GitHub, `chrome-devtools-axi` for browser work and `lavish-axi` for visual decisions/reports; consult current command help before use. See [required agent setup](docs/setup.md#required-initial-setup-agent-command-line-tools) for prerequisites, `PATH` guidance and authorization boundaries. Optional agent hooks/plugins are not required.
 
