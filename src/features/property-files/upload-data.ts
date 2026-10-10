@@ -2,7 +2,7 @@ import 'server-only';
 import { createHash, createHmac } from 'node:crypto';
 import { ApiError, uuid, type RouteContext } from '@/lib/supabase/route';
 import { contentMime, fileMimeTypes, maximumFileBytes } from './content';
-import type { FileRegistrationResult } from './types';
+import type { DocumentCategory, DocumentCategoryList, FileRegistrationResult } from './types';
 
 function databaseFailure(error: { code?: string }): never {
   if (error.code === '42501') throw new ApiError(403, 'access-denied');
@@ -29,6 +29,7 @@ export async function registerFile(
           'sizeBytes',
           'sha256',
           'purpose',
+          'categoryId',
         ].includes(key),
     )
   )
@@ -61,7 +62,13 @@ export async function registerFile(
     (body.purpose === 'photo' && body.mimeType === 'application/pdf')
   )
     throw new ApiError(400, 'invalid-input');
-  const { data, error } = await context.client.rpc('register_property_file', {
+  if (
+    body.categoryId !== undefined &&
+    body.categoryId !== null &&
+    !uuid(body.categoryId)
+  )
+    throw new ApiError(400, 'invalid-input');
+  const rpcArgs: Record<string, unknown> = {
     p_file_id: body.fileId,
     p_property_id: propertyId,
     p_original_filename: body.originalFilename,
@@ -69,7 +76,11 @@ export async function registerFile(
     p_size_bytes: body.sizeBytes,
     p_sha256: body.sha256,
     p_purpose: body.purpose,
-  });
+  };
+  if (body.categoryId !== undefined && body.categoryId !== null) {
+    rpcArgs.p_category_id = body.categoryId;
+  }
+  const { data, error } = await context.client.rpc('register_property_file', rpcArgs);
   if (error) databaseFailure(error);
   if (
     !data ||
@@ -207,4 +218,30 @@ export async function validateAndCompleteFile(
   );
   if (completionError) databaseFailure(completionError);
   return { status: 'ready' as const };
+}
+
+export async function listCategories(
+  context: RouteContext,
+): Promise<DocumentCategoryList> {
+  const { data, error } = await context.client.rpc('list_document_categories');
+  if (error)
+    throw new ApiError(
+      error.code === '42501' ? 403 : 503,
+      error.code === '42501' ? 'access-denied' : 'unavailable',
+    );
+  return { categories: (data ?? []) as DocumentCategory[] };
+}
+
+export async function createOrGetCategory(
+  context: RouteContext,
+  name: string,
+): Promise<string> {
+  if (typeof name !== 'string' || !name.trim())
+    throw new ApiError(400, 'invalid-input');
+  const { data, error } = await context.client.rpc('create_or_get_category', {
+    p_name: name.trim(),
+  });
+  if (error) databaseFailure(error);
+  if (!data || typeof data !== 'string') throw new ApiError(503, 'unavailable');
+  return data;
 }

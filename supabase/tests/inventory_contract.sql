@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
-select plan(11);
+select plan(15);
 select ok(not has_table_privilege('anon','public.properties','SELECT'),'anonymous inventory select revoked');
 select ok(not has_table_privilege('authenticated','public.property_locks','UPDATE'),'direct lock mutation revoked');
 select ok(not has_table_privilege('authenticated','public.activity_events','INSERT'),'direct activity insertion revoked');
@@ -14,5 +14,9 @@ select ok(not has_table_privilege('authenticated','public.rental_agreements','UP
 select ok(not has_table_privilege('authenticated','public.rental_payments','INSERT'),'direct rental receipt writes revoked');
 select ok(not has_table_privilege('anon','public.rental_months','SELECT'),'anonymous rental months select revoked');
 select ok(exists(select 1 from pg_indexes where schemaname='public' and indexname='one_active_rental_per_property'),'whole-property active tenancy uniqueness exists');
+select ok(not has_table_privilege('authenticated','public.document_categories','UPDATE'),'direct category mutation revoked');
+select ok(not has_table_privilege('authenticated','public.document_categories','DELETE'),'direct category deletion revoked');
+select ok(exists(select 1 from public.document_categories where id = 'ffffffff-ffff-ffff-ffff-ffffffffffff'),'built-in Other category exists');
+select ok((select bool_and(upper(name) = name) from public.document_categories where name <> 'Other'),'employee category names not upper-case coerced');
 select * from finish();
 rollback;

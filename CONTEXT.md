@@ -116,3 +116,15 @@ _Avoid_: Permanent share link, public URL
 **Upload recovery**:
 An uploader resumes the original registered file after interruption or a new login. Authoritative Storage presence decides whether to validate existing bytes or reselect matching local content for the same UUID/path. Unknown outcomes are not absence; different or invalid occupied content requires a new attachment, preserving the original registration.
 _Avoid_: Byte-by-byte transfer resumption, orphan cleanup
+
+**Document category**:
+A company-wide classification for Property files, created by any active employee without admin approval. Each file has exactly one category. The built-in `Other` category is the default and is localized in the UI (VI: "Khác", EN: "Other"); employee-created category names are stored verbatim and are not translated.
+_Avoid_: Tag, label, folder, classification level
+
+**Category uniqueness**:
+Category names are compared case-insensitively and after trimming surrounding whitespace. Vietnamese accented characters are preserved as distinct. Whitespace-only names are rejected. Concurrent attempts to create the same normalized name return the existing row rather than creating a duplicate.
+_Avoid_: Case-sensitive matching, accent folding
+
+**Category immutability during registration**:
+A registered file's `category_id` is immutable through the `guard_file_identity` trigger. Same-ID registration retries do not overwrite an existing category assignment. Category correction is handled by a separate ticket (#26).
+_Avoid_: Recategorization through retry

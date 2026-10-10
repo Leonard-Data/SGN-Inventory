@@ -9,6 +9,7 @@ import type {
   FileRegistrationResult,
   FileRecoveryList,
   RecoverableFile,
+  DocumentCategoryList,
 } from './types';
 
 type Upload = {
@@ -17,6 +18,8 @@ type Upload = {
   state: 'registering' | 'uploading' | 'validating' | 'ready' | 'failed';
   error?: string;
 };
+
+const otherCategoryId = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
 
 export function Workspace({
   propertyId,
@@ -40,6 +43,11 @@ export function Workspace({
   const [recoverable, setRecoverable] = useState<RecoverableFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [purpose, setPurpose] = useState<'photo' | 'document'>('document');
+  const [categories, setCategories] = useState<DocumentCategoryList['categories']>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>(otherCategoryId);
+  const [showNewCategory, setShowNewCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [creatingCategory, setCreatingCategory] = useState(false);
   const generation = useRef(0);
   const controller = useRef<AbortController | null>(null);
 
@@ -63,17 +71,24 @@ export function Workspace({
             undefined,
             abort.signal,
           ),
+      api<DocumentCategoryList>(
+        '/api/document-categories',
+        undefined,
+        abort.signal,
+      ),
     ])
-      .then(([result, recovery]) => {
+      .then(([result, recovery, cats]) => {
         if (generation.current !== version || abort.signal.aborted) return;
         setFiles(result.files);
         setRecoverable(recovery.uploads);
+        setCategories(cats.categories);
         setError(null);
       })
       .catch((failure) => {
         if (generation.current !== version || abort.signal.aborted) return;
         setFiles([]);
         setRecoverable([]);
+        setCategories([]);
         if (
           failure instanceof RequestError &&
           (failure.status === 401 || failure.status === 403)
@@ -96,45 +111,40 @@ export function Workspace({
       failure instanceof RequestError &&
       (failure.status === 401 || failure.status === 403)
     ) {
-      setFiles([]);
-      setUploads([]);
-      setRecoverable([]);
       onDenied(failure.status);
       return true;
     }
     return false;
   }
+
   async function open(fileId: string, download: boolean) {
-    const version = generation.current;
-    const signal = controller.current?.signal;
     setSigning(fileId);
-    setError(null);
     try {
       const result = await api<SignedFileResponse>(
         `/api/properties/${propertyId}/files/${fileId}/signed`,
         { download },
-        signal,
       );
-      if (version === generation.current && !signal?.aborted)
-        window.location.assign(result.url);
+      window.open(result.url, '_blank');
     } catch (failure) {
-      if (
-        version === generation.current &&
-        !signal?.aborted &&
-        !denied(failure)
-      )
-        setError(
-          failure instanceof RequestError ? failure.code : 'unavailable',
-        );
+      denied(failure);
     } finally {
-      if (version === generation.current) setSigning(null);
+      setSigning(null);
     }
   }
+
+  function categoryName(id: string): string {
+    const cat = categories.find((c) => c.id === id);
+    if (!cat) return fileText.otherCategory;
+    if (cat.id === otherCategoryId) return fileText.otherCategory;
+    return cat.name;
+  }
+
   async function upload(file: File | null, recovery?: RecoverableFile) {
     const version = generation.current;
     const signal = controller.current?.signal;
     const id = recovery?.file.id ?? crypto.randomUUID();
     const filename = recovery?.file.original_filename ?? file!.name;
+    const categoryId = recovery?.file.category_id ?? selectedCategoryId;
     setUploads((rows) => [
       ...rows.filter((row) => row.id !== id),
       { id, filename, state: 'registering' },
@@ -203,6 +213,7 @@ export function Workspace({
             sizeBytes: recovery?.file.size_bytes ?? file!.size,
             sha256: recovery?.file.sha256 ?? sha256,
             purpose: recovery?.file.purpose ?? purpose,
+            categoryId,
           },
           signal,
         );
@@ -286,6 +297,7 @@ export function Workspace({
     }
     return true;
   }
+
   async function selected(
     event: ChangeEvent<HTMLInputElement>,
     recovery?: RecoverableFile,
@@ -303,6 +315,7 @@ export function Workspace({
       setRevision((value) => value + 1);
     }
   }
+
   async function retry(recovery: RecoverableFile) {
     if (uploading) return;
     const version = generation.current;
@@ -313,6 +326,29 @@ export function Workspace({
       setRevision((value) => value + 1);
     }
   }
+
+  async function handleCreateCategory() {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    setCreatingCategory(true);
+    try {
+      const result = await api<{ id: string }>('/api/document-categories', {
+        name,
+      });
+      setCategories((prev) => {
+        if (prev.some((c) => c.id === result.id)) return prev;
+        return [...prev, { id: result.id, name, created_by: '', created_at: '' }];
+      });
+      setSelectedCategoryId(result.id);
+      setShowNewCategory(false);
+      setNewCategoryName('');
+    } catch {
+      // Ignore creation errors; user can retry.
+    } finally {
+      setCreatingCategory(false);
+    }
+  }
+
   return (
     <section className="panel" aria-label={fileText.files}>
       <h2>{fileText.files}</h2>
@@ -337,6 +373,57 @@ export function Workspace({
             />
             {fileText.photo}
           </label>
+          <div>
+            <label htmlFor={'category-' + propertyId}>{fileText.category}</label>
+            <select
+              id={'category-' + propertyId}
+              value={selectedCategoryId}
+              onChange={(e) => {
+                if (e.target.value === '__new__') {
+                  setShowNewCategory(true);
+                } else {
+                  setSelectedCategoryId(e.target.value);
+                }
+              }}
+            >
+              <option value={otherCategoryId} disabled>
+                {fileText.selectCategory}
+              </option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.id === otherCategoryId ? fileText.otherCategory : cat.name}
+                </option>
+              ))}
+              <option value="__new__">{fileText.newCategory}</option>
+            </select>
+          </div>
+          {showNewCategory ? (
+            <div>
+              <label htmlFor={'new-category-' + propertyId}>
+                {fileText.categoryName}
+              </label>
+              <input
+                id={'new-category-' + propertyId}
+                type="text"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                disabled={creatingCategory}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void handleCreateCategory();
+                  }
+                }}
+              />
+              <button
+                type="button"
+                disabled={creatingCategory || !newCategoryName.trim()}
+                onClick={() => void handleCreateCategory()}
+              >
+                {fileText.createCategory}
+              </button>
+            </div>
+          ) : null}
           <label htmlFor={'files-' + propertyId}>{fileText.selectFiles}</label>
           <input
             id={'files-' + propertyId}
@@ -426,19 +513,7 @@ export function Workspace({
               <span className="file-name" translate="no">
                 {file.original_filename}
               </span>{' '}
-              <span className="badge">
-                {file.document_type === 'land_certificate'
-                  ? fileText.land_certificate
-                  : file.document_type === 'sale_contract'
-                    ? fileText.sale_contract
-                    : file.document_type === 'planning'
-                      ? fileText.planning
-                      : file.document_type === 'construction_permit'
-                        ? fileText.construction_permit
-                        : file.document_type === 'photo'
-                          ? fileText.photo
-                          : fileText.other}
-              </span>{' '}
+              <span className="badge">{categoryName(file.category_id)}</span>{' '}
               <span className="badge">
                 {file.purpose === 'photo' ? fileText.photo : fileText.document}
               </span>{' '}
