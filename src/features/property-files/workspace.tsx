@@ -66,12 +66,7 @@ export function Workspace({
           `/api/properties/${propertyId}/files/${fileId}/signed`,
           { download },
         );
-        if (download) {
-          // Navigate directly — Supabase signed URL triggers download header
-          window.location.href = result.url;
-        } else {
-          window.open(result.url, '_blank');
-        }
+        window.location.assign(result.url);
       } catch (failure) {
         if (
           failure instanceof RequestError &&

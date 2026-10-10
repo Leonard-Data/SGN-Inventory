@@ -61,7 +61,7 @@ export async function authorizeAndSignFile(
   const { data: signed, error: signError } = await context.client
     .storage
     .from('property-files')
-    .createSignedUrl(file.object_path, 60, { download: download || undefined });
+    .createSignedUrl(file.object_path, 60, { download: download ? file.original_filename : undefined });
 
   if (signError || !signed) throw new ApiError(503, 'unavailable');
 
