@@ -1,0 +1,16 @@
+node_modules
+.next/
+.vercel/
+.env*
+!.env.example
+__pycache__/
+.venv/
+supabase/.temp/
+supabase/.branches/
+project_sources/
+data/
+imports/
+*.xlsx
+*.xls
+staging-rows.jsonl
+*.log

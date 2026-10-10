@@ -1,0 +1,16 @@
+{
+  "name": "sgn-inventory-foundation",
+  "private": true,
+  "version": "0.2.0",
+  "description": "Database and development contract for the SGN Next.js/Supabase/Vercel MVP; UI implementation is the next phase",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test:schema": "node scripts/validate-schema.mjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
+    "supabase": "2.120.0"
+  }
+}

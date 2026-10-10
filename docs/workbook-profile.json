@@ -1,0 +1,86 @@
+{
+  "source_sha256": "0e467d2c2a9e0ae22ab8028abd7c179bf70bea17324d297d54fc8bd9b3f35259",
+  "batch_id": "bce75845-baf3-53af-a5ec-9ca18bc6e649",
+  "sheets": {
+    "Thông tin dự án": 19233,
+    "Loại Hình": 2,
+    "Loại dự án": 18,
+    "Nhân viên": 17,
+    "Contracts": 20480,
+    "Historical": 19151,
+    "Attachments": 2544,
+    "clicks": 56932,
+    "Trạng thái dự án": 6,
+    "Quận": 22,
+    "Phường": 367,
+    "Cities": 2
+  },
+  "excluded_sheets": [
+    "Login"
+  ],
+  "excluded_fields": [
+    "Password",
+    "Username"
+  ],
+  "properties": {
+    "total_rows": 19233,
+    "missing_id_rows": 23,
+    "distinct_nonblank_ids": 19209,
+    "duplicate_nonblank_keys": 1,
+    "rows_with_duplicate_nonblank_id": 2,
+    "unique_id_rows_before_content_checks": 19208
+  },
+  "relationships": {
+    "Contracts": {
+      "total_rows": 20480,
+      "direct_nonblank_match_rows": 0,
+      "unambiguous_direct_match_rows": 0,
+      "unresolved_or_ambiguous_rows": 20480,
+      "distinct_reference_values": 9554
+    },
+    "Historical": {
+      "total_rows": 19151,
+      "direct_nonblank_match_rows": 18834,
+      "unambiguous_direct_match_rows": 18829,
+      "unresolved_or_ambiguous_rows": 322,
+      "distinct_reference_values": 6910
+    },
+    "Attachments": {
+      "total_rows": 2544,
+      "direct_nonblank_match_rows": 2468,
+      "unambiguous_direct_match_rows": 2468,
+      "unresolved_or_ambiguous_rows": 76,
+      "distinct_reference_values": 1194
+    },
+    "clicks": {
+      "total_rows": 56932,
+      "direct_nonblank_match_rows": 56460,
+      "unambiguous_direct_match_rows": 56431,
+      "unresolved_or_ambiguous_rows": 501,
+      "distinct_reference_values": 11197
+    }
+  },
+  "issue_counts": {
+    "duplicate_property_id": 2,
+    "phone_needs_review": 2174,
+    "depth_m:non_positive_dimension": 78,
+    "frontage_m:non_positive_dimension": 76,
+    "non_positive_area": 84,
+    "sale_price_vnd:ambiguous_number": 98,
+    "monthly_rent_vnd:ambiguous_number": 2,
+    "area_needs_review": 1,
+    "depth_m:ambiguous_number": 1,
+    "frontage_m:ambiguous_number": 1,
+    "unmapped_status": 23,
+    "unmapped_listing_mode": 23,
+    "missing_property_id": 23,
+    "unmapped_property_category": 3,
+    "sale_price_vnd:money_overflow": 1,
+    "employee_authority_requires_review": 17,
+    "unresolved_property_reference": 21379
+  },
+  "assumptions": [
+    "Naive source timestamps are interpreted in Asia/Ho_Chi_Minh; confirm before promotion.",
+    "New ward mappings, employee authority, and BDS aliases require separate review."
+  ]
+}

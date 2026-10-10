@@ -1,0 +1,2 @@
+-- Deliberately no customer, account or official address data.
+-- Schema tests create isolated synthetic fixtures. Bootstrap a reviewed admin separately.
