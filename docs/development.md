@@ -45,6 +45,7 @@ src/
   proxy.ts                     # Session refresh, live membership and saved locale
   features/employees/          # Membership guard, auth screens, protected state
   features/properties/         # Bounded queries, details, page views and formatting
+  features/property-files/     # Private file read workspace, types, signed URLs
   i18n/messages.ts             # Equivalent typed VI/EN journey dictionaries
   lib/supabase/route.ts         # User-scoped SSR cookies/cache/input boundary
   types/database.ts            # Generated from the live dev public schema
