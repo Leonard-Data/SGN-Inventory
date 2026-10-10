@@ -151,4 +151,11 @@ Migration `20261010225118_document_categories.sql` adds company-wide `document_c
 - **Updated `register_property_file`**: Accepts optional `p_category_id uuid` (defaults to Other). On same-ID retry, category differences are ignored (not identity conflict). Forged references rejected.
 - **Legacy mapping**: Known `document_type` codes are mapped by `builtin` value, not by name comparison. Unmatched values fall back to Other.
 
+### Ticket #26 — Authorized Document category correction
+
+Migration `20261010232203_set_file_category.sql` exposes `set_file_category(property_id,file_id,category_id)` through a public invoker wrapper and guarded private definer. It checks live membership, locks the unarchived parent property before the matching file, and accepts only the original uploader or a current property editor. A null historical uploader is not a wildcard.
+
+`POST /api/properties/{id}/files/{fileId}/category` accepts exactly `{categoryId: UUID}`. The category must exist and the file must belong to the URL property. Only `category_id` changes; failures preserve the assignment, readiness, original content, attribution, review history and evidence references. Fresh authenticated file reads update the displayed badge after save. VI/EN controls use the same permissions, including uploader access without property-fact edit authority.
+
+
 

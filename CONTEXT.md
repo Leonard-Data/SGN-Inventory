@@ -132,3 +132,7 @@ _Avoid_: Case-sensitive matching, accent folding
 **Category immutability during registration**:
 A registered file's `category_id` is NOT immutable through the registration guard (unlike identity fields such as property_id, filename, hash). Same-ID registration retries do not overwrite an existing category assignment. Controlled recategorization is handled by ticket #26.
 _Avoid_: Recategorization through retry
+
+**Category correction**:
+Changing an attachment's one Document category by its original uploader or a current property editor, while the property remains unarchived. It changes classification, not content, file completion, review history, legal status or the property's cover choice.
+_Avoid_: Re-upload, document approval, contributor reorganization
