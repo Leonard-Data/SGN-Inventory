@@ -2,7 +2,7 @@
 
 ## Executed verification
 
-`npm run test:schema` executes all four migrations in embedded PostgreSQL (PGlite) with the real unaccent/pg_trgm extensions. It creates mock Supabase Auth/Storage schemas and fixture employee accounts. It checks real database grants, RLS, workflow state and data constraints; it does not emulate HTTP APIs.
+`npm run test:schema` executes all six migrations in embedded PostgreSQL (PGlite) with the real unaccent/pg_trgm extensions. It creates mock Supabase Auth/Storage schemas and fixture employee accounts. It checks real database grants, RLS, workflow state and data constraints; it does not emulate HTTP APIs.
 
 Results are in `validation-results.json`. Covered behaviors include anonymous/inactive denial, property edit restrictions, denied privilege escalation, accent-insensitive search, reservation approval and conflict, self approval/visit denial, activity retry, Vietnam dates, effective expiry/release, private staging/audit access and registered private-file access.
 
@@ -63,9 +63,9 @@ These checks use inert fixtures and do not establish Supabase connectivity, real
 
 Use Supabase CLI advisors and the real local/staging database when available. Inspect the current command's `--help` rather than assuming old flags. Run the SQL pgTAP structural checks in `supabase/tests/` on the local stack.
 
-## Confirmed employee-access slice acceptance (not yet executed)
+## Confirmed employee-access slice acceptance
 
-Scope: [confirmed first employee-access slice](delivery-plan.md#confirmed-first-employee-access-slice). These scenarios are planned staging gates, not additions to the executed results above. Run against isolated staging with real Supabase Auth, Data API/RLS and the actual browser UI. Mocked authorization and embedded database checks cannot substitute for this evidence. Provisioning staging still requires its separate authorization.
+Scope: [confirmed first employee-access slice](delivery-plan.md#confirmed-first-employee-access-slice). Use isolated development/staging with real Supabase Auth, Data API/RLS and the actual browser UI. Mocked authorization and embedded database checks cannot substitute for this evidence. The user authorized this development project and synthetic fixtures separately; production and broader MVP acceptance remain outside that authorization. **Actual recovery-email delivery is explicitly paused pending an accessible test mailbox; issue #1 remains open and its PR stays draft.**
 
 Prepare sanitized fixtures through authorized administration:
 
@@ -95,7 +95,24 @@ Prepare sanitized fixtures through authorized administration:
 | Sign out, then use Back, refresh and protected navigation | Current browser session is signed out and sensitive client state is cleared; cached property/contact details are not revealed |
 | Sign out one browser while another device is signed in | Other device session remains active; do not claim that a copied, unexpired access token is immediately invalidated |
 
-Record observed browser results and sanitized HTTP statuses/response shapes without tokens, passwords or customer data. The literal-search scenario is currently blocked by the documented wildcard implementation gap. No browser/Auth/API scenario in this section has been executed by this documentation update, and passing this slice would not establish production import, private-file or broader MVP release acceptance.
+Record observed browser results and sanitized HTTP statuses/response shapes without tokens, passwords or customer data. Literal search is implemented by a forward migration and verified against distinct hosted matching/nonmatching controls. `scripts/employee-access-acceptance.mjs` exercises the real app and hosted Supabase through isolated Chrome profiles; it writes `employee-access-acceptance.json` only after all reachable scenarios pass and explicitly records the unexecuted real-mailbox gate. Intermediate failed browser-driver runs are not full acceptance evidence. Passing reachable scenarios does not establish production import, Storage/private-file, real-email or broader MVP release acceptance.
+
+### Executed issue #1 development evidence
+
+`employee-access-acceptance.json` records the real hosted-development/local-build run at **2026-10-10 10:50 UTC**. All 12 reachable observation groups passed:
+
+- Real accepted linked-user sign-in, anonymous denial and UUID-keyset pages of 30 then 6 rows.
+- Accent/unaccent contiguous search, literal `%`/`_` controls, reordered/no-match inputs and invalid/oversized request rejection.
+- Decimal-string VND beyond Number's safe range, exact m², original legacy/candidate addresses and recorded owner/broker/raw-phone links; missing data is visibly unknown.
+- Reviewer archived detail and same-key page view; archived physical visit and ordinary archived reads are rejected.
+- Inactive/unlinked browser and app denial in both languages, zero direct RLS rows and guarded-RPC denial.
+- Real browser search/detail; failed offline locale save retains language/state/source, successful VI/EN switching retains query/cursor/scroll/record and creates no duplicate activity.
+- Live deactivation rejects original sessions (`403` app, zero direct rows, `42501` guarded RPC) and clears source details on refocus; the synthetic employee is restored.
+- Saved language survives login and remains independent per employee. Local sign-out clears Back/direct-navigation details while the independently profiled other device stays signed in.
+- Invalid recovery callbacks and inputs are localized and cannot update a password or grant employee access.
+- Additional actual browser smoke: device emulation measured 390×844 with scroll width 390; native Tab exposed the localized skip link and Enter focused the main heading. The resize command's reported dimensions were not trusted because direct measurements disagreed; device emulation produced the correct measured viewport. Pixel screenshot capture timed out, so no screenshot or error-free-console claim is made.
+
+Separately, strict types and the production build passed; 10 native unit tests and 83 embedded schema assertions passed across all six migrations. Authorized hosted configuration was verified with closed signup, exact localhost recovery URLs and `public`-only Data API exposure (`private` read `406/PGRST106`, authenticated public read `200`). **No real mailbox was exercised; successful delivery/callback/new-password and denied-identity recovery remain release blockers.** Private Storage, customer import, broader workflows, production and deployment are not claimed.
 
 ## Property, contact and address maintenance acceptance (not yet executed)
 
@@ -142,4 +159,4 @@ Prepare two pending requests from different employees. In session A use an authe
 
 ## Honest completion limits
 
-The package has no live Supabase integration or inventory/auth browser verification yet. The readiness page and configuration health have local browser/runtime smoke evidence only. Embedded Auth/Storage shims cannot prove invitation flow, token validation, Storage API signed URLs, HTTP origin protections or cloud deployment correctness. Those are staging acceptance gates before release, not results claimed by this foundation.
+Issue #1 has a real development Supabase connection and scoped app/Auth/Data API/browser checks; the historical foundation-only evidence above remains separate. Embedded Auth/Storage shims do not prove email delivery, Storage API signed URLs, HTTP deployment protections or cloud release correctness. Actual recovery-email delivery remains paused, and private files, production imports, broader workflows and production deployment still require separate staging gates and authorization.

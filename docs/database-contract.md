@@ -14,7 +14,7 @@ Use the signed-in user's request-scoped Supabase client with the publishable key
 
 Expose only `public` in the Data API. `private` must remain unexposed even though authenticated DB roles have USAGE and narrowly scoped helper EXECUTE permissions. Do not create a privileged browser/client service-role connection. Secret/server keys are limited to authorized Auth administration and controlled offline imports.
 
-### Confirmed employee-access slice (planned)
+### Confirmed employee-access slice
 
 An employee invitation must already be accepted, the identity linked and the employee active before this journey starts. Email/password sign-in and recovery do not grant employee authority. Validate the session and check live employee membership on every protected server request; ordinary application requests continue to use the user's publishable-key client and RLS, never a privileged fallback.
 
@@ -24,7 +24,13 @@ The slice signs out only the current browser session, clears sensitive client st
 
 Persist VI/EN preference through `set_my_locale` before switching the interface. Failure retains the previous language and shows a localized error; success preserves search query, result position and open property. Read the saved preference after subsequent login. No language change rewrites source records.
 
-These are approved application requirements, not claims that the foundation has sign-in routes, membership guards, cache handling or browser acceptance. See the [delivery scope](delivery-plan.md#confirmed-first-employee-access-slice) and [staging scenarios](testing.md#confirmed-employee-access-slice-acceptance-not-yet-executed).
+The issue #1 implementation supplies sign-in, protected browsing/search, read-only details, local sign-out and saved VI/EN preference. Real password-recovery routes use Supabase, but request-to-mailbox-to-callback acceptance remains explicitly paused by the user; this is not completed slice or production acceptance. See the [delivery scope](delivery-plan.md#confirmed-first-employee-access-slice) and [acceptance evidence and remaining gates](testing.md#confirmed-employee-access-slice-acceptance).
+
+`src/lib/supabase/route.ts` creates one publishable-key/session client per request, forwards refreshed cookies and SDK cache headers, and applies private/no-store responses and no-referrer policy. Auth cookies are HttpOnly and Secure on HTTPS. The locale cookie is presentation only; live membership and employee preference come from the database. Public auth navigation may carry `lang=vi|en`, but successful protected language switching persists only through `set_my_locale`.
+
+Application endpoints: `POST /api/auth/login` `{email,password,locale}`, `POST /api/auth/logout` `{}` (local scope), `GET /api/session`, `GET /api/properties?query=&after=`, `GET /api/properties/[id]`, `POST /api/properties/[id]/page-view` `{key}`, and `POST /api/locale` `{locale}`. All JSON writes require the configured same Origin and a bounded JSON object; identities, keys, enum values and query bounds are validated. Detail prices are cast to text in PostgREST before JSON serialization; consumers must keep whole-VND decimal strings, not parse them to Number.
+
+Recovery: `POST /api/auth/recover` `{email,locale}` invokes `resetPasswordForEmail`; `/auth/callback` exchanges a real PKCE `code` with the current SDK's optional `sb_flow_id` verifier slot, and `/auth/confirm` accepts only `token_hash` with `type=recovery`. Neither callback accepts arbitrary redirect targets. `POST /api/auth/password` `{password,confirmPassword}` requires a verified Auth user and the matching recovery-flow marker, enforces 8–128 characters/matching inputs, updates the password and signs out locally. The marker is not employee authority. Callback URLs are not printed by Next request logging. No employee row is created, linked, activated or promoted by recovery.
 
 ## Read contract
 
@@ -44,7 +50,7 @@ Search parameters: `p_query text=''`, `p_status text=NULL`, `p_mode text=NULL`, 
 
 The SQL search response is `setof properties`, sorted by UUID ascending, with at most 50 rows. Cursor is the last returned UUID. Fetch result address summaries separately by the returned property IDs; bound relation queries to the current page. Price/area filters are normal typed property filters; add explicit RPC parameters with tests before offering those filters in a combined search UI. Do not interpolate user SQL.
 
-For the confirmed employee-access slice, address search is accent-insensitive contiguous-substring matching with literal `%` and `_`, not fuzzy or reordered-token matching. Show the matching address format and verification state. **Implementation gap:** `20261010013008_inventory_storage_reporting.sql` currently uses `LIKE`/`ILIKE` patterns in which `%` and `_` are wildcards. The approved literal behavior is not yet implemented; address it with verified escaping or a new migration and regression coverage before accepting the slice. Do not rewrite the existing migration or claim literal behavior is already provided.
+Address search is accent-insensitive contiguous-substring matching with literal `%`, `_` and backslash, not fuzzy or reordered-token matching. `20261010073738_literal_inventory_search.sql` escapes patterns without rewriting the deployed foundation migration, applies the 120-character bound to raw input and retains UUID ordering/RLS/default limits. Show the matching recorded address format and verification state; never infer a verified ward from a text match.
 
 ## Mutation RPC contract
 
@@ -53,7 +59,7 @@ For the confirmed employee-access slice, address search is accent-insensitive co
 | `request_property_lock` | `p_property_id uuid`, `p_reason text`, optional `p_evidence_file_id uuid`, `p_reference text` | New lock UUID | Active employee; available/negotiating property; reason 10–2000 chars; ready evidence belongs to property; 48h pending request |
 | `decide_property_lock` | `p_lock_id uuid`, `p_approve boolean`, `p_reason text`, `p_days integer=7` | void | Manager/admin; independent reviewer; pending unexpired request; active claimant; days 1–30; at most one approved lock |
 | `release_property_lock` | `p_lock_id uuid`, `p_reason text` | void | Claimant or manager/admin; pending/approved only; meaningful reason; append event |
-| `record_property_activity` | `p_property_id uuid`, `p_kind='page_view'|'site_visit'`, `p_key uuid`, optional `p_notes text` | Event UUID | Actor derived from session; server timestamp; site visits start pending; retry key reused only for same employee/property/kind |
+| `record_property_activity` | `p_property_id uuid`, `p_kind='page_view'|'site_visit'`, `p_key uuid`, optional `p_notes text` | Event UUID | Active actor derived from session; server timestamp; unarchived properties ordinarily; archived **page views only** for active manager/admin with reviewer read access; archived site visits remain rejected; visits start pending; retry key reused only for same employee/property/kind |
 | `review_property_visit` | `p_event_id uuid`, `p_confirm boolean` | void | Manager/admin; another employee's pending site visit |
 | `complete_property_upload` | `p_file_id uuid` | void | Uploader/reviewer; registered object must exist; marks ready |
 | `review_property_file` | `p_file_id uuid`, `p_status='accepted'|'issue_flagged'` | void | Manager/admin; ready file; records reviewer; does not automatically verify property legal status |

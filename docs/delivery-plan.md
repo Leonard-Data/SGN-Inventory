@@ -4,13 +4,13 @@
 
 Replace the AppSheet/Google Sheets inventory profiled on 10 October 2026 with one Next.js App Router/TypeScript application, one Supabase Postgres database and Vercel hosting. Earlier Reflex/Cloudflare proposals are superseded. The company shares inventory and internal contacts; managers review company-wide, without branch/team isolation. Roles are sales, staff, manager and admin. See the domain glossary in [CONTEXT.md](../CONTEXT.md), the broader [architecture](architecture.md), [workbook findings](workbook-mapping.md) and [database contract](database-contract.md).
 
-VI/EN localization and rental agreement/month/manual receipt/refund handling were made mandatory on 10 October 2026. They remain broader MVP requirements even where the first employee-access slice below excludes their management screens. UI, reviewed promotion ETL and real staging acceptance remain planned, not implemented.
+VI/EN localization and rental agreement/month/manual receipt/refund handling were made mandatory on 10 October 2026. They remain broader MVP requirements even where the first employee-access slice excludes their management screens. The scoped employee-access UI and user-session data path are implemented; reviewed promotion ETL, broader workflow UI and full staging acceptance remain planned. Real recovery-email delivery acceptance is explicitly paused pending a test mailbox.
 
 GitHub publication of the initial package to <https://github.com/Leonard-Data/SGN-Inventory> was approved on 10 October 2026. The remote now contains `main` and the connected account has repository write access. Engineering setup does not itself authorize Supabase/Vercel provisioning, customer-data import or cloud deployment. Raw workbooks, customer records and secrets remain excluded.
 
 ## Planned application structure
 
-The database, documentation and engineering foundation are implemented: `src/app` has a bilingual readiness page and configuration health, with environment/release checks and pinned tooling. The feature routes and adapters below remain planned, not working inventory/auth UI. See [development.md](development.md) for the actual source tree.
+The database and engineering foundation plus issue #1 employee-access routes are implemented: login, protected browse/search/details, local logout, persisted VI/EN preference and real Supabase recovery endpoints. The following table is the broader target layout, not evidence that every listed workflow exists. See [development.md](development.md) for the actual source tree and [testing.md](testing.md#confirmed-employee-access-slice-acceptance) for scoped development evidence and the incomplete real-mailbox gate.
 
 | Path | Responsibility |
 | --- | --- |
@@ -60,7 +60,7 @@ Build auth + inventory first, then reservations/visits, then analytics and compl
 
 ## Confirmed property, contact and address maintenance plan
 
-The user confirmed this assembled plan on 10 October 2026, including requester-only request history and the authorized staff processing queue. Confirmation authorizes documenting the agreement, not implementation, provisioning, import or deployment. The package remains a database foundation without a working application.
+The user confirmed this assembled maintenance plan on 10 October 2026, including requester-only request history and the authorized staff processing queue. Confirmation authorizes documenting the agreement, not maintenance implementation, provisioning, import or deployment. Employee access and read-only inventory do not implement the maintenance workflows below.
 
 ### End-to-end journey
 
@@ -123,11 +123,11 @@ The confirmed journey is: an invited, active employee signs in → searches a le
 
 ### Acceptance and boundaries
 
-Use representative sanitized fixtures in isolated staging with real Supabase Auth and RLS; mocked authorization does not establish acceptance. Follow the [employee-access acceptance scenarios](testing.md#confirmed-employee-access-slice-acceptance-not-yet-executed).
+Use representative sanitized fixtures in isolated staging with real Supabase Auth and RLS; mocked authorization does not establish acceptance. Follow the [employee-access acceptance scenarios and evidence](testing.md#confirmed-employee-access-slice-acceptance).
 
 File viewing, record editing, reservation/rental management, employee administration UI and production workbook import are outside this slice, not removed from the broader MVP. Provisioning and deployment are not authorized by the journey agreement.
 
-**Known gap:** the current search migration treats `%` and `_` as wildcards. Literal matching needs implementation and regression verification before this slice can pass acceptance; no SQL or application behavior was changed by documenting the agreement.
+The authorized development project received two forward fixes without rewriting deployed SQL: `20261010073738_literal_inventory_search.sql` implements literal wildcard/backslash matching, and `20261010085034_reviewer_archived_page_views.sql` allows active reviewer archived-detail page views while rejecting archived physical visits. Both have embedded regressions and real hosted API proof. Dev Data API exposure was separately authorized and verified as `public` only. These changes do not authorize production migration, import or deployment; keep the PR draft and issue #1 open until actual recovery-email delivery/callback/password-update acceptance is available.
 
 ## Vietnamese/English UX requirements
 
@@ -144,7 +144,7 @@ File viewing, record editing, reservation/rental management, employee administra
 
 Engineering setup now includes locked npm dependencies, staged-format/type/lint/test hooks and read-only CI covering formatting, lint, types, configuration/release regressions, schema/preparation tests and Next build. A failed quality gate blocks the manually dispatched release workflows. Apply reviewed schema changes through the separate database dry-run/apply workflow, never Vercel build side effects.
 
-Two isolated Supabase and Vercel projects implement `dev`/`prod`; local and optional previews belong to dev. Deployments are explicit GitHub environment-gated operations on `develop`/`main`, respectively, with project/ref isolation checks and health smoke. Automatic Vercel Git deployment is disabled. The [setup runbook](setup.md) defines provisioning, protections, credentials and rollback; cloud actions and real staging acceptance have not been executed by engineering setup.
+Two isolated Supabase and Vercel projects are the required `dev`/`prod` release topology; local and optional previews belong to dev. Deployments are explicit GitHub environment-gated operations on `develop`/`main`, respectively, with project/ref isolation checks and health smoke. Automatic Vercel Git deployment must remain disabled. The [setup runbook](setup.md) defines provisioning, protections, credentials and rollback. Issue #1 separately authorized dev Supabase inspection/migrations, closed signup, exact localhost Auth redirects, synthetic fixtures and public-only API exposure. No production provisioning/import or Vercel deployment is established by this work.
 
 Production release sequence: database compatibility change → application build/preview validation → approved deployment → smoke checks → monitor. Add destructive/restrictive schema changes only after the application is compatible. Keep prior app deployment available for rollback and use forward database fixes when recovery is safer.
 

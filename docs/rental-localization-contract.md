@@ -1,6 +1,6 @@
 # Required localization and rental contract — version 0.2.0
 
-This is a normative extension to `database-contract.md`. The user added it on 10 October 2026. Migration 4 implements the database foundation; the Next.js UI, localization dictionaries and real service integration remain implementation work.
+This is a normative extension to `database-contract.md`, added on 10 October 2026. Migration 4 implements the rental/locale database foundation. Issue #1 implements the bounded employee-access VI/EN dictionaries and real user-session service path; rental-management UI and broader service acceptance remain planned, and actual recovery-email delivery is explicitly paused.
 
 ## 1. Two required languages, Vietnamese regional data
 
@@ -17,7 +17,7 @@ Vietnamese localization applies in either language:
 - Business date/time and month boundaries always use `Asia/Ho_Chi_Minh`, irrespective of device location or UI language. Display `dd/MM/yyyy` in both languages (`vi-VN` / `en-GB`); store UTC instants and date-only rental terms separately.
 - `rental_agreements.contract_language` describes the signed document language; changing UI language does not change that value or translate a contract.
 
-Implementation paths: `src/i18n/vi.ts`, `src/i18n/en.ts`, locale/provider support, and a dictionary-parity check. They are planned frontend deliverables, not existing components in this foundation.
+The delivered slice uses `src/i18n/messages.ts`, whose typed `Record<Locale, Record<keyof typeof vi, string>>` requires equivalent VI/EN keys, and the reused protected session header. `set_my_locale` succeeds before UI/cookie preference changes; failed network saves retain the previous language. Live browser acceptance covers vi → en → vi on nonempty cursor-paged address search and on open details, query/cursor/property/scroll retention, exact source values, same activity identity/count, saved preference after login and separate employees. See [executed evidence and remaining gates](testing.md#confirmed-employee-access-slice-acceptance). Broader rental labels/flows remain required, not implemented by this read-only slice.
 
 ## 2. Rental lifecycle and whole-property inventory
 

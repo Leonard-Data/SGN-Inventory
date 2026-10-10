@@ -1,0 +1,57 @@
+{
+  "checkedAt": "2026-10-10T10:50:38.099Z",
+  "environment": "authorized hosted development Supabase / local real Next.js application",
+  "projectRef": "tneucwzcrzteeixvttpu",
+  "observations": [
+    {
+      "name": "real authenticated keyset pages and anonymous denial",
+      "appStatus": 200,
+      "anonymousStatus": 401,
+      "pageSizes": [
+        30,
+        6
+      ]
+    },
+    {
+      "name": "literal accent-insensitive contiguous search, controls and validation"
+    },
+    {
+      "name": "exact decimal-string money, recorded contact links and same-key page view"
+    },
+    {
+      "name": "reviewer-only archived detail/page view and rejected archived physical visit"
+    },
+    {
+      "name": "inactive and unlinked browser/application/direct-RLS denial"
+    },
+    {
+      "name": "real browser search/detail, failed locale save, state/source retention and no duplicate activity"
+    },
+    {
+      "name": "localized oversized/empty/missing-contact and unresolved states"
+    },
+    {
+      "name": "live deactivation with original app/direct sessions and clearing on refocus",
+      "appStatus": 403,
+      "directRows": 0
+    },
+    {
+      "name": "preference survives sign-in, Back/direct navigation clears data and other device stays signed in"
+    },
+    {
+      "name": "localized invalid recovery callback/input without password or employee access"
+    },
+    {
+      "name": "independent employee saved language"
+    },
+    {
+      "name": "real archived reviewer detail surface without physical-visit creation"
+    }
+  ],
+  "recoveryEmailDelivery": "not executed: user paused acceptance until an accessible mailbox is available",
+  "limitations": [
+    "Not production/deployed application acceptance",
+    "Real request-to-mailbox-to-callback password recovery and recovery for denied identities remain unexecuted",
+    "Broader MVP/Storage/import/rental/concurrent reservation gates are out of scope"
+  ]
+}

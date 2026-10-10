@@ -196,6 +196,41 @@ await check('anonymous rental tables denied',()=>fails('select * from public.ren
 await asUser(4);
 await check('inactive language update denied',()=>fails("select public.set_my_locale('en')",[],'42501'));
 await check('inactive rental RPC denied',()=>fails('select public.create_rental_agreement($1,$2,$3,$4,$5,$6)',[rentProperty,tenant,'RENT-INACTIVE',dates.start,dates.finish,'12000000'],'42501'));
+await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
+const literalProperty='20000000-0000-4000-8000-000000000004';
+const wildcardControl='20000000-0000-4000-8000-000000000005';
+await db.query("insert into public.properties(id,property_code,listing_mode,status) values($1,'LITERAL%_CODE','sale','available'),($2,'LITERALXXCODE','sale','available')",[literalProperty,wildcardControl]);
+await db.query("insert into public.property_addresses(property_id,format,address_text) values($1,'legacy',$3),($2,'legacy',$4)",[literalProperty,wildcardControl,'Nhà 50%_ Nguyễn Trãi \\ '+ '%'.repeat(120),'Nhà 500X Nguyễn Trãi X control']);
+await asUser(0);
+await check('search treats percent and underscore as literal with excluded controls',async()=>{
+  for(const query of ['50%','%_','%_CODE']) assert.deepEqual((await db.query('select id from public.search_properties($1)',[query])).rows.map(row=>row.id),[literalProperty]);
+});
+await check('literal backslash is not an escape supplied by caller',async()=>assert.deepEqual((await db.query('select id from public.search_properties($1)',['\\'])).rows.map(row=>row.id),[literalProperty]));
+await check('120 literal characters remain permitted after SQL escaping',async()=>assert.deepEqual((await db.query('select id from public.search_properties($1)',['%'.repeat(120)])).rows.map(row=>row.id),[literalProperty]));
+await check('oversized raw query remains rejected by search',async()=>assert.deepEqual((await db.query('select id from public.search_properties($1)',['%'.repeat(121)])).rows,[]));
+await check('address search is contiguous, not reordered tokens',async()=>assert.deepEqual((await db.query('select id from public.search_properties($1)',['trai nguyen'])).rows,[]));
+await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
+const archivedProperty='20000000-0000-4000-8000-000000000006';
+const archivedViewKey='80000000-0000-4000-8000-000000000001';
+await db.query("insert into public.properties(id,property_code,listing_mode,status,archived_at) values($1,'ARCHIVED-REVIEW','sale','available',now())",[archivedProperty]);
+await asUser(2);
+await check('reviewer archived detail records one retry-safe page view without a physical visit',async()=>{
+  const first=(await db.query("select public.record_property_activity($1,'page_view',$2) as id",[archivedProperty,archivedViewKey])).rows[0].id;
+  assert.equal((await db.query("select public.record_property_activity($1,'page_view',$2) as id",[archivedProperty,archivedViewKey])).rows[0].id,first);
+  assert.deepEqual((await db.query("select property_id,employee_id,kind,visit_status from public.activity_events where id=$1",[first])).rows,[{property_id:archivedProperty,employee_id:employees[2],kind:'page_view',visit_status:null}]);
+});
+await check('reviewer cannot submit an archived physical visit',()=>fails("select public.record_property_activity($1,'site_visit',$2)",[archivedProperty,'80000000-0000-4000-8000-000000000002'],'P0001'));
+await check('sales and staff cannot read or record an archived property',async()=>{
+  for(const index of [0,5]) {
+    await asUser(index);
+    assert.deepEqual((await db.query('select id from public.properties where id=$1',[archivedProperty])).rows,[]);
+    await fails("select public.record_property_activity($1,'page_view',$2)",[archivedProperty,archivedViewKey],'P0001');
+  }
+});
+await db.exec('reset role');await db.query('update public.employees set is_active=false where id=$1',[employees[2]]);
+await asUser(2);
+await check('deactivated reviewer cannot replay an archived page-view identity',()=>fails("select public.record_property_activity($1,'page_view',$2)",[archivedProperty,archivedViewKey],'42501'));
+await db.exec('reset role');await db.query('update public.employees set is_active=true where id=$1',[employees[2]]);
 const report={checked_at:new Date().toISOString(),engine:'PGlite embedded PostgreSQL; mocked auth/storage schemas',passed,
  limitations:['Not a live Supabase integration test','HTTP Auth, signed URLs, Vercel and browser flows not exercised','True multi-session concurrent transaction test remains a staging acceptance gate']};
 await fs.writeFile(path.join(root,'docs/validation-results.json'),JSON.stringify(report,null,2)+'\n');
