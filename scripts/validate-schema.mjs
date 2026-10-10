@@ -237,6 +237,62 @@ await check('retry preserves existing category (no recategorization)',async()=>{
   const f=await db.query('select category_id from public.property_files where id=$1',[fid]);
   assert.equal(f.rows[0].category_id,cat.rows[0].id);
 });
+await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
+const categoryProperty='22000000-0000-4000-8000-000000000001';
+const categoryFile='42000000-0000-4000-8000-000000000001';
+const nullUploaderFile='42000000-0000-4000-8000-000000000002';
+await db.query("insert into public.properties(id,property_code,listing_mode,status,created_by) values($1,'SGN-CATEGORY','sale','available',$2)",[categoryProperty,employees[0]]);
+await asUser(1);
+await db.query(registerSql,[categoryFile,categoryProperty,'category-correction.pdf','application/pdf',1024,testSha256,'document',otherCatId]);
+await db.exec('reset role');
+await db.query("insert into public.property_files(id,property_id,document_type,object_path,original_filename,purpose,upload_status,uploaded_by,review_status,reviewed_by) values($1,$2,'other',$3,'legacy-category.pdf','document','ready',null,'accepted',$4)",[nullUploaderFile,categoryProperty,`${categoryProperty}/${nullUploaderFile}/content`,employees[2]]);
+const categoryOriginal=(await db.query('select * from public.property_files where id=$1',[categoryFile])).rows[0];
+const nullUploaderOriginal=(await db.query('select * from public.property_files where id=$1',[nullUploaderFile])).rows[0];
+await asUser(1);
+const correctionCategory=(await db.query("select public.create_or_get_category('Hồ sơ chỉnh sửa') as id")).rows[0].id;
+const correctionSql='select public.set_file_category($1,$2,$3)';
+await check('uploader without property edit authority corrects only category and can choose Other',async()=>{
+  await db.query(correctionSql,[categoryProperty,categoryFile,correctionCategory]);
+  assert.deepEqual((await db.query('select * from public.property_files where id=$1',[categoryFile])).rows[0],{...categoryOriginal,category_id:correctionCategory});
+  await db.query(correctionSql,[categoryProperty,categoryFile,otherCatId]);
+  assert.deepEqual((await db.query('select * from public.property_files where id=$1',[categoryFile])).rows[0],categoryOriginal);
+});
+await check('NULL historical uploader does not grant contributor correction authority',()=>fails(correctionSql,[categoryProperty,nullUploaderFile,correctionCategory],'42501'));
+await check('category creator cannot correct another uploader attachment without edit authority',()=>fails(correctionSql,[property,fileId,correctionCategory],'42501'));
+await asUser(0);
+await check('sales owner corrects another employee file without changing its state or identity',async()=>{
+  await db.query(correctionSql,[categoryProperty,categoryFile,correctionCategory]);
+  await db.exec('reset role');
+  assert.deepEqual((await db.query('select * from public.property_files where id=$1',[categoryFile])).rows[0],{...categoryOriginal,category_id:correctionCategory});
+  await asUser(0);
+});
+await check('unknown category, missing file and mismatched property leave assignment unchanged',async()=>{
+  await fails(correctionSql,[categoryProperty,categoryFile,'00000000-0000-0000-0000-000000000000'],'23514');
+  await fails(correctionSql,[categoryProperty,'42000000-0000-4000-8000-ffffffffffff',otherCatId],'23514');
+  await fails(correctionSql,[property,categoryFile,otherCatId],'23514');
+  await db.exec('reset role');
+  assert.deepEqual((await db.query('select * from public.property_files where id=$1',[categoryFile])).rows[0],{...categoryOriginal,category_id:correctionCategory});
+});
+for(const actor of [5,2,3]){
+  await asUser(actor);
+  await check(`editor ${actor} can correct historical NULL-uploader attachment`,async()=>{
+    await db.query(correctionSql,[categoryProperty,nullUploaderFile,correctionCategory]);
+    assert.deepEqual((await db.query('select * from public.property_files where id=$1',[nullUploaderFile])).rows[0],{...nullUploaderOriginal,category_id:correctionCategory});
+  });
+}
+for(const actor of [null,4]){
+  await asUser(actor);
+  await check(`${actor===null?'anonymous':'inactive'} category correction denied`,()=>fails(correctionSql,[categoryProperty,nullUploaderFile,otherCatId],'42501'));
+}
+await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");await db.query('update public.properties set archived_at=now() where id=$1',[categoryProperty]);
+await asUser(2);
+await check('even editor cannot correct archived attachment',()=>fails(correctionSql,[categoryProperty,nullUploaderFile,otherCatId],'42501'));
+await db.exec('reset role');await db.query('update public.properties set archived_at=null where id=$1',[categoryProperty]);
+await asUser(1);await db.exec('reset role');await db.query('update public.employees set is_active=false where id=$1',[employees[1]]);
+await db.exec('set role authenticated');
+await check('existing session loses uploader correction authority immediately after deactivation',()=>fails(correctionSql,[categoryProperty,categoryFile,otherCatId],'42501'));
+await db.exec('reset role');await db.query('update public.employees set is_active=true where id=$1',[employees[1]]);
+await asUser(0);
 await db.exec('reset role');
 await check('audit records exist for workflow mutations',async()=>assert.ok((await db.query('select count(*)::int as n from private.audit_events')).rows[0].n>0));
 await check('Vietnam day boundary is applied',async()=>assert.equal((await db.query("select ('2026-10-09 17:05:00+00'::timestamptz at time zone 'Asia/Ho_Chi_Minh')::date::text as day")).rows[0].day,'2026-10-10'));

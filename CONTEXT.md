@@ -132,3 +132,7 @@ _Avoid_: Any image file, certificate photo
 **Property cover photo**:
 The one Property photo explicitly chosen by a current property editor to represent the property, or no choice. It belongs to that property and has technical file completion; uploading or checking a photo does not choose it automatically. Removing the choice retains the original attachment.
 _Avoid_: Public image, automatic first photo, document approval
+
+**Category correction**:
+Changing an attachment's one Document category by its original uploader or a current property editor, while the property remains unarchived. It changes classification, not content, file completion, review history, legal status or the property's cover choice.
+_Avoid_: Re-upload, document approval, contributor reorganization

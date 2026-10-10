@@ -60,6 +60,10 @@ const vi = {
   changingCover: 'Đang lưu ảnh bìa…',
   selectedCover: 'Ảnh bìa đã chọn',
   checkPhoto: 'Kiểm tra kỹ thuật ảnh trước khi chọn',
+  save: 'Lưu',
+  cancel: 'Hủy',
+  changeCategory: 'Đổi danh mục',
+  savingCategory: 'Đang lưu…',
 };
 
 const en: Record<keyof typeof vi, string> = {
@@ -120,6 +124,10 @@ const en: Record<keyof typeof vi, string> = {
   changingCover: 'Saving cover…',
   selectedCover: 'Selected cover',
   checkPhoto: 'Technically validate photo before selection',
+  save: 'Save',
+  cancel: 'Cancel',
+  changeCategory: 'Change category',
+  savingCategory: 'Saving…',
 };
 
 const errorsVi: Record<string, string> = {
@@ -145,6 +153,7 @@ const errorsVi: Record<string, string> = {
   'replacement-required':
     'Đăng ký này không thể tiếp tục. Chọn nội dung thay thế thành một tập tin mới; giữ nguyên đăng ký cũ.',
   'invalid-cover': 'Chọn ảnh bất động sản đã kiểm tra kỹ thuật và thuộc đúng bất động sản này.',
+  'invalid-category': 'Danh mục không hợp lệ.',
 };
 
 const errorsEn: Record<keyof typeof errorsVi, string> = {
@@ -169,6 +178,7 @@ const errorsEn: Record<keyof typeof errorsVi, string> = {
   'replacement-required':
     'This registration cannot resume. Upload replacement content as a new attachment; the original registration is retained.',
   'invalid-cover': 'Choose a technically validated Property photo belonging to this property.',
+  'invalid-category': 'Invalid category.',
 };
 
 export const fileMessages: Record<

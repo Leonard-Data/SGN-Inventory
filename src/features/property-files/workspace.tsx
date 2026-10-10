@@ -55,6 +55,10 @@ export function Workspace({
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [creatingCategory, setCreatingCategory] = useState(false);
+  const [editingFileId, setEditingFileId] = useState<string | null>(null);
+  const [editingCategoryId, setEditingCategoryId] = useState('');
+  const [categoryBusy, setCategoryBusy] = useState(false);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
   const generation = useRef(0);
   const controller = useRef<AbortController | null>(null);
   const [coverBusy, setCoverBusy] = useState(false);
@@ -396,6 +400,26 @@ export function Workspace({
     }
   }
 
+  async function changeCategory(fileId: string) {
+    const version = generation.current;
+    const signal = controller.current?.signal;
+    setCategoryBusy(true);
+    setCategoryError(null);
+    try {
+      await api(`/api/properties/${propertyId}/files/${fileId}/category`, { categoryId: editingCategoryId }, signal);
+      if (generation.current !== version || signal?.aborted) return;
+      const fresh = await api<PropertyFileList>(`/api/properties/${propertyId}/files`, undefined, signal);
+      if (generation.current !== version || signal?.aborted) return;
+      setFiles(fresh.files);
+      setEditingFileId(null);
+    } catch (failure) {
+      if (generation.current === version && !signal?.aborted && !denied(failure))
+        setCategoryError(failure instanceof RequestError ? failure.code : 'unavailable');
+    } finally {
+      if (generation.current === version) setCategoryBusy(false);
+    }
+  }
+
   return (
     <section className="panel" aria-label={fileText.files}>
       <h2>{fileText.files}</h2>
@@ -598,6 +622,26 @@ export function Workspace({
                 ) : (
                   <button type="button" disabled={coverBusy || checkingPhoto !== null} onClick={() => void checkPhoto(file.id)}>
                     {checkingPhoto === file.id ? fileText.validating : fileText.checkPhoto}
+                  </button>
+                )
+              ) : null}
+              {!archived && (canEdit || file.uploaded_by === employeeId) ? (
+                editingFileId === file.id ? (
+                  <div>
+                    <label htmlFor={'edit-category-' + file.id}>{fileText.category}</label>
+                    <select id={'edit-category-' + file.id} value={editingCategoryId} disabled={categoryBusy}
+                      onChange={(event) => setEditingCategoryId(event.target.value)}>
+                      {categories.map((category) => <option key={category.id} value={category.id}>{categoryName(category.id)}</option>)}
+                    </select>
+                    <button type="button" disabled={categoryBusy || !editingCategoryId} onClick={() => void changeCategory(file.id)}>
+                      {categoryBusy ? fileText.savingCategory : fileText.save}
+                    </button>
+                    <button type="button" disabled={categoryBusy} onClick={() => {setEditingFileId(null);setCategoryError(null);}}>{fileText.cancel}</button>
+                    {categoryError ? <p role="alert">{fileText.errors[categoryError] ?? text.unavailable}</p> : null}
+                  </div>
+                ) : (
+                  <button type="button" disabled={categoryBusy} onClick={() => {setEditingFileId(file.id);setEditingCategoryId(file.category_id);setCategoryError(null);}}>
+                    {fileText.changeCategory}
                   </button>
                 )
               ) : null}
