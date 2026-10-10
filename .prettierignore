@@ -1,6 +1,9 @@
 node_modules/
 .next/
 .vercel/
+# Preserve installed upstream skills and agent links.
+.agents/skills/
+.claude/skills/
 package-lock.json
 next-env.d.ts
 supabase/migrations/

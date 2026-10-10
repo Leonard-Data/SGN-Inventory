@@ -19,6 +19,14 @@ Read `CONTEXT.md` and `docs/database-contract.md` before changing the project. T
 - Pin dependencies and commit lockfiles. Node.js 22+ is required. Verify current package and SSR API versions before building the UI.
 - Do not cache authenticated inventory, employee/contact data, signed document links or user sessions in a shared public cache.
 
+## UI and Vercel skills
+
+- UI implementation and React/Next.js performance work: read and follow [vercel-react-best-practices](.agents/skills/vercel-react-best-practices/SKILL.md), including the rule files relevant to the change.
+- Reusable component API design or composition refactors: read and follow [vercel-composition-patterns](.agents/skills/vercel-composition-patterns/SKILL.md).
+- UI review, accessibility or UX audits: read and follow [web-design-guidelines](.agents/skills/web-design-guidelines/SKILL.md); fetch its current guidelines before each review.
+- Vercel deployment work: read and follow [deploy-to-vercel](.agents/skills/deploy-to-vercel/SKILL.md); for token-authenticated CLI work, also read [vercel-cli-with-tokens](.agents/skills/vercel-cli-with-tokens/SKILL.md).
+- Apply these skills within this project's authorization, data boundaries, pinned tool versions and acceptance requirements; those take precedence over upstream examples. Check credential presence without printing secret values. Installing or invoking a skill grants no deployment authority.
+
 ## Database invariants
 
 - Every new exposed table needs explicit grants and RLS in the same migration. Never grant `anon` access to inventory.
