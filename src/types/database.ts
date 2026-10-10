@@ -370,6 +370,7 @@ export type Database = {
           bathrooms: number | null
           bedrooms: number | null
           construction_text: string | null
+          cover_file_id: string | null
           created_at: string
           created_by: string | null
           depth_m: number | null
@@ -403,6 +404,7 @@ export type Database = {
           bathrooms?: number | null
           bedrooms?: number | null
           construction_text?: string | null
+          cover_file_id?: string | null
           created_at?: string
           created_by?: string | null
           depth_m?: number | null
@@ -436,6 +438,7 @@ export type Database = {
           bathrooms?: number | null
           bedrooms?: number | null
           construction_text?: string | null
+          cover_file_id?: string | null
           created_at?: string
           created_by?: string | null
           depth_m?: number | null
@@ -463,6 +466,13 @@ export type Database = {
           updated_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "properties_cover_file_id_fkey"
+            columns: ["cover_file_id"]
+            isOneToOne: false
+            referencedRelation: "property_files"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "properties_created_by_fkey"
             columns: ["created_by"]
@@ -1540,6 +1550,7 @@ export type Database = {
           bathrooms: number | null
           bedrooms: number | null
           construction_text: string | null
+          cover_file_id: string | null
           created_at: string
           created_by: string | null
           depth_m: number | null
@@ -1574,6 +1585,10 @@ export type Database = {
         }
       }
       set_my_locale: { Args: { p_locale: string }; Returns: undefined }
+      set_property_cover: {
+        Args: { p_file_id?: string; p_property_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
