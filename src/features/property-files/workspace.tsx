@@ -100,9 +100,6 @@ export function Workspace({
               <span className="file-name" translate="no">
                 {file.original_filename}
               </span>
-              <span className="file-purpose badge">
-                {fileText[file.purpose as 'photo' | 'document'] ?? fileText.unknownType}
-              </span>
               <span className="file-actions">
                 <button
                   type="button"

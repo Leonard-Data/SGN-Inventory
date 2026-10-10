@@ -7,9 +7,6 @@ const vi = {
   download: 'Tải xuống',
   signingFile: 'Đang lấy liên kết…',
   signedFailed: 'Không lấy được liên kết tập tin. Vui lòng thử lại.',
-  photo: 'Ảnh',
-  document: 'Tài liệu',
-  unknownType: 'Chưa xác định',
 } as const;
 
 const en: Record<keyof typeof vi, string> = {
@@ -19,9 +16,6 @@ const en: Record<keyof typeof vi, string> = {
   download: 'Download',
   signingFile: 'Obtaining link…',
   signedFailed: 'Unable to obtain file link. Please retry.',
-  photo: 'Photo',
-  document: 'Document',
-  unknownType: 'Unknown',
 };
 
 export const fileMessages: Record<Locale, Record<keyof typeof vi, string>> = {

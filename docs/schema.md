@@ -30,11 +30,10 @@ erDiagram
 | `admin_unit_crosswalks` | From/to version FKs, whole/partial/rename, effective date, source, notes, reviewer | Crosswalks do not directly set a property's address; partial transitions require boundary or property-level evidence |
 | `contacts` | UUID, name, normalized phone string array, untouched raw phone text, role and notes | No global merges based on generic owner name or masked phone ID |
 | `property_contacts` | Composite property/contact PK, relation, primary flag | Supports several owners/brokers; at most one primary contact per property |
-| `property_files` | UUID, property FK, type, purpose (photo/document), private bucket, immutable object path, original filename, MIME/size/hash, upload/review state, uploader/reviewer, optional category FK | Registered path includes property ID and file ID; completion verifies stored object exists; purpose is independent of MIME and category; ready-only reads require live property access |
+| `property_files` | UUID, property FK, type, private bucket, immutable object path, original filename, MIME/size/hash, upload/review state, uploader/reviewer | Registered path includes property ID and file ID; completion verifies stored object exists; ready-only reads require live property access |
 | `activity_events` | UUID, employee/property FK, page_view/site_visit, occurred/recorded timestamps, generated Vietnam day, source, idempotency key, visit decision | No direct client DML; one key per employee; only confirmed visits count as physical visit KPI; page_view has no visit status |
 | `property_locks` | UUID, property/claimant, reason, optional evidence, attribution reference, lifecycle state, expiry, independent decision | One approved row per property; one pending request per property/employee; effective reservation additionally requires future expiry |
 | `lock_events` | Identity key, lock FK, actor, action, reason, timestamp | Append-only client access; all approved/rejected/released/expired transitions retain trace |
-| `document_categories` | UUID, unique lowercase-trimmed label, creator FK | Company-wide category; no rename/merge/delete operations |
 
 ## Rental tables (migration 4)
 

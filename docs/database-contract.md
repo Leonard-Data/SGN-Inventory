@@ -31,7 +31,7 @@ The issue #1 implementation supplies sign-in, protected browsing/search, read-on
 Application endpoints: `POST /api/auth/login` `{email,password,locale}`, `POST /api/auth/logout` `{}` (local scope), `GET /api/session`, `GET /api/properties?query=&after=`, `GET /api/properties/[id]`, `POST /api/properties/[id]/page-view` `{key}`, and `POST /api/locale` `{locale}`. All JSON writes require the configured same Origin and a bounded JSON object; identities, keys, enum values and query bounds are validated. Detail prices are cast to text in PostgREST before JSON serialization; consumers must keep whole-VND decimal strings, not parse them to Number.
 Property file read workspace (ticket #22):
 - `GET /api/properties/{propertyId}/files` → `{files: [...]}` — completed attachments for a property, subject to live employee access and archived-property reviewer boundary.
-- `POST /api/properties/{propertyId}/files/{fileId}/signed` `{download: boolean}` → `{url, expiresAt}` — authorized 60-second signed URL; access checked via `authorize_file_read` RPC.
+:- `POST /api/properties/{propertyId}/files/{fileId}/signed` `{download: boolean}` → `{url, expiresAt}` — authorized 60-second signed URL; access checked via RLS.
 Signed URLs are bearer credentials until expiry; they must not be logged, persisted in metadata or publicly cached. Renewal requires a new authorized read. No upload/recovery/categories/cover endpoints in this ticket.
 
 Recovery: `POST /api/auth/recover` `{email,locale}` invokes `resetPasswordForEmail`; `/auth/callback` exchanges a real PKCE `code` with the current SDK's optional `sb_flow_id` verifier slot, and `/auth/confirm` accepts only `token_hash` with `type=recovery`. Neither callback accepts arbitrary redirect targets. `POST /api/auth/password` `{password,confirmPassword}` requires a verified Auth user and the matching recovery-flow marker, enforces 8–128 characters/matching inputs, updates the password and signs out locally. The marker is not employee authority. Callback URLs are not printed by Next request logging. No employee row is created, linked, activated or promoted by recovery.
@@ -67,7 +67,6 @@ Address search is accent-insensitive contiguous-substring matching with literal 
 | `review_property_visit` | `p_event_id uuid`, `p_confirm boolean` | void | Manager/admin; another employee's pending site visit |
 | `complete_property_upload` | `p_file_id uuid` | void | Uploader/reviewer; registered object must exist; marks ready |
 | `review_property_file` | `p_file_id uuid`, `p_status='accepted'|'issue_flagged'` | void | Manager/admin; ready file; records reviewer; does not automatically verify property legal status |
-| `authorize_file_read` | `p_file_id uuid` | JSON metadata | Active employee with live property access; ready file only; archived properties require reviewer; returns object_path for signed URL creation |
 
 No authenticated INSERT/UPDATE/DELETE grants exist on locks, lock events or activity. Do not replace an RPC with several client writes. New lock requests have no explicit retry key: on `23505` from the pending-request index, refetch the employee's open request rather than blindly retrying. UI confirmation after ambiguous network failure must fetch the current state.
 

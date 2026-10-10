@@ -1058,121 +1058,6 @@ export type Database = {
           },
         ];
       };
-      property_files: {
-        Row: {
-          bucket_id: string;
-          category_id: string | null;
-          created_at: string;
-          document_type: string;
-          id: string;
-          mime_type: string | null;
-          object_path: string;
-          original_filename: string;
-          property_id: string;
-          purpose: string;
-          review_status: string;
-          reviewed_by: string | null;
-          sha256: string | null;
-          size_bytes: number | null;
-          upload_status: string;
-          uploaded_by: string | null;
-        };
-        Insert: {
-          bucket_id?: string;
-          category_id?: string | null;
-          created_at?: string;
-          document_type: string;
-          id?: string;
-          mime_type?: string | null;
-          object_path: string;
-          original_filename: string;
-          property_id: string;
-          purpose?: string;
-          review_status?: string;
-          reviewed_by?: string | null;
-          sha256?: string | null;
-          size_bytes?: number | null;
-          upload_status?: string;
-          uploaded_by?: string | null;
-        };
-        Update: {
-          bucket_id?: string;
-          category_id?: string | null;
-          created_at?: string;
-          document_type?: string;
-          id?: string;
-          mime_type?: string | null;
-          object_path?: string;
-          original_filename?: string;
-          property_id?: string;
-          purpose?: string;
-          review_status?: string;
-          reviewed_by?: string | null;
-          sha256?: string | null;
-          size_bytes?: number | null;
-          upload_status?: string;
-          uploaded_by?: string | null;
-        };
-        Relationships: [
-          {
-            foreignKeyName: 'property_files_property_id_fkey';
-            columns: ['property_id'];
-            isOneToOne: false;
-            referencedRelation: 'properties';
-            referencedColumns: ['id'];
-          },
-          {
-            foreignKeyName: 'property_files_uploaded_by_fkey';
-            columns: ['uploaded_by'];
-            isOneToOne: false;
-            referencedRelation: 'employees';
-            referencedColumns: ['id'];
-          },
-          {
-            foreignKeyName: 'property_files_reviewed_by_fkey';
-            columns: ['reviewed_by'];
-            isOneToOne: false;
-            referencedRelation: 'employees';
-            referencedColumns: ['id'];
-          },
-          {
-            foreignKeyName: 'property_files_category_id_fkey';
-            columns: ['category_id'];
-            isOneToOne: false;
-            referencedRelation: 'document_categories';
-            referencedColumns: ['id'];
-          },
-        ];
-      };
-      document_categories: {
-        Row: {
-          created_at: string;
-          created_by: string | null;
-          id: string;
-          label: string;
-        };
-        Insert: {
-          created_at?: string;
-          created_by?: string | null;
-          id?: string;
-          label: string;
-        };
-        Update: {
-          created_at?: string;
-          created_by?: string | null;
-          id?: string;
-          label?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: 'document_categories_created_by_fkey';
-            columns: ['created_by'];
-            isOneToOne: false;
-            referencedRelation: 'employees';
-            referencedColumns: ['id'];
-          },
-        ];
-      };
     };
     Views: {
       v_admin_inventory_by_area: {
@@ -1465,12 +1350,7 @@ export type Database = {
         ];
       };
     };
-
     Functions: {
-      authorize_file_read: {
-        Args: { p_file_id: string };
-        Returns: Record<string, unknown>;
-      };
       activate_rental_agreement: {
         Args: { p_agreement_id: string };
         Returns: undefined;
