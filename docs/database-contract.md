@@ -31,8 +31,8 @@ The issue #1 implementation supplies sign-in, protected browsing/search, read-on
 Application endpoints: `POST /api/auth/login` `{email,password,locale}`, `POST /api/auth/logout` `{}` (local scope), `GET /api/session`, `GET /api/properties?query=&after=`, `GET /api/properties/[id]`, `POST /api/properties/[id]/page-view` `{key}`, and `POST /api/locale` `{locale}`. All JSON writes require the configured same Origin and a bounded JSON object; identities, keys, enum values and query bounds are validated. Detail prices are cast to text in PostgREST before JSON serialization; consumers must keep whole-VND decimal strings, not parse them to Number.
 Property file read workspace (ticket #22):
 - `GET /api/properties/{propertyId}/files` → `{files: [...]}` — completed attachments for a property, subject to live employee access and archived-property reviewer boundary.
-:- `POST /api/properties/{propertyId}/files/{fileId}/signed` `{download: boolean}` → `{url, expiresAt}` — authorized 60-second signed URL; access checked via RLS.
-Signed URLs are bearer credentials until expiry; they must not be logged, persisted in metadata or publicly cached. Renewal requires a new authorized read. No upload/recovery/categories/cover endpoints in this ticket.
+- `POST /api/properties/{propertyId}/files/{fileId}/signed` `{download: boolean}` → `{url, expiresAt}` — authorized 60-second signed URL; access checked via RLS. Downloads retain the original filename.
+Signed URLs are bearer credentials until expiry; they must not be logged, persisted in metadata or publicly cached. Renewal requires a new authorized read.
 
 Recovery: `POST /api/auth/recover` `{email,locale}` invokes `resetPasswordForEmail`; `/auth/callback` exchanges a real PKCE `code` with the current SDK's optional `sb_flow_id` verifier slot, and `/auth/confirm` accepts only `token_hash` with `type=recovery`. Neither callback accepts arbitrary redirect targets. `POST /api/auth/password` `{password,confirmPassword}` requires a verified Auth user and the matching recovery-flow marker, enforces 8–128 characters/matching inputs, updates the password and signs out locally. The marker is not employee authority. Callback URLs are not printed by Next request logging. No employee row is created, linked, activated or promoted by recovery.
 
@@ -65,8 +65,8 @@ Address search is accent-insensitive contiguous-substring matching with literal 
 | `release_property_lock` | `p_lock_id uuid`, `p_reason text` | void | Claimant or manager/admin; pending/approved only; meaningful reason; append event |
 | `record_property_activity` | `p_property_id uuid`, `p_kind='page_view'|'site_visit'`, `p_key uuid`, optional `p_notes text` | Event UUID | Active actor derived from session; server timestamp; unarchived properties ordinarily; archived **page views only** for active manager/admin with reviewer read access; archived site visits remain rejected; visits start pending; retry key reused only for same employee/property/kind |
 | `review_property_visit` | `p_event_id uuid`, `p_confirm boolean` | void | Manager/admin; another employee's pending site visit |
-| `complete_property_upload` | `p_file_id uuid` | void | Uploader/reviewer; registered object must exist; marks ready |
-| `review_property_file` | `p_file_id uuid`, `p_status='accepted'|'issue_flagged'` | void | Manager/admin; ready file; records reviewer; does not automatically verify property legal status |
+| `register_property_file` | `p_file_id uuid`, `p_property_id uuid`, `p_original_filename text`, `p_mime_type text`, `p_size_bytes bigint`, `p_sha256 text`, `p_purpose text='document'` | JSON `{fileId,objectPath}` | Any active employee; unarchived property; same UUID retries must match original expectations |
+| `complete_property_upload` | `p_file_id uuid`, `p_object_id uuid`, `p_mime_type text`, `p_size_bytes bigint`, `p_sha256 text`, `p_signature text` | void | Uploader; trusted server attestation of actual bytes; live access, parent/property identity, expectations and immutable Storage object checked atomically |
 
 No authenticated INSERT/UPDATE/DELETE grants exist on locks, lock events or activity. Do not replace an RPC with several client writes. New lock requests have no explicit retry key: on `23505` from the pending-request index, refetch the employee's open request rather than blindly retrying. UI confirmation after ambiguous network failure must fetch the current state.
 
@@ -76,7 +76,7 @@ No authenticated INSERT/UPDATE/DELETE grants exist on locks, lock events or acti
 - Manager/admin decide record-review and legal statuses and set sold/rented states. Sales cannot claim review approval by patching a property.
 - Address writes follow property edit permission; verified mappings require manager/admin. Primary-address replacement must be atomic; the planned maintenance slice does not require a separate approver.
 - Contact maintenance and property/contact links require staff/manager/admin. The foundation has no correction-request table or in-app workflow; the planned maintenance contract below replaces external operational handoff with structured in-app requests once implemented.
-- Files: INSERT metadata is allowed with property edit permission and current employee as uploader. Upload completion/review use RPCs. No direct authenticated file metadata UPDATE or DELETE.
+- Files: no direct authenticated metadata INSERT/UPDATE/DELETE. Registration and attested completion use invoker RPC wrappers around narrowly granted private definers. Historical review data is retained; review mutation RPCs are removed.
 - Admin maintains employees and official catalogs. Creating an employee row does not create an Auth user; invitations and confirmed account linkage are separate server operations.
 - Hard deletes are not exposed. When deactivating an employee, review their approved locks and release or let them expire; deactivation blocks new employee DB requests but does not erase attribution history.
 
@@ -105,14 +105,16 @@ See the [planned maintenance acceptance scenarios](testing.md#property-contact-a
 
 ## Document protocol
 
-1. Choose a UUID for the metadata row. Validate a safe filename and allowed MIME/size.
-2. Register metadata with `object_path = <property_uuid>/<file_uuid>/<filename>` and pending upload status.
-3. Upload once to the private `property-files` bucket using the user's client; never `upsert`.
-4. Call `complete_property_upload`; the DB checks Storage registration exists. The server additionally checks expected byte count/hash/MIME before accepting a legal document in the UI.
-5. For reading, use a short-lived signed URL (recommended 60 seconds) after RLS permits the object. URLs are bearer links until expiry and must not be logged, persisted in metadata or publicly cached.
-6. Retry uploads using the same registered metadata if the object has not been created. If bytes already exist after a network interruption, retry completion. For replacement, create a new file UUID and path.
+1. Choose one client UUID per file before registration. Register its safe original filename, supported MIME, positive byte count ≤20 MiB, SHA-256 and document/photo purpose. New registrations use `<property_uuid>/<file_uuid>/content`, an opaque ASCII Storage key; original filenames remain verbatim metadata and download names. Existing paths, expectations and attribution are immutable.
+2. `POST /api/properties/{propertyId}/files/register` returns `{fileId,objectPath,uploadUrl,publishableKey,accessToken}`. The request validates the live employee before obtaining the session JWT solely for direct upload transport.
+3. POST bytes directly to private Storage with that user's JWT and `x-upsert: false`. This avoids Vercel's request-body limit while retaining Storage's live employee/pending-owner policy; no bearer signed-upload token or service-role upload is used. Keep transport credentials only in memory.
+4. `POST /api/properties/{propertyId}/files/{fileId}/complete` accepts only `{}`. It inspects and downloads the actual object through the user's session, checks its immutable identity, exact bytes/hash and decoded supported format, and signs a versioned HMAC attestation. The database independently verifies the signature, original expectations, object identity and current actor after locking the parent property then file. An arbitrary browser RPC cannot mark a file ready.
+5. Each open/download requests a fresh 60-second signed URL after live access checks. Already-issued bearer URLs remain usable until expiry; subsequent issuance and metadata/byte reads are denied after deactivation.
+6. Registration and completion retry the same UUID/path. Existing bytes are never overwritten; replacement requires a new UUID/path. A transport failure is not proof of missing bytes.
 
-Bucket enforcement limits objects to 20 MiB and PDF/JPEG/PNG/WebP. MIME labels alone do not establish trustworthy content; validate bytes in the implementation's completion/review route. Storage cleanup for failed or orphaned uploads is an audited administrative maintenance operation, not a client delete.
+Bucket enforcement limits objects to 20 MiB and PDF/JPEG/PNG/WebP. Image validation decodes actual image content; PDF validation requires its header/EOF and parses its object graph/page tree using pinned `pdf-lib`. This is not semantic/legal authenticity checking, malware scanning or human review. Historical ready rows remain readable with original IDs, paths, expectations and review attribution.
+
+Install one cryptographically random 32-byte hex key as server-only `SGN_FILE_VALIDATION_KEY` and the matching `private.file_validation_keys` singleton (`id=1`) through the database owner. Neither authenticated clients nor service_role have key-table privileges. Missing configuration fails closed. Never commit, expose through `NEXT_PUBLIC_`, print or return this key. Migration SQL contains no secret.
 
 ## Types and error behavior
 
@@ -125,3 +127,11 @@ Bucket enforcement limits objects to 20 MiB and PDF/JPEG/PNG/WebP. MIME labels a
 ## Contract changes
 
 Add future changes as new migrations, with tests and this contract updated together. When introducing teams, branch scope, commission calculation/payouts, automated payment collection, address automation or a public portal, revisit authorization and data boundaries first.
+
+### Ticket #23 — Validated Property file upload
+
+Migration `20261010185028_property_file_upload_completion.sql` adds document/photo purpose and paired `validated_at`/`validated_object_id` completion evidence, removes direct metadata writes and the legacy existence-only completion/human-review RPCs, and tightens Storage policies. Existing `document_type='photo'` rows retain photo purpose; historical file and review fields are not rewritten.
+Migration `20261010195100_property_file_ascii_keys.sql` fixes a real hosted Storage limitation: Unicode object keys are rejected even though Vietnamese original filenames are valid metadata. Only newly registered paths change; earlier registrations and legacy object/evidence identities remain untouched. An occupied or unusable immutable path requires a new replacement identity, never renaming or overwriting its original record.
+
+Own pending metadata and bytes are visible only while the parent is unarchived, to support actual-byte inspection and later interruption recovery. Completed files retain the company-internal read boundary; pending bytes never appear in the shared read workspace. Anonymous/unlinked/inactive users have no file access. No category or cover schema is introduced by this migration.
+

@@ -17,7 +17,7 @@
     "typecheck": "tsc --noEmit",
     "format:check": "prettier . --check",
     "format": "prettier . --write",
-    "test:unit": "node --test src/lib/environment.test.ts src/features/properties/format.test.ts scripts/release-guard.test.mjs",
+    "test:unit": "node --test src/lib/environment.test.ts src/features/properties/format.test.ts src/features/property-files/content.test.ts scripts/release-guard.test.mjs",
     "test:schema": "node scripts/validate-schema.mjs",
     "test:acceptance": "node --env-file-if-exists=.env.local --env-file-if-exists=.env.acceptance.local scripts/employee-access-acceptance.mjs",
     "test:files:acceptance": "node --env-file-if-exists=.env.local --env-file-if-exists=.env.acceptance.local scripts/property-files-acceptance.mjs",
@@ -31,9 +31,11 @@
     "@supabase/ssr": "0.12.7",
     "@supabase/supabase-js": "2.117.3",
     "next": "16.4.0",
+    "pdf-lib": "1.17.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "server-only": "0.0.1"
+    "server-only": "0.0.1",
+    "sharp": "0.35.5"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.8",

@@ -211,6 +211,22 @@ No executed evidence yet. See `docs/property-files-acceptance.json` (future) and
 
 Prepare two pending requests from different employees. In session A use an authenticated reviewer JWT context, call `decide_property_lock(A, true, reason)` within a transaction and hold the transaction open. In session B use a different connection and reviewer context to approve B. B must wait on the same parent property row. Commit A; B must fail with reservation conflict. Query effective locks and audit/events to confirm one approval. Repeat with A rolling back: B may then succeed. Do not treat parallel calls in a single embedded DB connection as a proof of real multi-session locking.
 
+## Spec #33 development evidence — upload slice
+
+The captain authorized only development project `tneucwzcrzteeixvttpu`, its declared synthetic fixtures and scoped Spec #33 migrations/key installation. No production migration, import or deployment is included.
+
+- Real authenticated browser uploads completed PDF, JPEG, PNG and WebP against private Storage, with actual server download/format/hash validation and paired immutable-object completion evidence. Uploading to another employee's unarchived property succeeded without granting property-edit authority.
+- A supported PDF of exactly 20 MiB completed through direct user-JWT Storage transport; the application request carried registration/completion JSON, not the file body.
+- A different active employee downloaded the newly completed PDF and its exact SHA-256 matched the synthetic source. Truncated PNG bytes remained pending/private and produced a Vietnamese content-validation error.
+- Actual application registration rejected unsafe filenames, zero size, unsupported MIME and >20 MiB with `400` localized error codes. Direct metadata readiness mutation and a forged completion attestation returned `403`.
+- The actual VI→EN header action persisted the employee preference and rendered English file controls without changing the original filenames.
+- Hosted Storage rejected the initial Unicode key with `400/InvalidKey`. The additive ASCII-key migration left that failed registration and all prior paths unchanged; a new registration with the same Vietnamese original filename completed and another employee retrieved exact bytes. Native download `filename*` decoding also matched the original exactly after avoiding SDK query double-encoding.
+- Before the PDF parser fix, an EOF/xref-looking payload with no PDF object graph was misclassified as PDF. Afterward the permanent regression and real browser upload rejected it without sharing; the exact 20 MiB genuine PDF still revalidated successfully.
+- Inactive/unlinked authenticated identities returned zero direct file rows and `403` registration; another employee could not read the uploader's pending metadata.
+- The earlier read slice exercised actual signed-link expiry, authorized renewal, original download filename/content, and live deactivation with an existing JWT: new signing returned `403`, direct metadata returned no rows, refocus removed private files, and the already-issued bearer remained usable until expiry. The employee was restored.
+
+These are scoped development observations, not whole-spec acceptance. Recovery, categories, recategorization, covers and independent-session contention remain separate ticket gates. No object-delete or overwrite probe is claimed.
+
 ## Honest completion limits
 
 Issue #1 has real development Supabase and scoped app/Auth/Data API/browser evidence, plus separately completed active/inactive/unlinked delivered recovery with fixture restoration; historical foundation-only evidence above remains separate. Embedded Auth/Storage shims do not prove email delivery, Storage signed URLs, HTTP deployment protections or cloud release correctness. Private files, production imports, broader workflows and production deployment still require separate staging gates and authorization. Independent review agents remain unavailable due provider credentials; human PR review is still required.

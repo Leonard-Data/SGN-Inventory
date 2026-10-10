@@ -1,11 +1,13 @@
 import { PGlite } from '@electric-sql/pglite';
 import { unaccent } from '@electric-sql/pglite/contrib/unaccent';
 import { pg_trgm } from '@electric-sql/pglite/contrib/pg_trgm';
+import { pgcrypto } from '@electric-sql/pglite/contrib/pgcrypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
 const root = process.env.SGN_PROJECT_ROOT || process.cwd();
-const db = new PGlite({extensions:{unaccent,pg_trgm}});
+const db = new PGlite({extensions:{unaccent,pg_trgm,pgcrypto}});
 await db.exec(`
   create role anon; create role authenticated; create role service_role bypassrls;
   create schema auth; create table auth.users(id uuid primary key);
@@ -15,7 +17,7 @@ await db.exec(`
   grant usage on schema auth to authenticated,anon,service_role;
   create schema storage;
   create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
-  create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text);
+  create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text,unique(bucket_id,name));
   alter table storage.objects enable row level security;
   grant usage on schema storage to authenticated,anon;
   grant select,insert,update,delete on storage.objects to authenticated;
@@ -102,17 +104,89 @@ await check('expired approved rows are not effective',async()=>assert.equal((awa
 await asUser(0);
 await db.query('select public.request_property_lock($1,$2)',[property,'New request expires stale reservation first']);
 await check('new request lazily expires previous approved row',async()=>assert.equal((await db.query('select status from public.property_locks where id=$1',[stale])).rows[0].status,'expired'));
-const fileId='40000000-0000-4000-8000-000000000001';const objectPath=`${property}/${fileId}/fixture.pdf`;
+const fileId='40000000-0000-4000-8000-000000000001';let objectPath=`${property}/${fileId}/fixture.pdf`;
+const testSha256='a'.repeat(64);const validationKey='b'.repeat(64);
+const storageId='80000000-0000-4000-8000-000000000001';
+const registerSql='select public.register_property_file($1,$2,$3,$4,$5,$6,$7) as result';
+const completionSql='select public.complete_property_upload($1,$2,$3,$4,$5,$6)';
+const registration=[fileId,property,'fixture.pdf','application/pdf',1024,testSha256,'document'];
+await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
+await db.query('insert into private.file_validation_keys(id,key_hex) values(1,$1)',[validationKey]);
 await asUser(0);
-await db.query("insert into public.property_files(id,property_id,document_type,object_path,original_filename,uploaded_by) values($1,$2,'land_certificate',$3,'fixture.pdf',$4)",[fileId,property,objectPath,employees[0]]);
-await check('file cannot be completed without bytes',()=>fails('select public.complete_property_upload($1)',[fileId]));
-await check('direct file completion update is denied',()=>fails("update public.property_files set upload_status='ready' where id=$1",[fileId],'42501'));
-await check('unregistered file upload denied',()=>fails("insert into storage.objects(bucket_id,name) values('property-files','unregistered.pdf')",[],'42501'));
-await db.query("insert into storage.objects(bucket_id,name) values('property-files',$1)",[objectPath]);
-await check('pending file is not readable',async()=>assert.equal((await db.query('select * from storage.objects')).rows.length,0));
-await db.query('select public.complete_property_upload($1)',[fileId]);
-await check('ready registered file readable to active employee',async()=>assert.equal((await db.query('select * from storage.objects')).rows.length,1));
-await check('object overwrite is blocked',async()=>assert.equal((await db.query("update storage.objects set name='renamed' returning id")).rows.length,0));
+await check('legacy completion and review mutation paths removed',async()=>{
+  await fails('select public.complete_property_upload($1)',[fileId],'42883');
+  await fails('select public.review_property_file($1,$2)',[fileId,'accepted'],'42883');
+});
+await check('direct ready insertion and update denied',async()=>{
+  await fails("insert into public.property_files(id,property_id,document_type,object_path,original_filename,uploaded_by,upload_status) values($1,$2,'other',$3,'fixture.pdf',$4,'ready')",[fileId,property,objectPath,employees[0]],'42501');
+  await fails("update public.property_files set upload_status='ready' where id=$1",[fileId],'42501');
+});
+objectPath=(await db.query(registerSql,registration)).rows[0].result.objectPath;
+const payload=['v1',fileId,property,employees[0],objectPath,storageId,'application/pdf','1024',testSha256].join('|');
+const signature=createHmac('sha256',Buffer.from(validationKey,'hex')).update(payload).digest('hex');
+const completion=[fileId,storageId,'application/pdf',1024,testSha256,signature];
+await check('same registration key converges without replacing expectations',async()=>{
+  await db.query(registerSql,registration);
+  await fails(registerSql,[fileId,property,'changed.pdf','application/pdf',1024,testSha256,'document'],'42501');
+  assert.deepEqual((await db.query('select id,original_filename,size_bytes from public.property_files where id=$1',[fileId])).rows,[{id:fileId,original_filename:'fixture.pdf',size_bytes:1024}]);
+});
+await check('unsafe names, empty and oversized expectations rejected atomically',async()=>{
+  for(const [name,size] of [['../bad.pdf',1024],[' ',1024],['empty.pdf',0],['large.pdf',20971521]])
+    await fails(registerSql,['40000000-0000-4000-8000-000000000002',property,name,'application/pdf',size,testSha256,'document'],'23514');
+  assert.deepEqual((await db.query('select id from public.property_files')).rows,[{id:fileId}]);
+});
+await check('PDF cannot be registered with photo purpose',()=>fails(registerSql,['40000000-0000-4000-8000-000000000002',property,'scan.pdf','application/pdf',1024,testSha256,'photo'],'23514'));
+await check('completion requires actual authoritative object identity and unforgeable attestation',async()=>{
+  await fails(completionSql,completion,'23514');
+  await fails(completionSql,[...completion.slice(0,5),'0'.repeat(64)],'42501');
+  assert.equal((await db.query('select upload_status from public.property_files where id=$1',[fileId])).rows[0].upload_status,'pending');
+});
+await check('unregistered Storage insertion denied',()=>fails("insert into storage.objects(bucket_id,name) values('property-files','unregistered.pdf')",[],'42501'));
+await db.query("insert into storage.objects(id,bucket_id,name) values($1,'property-files',$2)",[storageId,objectPath]);
+await check('only original uploader may inspect pending bytes',async()=>{
+  assert.deepEqual((await db.query('select name from storage.objects where name=$1',[objectPath])).rows,[{name:objectPath}]);
+  await asUser(1);
+  assert.deepEqual((await db.query('select id from public.property_files where id=$1',[fileId])).rows,[]);
+  assert.deepEqual((await db.query('select name from storage.objects where name=$1',[objectPath])).rows,[]);
+  await fails(completionSql,completion,'42501');
+  await asUser(0);
+});
+await check('false count or object attestation cannot publish pending attachment',async()=>{
+  await fails(completionSql,[fileId,storageId,'application/pdf',1025,testSha256,signature],'23514');
+  await fails(completionSql,[fileId,'80000000-0000-4000-8000-000000000002','application/pdf',1024,testSha256,signature],'42501');
+  assert.equal((await db.query('select upload_status from public.property_files where id=$1',[fileId])).rows[0].upload_status,'pending');
+});
+await db.query(completionSql,completion);
+await check('repeated signed completion converges and preserves original identity',async()=>{
+  const first=(await db.query('select id,property_id,uploaded_by,object_path,upload_status,validated_object_id,validated_at from public.property_files where id=$1',[fileId])).rows;
+  assert.equal(first[0].upload_status,'ready');assert.equal(first[0].validated_object_id,storageId);
+  assert.equal(first[0].property_id,property);assert.equal(first[0].uploaded_by,employees[0]);assert.equal(first[0].object_path,objectPath);
+  await db.query(completionSql,completion);
+  assert.deepEqual((await db.query('select id,property_id,uploaded_by,object_path,upload_status,validated_object_id,validated_at from public.property_files where id=$1',[fileId])).rows,first);
+});
+await asUser(1);
+await check('ready bytes are privately shared with another property reader',async()=>assert.deepEqual((await db.query('select name from storage.objects where name=$1',[objectPath])).rows,[{name:objectPath}]));
+await check('ordinary object overwrite and delete denied',async()=>{
+  assert.deepEqual((await db.query("update storage.objects set name='changed' where id=$1 returning id",[storageId])).rows,[]);
+  assert.deepEqual((await db.query('delete from storage.objects where id=$1 returning id',[storageId])).rows,[]);
+});
+await asUser(0);
+const crossFile='40000000-0000-4000-8000-000000000002';
+await db.query(registerSql,[crossFile,other,'Ảnh nguồn.pdf','application/pdf',1024,testSha256,'document']);
+await check('cross-owner contribution preserves uploader and grants no fact editing',async()=>{
+  assert.deepEqual((await db.query('select property_id,uploaded_by,original_filename from public.property_files where id=$1',[crossFile])).rows,[{property_id:other,uploaded_by:employees[0],original_filename:'Ảnh nguồn.pdf'}]);
+  assert.match((await db.query('select object_path from public.property_files where id=$1',[crossFile])).rows[0].object_path,/^[a-zA-Z0-9/.-]+$/);
+  assert.deepEqual((await db.query("update public.properties set notes='unauthorized' where id=$1 returning id",[other])).rows,[]);
+});
+await check('validation secret inaccessible to ordinary clients',()=>fails('select * from private.file_validation_keys',[],'42501'));
+await asUser(2);await db.query('update public.properties set archived_at=now() where id=$1',[other]);
+await asUser(0);
+await check('archiving hides uploader pending metadata and blocks further completion or registration',async()=>{
+  assert.deepEqual((await db.query('select id from public.property_files where id=$1',[crossFile])).rows,[]);
+  await fails(registerSql,['40000000-0000-4000-8000-000000000003',other,'archive.pdf','application/pdf',1024,testSha256,'document'],'42501');
+  await fails(completionSql,[crossFile,storageId,'application/pdf',1024,testSha256,signature],'42501');
+});
+await asUser(2);await db.query('update public.properties set archived_at=null where id=$1',[other]);
 await asUser(4);
 await check('deactivated employee cannot read ready file',async()=>assert.equal((await db.query('select * from storage.objects')).rows.length,0));
 await db.exec('reset role');

@@ -43,6 +43,13 @@ export function Detail({
   const viewRequest = useRef<Promise<void> | null>(null);
   const [viewError, setViewError] = useState(false);
   const employeeId = employee?.id;
+  const denyFiles = useCallback(
+    (status: number) => {
+      clear();
+      window.location.replace(status === 401 ? '/login' : '/access-denied');
+    },
+    [clear],
+  );
   const recordView = useCallback(async () => {
     if (viewRequest.current) return viewRequest.current;
     viewKey.current ??= crypto.randomUUID();
@@ -224,14 +231,12 @@ export function Detail({
                 )}
               </section>
               <Workspace
+                key={`${id}:${employeeId}`}
                 propertyId={id}
                 locale={locale}
                 employeeId={employeeId ?? null}
                 archived={!!property.archived_at}
-                onDenied={() => {
-                  clear();
-                  window.location.replace('/access-denied');
-                }}
+                onDenied={denyFiles}
               />
             </div>
             <p className="muted">{text.pageViewNote}</p>

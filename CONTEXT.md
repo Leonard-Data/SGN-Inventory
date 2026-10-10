@@ -106,7 +106,7 @@ A registered document or photo attached to a property, stored in the private `pr
 _Avoid_: Uploaded image, attached document
 
 **File completion**:
-Technical validation confirming the stored bytes match registered expected size and SHA-256. Not a human review, legal authenticity check or ownership certification. Completed files are readable without a review gate.
+Technical validation of the actual stored object: supported content format, registered byte count and SHA-256, and immutable Storage identity. A server-only signed attestation authorizes readiness; browser claims alone cannot. Not human review, legal authenticity or ownership certification. Completed files are readable without a review gate.
 _Avoid_: Document acceptance, review approval
 
 **Signed file URL**:

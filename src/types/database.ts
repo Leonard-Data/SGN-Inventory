@@ -615,12 +615,15 @@ export type Database = {
           object_path: string;
           original_filename: string;
           property_id: string;
+          purpose: string;
           review_status: string;
           reviewed_by: string | null;
           sha256: string | null;
           size_bytes: number | null;
           upload_status: string;
           uploaded_by: string | null;
+          validated_at: string | null;
+          validated_object_id: string | null;
         };
         Insert: {
           bucket_id?: string;
@@ -631,12 +634,15 @@ export type Database = {
           object_path: string;
           original_filename: string;
           property_id: string;
+          purpose?: string;
           review_status?: string;
           reviewed_by?: string | null;
           sha256?: string | null;
           size_bytes?: number | null;
           upload_status?: string;
           uploaded_by?: string | null;
+          validated_at?: string | null;
+          validated_object_id?: string | null;
         };
         Update: {
           bucket_id?: string;
@@ -647,12 +653,15 @@ export type Database = {
           object_path?: string;
           original_filename?: string;
           property_id?: string;
+          purpose?: string;
           review_status?: string;
           reviewed_by?: string | null;
           sha256?: string | null;
           size_bytes?: number | null;
           upload_status?: string;
           uploaded_by?: string | null;
+          validated_at?: string | null;
+          validated_object_id?: string | null;
         };
         Relationships: [
           {
@@ -1365,7 +1374,14 @@ export type Database = {
         Returns: undefined;
       };
       complete_property_upload: {
-        Args: { p_file_id: string };
+        Args: {
+          p_file_id: string;
+          p_mime_type: string;
+          p_object_id: string;
+          p_sha256: string;
+          p_signature: string;
+          p_size_bytes: number;
+        };
         Returns: undefined;
       };
       create_rental_agreement: {
@@ -1417,6 +1433,18 @@ export type Database = {
         };
         Returns: string;
       };
+      register_property_file: {
+        Args: {
+          p_file_id: string;
+          p_mime_type: string;
+          p_original_filename: string;
+          p_property_id: string;
+          p_purpose?: string;
+          p_sha256: string;
+          p_size_bytes: number;
+        };
+        Returns: Json;
+      };
       release_property_lock: {
         Args: { p_lock_id: string; p_reason: string };
         Returns: undefined;
@@ -1429,10 +1457,6 @@ export type Database = {
           p_reference?: string;
         };
         Returns: string;
-      };
-      review_property_file: {
-        Args: { p_file_id: string; p_status: string };
-        Returns: undefined;
       };
       review_property_visit: {
         Args: { p_confirm: boolean; p_event_id: string };

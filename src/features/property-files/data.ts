@@ -10,7 +10,7 @@ export async function propertyFiles(
   const { data: files, error } = await context.client
     .from('property_files')
     .select(
-      'id,property_id,document_type,object_path,original_filename,mime_type,size_bytes,sha256,upload_status,uploaded_by,created_at',
+      'id,property_id,document_type,object_path,original_filename,mime_type,size_bytes,sha256,upload_status,purpose,uploaded_by,created_at,validated_at,validated_object_id',
     )
     .eq('property_id', propertyId)
     .eq('upload_status', 'ready')
@@ -28,7 +28,8 @@ export async function authorizeAndSignFile(
   fileId: string,
   download: boolean,
 ): Promise<SignedFileResponse> {
-  if (!uuid(propertyId) || !uuid(fileId)) throw new ApiError(400, 'invalid-input');
+  if (!uuid(propertyId) || !uuid(fileId))
+    throw new ApiError(400, 'invalid-input');
   if (typeof download !== 'boolean') throw new ApiError(400, 'invalid-input');
 
   // Verify property exists and caller has access (RLS on properties table)
@@ -58,15 +59,17 @@ export async function authorizeAndSignFile(
   if (!file) throw new ApiError(404, 'not-found');
 
   // Create signed URL (60 seconds)
-  const { data: signed, error: signError } = await context.client
-    .storage
+  const { data: signed, error: signError } = await context.client.storage
     .from('property-files')
-    .createSignedUrl(file.object_path, 60, { download: download ? file.original_filename : undefined });
+    .createSignedUrl(file.object_path, 60);
 
   if (signError || !signed) throw new ApiError(503, 'unavailable');
+  // The SDK re-encodes query parameters; append once to preserve Vietnamese download names.
+  const signedUrl = new URL(signed.signedUrl);
+  if (download) signedUrl.searchParams.set('download', file.original_filename);
 
   return {
-    url: signed.signedUrl,
+    url: signedUrl.href,
     expiresAt: Math.floor(Date.now() / 1000) + 60,
   };
 }
