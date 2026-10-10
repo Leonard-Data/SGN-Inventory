@@ -2,15 +2,12 @@ export type PropertyFile = {
   id: string;
   property_id: string;
   document_type: string;
-  purpose: string;
-  category_id: string | null;
   object_path: string;
   original_filename: string;
   mime_type: string | null;
   size_bytes: number | null;
   sha256: string | null;
   upload_status: string;
-  review_status: string;
   uploaded_by: string | null;
   created_at: string;
 };

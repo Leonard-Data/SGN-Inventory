@@ -5,12 +5,12 @@ import { propertyFiles } from '@/features/property-files/data';
 
 export function GET(
   request: NextRequest,
-  route: { params: Promise<{ propertyId: string }> },
+  route: { params: Promise<{ id: string }> },
 ) {
   return runRoute(request, async (context) => {
     await activeEmployee(context);
     return NextResponse.json(
-      await propertyFiles(context, (await route.params).propertyId),
+      await propertyFiles(context, (await route.params).id),
     );
   });
 }

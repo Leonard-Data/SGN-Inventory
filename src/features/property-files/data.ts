@@ -10,7 +10,7 @@ export async function propertyFiles(
   const { data: files, error } = await context.client
     .from('property_files')
     .select(
-      'id,property_id,document_type,purpose,category_id,object_path,original_filename,mime_type,size_bytes,sha256,upload_status,review_status,uploaded_by,created_at',
+      'id,property_id,document_type,object_path,original_filename,mime_type,size_bytes,sha256,upload_status,uploaded_by,created_at',
     )
     .eq('property_id', propertyId)
     .eq('upload_status', 'ready')
@@ -22,7 +22,6 @@ export async function propertyFiles(
     );
   return { files: files ?? [] };
 }
-
 export async function authorizeAndSignFile(
   context: RouteContext,
   propertyId: string,
@@ -32,23 +31,37 @@ export async function authorizeAndSignFile(
   if (!uuid(propertyId) || !uuid(fileId)) throw new ApiError(400, 'invalid-input');
   if (typeof download !== 'boolean') throw new ApiError(400, 'invalid-input');
 
-  // 1. Authorize read via RPC — raises 42501 if denied
-  const { data: meta, error: authError } = await context.client
-    .rpc('authorize_file_read', { p_file_id: fileId });
-  if (authError) {
-    if (authError.code === '42501') throw new ApiError(403, 'access-denied');
+  // Verify property exists and caller has access (RLS on properties table)
+  const { data: property, error: propError } = await context.client
+    .from('properties')
+    .select('id')
+    .eq('id', propertyId)
+    .maybeSingle();
+  if (propError) {
+    if (propError.code === '42501') throw new ApiError(403, 'access-denied');
     throw new ApiError(503, 'unavailable');
   }
-  if (!meta || typeof meta !== 'object' || !('object_path' in (meta as Record<string, unknown>)))
-    throw new ApiError(403, 'access-denied');
+  if (!property) throw new ApiError(404, 'not-found');
 
-  const path = (meta as Record<string, string>).object_path;
+  // Verify file exists, belongs to property, is ready — RLS ensures caller has access
+  const { data: file, error: fileError } = await context.client
+    .from('property_files')
+    .select('id,object_path,original_filename')
+    .eq('property_id', propertyId)
+    .eq('id', fileId)
+    .eq('upload_status', 'ready')
+    .maybeSingle();
+  if (fileError) {
+    if (fileError.code === '42501') throw new ApiError(403, 'access-denied');
+    throw new ApiError(503, 'unavailable');
+  }
+  if (!file) throw new ApiError(404, 'not-found');
 
-  // 2. Create signed URL (60 seconds, as recommended)
+  // Create signed URL (60 seconds)
   const { data: signed, error: signError } = await context.client
     .storage
     .from('property-files')
-    .createSignedUrl(path, 60, { download: download ? undefined : undefined });
+    .createSignedUrl(file.object_path, 60, { download: download || undefined });
 
   if (signError || !signed) throw new ApiError(503, 'unavailable');
 

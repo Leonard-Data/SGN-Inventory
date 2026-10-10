@@ -7,9 +7,14 @@ const vi = {
   download: 'Tải xuống',
   signingFile: 'Đang lấy liên kết…',
   signedFailed: 'Không lấy được liên kết tập tin. Vui lòng thử lại.',
-  photo: 'Ảnh',
-  document: 'Tài liệu',
-  unknownType: 'Chưa xác định',
+  availabilityNote: 'Tập tin hiển thị không xác nhận quyền sở hữu pháp lý hoặc tính xác thực pháp lý.',
+  // document_type labels — six fixed types
+  image: 'Hình ảnh',
+  contract: 'Hợp đồng',
+  certificate: 'Chứng chỉ',
+  identification: 'Giấy tờ tùy thân',
+  report: 'Báo cáo',
+  other: 'Khác',
 } as const;
 
 const en: Record<keyof typeof vi, string> = {
@@ -19,9 +24,13 @@ const en: Record<keyof typeof vi, string> = {
   download: 'Download',
   signingFile: 'Obtaining link…',
   signedFailed: 'Unable to obtain file link. Please retry.',
-  photo: 'Photo',
-  document: 'Document',
-  unknownType: 'Unknown',
+  availabilityNote: 'Displayed files do not confirm legal ownership or legal authenticity.',
+  image: 'Image',
+  contract: 'Contract',
+  certificate: 'Certificate',
+  identification: 'Identification',
+  report: 'Report',
+  other: 'Other',
 };
 
 export const fileMessages: Record<Locale, Record<keyof typeof vi, string>> = {
