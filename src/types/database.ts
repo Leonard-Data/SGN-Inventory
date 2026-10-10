@@ -1,0 +1,1623 @@
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[];
+
+export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: '14.18';
+  };
+  public: {
+    Tables: {
+      activity_events: {
+        Row: {
+          business_day: string | null;
+          employee_id: string;
+          id: string;
+          idempotency_key: string;
+          kind: string;
+          notes: string | null;
+          occurred_at: string;
+          property_id: string;
+          recorded_at: string;
+          reviewed_at: string | null;
+          reviewed_by: string | null;
+          source: string;
+          visit_status: string | null;
+        };
+        Insert: {
+          business_day?: string | null;
+          employee_id: string;
+          id?: string;
+          idempotency_key: string;
+          kind: string;
+          notes?: string | null;
+          occurred_at?: string;
+          property_id: string;
+          recorded_at?: string;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+          source?: string;
+          visit_status?: string | null;
+        };
+        Update: {
+          business_day?: string | null;
+          employee_id?: string;
+          id?: string;
+          idempotency_key?: string;
+          kind?: string;
+          notes?: string | null;
+          occurred_at?: string;
+          property_id?: string;
+          recorded_at?: string;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+          source?: string;
+          visit_status?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'activity_events_employee_id_fkey';
+            columns: ['employee_id'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'activity_events_employee_id_fkey';
+            columns: ['employee_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+          {
+            foreignKeyName: 'activity_events_property_id_fkey';
+            columns: ['property_id'];
+            isOneToOne: false;
+            referencedRelation: 'properties';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'activity_events_reviewed_by_fkey';
+            columns: ['reviewed_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'activity_events_reviewed_by_fkey';
+            columns: ['reviewed_by'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+        ];
+      };
+      admin_unit_crosswalks: {
+        Row: {
+          effective_on: string;
+          from_unit_id: string;
+          id: string;
+          relation: string;
+          resolution_notes: string | null;
+          source_url: string;
+          to_unit_id: string;
+          verified_by: string | null;
+        };
+        Insert: {
+          effective_on: string;
+          from_unit_id: string;
+          id?: string;
+          relation: string;
+          resolution_notes?: string | null;
+          source_url: string;
+          to_unit_id: string;
+          verified_by?: string | null;
+        };
+        Update: {
+          effective_on?: string;
+          from_unit_id?: string;
+          id?: string;
+          relation?: string;
+          resolution_notes?: string | null;
+          source_url?: string;
+          to_unit_id?: string;
+          verified_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'admin_unit_crosswalks_from_unit_id_fkey';
+            columns: ['from_unit_id'];
+            isOneToOne: false;
+            referencedRelation: 'admin_unit_versions';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'admin_unit_crosswalks_to_unit_id_fkey';
+            columns: ['to_unit_id'];
+            isOneToOne: false;
+            referencedRelation: 'admin_unit_versions';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'admin_unit_crosswalks_verified_by_fkey';
+            columns: ['verified_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'admin_unit_crosswalks_verified_by_fkey';
+            columns: ['verified_by'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+        ];
+      };
+      admin_unit_versions: {
+        Row: {
+          id: string;
+          name_vi: string;
+          official_code: string;
+          parent_id: string | null;
+          source_url: string;
+          unit_level: string;
+          valid_from: string;
+          valid_to: string | null;
+        };
+        Insert: {
+          id?: string;
+          name_vi: string;
+          official_code: string;
+          parent_id?: string | null;
+          source_url: string;
+          unit_level: string;
+          valid_from: string;
+          valid_to?: string | null;
+        };
+        Update: {
+          id?: string;
+          name_vi?: string;
+          official_code?: string;
+          parent_id?: string | null;
+          source_url?: string;
+          unit_level?: string;
+          valid_from?: string;
+          valid_to?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'admin_unit_versions_parent_id_fkey';
+            columns: ['parent_id'];
+            isOneToOne: false;
+            referencedRelation: 'admin_unit_versions';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      contacts: {
+        Row: {
+          contact_type: string;
+          created_at: string;
+          display_name: string;
+          id: string;
+          notes: string | null;
+          phones: string[];
+          raw_phone_text: string | null;
+        };
+        Insert: {
+          contact_type?: string;
+          created_at?: string;
+          display_name: string;
+          id?: string;
+          notes?: string | null;
+          phones?: string[];
+          raw_phone_text?: string | null;
+        };
+        Update: {
+          contact_type?: string;
+          created_at?: string;
+          display_name?: string;
+          id?: string;
+          notes?: string | null;
+          phones?: string[];
+          raw_phone_text?: string | null;
+        };
+        Relationships: [];
+      };
+      employees: {
+        Row: {
+          auth_user_id: string | null;
+          created_at: string;
+          display_name: string;
+          email: string;
+          id: string;
+          is_active: boolean;
+          phone: string | null;
+          preferred_locale: string;
+          role: string;
+        };
+        Insert: {
+          auth_user_id?: string | null;
+          created_at?: string;
+          display_name: string;
+          email: string;
+          id?: string;
+          is_active?: boolean;
+          phone?: string | null;
+          preferred_locale?: string;
+          role?: string;
+        };
+        Update: {
+          auth_user_id?: string | null;
+          created_at?: string;
+          display_name?: string;
+          email?: string;
+          id?: string;
+          is_active?: boolean;
+          phone?: string | null;
+          preferred_locale?: string;
+          role?: string;
+        };
+        Relationships: [];
+      };
+      lock_events: {
+        Row: {
+          action: string;
+          actor_id: string | null;
+          created_at: string;
+          id: number;
+          lock_id: string;
+          reason: string | null;
+        };
+        Insert: {
+          action: string;
+          actor_id?: string | null;
+          created_at?: string;
+          id?: never;
+          lock_id: string;
+          reason?: string | null;
+        };
+        Update: {
+          action?: string;
+          actor_id?: string | null;
+          created_at?: string;
+          id?: never;
+          lock_id?: string;
+          reason?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'lock_events_actor_id_fkey';
+            columns: ['actor_id'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'lock_events_actor_id_fkey';
+            columns: ['actor_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+          {
+            foreignKeyName: 'lock_events_lock_id_fkey';
+            columns: ['lock_id'];
+            isOneToOne: false;
+            referencedRelation: 'property_locks';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'lock_events_lock_id_fkey';
+            columns: ['lock_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_effective_property_locks';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      properties: {
+        Row: {
+          access_type: string;
+          archived_at: string | null;
+          area_raw: string | null;
+          bathrooms: number | null;
+          bedrooms: number | null;
+          construction_text: string | null;
+          created_at: string;
+          created_by: string | null;
+          depth_m: number | null;
+          direction: string | null;
+          floor_area_m2: number | null;
+          floors: number | null;
+          frontage_m: number | null;
+          id: string;
+          land_area_m2: number | null;
+          latitude: number | null;
+          legal_status: string;
+          listing_mode: string;
+          longitude: number | null;
+          map_sheet_number: string | null;
+          monthly_rent_vnd: number | null;
+          notes: string | null;
+          ownership_type: string | null;
+          parcel_number: string | null;
+          property_code: string;
+          property_type: string;
+          record_review_status: string;
+          sale_price_vnd: number | null;
+          status: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          access_type?: string;
+          archived_at?: string | null;
+          area_raw?: string | null;
+          bathrooms?: number | null;
+          bedrooms?: number | null;
+          construction_text?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          depth_m?: number | null;
+          direction?: string | null;
+          floor_area_m2?: number | null;
+          floors?: number | null;
+          frontage_m?: number | null;
+          id?: string;
+          land_area_m2?: number | null;
+          latitude?: number | null;
+          legal_status?: string;
+          listing_mode: string;
+          longitude?: number | null;
+          map_sheet_number?: string | null;
+          monthly_rent_vnd?: number | null;
+          notes?: string | null;
+          ownership_type?: string | null;
+          parcel_number?: string | null;
+          property_code: string;
+          property_type?: string;
+          record_review_status?: string;
+          sale_price_vnd?: number | null;
+          status?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          access_type?: string;
+          archived_at?: string | null;
+          area_raw?: string | null;
+          bathrooms?: number | null;
+          bedrooms?: number | null;
+          construction_text?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          depth_m?: number | null;
+          direction?: string | null;
+          floor_area_m2?: number | null;
+          floors?: number | null;
+          frontage_m?: number | null;
+          id?: string;
+          land_area_m2?: number | null;
+          latitude?: number | null;
+          legal_status?: string;
+          listing_mode?: string;
+          longitude?: number | null;
+          map_sheet_number?: string | null;
+          monthly_rent_vnd?: number | null;
+          notes?: string | null;
+          ownership_type?: string | null;
+          parcel_number?: string | null;
+          property_code?: string;
+          property_type?: string;
+          record_review_status?: string;
+          sale_price_vnd?: number | null;
+          status?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'properties_created_by_fkey';
+            columns: ['created_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'properties_created_by_fkey';
+            columns: ['created_by'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+          {
+            foreignKeyName: 'properties_updated_by_fkey';
+            columns: ['updated_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'properties_updated_by_fkey';
+            columns: ['updated_by'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+        ];
+      };
+      property_addresses: {
+        Row: {
+          address_text: string;
+          commune_text: string | null;
+          commune_unit_id: string | null;
+          created_at: string;
+          district_text: string | null;
+          district_unit_id: string | null;
+          effective_on: string | null;
+          format: string;
+          house_number: string | null;
+          id: string;
+          is_primary: boolean;
+          mapping_status: string;
+          property_id: string;
+          province_text: string | null;
+          province_unit_id: string | null;
+          search_text: string;
+          source_url: string | null;
+          street: string | null;
+          verification_method: string | null;
+          verified_at: string | null;
+          verified_by: string | null;
+        };
+        Insert: {
+          address_text: string;
+          commune_text?: string | null;
+          commune_unit_id?: string | null;
+          created_at?: string;
+          district_text?: string | null;
+          district_unit_id?: string | null;
+          effective_on?: string | null;
+          format: string;
+          house_number?: string | null;
+          id?: string;
+          is_primary?: boolean;
+          mapping_status?: string;
+          property_id: string;
+          province_text?: string | null;
+          province_unit_id?: string | null;
+          search_text?: string;
+          source_url?: string | null;
+          street?: string | null;
+          verification_method?: string | null;
+          verified_at?: string | null;
+          verified_by?: string | null;
+        };
+        Update: {
+          address_text?: string;
+          commune_text?: string | null;
+          commune_unit_id?: string | null;
+          created_at?: string;
+          district_text?: string | null;
+          district_unit_id?: string | null;
+          effective_on?: string | null;
+          format?: string;
+          house_number?: string | null;
+          id?: string;
+          is_primary?: boolean;
+          mapping_status?: string;
+          property_id?: string;
+          province_text?: string | null;
+          province_unit_id?: string | null;
+          search_text?: string;
+          source_url?: string | null;
+          street?: string | null;
+          verification_method?: string | null;
+          verified_at?: string | null;
+          verified_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'property_addresses_commune_unit_id_fkey';
+            columns: ['commune_unit_id'];
+            isOneToOne: false;
+            referencedRelation: 'admin_unit_versions';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'property_addresses_district_unit_id_fkey';
+            columns: ['district_unit_id'];
+            isOneToOne: false;
+            referencedRelation: 'admin_unit_versions';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'property_addresses_property_id_fkey';
+            columns: ['property_id'];
+            isOneToOne: false;
+            referencedRelation: 'properties';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'property_addresses_province_unit_id_fkey';
+            columns: ['province_unit_id'];
+            isOneToOne: false;
+            referencedRelation: 'admin_unit_versions';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'property_addresses_verified_by_fkey';
+            columns: ['verified_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'property_addresses_verified_by_fkey';
+            columns: ['verified_by'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+        ];
+      };
+      property_contacts: {
+        Row: {
+          contact_id: string;
+          is_primary: boolean;
+          property_id: string;
+          relation: string;
+        };
+        Insert: {
+          contact_id: string;
+          is_primary?: boolean;
+          property_id: string;
+          relation?: string;
+        };
+        Update: {
+          contact_id?: string;
+          is_primary?: boolean;
+          property_id?: string;
+          relation?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'property_contacts_contact_id_fkey';
+            columns: ['contact_id'];
+            isOneToOne: false;
+            referencedRelation: 'contacts';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'property_contacts_property_id_fkey';
+            columns: ['property_id'];
+            isOneToOne: false;
+            referencedRelation: 'properties';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      property_files: {
+        Row: {
+          bucket_id: string;
+          created_at: string;
+          document_type: string;
+          id: string;
+          mime_type: string | null;
+          object_path: string;
+          original_filename: string;
+          property_id: string;
+          review_status: string;
+          reviewed_by: string | null;
+          sha256: string | null;
+          size_bytes: number | null;
+          upload_status: string;
+          uploaded_by: string | null;
+        };
+        Insert: {
+          bucket_id?: string;
+          created_at?: string;
+          document_type: string;
+          id?: string;
+          mime_type?: string | null;
+          object_path: string;
+          original_filename: string;
+          property_id: string;
+          review_status?: string;
+          reviewed_by?: string | null;
+          sha256?: string | null;
+          size_bytes?: number | null;
+          upload_status?: string;
+          uploaded_by?: string | null;
+        };
+        Update: {
+          bucket_id?: string;
+          created_at?: string;
+          document_type?: string;
+          id?: string;
+          mime_type?: string | null;
+          object_path?: string;
+          original_filename?: string;
+          property_id?: string;
+          review_status?: string;
+          reviewed_by?: string | null;
+          sha256?: string | null;
+          size_bytes?: number | null;
+          upload_status?: string;
+          uploaded_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'property_files_property_id_fkey';
+            columns: ['property_id'];
+            isOneToOne: false;
+            referencedRelation: 'properties';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'property_files_reviewed_by_fkey';
+            columns: ['reviewed_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'property_files_reviewed_by_fkey';
+            columns: ['reviewed_by'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+          {
+            foreignKeyName: 'property_files_uploaded_by_fkey';
+            columns: ['uploaded_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'property_files_uploaded_by_fkey';
+            columns: ['uploaded_by'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+        ];
+      };
+      property_locks: {
+        Row: {
+          attribution_reference: string | null;
+          decided_at: string | null;
+          decided_by: string | null;
+          decision_reason: string | null;
+          evidence_file_id: string | null;
+          expires_at: string;
+          id: string;
+          property_id: string;
+          reason: string;
+          released_at: string | null;
+          requested_at: string;
+          requested_by: string;
+          status: string;
+        };
+        Insert: {
+          attribution_reference?: string | null;
+          decided_at?: string | null;
+          decided_by?: string | null;
+          decision_reason?: string | null;
+          evidence_file_id?: string | null;
+          expires_at?: string;
+          id?: string;
+          property_id: string;
+          reason: string;
+          released_at?: string | null;
+          requested_at?: string;
+          requested_by: string;
+          status?: string;
+        };
+        Update: {
+          attribution_reference?: string | null;
+          decided_at?: string | null;
+          decided_by?: string | null;
+          decision_reason?: string | null;
+          evidence_file_id?: string | null;
+          expires_at?: string;
+          id?: string;
+          property_id?: string;
+          reason?: string;
+          released_at?: string | null;
+          requested_at?: string;
+          requested_by?: string;
+          status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'property_locks_decided_by_fkey';
+            columns: ['decided_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'property_locks_decided_by_fkey';
+            columns: ['decided_by'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+          {
+            foreignKeyName: 'property_locks_evidence_file_id_fkey';
+            columns: ['evidence_file_id'];
+            isOneToOne: false;
+            referencedRelation: 'property_files';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'property_locks_property_id_fkey';
+            columns: ['property_id'];
+            isOneToOne: false;
+            referencedRelation: 'properties';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'property_locks_requested_by_fkey';
+            columns: ['requested_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'property_locks_requested_by_fkey';
+            columns: ['requested_by'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+        ];
+      };
+      rental_agreements: {
+        Row: {
+          actual_ends_on: string | null;
+          approved_at: string | null;
+          approved_by: string | null;
+          close_reason: string | null;
+          closed_at: string | null;
+          closed_by: string | null;
+          contract_code: string;
+          contract_language: string;
+          created_at: string;
+          created_by: string;
+          due_day: number;
+          ends_on: string;
+          id: string;
+          monthly_rent_vnd: number;
+          property_id: string;
+          proration_method: string;
+          starts_on: string;
+          status: string;
+          tenant_contact_id: string;
+        };
+        Insert: {
+          actual_ends_on?: string | null;
+          approved_at?: string | null;
+          approved_by?: string | null;
+          close_reason?: string | null;
+          closed_at?: string | null;
+          closed_by?: string | null;
+          contract_code: string;
+          contract_language?: string;
+          created_at?: string;
+          created_by: string;
+          due_day?: number;
+          ends_on: string;
+          id?: string;
+          monthly_rent_vnd: number;
+          property_id: string;
+          proration_method?: string;
+          starts_on: string;
+          status?: string;
+          tenant_contact_id: string;
+        };
+        Update: {
+          actual_ends_on?: string | null;
+          approved_at?: string | null;
+          approved_by?: string | null;
+          close_reason?: string | null;
+          closed_at?: string | null;
+          closed_by?: string | null;
+          contract_code?: string;
+          contract_language?: string;
+          created_at?: string;
+          created_by?: string;
+          due_day?: number;
+          ends_on?: string;
+          id?: string;
+          monthly_rent_vnd?: number;
+          property_id?: string;
+          proration_method?: string;
+          starts_on?: string;
+          status?: string;
+          tenant_contact_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'rental_agreements_approved_by_fkey';
+            columns: ['approved_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'rental_agreements_approved_by_fkey';
+            columns: ['approved_by'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+          {
+            foreignKeyName: 'rental_agreements_closed_by_fkey';
+            columns: ['closed_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'rental_agreements_closed_by_fkey';
+            columns: ['closed_by'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+          {
+            foreignKeyName: 'rental_agreements_created_by_fkey';
+            columns: ['created_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'rental_agreements_created_by_fkey';
+            columns: ['created_by'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+          {
+            foreignKeyName: 'rental_agreements_property_id_fkey';
+            columns: ['property_id'];
+            isOneToOne: false;
+            referencedRelation: 'properties';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'rental_agreements_tenant_contact_id_fkey';
+            columns: ['tenant_contact_id'];
+            isOneToOne: false;
+            referencedRelation: 'contacts';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      rental_months: {
+        Row: {
+          agreement_id: string;
+          amount_due_vnd: number;
+          due_on: string;
+          id: string;
+          month_start: string;
+          occupied_from: string;
+          occupied_to: string;
+          status: string;
+        };
+        Insert: {
+          agreement_id: string;
+          amount_due_vnd: number;
+          due_on: string;
+          id?: string;
+          month_start: string;
+          occupied_from: string;
+          occupied_to: string;
+          status?: string;
+        };
+        Update: {
+          agreement_id?: string;
+          amount_due_vnd?: number;
+          due_on?: string;
+          id?: string;
+          month_start?: string;
+          occupied_from?: string;
+          occupied_to?: string;
+          status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'rental_months_agreement_id_fkey';
+            columns: ['agreement_id'];
+            isOneToOne: false;
+            referencedRelation: 'rental_agreements';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'rental_months_agreement_id_fkey';
+            columns: ['agreement_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_rental_property_status';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      rental_payments: {
+        Row: {
+          amount_vnd: number;
+          decision_reason: string | null;
+          evidence_file_id: string | null;
+          external_reference: string | null;
+          id: string;
+          idempotency_key: string;
+          kind: string;
+          method: string;
+          paid_on: string;
+          recorded_at: string;
+          recorded_by: string;
+          rental_month_id: string;
+          reviewed_at: string | null;
+          reviewed_by: string | null;
+          status: string;
+        };
+        Insert: {
+          amount_vnd: number;
+          decision_reason?: string | null;
+          evidence_file_id?: string | null;
+          external_reference?: string | null;
+          id?: string;
+          idempotency_key: string;
+          kind: string;
+          method: string;
+          paid_on: string;
+          recorded_at?: string;
+          recorded_by: string;
+          rental_month_id: string;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+          status?: string;
+        };
+        Update: {
+          amount_vnd?: number;
+          decision_reason?: string | null;
+          evidence_file_id?: string | null;
+          external_reference?: string | null;
+          id?: string;
+          idempotency_key?: string;
+          kind?: string;
+          method?: string;
+          paid_on?: string;
+          recorded_at?: string;
+          recorded_by?: string;
+          rental_month_id?: string;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+          status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'rental_payments_evidence_file_id_fkey';
+            columns: ['evidence_file_id'];
+            isOneToOne: false;
+            referencedRelation: 'property_files';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'rental_payments_recorded_by_fkey';
+            columns: ['recorded_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'rental_payments_recorded_by_fkey';
+            columns: ['recorded_by'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+          {
+            foreignKeyName: 'rental_payments_rental_month_id_fkey';
+            columns: ['rental_month_id'];
+            isOneToOne: false;
+            referencedRelation: 'rental_months';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'rental_payments_rental_month_id_fkey';
+            columns: ['rental_month_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_rental_month_status';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'rental_payments_reviewed_by_fkey';
+            columns: ['reviewed_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'rental_payments_reviewed_by_fkey';
+            columns: ['reviewed_by'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+        ];
+      };
+    };
+    Views: {
+      v_admin_inventory_by_area: {
+        Row: {
+          available_count: number | null;
+          current_commune_id: string | null;
+          current_commune_label: string | null;
+          inventory_count: number | null;
+          legacy_district_label: string | null;
+          province_label: string | null;
+          reserved_count: number | null;
+          sold_count: number | null;
+          unlocked_available_count: number | null;
+        };
+        Relationships: [];
+      };
+      v_admin_locks_by_employee: {
+        Row: {
+          display_name: string | null;
+          effective_lock_count: number | null;
+          employee_id: string | null;
+        };
+        Relationships: [];
+      };
+      v_effective_property_locks: {
+        Row: {
+          attribution_reference: string | null;
+          decided_at: string | null;
+          decided_by: string | null;
+          decision_reason: string | null;
+          employee_name: string | null;
+          evidence_file_id: string | null;
+          expires_at: string | null;
+          id: string | null;
+          property_id: string | null;
+          reason: string | null;
+          released_at: string | null;
+          requested_at: string | null;
+          requested_by: string | null;
+          status: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'property_locks_decided_by_fkey';
+            columns: ['decided_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'property_locks_decided_by_fkey';
+            columns: ['decided_by'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+          {
+            foreignKeyName: 'property_locks_evidence_file_id_fkey';
+            columns: ['evidence_file_id'];
+            isOneToOne: false;
+            referencedRelation: 'property_files';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'property_locks_property_id_fkey';
+            columns: ['property_id'];
+            isOneToOne: false;
+            referencedRelation: 'properties';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'property_locks_requested_by_fkey';
+            columns: ['requested_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'property_locks_requested_by_fkey';
+            columns: ['requested_by'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+        ];
+      };
+      v_employee_daily_activity: {
+        Row: {
+          business_day: string | null;
+          confirmed_properties_visited: number | null;
+          distinct_properties_viewed: number | null;
+          employee_id: string | null;
+          page_view_events: number | null;
+          pending_visits: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'activity_events_employee_id_fkey';
+            columns: ['employee_id'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'activity_events_employee_id_fkey';
+            columns: ['employee_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+        ];
+      };
+      v_rental_month_status: {
+        Row: {
+          agreement_id: string | null;
+          amount_due_vnd: number | null;
+          balance_due_vnd: number | null;
+          contract_code: string | null;
+          due_on: string | null;
+          id: string | null;
+          is_active_month: boolean | null;
+          is_overdue: boolean | null;
+          month_phase: string | null;
+          month_start: string | null;
+          net_paid_vnd: number | null;
+          occupied_days: number | null;
+          occupied_from: string | null;
+          occupied_to: string | null;
+          payment_status: string | null;
+          property_id: string | null;
+          refund_due_vnd: number | null;
+          status: string | null;
+          tenant_contact_id: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'rental_agreements_property_id_fkey';
+            columns: ['property_id'];
+            isOneToOne: false;
+            referencedRelation: 'properties';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'rental_agreements_tenant_contact_id_fkey';
+            columns: ['tenant_contact_id'];
+            isOneToOne: false;
+            referencedRelation: 'contacts';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'rental_months_agreement_id_fkey';
+            columns: ['agreement_id'];
+            isOneToOne: false;
+            referencedRelation: 'rental_agreements';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'rental_months_agreement_id_fkey';
+            columns: ['agreement_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_rental_property_status';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      v_rental_property_status: {
+        Row: {
+          actual_ends_on: string | null;
+          approved_at: string | null;
+          approved_by: string | null;
+          close_reason: string | null;
+          closed_at: string | null;
+          closed_by: string | null;
+          contract_code: string | null;
+          contract_language: string | null;
+          created_at: string | null;
+          created_by: string | null;
+          due_day: number | null;
+          ends_on: string | null;
+          id: string | null;
+          monthly_rent_vnd: number | null;
+          occupancy_status: string | null;
+          property_id: string | null;
+          proration_method: string | null;
+          starts_on: string | null;
+          status: string | null;
+          tenant_contact_id: string | null;
+        };
+        Insert: {
+          actual_ends_on?: string | null;
+          approved_at?: string | null;
+          approved_by?: string | null;
+          close_reason?: string | null;
+          closed_at?: string | null;
+          closed_by?: string | null;
+          contract_code?: string | null;
+          contract_language?: string | null;
+          created_at?: string | null;
+          created_by?: string | null;
+          due_day?: number | null;
+          ends_on?: string | null;
+          id?: string | null;
+          monthly_rent_vnd?: number | null;
+          occupancy_status?: never;
+          property_id?: string | null;
+          proration_method?: string | null;
+          starts_on?: string | null;
+          status?: string | null;
+          tenant_contact_id?: string | null;
+        };
+        Update: {
+          actual_ends_on?: string | null;
+          approved_at?: string | null;
+          approved_by?: string | null;
+          close_reason?: string | null;
+          closed_at?: string | null;
+          closed_by?: string | null;
+          contract_code?: string | null;
+          contract_language?: string | null;
+          created_at?: string | null;
+          created_by?: string | null;
+          due_day?: number | null;
+          ends_on?: string | null;
+          id?: string | null;
+          monthly_rent_vnd?: number | null;
+          occupancy_status?: never;
+          property_id?: string | null;
+          proration_method?: string | null;
+          starts_on?: string | null;
+          status?: string | null;
+          tenant_contact_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'rental_agreements_approved_by_fkey';
+            columns: ['approved_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'rental_agreements_approved_by_fkey';
+            columns: ['approved_by'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+          {
+            foreignKeyName: 'rental_agreements_closed_by_fkey';
+            columns: ['closed_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'rental_agreements_closed_by_fkey';
+            columns: ['closed_by'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+          {
+            foreignKeyName: 'rental_agreements_created_by_fkey';
+            columns: ['created_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'rental_agreements_created_by_fkey';
+            columns: ['created_by'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+          {
+            foreignKeyName: 'rental_agreements_property_id_fkey';
+            columns: ['property_id'];
+            isOneToOne: false;
+            referencedRelation: 'properties';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'rental_agreements_tenant_contact_id_fkey';
+            columns: ['tenant_contact_id'];
+            isOneToOne: false;
+            referencedRelation: 'contacts';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+    };
+    Functions: {
+      activate_rental_agreement: {
+        Args: { p_agreement_id: string };
+        Returns: undefined;
+      };
+      close_rental_agreement: {
+        Args: {
+          p_agreement_id: string;
+          p_end_on: string;
+          p_reason: string;
+          p_status: string;
+        };
+        Returns: undefined;
+      };
+      complete_property_upload: {
+        Args: { p_file_id: string };
+        Returns: undefined;
+      };
+      create_rental_agreement: {
+        Args: {
+          p_code: string;
+          p_due_day?: number;
+          p_end: string;
+          p_language?: string;
+          p_property_id: string;
+          p_proration?: string;
+          p_rent: number;
+          p_start: string;
+          p_tenant_id: string;
+        };
+        Returns: string;
+      };
+      decide_property_lock: {
+        Args: {
+          p_approve: boolean;
+          p_days?: number;
+          p_lock_id: string;
+          p_reason: string;
+        };
+        Returns: undefined;
+      };
+      decide_rental_payment: {
+        Args: { p_action: string; p_payment_id: string; p_reason: string };
+        Returns: undefined;
+      };
+      record_property_activity: {
+        Args: {
+          p_key: string;
+          p_kind: string;
+          p_notes?: string;
+          p_property_id: string;
+        };
+        Returns: string;
+      };
+      record_rental_payment: {
+        Args: {
+          p_amount: number;
+          p_evidence?: string;
+          p_key: string;
+          p_kind: string;
+          p_method: string;
+          p_month_id: string;
+          p_paid_on: string;
+          p_reference?: string;
+        };
+        Returns: string;
+      };
+      release_property_lock: {
+        Args: { p_lock_id: string; p_reason: string };
+        Returns: undefined;
+      };
+      request_property_lock: {
+        Args: {
+          p_evidence_file_id?: string;
+          p_property_id: string;
+          p_reason: string;
+          p_reference?: string;
+        };
+        Returns: string;
+      };
+      review_property_file: {
+        Args: { p_file_id: string; p_status: string };
+        Returns: undefined;
+      };
+      review_property_visit: {
+        Args: { p_confirm: boolean; p_event_id: string };
+        Returns: undefined;
+      };
+      search_properties: {
+        Args: {
+          p_after?: string;
+          p_area_id?: string;
+          p_limit?: number;
+          p_mode?: string;
+          p_query?: string;
+          p_status?: string;
+          p_type?: string;
+        };
+        Returns: {
+          access_type: string;
+          archived_at: string | null;
+          area_raw: string | null;
+          bathrooms: number | null;
+          bedrooms: number | null;
+          construction_text: string | null;
+          created_at: string;
+          created_by: string | null;
+          depth_m: number | null;
+          direction: string | null;
+          floor_area_m2: number | null;
+          floors: number | null;
+          frontage_m: number | null;
+          id: string;
+          land_area_m2: number | null;
+          latitude: number | null;
+          legal_status: string;
+          listing_mode: string;
+          longitude: number | null;
+          map_sheet_number: string | null;
+          monthly_rent_vnd: number | null;
+          notes: string | null;
+          ownership_type: string | null;
+          parcel_number: string | null;
+          property_code: string;
+          property_type: string;
+          record_review_status: string;
+          sale_price_vnd: number | null;
+          status: string;
+          updated_at: string;
+          updated_by: string | null;
+        }[];
+        SetofOptions: {
+          from: '*';
+          to: 'properties';
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
+      };
+      set_my_locale: { Args: { p_locale: string }; Returns: undefined };
+    };
+    Enums: {
+      [_ in never]: never;
+    };
+    CompositeTypes: {
+      [_ in never]: never;
+    };
+  };
+};
+
+type DatabaseWithoutInternals = Omit<Database, '__InternalSupabase'>;
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<
+  keyof Database,
+  'public'
+>];
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema['Tables'] & DefaultSchema['Views'])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals;
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables'] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Views'])
+    : never) = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals;
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables'] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Views'])[TableName] extends {
+      Row: infer R;
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema['Tables'] &
+        DefaultSchema['Views'])
+    ? (DefaultSchema['Tables'] &
+        DefaultSchema['Views'])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R;
+      }
+      ? R
+      : never
+    : never;
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    keyof DefaultSchema['Tables'] | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals;
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables']
+    : never) = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals;
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables'][TableName] extends {
+      Insert: infer I;
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema['Tables']
+    ? DefaultSchema['Tables'][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I;
+      }
+      ? I
+      : never
+    : never;
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    keyof DefaultSchema['Tables'] | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals;
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables']
+    : never) = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals;
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables'][TableName] extends {
+      Update: infer U;
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema['Tables']
+    ? DefaultSchema['Tables'][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U;
+      }
+      ? U
+      : never
+    : never;
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    keyof DefaultSchema['Enums'] | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals;
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions['schema']]['Enums']
+    : never) = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals;
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions['schema']]['Enums'][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema['Enums']
+    ? DefaultSchema['Enums'][DefaultSchemaEnumNameOrOptions]
+    : never;
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema['CompositeTypes']
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals;
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions['schema']]['CompositeTypes']
+    : never) = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals;
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions['schema']]['CompositeTypes'][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema['CompositeTypes']
+    ? DefaultSchema['CompositeTypes'][PublicCompositeTypeNameOrOptions]
+    : never;
+
+export const Constants = {
+  public: {
+    Enums: {},
+  },
+} as const;

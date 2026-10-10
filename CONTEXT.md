@@ -36,6 +36,10 @@ _Avoid_: Address record
 A stable, unique inventory reference assigned to a property. New property codes are assigned by the system; an address correction does not change the code.
 _Avoid_: Address identifier, ward-based identity
 
+**Archived property**:
+A property retained for manager/admin review but excluded from ordinary inventory browsing. Reading its details is still a page view, not a physical visit.
+_Avoid_: Deleted property, available listing
+
 **Legacy address**:
 A preserved historical address, including its original district-bearing source text.
 _Avoid_: Incorrect address, current address
@@ -43,6 +47,10 @@ _Avoid_: Incorrect address, current address
 **Current address**:
 A separate address under the applicable province/city and commune/ward structure, without a district. Its presence alone does not establish that its mapping is verified.
 _Avoid_: Translated address, automatically converted address
+
+**Address search**:
+A match of a literal, accent-insensitive contiguous fragment against recorded addresses; `%` and `_` are ordinary characters.
+_Avoid_: Fuzzy search, automatic ward mapping
 
 **Unresolved address mapping**:
 A legacy-to-current address relationship without sufficient reviewed evidence to identify the current administrative units.
@@ -75,7 +83,7 @@ _Avoid_: Approval queue, page-view history
 ### Activity and reservations
 
 **Page view**:
-An employee's interaction with a property detail page. It is not evidence of a physical visit.
+A view of property details by an active employee, including authorized review of an archived property. It is not evidence of a physical visit.
 _Avoid_: Visit, attendance
 
 **Confirmed physical visit**:

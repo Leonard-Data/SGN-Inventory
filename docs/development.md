@@ -17,6 +17,8 @@ One Next.js App Router application, TypeScript, React, plain CSS, Supabase Postg
 
 `package.json` and `package-lock.json` are authoritative. Install with `npm ci`. Commit both when updating dependencies; never use an unpinned `npx ...@latest` in automation. ESLint 9 is intentional: the selected Next lint plugins do not all declare ESLint 10 support. Verify official documentation and peer requirements before upgrades.
 
+All three GitHub workflows install pinned npm `11.14.1` after `setup-node` and before `npm ci`; selecting Node `24.14.0` alone supplies npm `11.9.0`, which the strict package engine correctly rejects. Keep the bootstrap version aligned with the package toolchain.
+
 Maintenance caveat: npm marks ESLint `9.39.5` unsupported. It is retained for the selected Next plugins' declared compatibility, not treated as a long-term supported choice. Upgrade lint tooling when the complete plugin set supports a maintained major; do not hide peer conflicts with force/legacy-peer-deps. Python requirements also pin `et-xmlfile` and `tzdata` so Windows setup does not depend on a missing system IANA timezone database.
 
 A **Module** puts substantial behavior behind one small **Interface**. Its Interface includes invariants, ordering, configuration, error modes and performance, not just TypeScript types. **Depth** gives callers **Leverage** and maintainers **Locality**. Prefer feature-level operations that hide bounded queries, input validation and error interpretation, not thin generic CRUD forwarding.
@@ -27,16 +29,25 @@ The implemented environment Module is an example: `readEnvironment(values, expec
 
 ## Source layout
 
-Existing runnable foundation:
+Implemented foundation and employee-access slice:
 
 ```text
 src/
   app/
     layout.tsx                 # Root rendering and metadata
-    page.tsx                   # Bilingual readiness notice, no inventory
-    globals.css                # Shared presentation
-    api/health/route.ts         # No-store configuration health, no data access
-  i18n/messages.ts             # Typed VI/EN foundation dictionary
+    page.tsx                   # Redirect to protected inventory
+    login/, access-denied/     # Localized sign-in and explicit membership denial
+    recover/, reset-password/  # Real delivered recovery, including denied identities
+    properties/                # Protected browse and read-only details
+    auth/                      # PKCE/token-hash recovery callbacks
+    api/                       # Validated auth/session/inventory/locale + health
+    globals.css                # Shared responsive presentation
+  proxy.ts                     # Session refresh, live membership and saved locale
+  features/employees/          # Membership guard, auth screens, protected state
+  features/properties/         # Bounded queries, details, page views and formatting
+  i18n/messages.ts             # Equivalent typed VI/EN journey dictionaries
+  lib/supabase/route.ts         # User-scoped SSR cookies/cache/input boundary
+  types/database.ts            # Generated from the live dev public schema
   lib/environment.ts           # Pure validated environment Interface
   lib/environment.test.ts      # Configuration invariants
 scripts/
@@ -44,6 +55,7 @@ scripts/
   release-guard.mjs             # Branch/project isolation and release smoke
   release-guard.test.mjs        # Cross-stage regression risks
   validate-schema.mjs           # Existing embedded SQL assertions
+  employee-access-acceptance.mjs # Real app/browser/Auth/RLS dev fixture acceptance
   prepare_workbook.py           # Existing private, dry-run preparation
   test_preparation.py
 supabase/
@@ -53,13 +65,13 @@ supabase/
 .husky/pre-commit
 ```
 
-Create feature directories only when implementing an approved feature. The planned employee-access, inventory, reservation, rental and maintenance layout remains in [delivery-plan.md](delivery-plan.md). It is not implemented by the readiness page.
+Create additional feature directories only for approved backlog work. Employee access and read-only inventory are implemented; reservation, rental and maintenance UI remains in [delivery-plan.md](delivery-plan.md). The real-mailbox recovery gate prevents claiming completed issue #1 acceptance.
 
 - `src/app/`: route composition, presentation, narrow validated Server Actions/Route Handlers. No direct inventory SQL/query orchestration in rendering.
 - `src/features/<feature>/`: validation, feature data access, domain results and workflow operations; keep feature-specific rendering beside the feature when useful. Export a small Interface, not every internal helper.
-- `src/lib/supabase/`: future browser/request-scoped server/refresh adapters following the current official SSR guidance. No application-global server client.
+- `src/lib/supabase/route.ts`: one request-scoped server/refresh adapter following current official SSR guidance. Browser code calls same-origin application endpoints; no application-global server client or privileged fallback.
 - `src/components/`: shared presentation only after actual reuse; not a dumping ground for business rules.
-- `src/i18n/`: typed equivalent VI/EN dictionaries. `src/types/database.ts`: future generated types from the migration schema, never handwritten copies.
+- `src/i18n/`: typed equivalent VI/EN dictionaries. `src/types/database.ts`: CLI-generated live public-schema types, never handwritten copies.
 
 ## Coding rules
 
@@ -75,11 +87,11 @@ Create feature directories only when implementing an approved feature. The plann
 Read [CONTEXT.md](../CONTEXT.md), [database-contract.md](database-contract.md) and the migration SQL before feature changes. Foundation setup does not change their authorization/business contract.
 
 - Ordinary requests use the publishable key and user's session, with RLS. Validate the session server-side with the official SSR guidance, never trust raw `getSession()` or editable user metadata; check live employee membership.
-- Implement session refresh with the current `proxy.ts` convention when the approved auth slice is built. Preserve refreshed cookies **and** cache headers on returned responses. The foundation deliberately has no sign-in/client/refresh implementation.
+- `src/proxy.ts` implements session refresh and protected-page membership using the current convention. Route responses and proxy redirects retain refreshed cookies and SDK cache headers, with private/no-store headers on protected responses.
 - New exposed tables require grants and RLS in the same new migration. Views use `security_invoker = true`. Privileged internals live in `private`, fixed search path, default EXECUTE revoked, live role checked; public wrappers remain invoker functions.
 - Preserve property-before-lock and property → agreement → month → payment locking order. Use the contract RPCs rather than several client writes. Preserve independent review, idempotency, receipt history and one active whole-property rental.
 - Preserve legacy addresses, source text, phone strings, integer VND and m². Current addresses contain no district. Never infer relationships from sheet position or guess partial ward mappings.
-- All feature navigation, forms, errors, notifications and dashboards must support `vi` and `en`. Employee language persistence uses `set_my_locale`; readiness-page query-string switching is not employee preference persistence. Do not translate stored source records. Vietnam business dates come from the database.
+- All feature navigation, forms, errors, notifications and dashboards must support `vi` and `en`. Protected employee language persistence uses `set_my_locale`; pre-auth `lang`/locale cookies are presentation only. Do not translate stored source records. Vietnam business dates come from the database.
 - Check `npx supabase migration new --help`, then create a new migration with the pinned CLI. Never rewrite a deployed migration. Contract changes update `CONTEXT.md` and `docs/database-contract.md` together and add invariant/regression evidence.
 
 ## Checks and contribution flow
@@ -92,6 +104,12 @@ Read [CONTEXT.md](../CONTEXT.md), [database-contract.md](database-contract.md) a
 6. CI is required for merges. Hooks are convenience, not security gates; bypassing them does not bypass CI. Never commit workbooks, staging JSONL, legal files, credentials or real customer fixtures.
 
 Embedded PostgreSQL and readiness HTTP checks are not real Supabase Auth/Data API/RLS/Storage or inventory browser acceptance. Those remain the gates in [testing.md](testing.md).
+
+### Real employee-access development acceptance
+
+Use an already-running local build against the separately authorized dev project. Keep credentials and the private synthetic fixture manifest outside Git. An ignored `.env.acceptance.local` may contain only `SGN_ACCEPTANCE_FIXTURES=<absolute private manifest path>`; the manifest supplies accepted active/inactive/unlinked/operator identities, their private passwords and exact synthetic property IDs.
+
+Run `node --env-file=.env.local --env-file=.env.acceptance.local scripts/employee-access-acceptance.mjs --allow-deactivation --report docs/employee-access-acceptance.json` only with concrete authorization to deactivate/reactivate the named synthetic employee. The script verifies dev stage/project and fixture ownership, restores activation in `finally`, uses real user/publishable sessions and separate Chrome user-data directories, and never treats mocked RLS or generated recovery links as email delivery. Consult `chrome-devtools-axi --help` before use. Its automated report excludes human-coordinated mailbox recovery; active, inactive and unlinked delivered cases separately passed and the dedicated recovery fixture was restored. Use both evidence sources for scoped issue #1 acceptance; neither establishes full MVP or production completion.
 
 ## References
 
