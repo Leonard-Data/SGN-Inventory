@@ -240,6 +240,12 @@ These are scoped development observations, not whole-spec acceptance. Categories
 
 The separately authorized overwrite/delete probe targeted only a newly declared disposable synthetic object: overwrite returned `400`, delete returned `200` with an empty removal list, and an independent subsequent read retained the exact original bytes. No legacy or real object was targeted; no cleanup deletion was performed.
 
+### Executed ticket #25 category evidence
+
+On the isolated development project, the native VI/EN workspace created a surrounding-Unicode-whitespace category and retained its accented spelling across saved locale changes. Two separately authenticated browser employees selected that same company category on different properties and uploaded valid PDFs; an independent employee read retained the exact original bytes. Other was the initial localized picker choice, and an actual omitted-category API registration/upload/completion produced a ready Other document.
+
+Two independent employee JWT sessions concurrently created case/Unicode-edge variants of one new name and received the same category identity. Application and direct-RPC whitespace-only requests returned `400`; inactive/unlinked category reads returned no rows and creation returned `403`. Anonymous application reads returned `401`. An unlinked assignment attempt returned `403`; a forged category returned `400` with no file metadata. The migration preserved all three original legacy rows, including equivalent creation instants, and the existing reservation evidence reference. Embedded category/cover integration currently passes 107 assertions; complete-spec verification remains the later gate.
+
 ## Honest completion limits
 
 Issue #1 has real development Supabase and scoped app/Auth/Data API/browser evidence, plus separately completed active/inactive/unlinked delivered recovery with fixture restoration; historical foundation-only evidence above remains separate. Embedded Auth/Storage shims do not prove email delivery, Storage signed URLs, HTTP deployment protections or cloud release correctness. Private files, production imports, broader workflows and production deployment still require separate staging gates and authorization. Independent review agents remain unavailable due provider credentials; human PR review is still required.
