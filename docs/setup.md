@@ -7,7 +7,25 @@ This repository contains a runnable bilingual Next.js readiness page, configurat
 - Git with a shell available to Husky (Git for Windows includes it).
 - Node `24.14.0`, npm `11.14.1`. `.nvmrc`, `.node-version`, `packageManager` and engine checks record the baseline. Use your version manager; `nvm use` works with compatible nvm installations. Vercel runtime is `24.x`, not a guaranteed exact patch.
 - Python `3.11+` for preparation tests; Docker Desktop/Engine only for the optional real local Supabase stack.
+- Required agent tooling: official GitHub CLI (`gh`), Chrome, and the globally installed `gh-axi`, `chrome-devtools-axi` and compatible `lavish-axi` versions below. Complete this step before agent-assisted project work; optional hooks/plugins are not required.
 - No cloud credentials are needed for formatting, lint, types, tests, build or the readiness page.
+
+### Required initial setup: agent command-line tools
+
+Install any missing repository-required CLIs globally, not as application dependencies. Initial agent-assisted setup is incomplete until all three commands are available on `PATH` and their version checks pass. These compatible versions were exercised with Node `24.14.0` and npm `11.14.1`:
+
+```bash
+npm install --global gh-axi@0.1.36 chrome-devtools-axi@0.1.39 lavish-axi@0.1.85
+gh-axi --version
+chrome-devtools-axi --version
+lavish-axi --version
+```
+
+`gh-axi` requires the official GitHub CLI (`gh`) installed and authenticated. `chrome-devtools-axi` requires Chrome and starts its browser bridge on demand; standalone mode obtains `chrome-devtools-mcp` through npm. `lavish-axi` requires Node 22+, satisfied by the project baseline. Ensure npm's global executable directory is on `PATH`; on Windows it is normally `%APPDATA%\npm`.
+
+Use `gh-axi` for GitHub, `chrome-devtools-axi` for browser work, and `lavish-axi` for visual decisions/reports. Read each command's current `--help` before use. Optional agent hooks/plugins are not installed by these commands. CLI installation does not authorize GitHub writes, publication of visual artifacts, cloud provisioning or deployment.
+
+### Application dependencies and verification
 
 ```bash
 npm ci
@@ -37,21 +55,6 @@ npm run test:import
 ```
 
 If activation is unavailable, invoke `.venv`'s Python directly instead of weakening machine-wide execution policy. CI installs Python 3.11 and the same requirements.
-
-### Agent command-line tools
-
-Install the repository-required CLIs globally, not as application dependencies. These versions were exercised with Node `24.14.0` and npm `11.14.1`:
-
-```bash
-npm install --global gh-axi@0.1.36 chrome-devtools-axi@0.1.39 lavish-axi@0.1.85
-gh-axi --version
-chrome-devtools-axi --version
-lavish-axi --version
-```
-
-`gh-axi` requires the official GitHub CLI (`gh`) installed and authenticated. `chrome-devtools-axi` requires Chrome and starts its browser bridge on demand; standalone mode obtains `chrome-devtools-mcp` through npm. `lavish-axi` requires Node 22+, satisfied by the project baseline. Ensure npm's global executable directory is on `PATH`; on Windows it is normally `%APPDATA%\npm`.
-
-Use `gh-axi` for GitHub, `chrome-devtools-axi` for browser work, and `lavish-axi` for visual decisions/reports. Read each command's current `--help` before use. Optional agent hooks/plugins are not installed by these commands. CLI installation does not authorize GitHub writes, publication of visual artifacts, cloud provisioning or deployment.
 
 ## 2. Local environment
 

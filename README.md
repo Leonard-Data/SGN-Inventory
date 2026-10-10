@@ -31,11 +31,15 @@ For engineering setup, start with [docs/setup.md](docs/setup.md) and [docs/devel
 | `.husky/pre-commit`                                     | Staged formatting, lint, types and JavaScript/schema tests                                       |
 | `.env.example`, `.env.dev.example`, `.env.prod.example` | Credential-free local/dev/prod configuration examples                                            |
 
-## Verify locally
+## Required initial setup and local verification
 
-Use Node.js `24.14.0` and npm `11.14.1`, then:
+Use Node.js `24.14.0` and npm `11.14.1`. Agent-assisted project setup requires the official GitHub CLI (`gh`), Chrome and all three agent CLIs. Install missing agent CLIs globally and verify them before project work; they are not application dependencies:
 
 ```bash
+npm install --global gh-axi@0.1.36 chrome-devtools-axi@0.1.39 lavish-axi@0.1.85
+gh-axi --version
+chrome-devtools-axi --version
+lavish-axi --version
 npm ci
 npm run check
 npm run build
@@ -43,6 +47,8 @@ npm run dev
 ```
 
 Open `http://localhost:3000` (Vietnamese) or `/?lang=en`. Copy `.env.example` to ignored `.env.local`, supply local/dev publishable credentials and run `npm run check:env` to enable configuration health. See the setup runbook for Python checks and optional Docker/Supabase verification.
+
+Authenticate the official GitHub CLI for GitHub work. Use `gh-axi` for GitHub, `chrome-devtools-axi` for browser work and `lavish-axi` for visual decisions/reports; consult current command help before use. See [required agent setup](docs/setup.md#required-initial-setup-agent-command-line-tools) for prerequisites, `PATH` guidance and authorization boundaries. Optional agent hooks/plugins are not required.
 
 For the full local Supabase stack, install Docker, inspect `npx supabase start --help` and `npx supabase db reset --help`, then start/reset a **local** project. These migrations are for a fresh database; do not apply them unreviewed to an existing CRM.
 
