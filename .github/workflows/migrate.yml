@@ -1,0 +1,59 @@
+name: Review database migrations
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: 'Isolated stage (select matching develop/main branch)'
+        required: true
+        default: dev
+        type: choice
+        options: [dev, prod]
+      apply:
+        description: 'Apply reviewed pending migrations (false = dry run only)'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.stage }}
+  cancel-in-progress: false
+
+jobs:
+  quality:
+    uses: ./.github/workflows/ci.yml
+  migrate:
+    needs: quality
+    if: (inputs.stage == 'dev' && github.ref == 'refs/heads/develop') || (inputs.stage == 'prod' && github.ref == 'refs/heads/main')
+    environment: ${{ inputs.stage }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      HUSKY: '0'
+      SGN_ENV: ${{ inputs.stage }}
+      DEV_SUPABASE_PROJECT_REF: ${{ vars.DEV_SUPABASE_PROJECT_REF }}
+      PROD_SUPABASE_PROJECT_REF: ${{ vars.PROD_SUPABASE_PROJECT_REF }}
+      SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Verify database target before cloud contact
+        run: node scripts/release-guard.mjs target
+      - name: Inspect pinned CLI migration interface
+        run: |
+          npx --no-install supabase link --help
+          npx --no-install supabase db push --help
+      - run: npx --no-install supabase link --project-ref "$SUPABASE_PROJECT_REF"
+      - name: Show pending migrations without applying
+        run: npx --no-install supabase db push --linked --dry-run --skip-vault
+      - name: Apply explicitly authorized pending migrations
+        if: inputs.apply
+        run: npx --no-install supabase db push --linked --skip-vault --yes

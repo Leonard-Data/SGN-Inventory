@@ -1,40 +1,91 @@
-# SGN project context
+# SGN inventory domain
 
-## Product decision
+One company's shared property inventory, employee access, contacts, reservations and rental records.
 
-Replace the AppSheet/Google Sheets property inventory with a small, maintainable application. The source is `Databases.xlsx`, profiled on 10 October 2026. The chosen stack is Next.js, Supabase and Vercel; earlier Reflex/Cloudflare proposals are superseded.
+## Language
 
-## Scope and defaults
+### Employees and access
 
-- One company and one shared inventory. Managers review company-wide; no branch/team isolation in this MVP.
-- Two required UI languages: Vietnamese (`vi`, default) and English (`en`); Vietnamese regional formats remain mandatory in both. Store UTC instants; calculate work days in `Asia/Ho_Chi_Minh`.
-- Search legacy and current addresses, listing mode, property type, access type, price, dimensions and status.
-- Employees browse owner/broker contacts and private legal/photos files. Internal contacts are shared among active employees.
-- Four application roles: sales, staff, manager, admin. Invite-only Auth; authority comes from live employee rows.
-- Actual visits require independent confirmation. Page views are a separate activity metric.
-- A pending lock is a request; only an approved and unexpired lock reserves the property and identifies the claimant for commission attribution.
-- Default pending request expiry: 48 hours; approved reservation: 7 days, reviewer-selectable 1–30 days. Extensions require a new reviewed request after release/expiry.
-- Rental agreements, monthly occupancy/dues, and manually recorded receipts/refunds are in scope. No commission amount/rate, payouts, payment gateway, general accounting, customer portal, public listing, complex CRM pipeline or mobile native app.
+**Employee invitation**:
+An offer to join the company's internal inventory. Acceptance alone does not establish active employee access.
+_Avoid_: Access approval
 
-## Address decisions
+**Linked employee**:
+An employee whose sign-in identity has been confirmed as belonging to that employee.
+_Avoid_: Email match
 
-Keep the original district-bearing address. New entry defaults to province/city → commune/ward, with no current district. Legacy and current addresses are separate records. Do not guess a split-ward conversion. Display unresolved mappings visibly and use a separate analytic bucket. National address catalogs and approved crosswalk records still need ingestion; they are not bundled as verified seed data.
+**Active employee**:
+A linked employee whose company inventory access is enabled. Active employees share internal owner and broker contacts.
+_Avoid_: Signed-in employee, active session
 
-## Evidence and outstanding work
+**Inactive employee**:
+An employee whose company inventory access is disabled, regardless of whether they can still authenticate.
+_Avoid_: Signed-out employee
 
-There are 19,233 property rows, 17 employee rows and 56,932 legacy click events. Twenty-three property rows lack IDs; one nonblank ID is shared by two rows. `Contracts` has 20,480 rows and zero direct property-ID matches. See the sanitized profile and mapping document; do not assume sheet row numbers establish relationships.
+**Employee interface language**:
+The employee's preferred Vietnamese or English interface language. It is independent of the language of addresses, source records and signed documents.
+_Avoid_: Record language
 
-The user added mandatory VI/EN localization and rental status/month/payment handling on 10 October 2026. Schema and workflow tests run locally in embedded PostgreSQL with Supabase Auth/Storage shims. Real Auth, storage API, multi-session contention, Next.js routes and deployment still require staging validation. UI and promotion ETL are planned, not implemented.
+### Properties, addresses and contacts
 
-## Repository and approval
+**Property**:
+The building or parcel represented by one inventory identity. An address change does not create a different property.
+_Avoid_: Address record
 
-Target: <https://github.com/Leonard-Data/SGN-Inventory>. The user approved adding this initial package to GitHub on 10 October 2026. Publication is authorized but the connected account currently lacks push permission. Prepare the initial main-branch commit and publish once write access is available, after rechecking remote state. Raw workbook and customer records remain excluded.
+**Property code**:
+A stable, unique inventory reference assigned to a property. New property codes are assigned by the system; an address correction does not change the code.
+_Avoid_: Address identifier, ward-based identity
 
-## Reading order
+**Legacy address**:
+A preserved historical address, including its original district-bearing source text.
+_Avoid_: Incorrect address, current address
 
-1. This file and `AGENTS.md`.
-2. `docs/database-contract.md`, `docs/schema.md` and the migration SQL.
-3. `docs/address-model.md` and `docs/workflows-security.md`.
-4. `docs/migration-plan.md`, `docs/workbook-mapping.md` and `docs/delivery-plan.md`.
+**Current address**:
+A separate address under the applicable province/city and commune/ward structure, without a district. Its presence alone does not establish that its mapping is verified.
+_Avoid_: Translated address, automatically converted address
 
-Update this file when an approved product decision changes; do not leave competing architecture instructions in different files.
+**Unresolved address mapping**:
+A legacy-to-current address relationship without sufficient reviewed evidence to identify the current administrative units.
+_Avoid_: Verified match
+
+**Property contact link**:
+The recorded relationship between a property and a contact, such as owner or broker. Several contacts may belong to a property, with at most one marked primary.
+_Avoid_: Contact inferred from sheet position
+
+**Contact**:
+A shared named party whose contact details may be used by several properties. Its relationship to each property is recorded separately as a property contact link.
+_Avoid_: Property-specific phone record
+
+**Record verification**:
+An assessment of the accuracy of property facts and contact relationships, distinct from reservation approval. It is not a prerequisite for saving or displaying ordinary inventory changes and does not establish legal ownership.
+_Avoid_: Legal approval, address verification
+
+**Address mapping verification**:
+A separate evidence-based assessment establishing the property's current administrative units. It is not approval to save an address or reserve a property.
+_Avoid_: Record approval, automatic ward conversion
+
+**Correction request**:
+A recorded issue or proposed correction by an active employee concerning property facts, addresses, contact details or contact links on an unarchived property. Applying it resolves the request without an approval handoff; submission does not grant editing authority.
+_Avoid_: Direct edit, completed correction
+
+**Property change history**:
+The record of who changed information affecting a property, when, and its before/after values, including property facts, addresses, contact links and shared-contact details displayed on that property.
+_Avoid_: Approval queue, page-view history
+
+### Activity and reservations
+
+**Page view**:
+An employee's interaction with a property detail page. It is not evidence of a physical visit.
+_Avoid_: Visit, attendance
+
+**Confirmed physical visit**:
+A reported visit to a property confirmed by an independent reviewer.
+_Avoid_: Page view, legacy click
+
+**Reservation request**:
+A pending claim awaiting independent review. It does not reserve the property.
+_Avoid_: Effective reservation
+
+**Effective reservation**:
+An approved, unexpired property reservation identifying the claimant for commission attribution, not a commission amount or payout.
+_Avoid_: Pending lock, permanent property lock

@@ -55,7 +55,7 @@ The Postgres → Storage line represents authorization through registered file m
 
 ## Hosting and environments
 
-Use a separate Supabase development/staging project and production project. Vercel previews must use staging credentials and sanitized fixtures, never production data. Set the Supabase and Vercel regions near users after checking availability. Use the Node runtime supported by current Supabase libraries (22+). Vercel's Next.js integration supports the selected application architecture; see `sources.md`.
+Use two logical stages, `dev` and `prod`, with a separate Supabase project and isolated Vercel project per stage. Both host the same Next.js application; local development and optional previews use dev credentials and sanitized fixtures only. Explicit GitHub environment-gated workflows replace automatic Vercel Git deployments. The isolated hosting projects also prevent Vercel's first-deployment Production behavior from selecting production data for dev. Set regions near users after checking availability. Local/CI Node is pinned to `24.14.0`; Vercel uses `24.x`. See [setup.md](setup.md) and [development.md](development.md).
 
 Set Auth site URL and exact allowed callback URLs per environment. Disable public and anonymous signup; invite users through an admin-only server operation. A privileged server key is only needed for Auth administration and must not be the default inventory data client.
 

@@ -1,1 +1,4 @@
 openpyxl==3.1.5
+et-xmlfile==2.0.0
+# Windows has no system IANA timezone database.
+tzdata==2026.5

@@ -2,6 +2,14 @@
 
 Read `CONTEXT.md` and `docs/database-contract.md` before changing the project. The migration SQL is the physical schema authority. This is a foundation package; do not claim a working app exists yet.
 
+## Authorization and tools
+
+- Treat the user as the captain. Destructive, irreversible, security-sensitive, discard and merge actions require the captain to explicitly authorize the concrete action.
+- Keep overrides limited to the expressly authorized object and action. Never infer an override, broaden it, apply it by analogy, transfer it to another object or action, or turn one request into standing authority. Resolve ambiguous scope or conflicting instructions with one concise clarification before acting.
+- Preserve refused work. Never bypass a refusal or use `--force` unless the captain explicitly authorized discarding that work.
+- Use `gh-axi` for GitHub, `chrome-devtools-axi` for browser work, and compatible `lavish-axi` for visual decisions or reports. Consult current help before use rather than relying on memorized flags.
+- Never add an agent name as a commit co-author.
+
 ## Architecture
 
 - Use Next.js App Router, TypeScript and Supabase on Vercel. Keep one application and one Postgres database.
@@ -44,6 +52,16 @@ Read `CONTEXT.md` and `docs/database-contract.md` before changing the project. T
 
 ## Scope and reporting
 
-Implement only approved MVP backlog work. Report the actual changes, verification and remaining limits. Do not add AI matching, maps, payment calculations, external notifications or multi-tenancy without an approved requirement.
+Implement only approved MVP backlog work. Talk in outcomes, not mechanics: report actual changes, verification and remaining limits. Report failures plainly with the evidence; never present failed work as successful. Do not add AI matching, maps, payment calculations, external notifications or multi-tenancy without an approved requirement.
 
 The user approved GitHub publication of this initial package on 10 October 2026. Do not ask for the same approval again. Recheck the remote state and publish the prepared initial commit when repository write access is available. Supabase provisioning, production import and deployment are separate authorization scopes.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+## This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

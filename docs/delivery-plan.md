@@ -1,8 +1,16 @@
 # Next.js implementation and release plan
 
+## Scope and approval record
+
+Replace the AppSheet/Google Sheets inventory profiled on 10 October 2026 with one Next.js App Router/TypeScript application, one Supabase Postgres database and Vercel hosting. Earlier Reflex/Cloudflare proposals are superseded. The company shares inventory and internal contacts; managers review company-wide, without branch/team isolation. Roles are sales, staff, manager and admin. See the domain glossary in [CONTEXT.md](../CONTEXT.md), the broader [architecture](architecture.md), [workbook findings](workbook-mapping.md) and [database contract](database-contract.md).
+
+VI/EN localization and rental agreement/month/manual receipt/refund handling were made mandatory on 10 October 2026. They remain broader MVP requirements even where the first employee-access slice below excludes their management screens. UI, reviewed promotion ETL and real staging acceptance remain planned, not implemented.
+
+GitHub publication of the initial package to <https://github.com/Leonard-Data/SGN-Inventory> was approved on 10 October 2026. The remote now contains `main` and the connected account has repository write access. Engineering setup does not itself authorize Supabase/Vercel provisioning, customer-data import or cloud deployment. Raw workbooks, customer records and secrets remain excluded.
+
 ## Planned application structure
 
-The database and docs are implemented in this package; the folders below are the planned Next.js code layout, not existing UI files.
+The database, documentation and engineering foundation are implemented: `src/app` has a bilingual readiness page and configuration health, with environment/release checks and pinned tooling. The feature routes and adapters below remain planned, not working inventory/auth UI. See [development.md](development.md) for the actual source tree.
 
 | Path | Responsibility |
 | --- | --- |
@@ -30,7 +38,7 @@ The database and docs are implemented in this package; the folders below are the
 | `src/i18n/vi.ts` and `src/i18n/en.ts` | Complete equivalent dictionaries, validated key parity and localized messages |
 | `src/types/database.ts` | Generated Supabase types; do not edit manually |
 
-Keep Server Actions narrow and input-validated. Reuse user-scoped data clients in feature services. Do not create a parallel unrestricted CRUD API for Supabase tables.
+Keep Server Actions narrow and input-validated. Reuse user-scoped data clients inside feature Modules, separate from rendering. Keep each Interface small; do not add generic pass-through Modules or a parallel unrestricted CRUD interface for Supabase tables.
 
 ## Implementation backlog
 
@@ -38,7 +46,7 @@ Keep Server Actions narrow and input-validated. Reuse user-scoped data clients i
 | --- | --- | --- |
 | 1 | Local/staging DB and Auth foundation | Migrations apply on real Supabase; reviewed users can log in; inactive/unlinked users denied |
 | 2 | Responsive inventory and property detail | Vietnamese accent/legacy/current search; clear mode/type/access; 30-row pages; contact/file cards |
-| 3 | Property/address maintenance | Role-scoped edits; positive numeric validation; explicit legacy input; current ward selector; reviewer verification |
+| 3 | Property/contact/address maintenance and correction requests | Role-scoped immediate saves; property history; preserved legacy input; optional address verification; stale-edit rejection; no maintenance approval |
 | 4 | Private file protocol | Register → upload → confirm → signed read; interrupted upload recovery; no public legal links |
 | 5 | Approval-based reservations | Independent approval; duplicate/competing requests handled clearly; expiry and release reflected immediately |
 | 6 | Activity and review | Detail opens are page views; visits submitted/confirmed separately; unique confirmed-property daily KPI |
@@ -49,6 +57,77 @@ Keep Server Actions narrow and input-validated. Reuse user-scoped data clients i
 | 9 | Acceptance and release | Real RLS/Storage, competing-session test, browser flow, reconciliation and recovery rehearsal pass |
 
 Build auth + inventory first, then reservations/visits, then analytics and complete import. Use sanitized representative fixtures during UI development, not the raw customer workbook in previews.
+
+## Confirmed property, contact and address maintenance plan
+
+The user confirmed this assembled plan on 10 October 2026, including requester-only request history and the authorized staff processing queue. Confirmation authorizes documenting the agreement, not implementation, provisioning, import or deployment. The package remains a database foundation without a working application.
+
+### End-to-end journey
+
+1. A linked, active employee creates a property with a listing mode and at least one nonblank known address. Assign a stable unique property code and commit the property, initial address and change history together. Preserve existing/imported codes. Unknown prices, dimensions, classifications and contacts remain unknown.
+2. Sales may edit their own unarchived property/address; staff/manager/admin may edit shared unarchived inventory. Save authorized changes immediately and refresh affected search/detail data. No record approval, publication versions or maintenance-review queue.
+3. Staff/manager/admin create/correct shared contacts, maintain relationship/primary markers and remove mistaken links. Keep at most one primary contact per property. Show affected properties before a shared-contact save; the same person's correction appears on all linked properties and in each affected property's history. A wrong-person link is replaced locally, not by overwriting the shared person. No merging or hard deletion.
+4. Any active employee submits a structured correction issue for any unarchived property, with replacement values optional. The requester tracks their own requests; authorized staff process the company queue. Submitters gain no edit authority. Staff/manager/admin apply and resolve within their existing edit permissions, or reject with a reason; the requester may withdraw an open request. No second reviewer or requester confirmation.
+5. Use `open → applied`, `open → rejected` and `open → withdrawn`. Preserve original submissions and amendments. Atomically apply the correction, record actual changes and close the request. Terminal requests cannot be applied again. Reject stale proposals and serialize competing apply/reject/withdraw transitions.
+6. Anyone allowed to read the property may read its scoped change history: actor, time, fields and before/after values. Include creation, property/address edits, contact/link changes and primary replacements. Private raw audit data remains inaccessible; source records, phone strings, VND and m² retain their meaning in either UI language.
+7. Manager/admin may optionally designate an address mapping verified from valid official units and property-level evidence, without another approver. Saving addresses never waits for verification. Changed mapped address facts clear that address's verified designation; price/contact changes do not. Preserve original legacy source text and previous current rows; primary replacement is atomic. Verified current addresses remain the preferred display, otherwise legacy is usable and current candidates are clearly labeled.
+8. Sales requesting a lock for a deal use the existing reservation workflow: pending does not reserve; another manager/admin approves; only an approved, unexpired reservation is effective. This is not a new transaction/payment/commission module, and ordinary changes do not enter this approval flow.
+
+### Implementation sequence after separate authorization
+
+| Phase | Work | Observable completion |
+| --- | --- | --- |
+| 1. Database mutation and history contracts | Check current Supabase CLI help; create new migrations, never rewrite deployed SQL. Implement atomic creation/code allocation, immutable original legacy source, primary replacement, contact-link removal, optimistic revision checks, optional mapping verification/invalidation and scoped property history. Preserve current role, RLS, reservation and rental invariants. | Failure leaves no partial property/address/history state; direct Data API calls cannot bypass role, revision, source-preservation or history guarantees. |
+| 2. Correction requests | Add request and amendment/history storage with explicit grants/RLS. Requesters read their own requests; staff/manager/admin process the queue subject to property access. Implement guarded submit/amend/apply/reject/withdraw operations and atomic correction/history/closure. | Requests without replacement values work; stale or terminal requests cannot overwrite data; concurrent resolution has one winner. |
+| 3. Application maintenance surfaces | First establish the planned employee-access foundation and verify current pinned Next.js/React/Supabase SSR APIs. Add create/edit forms, explicit legacy/current address entry, dependent unit selectors with unresolved fallback, contact/link maintenance, correction submission/queue and property history in search/details. | Actual VI/EN browser journey works under live employee membership and user-scoped RLS; saves are immediate, not advertised as approved. |
+| 4. Acceptance | Add deterministic database regressions for the new invariants; run `npm run test:schema`. Execute the [maintenance staging scenarios](testing.md#property-contact-and-address-maintenance-acceptance-not-yet-executed) using real Auth/Data API/RLS and concurrent sessions. | Record actual observations; embedded tests alone are not staging or browser acceptance. |
+
+Mutation rendering stays separate from feature data access. Validate every Server Action/Route Handler input. Prefer transaction RPCs for multi-row state changes and revision checks; privileged internals remain private with fixed search paths, revoked default EXECUTE and live-role checks, exposed only through invoker wrappers. Migrate callers and close any replaced direct-write path rather than leave an authorization/concurrency bypass. Imports remain separately authorized controlled operations.
+
+History reads must project allowlisted property business fields, obey live access and archive boundaries, and associate shared-contact changes with affected properties. Neither sensitive history nor inventory/contact data belongs in shared public caches. Source-language records are not translated by switching VI/EN; property-history timestamps display Vietnam time.
+
+### Gaps and boundaries
+
+- Current SQL supports direct property/address/contact writes, private audit snapshots and reservation approval, not the complete maintenance journey. No atomic create/code generator, correction workflow, ordinary unlink, scoped history endpoint or agreed stale-edit guard exists yet. Original legacy text is not database-enforced immutable.
+- Official address catalogs are not seeded. Unverified raw current entry is allowed without guessing units; optional verification requires reviewed catalog data and evidence. Catalog ingestion/provisioning is a separate prerequisite, not a reason to reject a known-address save.
+- Existing search uses wildcard `%`/`_`; the already approved literal-search correction remains required before accepting search integration. Address summaries remain bounded to the current result page.
+- Existing record-review fields must not become a maintenance gate or misleading certification of changed facts. Preserve unrelated legal/sold/rented authority and active-rental protections.
+- Exclude legal-status review, new uploads, external notifications, contact merging, hard deletes, separate deal records, commission/payment calculations, maps, AI enrichment and multi-tenancy. Existing reservation/visit/rental approval requirements are unchanged.
+
+
+## Confirmed first employee-access slice
+
+The confirmed journey is: an invited, active employee signs in → searches a legacy address → opens property/contact details → switches VI/EN → signs out. An inactive or unlinked identity is denied through the UI and API. This section defines the planned slice, not an executed result or a replacement for the broader backlog.
+
+### Starting identity and sign-in
+
+- Start after invitation acceptance, confirmed identity linkage and activation through authorized administration. Being invited or authenticated alone does not authorize inventory access.
+- Use email/password sign-in with password recovery and no public signup. Invitation acceptance and employee invitation/linkage/activation management UI are outside this slice.
+- Validate sessions server-side and use live employee membership on every protected server request, as required by the [database contract](database-contract.md#client-and-authorization-contract).
+
+### Search and read-only details
+
+- Use accent-insensitive contiguous-substring legacy-address search. Treat `%` and `_` literally; do not offer fuzzy or reordered-token matching. Show the matching address format and verification state without inventing a current ward mapping.
+- Retain the contracted 30-row default page, UUID cursor and 120-character query validation. Bound address-summary queries to the current page.
+- Show property code, listing mode, physical type, access type, inventory/review/legal statuses, prices, dimensions, original legacy address and current address when present, with verification labels. Missing data remains visibly unknown.
+- Show all linked owner/broker contacts, their relationship and primary marker, names and preserved phone text. Do not fabricate missing contact relationships.
+- Detail opens record idempotent page views through the documented activity RPC, never physical visits. UI retries or language switches must not create duplicate opens.
+
+### Language, denial and sign-out
+
+- Default to Vietnamese and fully localize this journey in VI/EN, including authentication/recovery, navigation, validation, badges, loading/empty/error states and access denial. Preserve source records, phone strings, VND, m² and Vietnam business dates.
+- Switch language only after `set_my_locale` succeeds. On failure, retain the previous language and show a localized error without claiming it was saved. Successful switching preserves the search query, result position and open property; subsequent login loads the employee's saved preference.
+- Inactive/unlinked users see a localized access-denied screen, not an inventory-empty state; application endpoints return `403`. Direct Supabase requests with an existing JWT expose no protected rows or reject guarded RPCs.
+- Recheck membership on the next protected request or window refocus. When denial is detected, clear displayed inventory/contact data. Already delivered information cannot be recalled; no instant remote erasure is promised.
+- Sign out the current browser session only and clear sensitive client state. Back, refresh and protected navigation must not reveal cached details. Other devices remain signed in; an already-issued copied access token may remain valid until expiry.
+
+### Acceptance and boundaries
+
+Use representative sanitized fixtures in isolated staging with real Supabase Auth and RLS; mocked authorization does not establish acceptance. Follow the [employee-access acceptance scenarios](testing.md#confirmed-employee-access-slice-acceptance-not-yet-executed).
+
+File viewing, record editing, reservation/rental management, employee administration UI and production workbook import are outside this slice, not removed from the broader MVP. Provisioning and deployment are not authorized by the journey agreement.
+
+**Known gap:** the current search migration treats `%` and `_` as wildcards. Literal matching needs implementation and regression verification before this slice can pass acceptance; no SQL or application behavior was changed by documenting the agreement.
 
 ## Vietnamese/English UX requirements
 
@@ -63,9 +142,9 @@ Build auth + inventory first, then reservations/visits, then analytics and compl
 
 ## CI and environments
 
-After GitHub approval, add a workflow that installs locked dependencies, runs schema/preparation tests, and checks frontend formatting/types/lint/build when the frontend exists. A failed database test blocks schema promotion. Apply schema changes via a reviewed database pipeline, not Vercel build side effects.
+Engineering setup now includes locked npm dependencies, staged-format/type/lint/test hooks and read-only CI covering formatting, lint, types, configuration/release regressions, schema/preparation tests and Next build. A failed quality gate blocks the manually dispatched release workflows. Apply reviewed schema changes through the separate database dry-run/apply workflow, never Vercel build side effects.
 
-Use Vercel Git integration for approved repository deployments. Preview environment = staging project and sanitized data; production environment = production project. Verify Auth callback URLs, session handling and private caching per environment. Pin supported Next.js/React/Supabase packages at implementation time; this package intentionally pins only its existing test/CLI tools.
+Two isolated Supabase and Vercel projects implement `dev`/`prod`; local and optional previews belong to dev. Deployments are explicit GitHub environment-gated operations on `develop`/`main`, respectively, with project/ref isolation checks and health smoke. Automatic Vercel Git deployment is disabled. The [setup runbook](setup.md) defines provisioning, protections, credentials and rollback; cloud actions and real staging acceptance have not been executed by engineering setup.
 
 Production release sequence: database compatibility change → application build/preview validation → approved deployment → smoke checks → monitor. Add destructive/restrictive schema changes only after the application is compatible. Keep prior app deployment available for rollback and use forward database fixes when recovery is safer.
 

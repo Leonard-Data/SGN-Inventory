@@ -2,15 +2,49 @@
   "name": "sgn-inventory-foundation",
   "private": true,
   "version": "0.2.0",
-  "description": "Database and development contract for the SGN Next.js/Supabase/Vercel MVP; UI implementation is the next phase",
+  "description": "Engineering and database foundation for the SGN Next.js/Supabase/Vercel MVP",
+  "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": ">=24.14.0 <25",
+    "npm": ">=11.14.1 <12"
   },
+  "packageManager": "npm@11.14.1",
   "scripts": {
-    "test:schema": "node scripts/validate-schema.mjs"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "format:check": "prettier . --check",
+    "format": "prettier . --write",
+    "test:unit": "node --test src/lib/environment.test.ts scripts/release-guard.test.mjs",
+    "test:schema": "node scripts/validate-schema.mjs",
+    "test:import": "python -m unittest discover -s scripts -p test_*.py",
+    "test": "npm run test:unit && npm run test:schema",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test",
+    "check:env": "node --env-file-if-exists=.env.local scripts/check-environment.mjs",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "@supabase/ssr": "0.12.7",
+    "@supabase/supabase-js": "2.117.3",
+    "next": "16.4.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "server-only": "0.0.1"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.8",
-    "supabase": "2.120.0"
+    "@types/node": "24.19.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.4.0",
+    "husky": "9.1.7",
+    "lint-staged": "17.6.0",
+    "prettier": "3.9.9",
+    "supabase": "2.120.0",
+    "typescript": "6.0.3",
+    "vercel": "63.1.2"
   }
 }

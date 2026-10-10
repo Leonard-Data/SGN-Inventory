@@ -14,6 +14,18 @@ Use the signed-in user's request-scoped Supabase client with the publishable key
 
 Expose only `public` in the Data API. `private` must remain unexposed even though authenticated DB roles have USAGE and narrowly scoped helper EXECUTE permissions. Do not create a privileged browser/client service-role connection. Secret/server keys are limited to authorized Auth administration and controlled offline imports.
 
+### Confirmed employee-access slice (planned)
+
+An employee invitation must already be accepted, the identity linked and the employee active before this journey starts. Email/password sign-in and recovery do not grant employee authority. Validate the session and check live employee membership on every protected server request; ordinary application requests continue to use the user's publishable-key client and RLS, never a privileged fallback.
+
+Application endpoints return `403` for an authenticated inactive/unlinked identity, and the UI shows localized access denied rather than an empty inventory. Direct Data API SELECTs may return zero rows under RLS instead of a permission error; guarded RPCs reject unauthorized calls. Denial must hold for subsequent requests using a JWT issued before deactivation. On the next protected request or window refocus, recheck membership and clear displayed inventory/contact data if denied; previously delivered information cannot be recalled.
+
+The slice signs out only the current browser session, clears sensitive client state and prevents cached detail exposure through Back, refresh or protected navigation. Other device sessions remain signed in. Refresh-access revocation does not guarantee immediate invalidation of an already-issued copied access token before expiry.
+
+Persist VI/EN preference through `set_my_locale` before switching the interface. Failure retains the previous language and shows a localized error; success preserves search query, result position and open property. Read the saved preference after subsequent login. No language change rewrites source records.
+
+These are approved application requirements, not claims that the foundation has sign-in routes, membership guards, cache handling or browser acceptance. See the [delivery scope](delivery-plan.md#confirmed-first-employee-access-slice) and [staging scenarios](testing.md#confirmed-employee-access-slice-acceptance-not-yet-executed).
+
 ## Read contract
 
 | Feature | Source | Scope |
@@ -30,7 +42,9 @@ Expose only `public` in the Data API. `private` must remain unexposed even thoug
 
 Search parameters: `p_query text=''`, `p_status text=NULL`, `p_mode text=NULL`, `p_type text=NULL`, `p_area_id uuid=NULL`, `p_after uuid=NULL`, `p_limit integer=30`. Empty query browses inventory; query text over 120 characters returns no rows; route validation should reject it clearly. `p_mode='sale'` or `'rent'` also includes `both`. Area searches check province/district/commune version IDs on any address. For unresolved raw legacy labels, apply a separately validated label filter when the UI is implemented; never equate a text match with a verified current-area ID.
 
-The SQL search response is `setof properties`, sorted by UUID ascending, with at most 50 rows. Cursor is the last returned UUID. Fetch result address summaries separately by the returned property IDs; bound relation queries to the current page. Price/area filters are normal typed property filters; add explicit RPC parameters with tests before offering those filters in a combined search UI. Escape `%` and `_` or intentionally label wildcard behavior; do not interpolate user SQL.
+The SQL search response is `setof properties`, sorted by UUID ascending, with at most 50 rows. Cursor is the last returned UUID. Fetch result address summaries separately by the returned property IDs; bound relation queries to the current page. Price/area filters are normal typed property filters; add explicit RPC parameters with tests before offering those filters in a combined search UI. Do not interpolate user SQL.
+
+For the confirmed employee-access slice, address search is accent-insensitive contiguous-substring matching with literal `%` and `_`, not fuzzy or reordered-token matching. Show the matching address format and verification state. **Implementation gap:** `20261010013008_inventory_storage_reporting.sql` currently uses `LIKE`/`ILIKE` patterns in which `%` and `_` are wildcards. The approved literal behavior is not yet implemented; address it with verified escaping or a new migration and regression coverage before accepting the slice. Do not rewrite the existing migration or claim literal behavior is already provided.
 
 ## Mutation RPC contract
 
@@ -50,11 +64,34 @@ No authenticated INSERT/UPDATE/DELETE grants exist on locks, lock events or acti
 
 - Active employees may create properties; the DB sets creator/updater from their session. Sales edit their own unarchived properties; staff/managers/admin can edit shared inventory.
 - Manager/admin decide record-review and legal statuses and set sold/rented states. Sales cannot claim review approval by patching a property.
-- Address writes follow property edit permission; verified mappings require manager/admin. Use an atomic reviewed transaction when replacing a primary address.
-- Contact maintenance and property/contact links require staff/manager/admin. Sales can request corrections through the operational process; a correction-request table is not included in this foundation.
+- Address writes follow property edit permission; verified mappings require manager/admin. Primary-address replacement must be atomic; the planned maintenance slice does not require a separate approver.
+- Contact maintenance and property/contact links require staff/manager/admin. The foundation has no correction-request table or in-app workflow; the planned maintenance contract below replaces external operational handoff with structured in-app requests once implemented.
 - Files: INSERT metadata is allowed with property edit permission and current employee as uploader. Upload completion/review use RPCs. No direct authenticated file metadata UPDATE or DELETE.
 - Admin maintains employees and official catalogs. Creating an employee row does not create an Auth user; invitations and confirmed account linkage are separate server operations.
 - Hard deletes are not exposed. When deactivating an employee, review their approved locks and release or let them expire; deactivation blocks new employee DB requests but does not erase attribution history.
+
+### Confirmed property, contact and address maintenance decisions
+
+The user confirmed the assembled [maintenance plan](delivery-plan.md#confirmed-property-contact-and-address-maintenance-plan) on 10 October 2026. These are approved planned requirements, not changes to current SQL grants, RLS or behavior. Confirmation authorizes documenting the agreement, not implementation, provisioning, import or deployment.
+
+- Staff/manager/admin maintenance includes creating and correcting contacts, linking them to properties, changing relationship/primary markers and removing mistaken links. Contact merging and hard deletion are excluded. Removing one link must preserve the contact and its other relationships; the current schema has no ordinary unlink path.
+- Ordinary property, price, address, contact and contact-link changes do not require record approval. This supersedes the earlier mandatory maintenance-review decision. Authorized saves appear immediately in search/details without an approval handoff or automatic return to a record-approval queue. There is no last-approved published version or private initial-draft model.
+- Record accuracy, address mapping and legal ownership remain distinct. Do not present an earlier record-review decision as certification of subsequently changed facts. Existing record-review columns are not an authorization or publication gate. Legal-status review is not added to this slice.
+- "Create deal" means the existing reservation workflow, not a new sales-transaction entity. Sales requests a lock; independent manager/admin approval creates an effective reservation. Pending requests do not reserve. No self approval, agreed-price/payment/commission module or new property-lock boolean is introduced. Other established reservation, visit and rental rules are unchanged.
+- Creation requires listing mode and at least one nonblank known address. Accept explicit legacy entry or an unverified current address without guessed catalog units. Other facts and contacts may remain unknown. Save the property and its initial address atomically.
+- New properties receive system-assigned, stable, unique codes independent of address, ward and creator. Preserve existing/imported codes and property identity through address corrections.
+- Address mapping verification is optional evidence-based designation by manager/admin, without a second approver and without gating saves. Changing mapped address facts clears the affected verified designation atomically; unrelated price/contact changes do not. Require valid official unit hierarchy/dates and property-level evidence, particularly for partial transitions. Never overwrite original legacy source text; retain previous current addresses when replacing a primary.
+- Correcting the details of the same shared contact affects all linked properties; show affected properties before saving. A wrong-person link is corrected on the affected property rather than overwriting the shared contact. No automatic identity matching or merging.
+- Every change affecting a property must be recorded in its property change history, including creation, prices, addresses, owner/contact links, primary markers and shared-contact phones. Show actor, time, changed fields and before/after values. Shared-contact changes must be attributable from each affected property's history.
+- Any active employee who can read a property may read its business change history, subject to live membership and the same archived-property read boundary. Keep private audit tables unexposed; return only property-scoped business fields, not unrestricted audit payloads, secrets or document contents. No shared public cache.
+- Any active employee may submit a structured in-app correction request concerning any unarchived property's facts, addresses, contact details or links. Identify the target and explain the issue; replacement values are optional. Submission grants no editing or verification authority. Legal-status/evidence, reservation and rental corrections are outside this workflow.
+- Requesters may read their own submissions and amendments; staff/manager/admin may read the company processing queue subject to live property access. Ordinary employees cannot read other employees' requests solely because they can read the property.
+- Requests have `open`, `applied`, `rejected` or `withdrawn` states. Staff/manager/admin may apply or reject an open request within their existing edit authority; the requester may withdraw their own open request. Rejection requires a reason. Apply the actual correction, property-history entry and `applied` transition in one transaction; no reviewer handoff or requester confirmation. Retain the original request and amendments. Terminal requests cannot be reapplied.
+- Reject stale form saves and stale correction applications, show current information and require reconciliation. Do not silently merge or overwrite newer values. Preserve the original request and record amendments; serializing an application must also prevent concurrent withdrawal/rejection from succeeding on the same open request.
+
+**Implementation gaps:** the foundation has no creation/code-generation transaction, correction-request workflow or property-history endpoint. Unlink is unavailable to ordinary clients; direct table writes do not provide the agreed stale-edit guard or enforce immutable legacy source text. Existing private audit snapshots alone do not establish shared-contact attribution from each property's history. Optional verification/invalidation and atomic primary replacements need application/database implementation and regression coverage.
+
+See the [planned maintenance acceptance scenarios](testing.md#property-contact-and-address-maintenance-acceptance-not-yet-executed). No application implementation, migration, provisioning or deployment is authorized by this planning record.
 
 ## Document protocol
 

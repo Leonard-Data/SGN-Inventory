@@ -1,0 +1,16 @@
+node_modules/
+.next/
+.vercel/
+package-lock.json
+next-env.d.ts
+supabase/migrations/
+supabase/config.toml
+scripts/validate-schema.mjs
+# Existing contract docs and sanitized reports retain their source formatting.
+CONTEXT.md
+AGENTS.md
+CLAUDE.md
+docs/**
+!docs/setup.md
+!docs/development.md
+*.tsbuildinfo

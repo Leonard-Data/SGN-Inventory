@@ -1,0 +1,65 @@
+name: Deploy application
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: 'Isolated stage (select matching develop/main branch)'
+        required: true
+        default: dev
+        type: choice
+        options: [dev, prod]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.stage }}
+  cancel-in-progress: false
+
+jobs:
+  quality:
+    uses: ./.github/workflows/ci.yml
+  deploy:
+    needs: quality
+    if: (inputs.stage == 'dev' && github.ref == 'refs/heads/develop') || (inputs.stage == 'prod' && github.ref == 'refs/heads/main')
+    environment: ${{ inputs.stage }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      HUSKY: '0'
+      SGN_ENV: ${{ inputs.stage }}
+      DEV_SUPABASE_PROJECT_REF: ${{ vars.DEV_SUPABASE_PROJECT_REF }}
+      PROD_SUPABASE_PROJECT_REF: ${{ vars.PROD_SUPABASE_PROJECT_REF }}
+      DEV_VERCEL_PROJECT_ID: ${{ vars.DEV_VERCEL_PROJECT_ID }}
+      PROD_VERCEL_PROJECT_ID: ${{ vars.PROD_VERCEL_PROJECT_ID }}
+      SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+      EXPECTED_SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Verify isolated release configuration before cloud contact
+        run: node scripts/release-guard.mjs configuration
+      # Both targets use their isolated project's Production environment.
+      - run: npx --no-install vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+      - name: Verify downloaded project and variables before building
+        run: node scripts/release-guard.mjs pulled
+      - run: npx --no-install vercel build --prod --token="$VERCEL_TOKEN"
+      - name: Deploy exact stage build
+        shell: bash
+        run: |
+          url=$(npx --no-install vercel deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN")
+          printf 'DEPLOYMENT_URL=%s\n' "$url" >> "$GITHUB_ENV"
+      - name: Verify deployed stage health
+        env:
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: node scripts/release-guard.mjs smoke
