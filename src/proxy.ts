@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ApiError, createRouteContext } from '@/lib/supabase/route';
+import {
+  ApiError,
+  createRouteContext,
+  type RouteContext,
+} from '@/lib/supabase/route';
 import { activeEmployee } from '@/features/employees/access';
 import { messages } from '@/i18n/messages';
 export async function proxy(request: NextRequest) {
+  let context: RouteContext | undefined;
   try {
-    const context = createRouteContext(request);
+    context = createRouteContext(request);
     await context.client.auth.getClaims();
     if (request.nextUrl.pathname.startsWith('/properties')) {
       try {
@@ -30,10 +35,11 @@ export async function proxy(request: NextRequest) {
   } catch {
     const locale =
       request.cookies.get('sgn-locale')?.value === 'en' ? 'en' : 'vi';
-    return new NextResponse(messages[locale].unavailable, {
+    const response = new NextResponse(messages[locale].unavailable, {
       status: 503,
       headers: { 'Cache-Control': 'no-store' },
     });
+    return context ? context.finish(response) : response;
   }
 }
 export const config = {

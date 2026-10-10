@@ -99,7 +99,7 @@ Record observed browser results and sanitized HTTP statuses/response shapes with
 
 ### Executed issue #1 development evidence
 
-`employee-access-acceptance.json` records the real hosted-development/local-build run at **2026-10-10 10:50 UTC**. All 12 reachable observation groups passed:
+`employee-access-acceptance.json` records the latest real hosted-development/local-build run (see its `checkedAt` timestamp). All 12 reachable observation groups passed:
 
 - Real accepted linked-user sign-in, anonymous denial and UUID-keyset pages of 30 then 6 rows.
 - Accent/unaccent contiguous search, literal `%`/`_` controls, reordered/no-match inputs and invalid/oversized request rejection.
@@ -111,6 +111,9 @@ Record observed browser results and sanitized HTTP statuses/response shapes with
 - Saved language survives login and remains independent per employee. Local sign-out clears Back/direct-navigation details while the independently profiled other device stays signed in.
 - Invalid recovery callbacks and inputs are localized and cannot update a password or grant employee access.
 - Additional actual browser smoke: device emulation measured 390×844 with scroll width 390; native Tab exposed the localized skip link and Enter focused the main heading. The resize command's reported dimensions were not trusted because direct measurements disagreed; device emulation produced the correct measured viewport. Pixel screenshot capture timed out, so no screenshot or error-free-console claim is made.
+- Inline review found the proxy's `503` catch dropped SDK-refreshed cookies. A throwaway server-function smoke used a real hosted Auth refresh and deliberately failed only the employee Data API transport: before, `503` forwarded zero Auth cookies with no referrer policy; after, it forwarded the refreshed Auth cookie with `private, no-store, max-age=0` and `no-referrer`. This is fault-injection evidence, not a claimed hosted RLS outage or mailbox test. Bun emitted an internal directory-mismatch warning while returning success; actual Next build/browser checks remain separate.
+- The first PR quality job failed before installation: Node `24.14.0` bundled npm `11.9.0`, below the required `11.14.1` (`EBADENGINE`). CI and both release workflows now install pinned npm before `npm ci`; engine validation remains enabled and no release workflow was dispatched.
+- Independent parallel reviewer agents could not start because the provider rejected their API credentials (`401`); review was completed inline instead. The CodeRabbit success status is not review evidence: its PR comment explicitly skips draft reviews.
 
 Separately, strict types and the production build passed; 10 native unit tests and 83 embedded schema assertions passed across all six migrations. Authorized hosted configuration was verified with closed signup, exact localhost recovery URLs and `public`-only Data API exposure (`private` read `406/PGRST106`, authenticated public read `200`). **No real mailbox was exercised; successful delivery/callback/new-password and denied-identity recovery remain release blockers.** Private Storage, customer import, broader workflows, production and deployment are not claimed.
 
