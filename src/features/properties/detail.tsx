@@ -4,6 +4,7 @@ import { label, messages, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { SessionHeader } from '@/features/employees/session-header';
 import { api, RequestError } from '@/features/employees/api';
+import { Workspace } from '@/features/property-files/workspace';
 import type { PropertyDetail } from './detail-data';
 import { formatVnd, vietnamDate } from './format';
 const directionKeys: Record<string, string> = {
@@ -222,6 +223,12 @@ export function Detail({
                   <p>{text.noContacts}</p>
                 )}
               </section>
+              <Workspace
+                propertyId={id}
+                locale={locale}
+                employeeId={employeeId ?? null}
+                archived={!!property.archived_at}
+              />
             </div>
             <p className="muted">{text.pageViewNote}</p>
             {viewError ? (

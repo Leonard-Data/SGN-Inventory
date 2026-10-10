@@ -97,3 +97,30 @@ _Avoid_: Effective reservation
 **Effective reservation**:
 An approved, unexpired property reservation identifying the claimant for commission attribution, not a commission amount or payout.
 _Avoid_: Pending lock, permanent property lock
+
+
+### Property files
+
+**Property file**:
+A registered document or photo attached to a property, stored in the private `property-files` Storage bucket. Each file has a stable UUID, immutable path and a purpose (photo or document) independent of MIME type.
+_Avoid_: Uploaded image, attached document
+
+**File purpose**:
+Whether the file represents a Property photo (intended for property presentation) or a Document (evidence, certificate, contract). Set during registration and independent of MIME type and document category.
+_Avoid_: Image type, photo inferred from MIME
+
+**File completion**:
+Technical validation confirming the stored bytes match registered expected size and SHA-256. Not a human review, legal authenticity check or ownership certification. Completed files are readable without a review gate.
+_Avoid_: Document acceptance, review approval
+
+**Document category**:
+A company-wide classification label for a property file. Each file has at most one category; the default is Other. Categories are created and reused by active employees without admin approval.
+_Avoid_: Document type, tag
+
+**Signed file URL**:
+A short-lived bearer link (recommended 60 seconds) authorized by live employee access and property membership. Expired links require a new authorized read; already-issued links cannot be recalled.
+_Avoid_: Permanent share link, public URL
+
+**Property cover photo**:
+An explicit selection of one completed Property photo as the property's card image. Only an authorized property editor may set, replace or clear it. Not inferred from upload order or category name.
+_Avoid_: Default image, first uploaded photo
