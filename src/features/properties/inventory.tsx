@@ -1,10 +1,53 @@
 'use client';
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, useRef, type FormEvent } from 'react';
 import type { Locale } from '@/i18n/messages';
 import { label, messages } from '@/i18n/messages';
 import type { PropertyPage } from './types';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { SessionHeader } from '@/features/employees/session-header';
+import { api, RequestError } from '@/features/employees/api';
+
+function CoverThumbnail({
+  propertyId,
+  coverFileId,
+  locale,
+}: {
+  propertyId: string;
+  coverFileId: string | null;
+  locale: Locale;
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+  const generation = useRef(0);
+  useEffect(() => {
+    if (!coverFileId) { setUrl(null); return; }
+    const version = ++generation.current;
+    const abort = new AbortController();
+    api<{ url: string }>(
+      `/api/properties/${propertyId}/files/${coverFileId}/signed`,
+      { download: false },
+      abort.signal,
+    )
+      .then((result) => {
+        if (version === generation.current) setUrl(result.url);
+      })
+      .catch(() => {
+        if (version === generation.current) setUrl(null);
+      });
+    return () => abort.abort();
+  }, [propertyId, coverFileId]);
+  const text = messages[locale];
+  return (
+    <div className="cover-thumbnail">
+      {url ? (
+        <img src={url} alt={text.coverPlaceholder} style={{ width: 200, height: 150, objectFit: 'cover' }} />
+      ) : (
+        <div style={{ width: 200, height: 150, background: '#eee', display: 'flex', alignItems: 'center', justifyContent: 'center' }} aria-label={text.coverPlaceholder}>
+          🏠
+        </div>
+      )}
+    </div>
+  );
+}
 export function Inventory({
   initialLocale,
   initialQuery,
@@ -116,6 +159,11 @@ export function Inventory({
               <ul className="property-list">
                 {data.properties.map((property) => (
                   <li className="property-card" key={property.id}>
+                    <CoverThumbnail
+                      propertyId={property.id}
+                      coverFileId={property.coverFileId}
+                      locale={locale}
+                    />
                     <h2>
                       <a
                         translate="no"

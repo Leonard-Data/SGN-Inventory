@@ -37,6 +37,18 @@ const vi = {
     'PDF, JPEG, PNG hoặc WebP; lớn hơn 0 và tối đa 20 MiB mỗi tập tin. Không ghi đè tập tin đã có.',
   availabilityNote:
     'Tập tin đã kiểm tra kỹ thuật được chia sẻ nội bộ mà không cần duyệt tài liệu. Đây không phải xác minh tính xác thực, quyền sở hữu pháp lý hay quét mã độc.',
+  cover: 'Ảnh bìa',
+  setCover: 'Chọn làm ảnh bìa',
+  replaceCover: 'Thay ảnh bìa',
+  clearCover: 'Xóa ảnh bìa',
+  noCover: 'Chưa có ảnh bìa',
+  coverPlaceholder: 'Ảnh bìa bất động sản',
+  coverLoading: 'Đang tải ảnh bìa…',
+  coverDenied: 'Chỉ người có quyền sửa bất động sản mới được thay đổi ảnh bìa.',
+  coverFailed: 'Không thể thay đổi ảnh bìa.',
+  coverRequiresPhoto: 'Chỉ ảnh bất động sản đã hoàn tất mới được chọn làm ảnh bìa.',
+  coverRequiresValidation: 'Tập tin này chưa được kiểm tra nội dung. Hãy hoàn tất kiểm tra trước khi chọn làm ảnh bìa.',
+  coverNotSameProperty: 'Tập tin không thuộc bất động sản này.',
 };
 const en: Record<keyof typeof vi, string> = {
   files: 'Attached files',
@@ -77,6 +89,18 @@ const en: Record<keyof typeof vi, string> = {
     'PDF, JPEG, PNG or WebP; greater than zero and up to 20 MiB per file. Existing files are never overwritten.',
   availabilityNote:
     'Technically validated files are shared privately without document approval. This is not authenticity or legal ownership verification, or malware scanning.',
+  cover: 'Cover photo',
+  setCover: 'Set as cover',
+  replaceCover: 'Replace cover',
+  clearCover: 'Clear cover',
+  noCover: 'No cover selected',
+  coverPlaceholder: 'Property cover photo',
+  coverLoading: 'Loading cover…',
+  coverDenied: 'Only property editors can change the cover photo.',
+  coverFailed: 'Could not change the cover photo.',
+  coverRequiresPhoto: 'Only completed Property photos can be the cover.',
+  coverRequiresValidation: 'This file has not been validated. Complete validation before selecting as cover.',
+  coverNotSameProperty: 'The file does not belong to this property.',
 };
 const errorsVi: Record<string, string> = {
   'unsupported-format':

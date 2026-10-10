@@ -24,12 +24,16 @@ export function Workspace({
   employeeId,
   archived,
   onDenied,
+  canEdit,
+  coverFileId,
 }: {
   propertyId: string;
   locale: Locale;
   employeeId: string | null;
   archived: boolean;
   onDenied: (status: number) => void;
+  canEdit: boolean;
+  coverFileId: string | null;
 }) {
   const [files, setFiles] = useState<PropertyFileList['files']>([]);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +46,11 @@ export function Workspace({
   const [purpose, setPurpose] = useState<'photo' | 'document'>('document');
   const generation = useRef(0);
   const controller = useRef<AbortController | null>(null);
+  const [coverBusy, setCoverBusy] = useState(false);
+  const [coverError, setCoverError] = useState<string | null>(null);
+  const [coverUrl, setCoverUrl] = useState<string | null>(null);
+  const [coverExpires, setCoverExpires] = useState(0);
+  const coverGeneration = useRef(0);
 
   const text = globalMessages[locale];
   const fileText = fileMessages[locale];
@@ -103,6 +112,96 @@ export function Workspace({
       return true;
     }
     return false;
+  }
+
+  // Load cover signed URL when coverFileId changes
+  useEffect(() => {
+    if (!coverFileId) return;
+    const version = ++coverGeneration.current;
+    const abort = new AbortController();
+    setCoverBusy(true);
+    setCoverError(null);
+    void api<{ url: string; expiresAt: number }>(
+      `/api/properties/${propertyId}/files/${coverFileId}/signed`,
+      { download: false },
+      abort.signal,
+    )
+      .then((result) => {
+        if (version !== coverGeneration.current || abort.signal.aborted) return;
+        setCoverUrl(result.url);
+        setCoverExpires(result.expiresAt);
+        setCoverBusy(false);
+      })
+      .catch((failure) => {
+        if (version !== coverGeneration.current || abort.signal.aborted) return;
+        setCoverUrl(null);
+        setCoverExpires(0);
+        if (
+          failure instanceof RequestError &&
+          (failure.status === 401 || failure.status === 403)
+        ) {
+          onDenied(failure.status);
+          return;
+        }
+        setCoverBusy(false);
+        setCoverError('unavailable');
+      });
+    return () => abort.abort();
+  }, [coverFileId, propertyId, onDenied]);
+
+  // Renew cover URL when expired
+  useEffect(() => {
+    if (!coverUrl || !coverExpires) return;
+    const remaining = (coverExpires - Math.floor(Date.now() / 1000)) * 1000;
+    if (remaining <= 0) {
+      // Force renewal by toggling a state — handled by the effect above on coverFileId
+      setCoverUrl(null);
+      setCoverExpires(0);
+      return;
+    }
+    const timer = setTimeout(() => {
+      setCoverUrl(null);
+      setCoverExpires(0);
+    }, remaining - 5000);
+    return () => clearTimeout(timer);
+  }, [coverUrl, coverExpires]);
+
+  async function handleSetCover(fileId: string) {
+    setCoverBusy(true);
+    setCoverError(null);
+    try {
+      await api(`/api/properties/${propertyId}/cover`, { fileId });
+      setCoverUrl(null);
+      setCoverExpires(0);
+    } catch (failure) {
+      if (denied(failure)) return;
+      const message =
+        failure instanceof RequestError
+          ? failure.code === '23514'
+            ? 'coverRequiresPhoto'
+            : failure.code
+          : 'unavailable';
+      setCoverError(message);
+    } finally {
+      setCoverBusy(false);
+    }
+  }
+
+  async function handleClearCover() {
+    setCoverBusy(true);
+    setCoverError(null);
+    try {
+      await api(`/api/properties/${propertyId}/cover`, { fileId: null });
+      setCoverUrl(null);
+      setCoverExpires(0);
+    } catch (failure) {
+      if (denied(failure)) return;
+      setCoverError(
+        failure instanceof RequestError ? failure.code : 'unavailable',
+      );
+    } finally {
+      setCoverBusy(false);
+    }
   }
   async function open(fileId: string, download: boolean) {
     const version = generation.current;
@@ -406,6 +505,40 @@ export function Workspace({
           </ul>
         </section>
       ) : null}
+      {/* Cover photo section */}
+      {canEdit && !archived ? (
+        <section className="cover-section" aria-label={fileText.cover}>
+          <h3>{fileText.cover}</h3>
+          {coverUrl ? (
+            <img src={coverUrl} alt={fileText.coverPlaceholder} className="cover-image" style={{ maxWidth: '100%', maxHeight: 300 }} />
+          ) : coverBusy ? (
+            <p role="status">{fileText.coverLoading}</p>
+          ) : (
+            <div className="cover-placeholder">
+              <p>{fileText.noCover}</p>
+            </div>
+          )}
+          {coverFileId && !coverBusy ? (
+            <button type="button" disabled={coverBusy} onClick={() => void handleClearCover()}>
+              {fileText.clearCover}
+            </button>
+          ) : null}
+          {coverError ? (
+            <p role="alert">
+              {fileText.errors[coverError] ?? fileText[coverError as keyof typeof fileText] ?? text.unavailable}
+            </p>
+          ) : null}
+        </section>
+      ) : coverFileId ? (
+        <section className="cover-section" aria-label={fileText.cover}>
+          <h3>{fileText.cover}</h3>
+          {coverUrl ? (
+            <img src={coverUrl} alt={fileText.coverPlaceholder} className="cover-image" style={{ maxWidth: '100%', maxHeight: 300 }} />
+          ) : coverBusy ? (
+            <p role="status">{fileText.coverLoading}</p>
+          ) : null}
+        </section>
+      ) : null}
       {busy ? <p role="status">{text.loading}</p> : null}
       {error ? (
         <p role="alert">
@@ -456,6 +589,21 @@ export function Workspace({
               >
                 {fileText.download}
               </button>
+              {canEdit &&
+              !archived &&
+              file.purpose === 'photo' &&
+              file.upload_status === 'ready' &&
+              file.validated_at ? (
+                <button
+                  type="button"
+                  disabled={coverBusy}
+                  onClick={() => void handleSetCover(file.id)}
+                >
+                  {coverFileId === file.id
+                    ? fileText.replaceCover
+                    : fileText.setCover}
+                </button>
+              ) : null}
             </li>
           ))}
         </ul>
