@@ -247,6 +247,7 @@ export function Detail({
                 onDenied={denyFiles}
                 canEdit={canEdit}
                 coverFileId={coverFileId}
+                onCoverChanged={reload}
               />
             </div>
             <p className="muted">{text.pageViewNote}</p>

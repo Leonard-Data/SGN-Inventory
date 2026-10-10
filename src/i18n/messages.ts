@@ -94,7 +94,6 @@ const vi = {
     'Chưa ghi nhận được lượt xem. Thử lại không tạo lượt xem trùng.',
   pageViewNote:
     'Mở trang chỉ ghi nhận lượt xem, không xác nhận đã thăm bất động sản.',
-  coverPlaceholder: 'Ảnh bìa bất động sản',
   savedLocaleFailed:
     'Không lưu được ngôn ngữ. Ngôn ngữ hiện tại được giữ nguyên.',
   recovery: 'Quên mật khẩu?',
@@ -223,7 +222,6 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
       'Page view not recorded. Retrying will not create a duplicate.',
     pageViewNote:
       'Opening this page records a page view, not a confirmed physical visit.',
-    coverPlaceholder: 'Property cover photo',
     savedLocaleFailed:
       'Unable to save language. The current language is unchanged.',
     recovery: 'Forgot password?',

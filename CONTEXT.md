@@ -117,20 +117,10 @@ _Avoid_: Permanent share link, public URL
 An uploader resumes the original registered file after interruption or a new login. Authoritative Storage presence decides whether to validate existing bytes or reselect matching local content for the same UUID/path. Unknown outcomes are not absence; different or invalid occupied content requires a new attachment, preserving the original registration.
 _Avoid_: Byte-by-byte transfer resumption, orphan cleanup
 
-### Property cover photo
+**Property photo**:
+An image attached to represent the property, distinct from an image of a certificate or other document.
+_Avoid_: Any image file, certificate photo
 
-**Cover photo**:
-An explicit, nullable `cover_file_id` on the property row, set or cleared exclusively through the `set_property_cover` RPC (NULL clears). The RPC is guarded by the existing `private.can_edit_property()`.
-_Avoid_: Client-side cover assignment
-
-**Cover eligibility**:
-Only a `ready`, validated (`validated_at` not null) photo on the same property is eligible. Legacy ready photos (validated_at=null) are rejected; editors must complete validation first via the existing upload-complete flow. Cross-property files, non-photo files, and uncompleted uploads are rejected.
-_Avoid_: Auto-validate-and-set
-
-**Cover guard**:
-The `property_cover_guard` trigger (invoker, before INSERT or UPDATE) blocks direct cover_file_id changes by authenticated callers. The definer RPC sets `app.cover_authorized` before the UPDATE to authorize the change. Clients cannot forge the variable.
-_Avoid_: Direct column mutation by client code
-
-**Cover display**:
-The cover image is fetched via the existing signed-URL endpoint for the referenced file. The workspace shows the cover with set/clear controls for editors; the inventory card shows a thumbnail or neutral placeholder. The detail page includes cover display in the workspace section.
-_Avoid_: Separate cover upload endpoint
+**Property cover photo**:
+The one Property photo explicitly chosen by a current property editor to represent the property, or no choice. It belongs to that property and has technical file completion; uploading or checking a photo does not choose it automatically. Removing the choice retains the original attachment.
+_Avoid_: Public image, automatic first photo, document approval

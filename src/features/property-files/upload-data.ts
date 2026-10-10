@@ -3,6 +3,7 @@ import { createHash, createHmac } from 'node:crypto';
 import { ApiError, uuid, type RouteContext } from '@/lib/supabase/route';
 import { contentMime, fileMimeTypes, maximumFileBytes } from './content';
 import type { FileRegistrationResult } from './types';
+import type { Employee } from '@/features/employees/types';
 
 function databaseFailure(error: { code?: string }): never {
   if (error.code === '42501') throw new ApiError(403, 'access-denied');
@@ -101,7 +102,7 @@ export async function validateAndCompleteFile(
   context: RouteContext,
   propertyId: string,
   fileId: string,
-  employeeId: string,
+  employee: Employee,
 ) {
   if (!uuid(propertyId) || !uuid(fileId))
     throw new ApiError(400, 'invalid-input');
@@ -118,14 +119,20 @@ export async function validateAndCompleteFile(
     .maybeSingle();
   if (error) databaseFailure(error);
   if (!file) throw new ApiError(404, 'not-found');
-  if (file.uploaded_by !== employeeId) throw new ApiError(403, 'access-denied');
   const { data: property, error: propertyError } = await context.client
     .from('properties')
-    .select('id,archived_at')
+    .select('id,archived_at,created_by')
     .eq('id', propertyId)
     .maybeSingle();
   if (propertyError) databaseFailure(propertyError);
   if (!property || property.archived_at)
+    throw new ApiError(403, 'access-denied');
+  const readyPhotoEditor =
+    file.upload_status === 'ready' &&
+    file.purpose === 'photo' &&
+    (property.created_by === employee.id ||
+      ['staff', 'manager', 'admin'].includes(employee.role));
+  if (file.uploaded_by !== employee.id && !readyPhotoEditor)
     throw new ApiError(403, 'access-denied');
   if (file.upload_status !== 'pending' && file.upload_status !== 'ready')
     throw new ApiError(400, 'invalid-file');
@@ -170,7 +177,7 @@ export async function validateAndCompleteFile(
   }
   if (
     (file.mime_type !== null && mimeType !== file.mime_type) ||
-    (info.contentType && info.contentType.split(';')[0]?.trim() !== mimeType) ||
+    (file.mime_type !== null && info.contentType && info.contentType.split(';')[0]?.trim() !== mimeType) ||
     (file.purpose === 'photo' && mimeType === 'application/pdf')
   )
     throw new ApiError(400, 'file-mismatch');
@@ -184,7 +191,7 @@ export async function validateAndCompleteFile(
     'v1',
     file.id,
     file.property_id,
-    employeeId,
+    file.uploaded_by ?? '',
     file.object_path,
     info.id,
     mimeType,

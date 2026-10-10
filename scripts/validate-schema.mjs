@@ -306,52 +306,80 @@ await asUser(2);
 await check('deactivated reviewer cannot replay an archived page-view identity',()=>fails("select public.record_property_activity($1,'page_view',$2)",[archivedProperty,archivedViewKey],'42501'));
 await db.exec('reset role');await db.query('update public.employees set is_active=true where id=$1',[employees[2]]);
 await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
-const coverProperty = '20000000-0000-4000-8000-000000000009';
-const coverFile = '40000000-0000-4000-8000-000000000050';
-const coverObject = '80000000-0000-4000-8000-000000000050';
+const coverProperty='20000000-0000-4000-8000-000000000009';
 await db.query("insert into public.properties(id,property_code,listing_mode,status,created_by) values($1,'COVER-001','sale','available',$2)",[coverProperty,employees[0]]);
-await db.query("insert into public.property_files(id,property_id,original_filename,purpose,upload_status,uploaded_by,object_path,mime_type,file_size,sha256_hash,validated_at) values($1,$2,'cover.jpg','photo','ready',$3,'/cover/COVER-001/cover.jpg','image/jpeg',1024,'a'.repeat(64),now())",[coverFile,coverProperty,employees[0]]);
+const coverFixtures=[
+  {id:'40000000-0000-4000-8000-000000000050',purpose:'photo',ready:true,validated:true,parent:coverProperty,uploader:employees[1]},
+  {id:'40000000-0000-4000-8000-000000000051',purpose:'photo',ready:true,validated:true,parent:coverProperty,uploader:employees[1]},
+  {id:'40000000-0000-4000-8000-000000000052',purpose:'document',ready:true,validated:true,parent:coverProperty,uploader:employees[1]},
+  {id:'40000000-0000-4000-8000-000000000053',purpose:'photo',ready:false,validated:false,parent:coverProperty,uploader:employees[1]},
+  {id:'40000000-0000-4000-8000-000000000054',purpose:'photo',ready:true,validated:false,parent:coverProperty,uploader:null},
+  {id:'40000000-0000-4000-8000-000000000055',purpose:'photo',ready:true,validated:true,parent:other,uploader:employees[1]},
+];
+for(const fixture of coverFixtures) {
+  fixture.path=`${fixture.parent}/${fixture.id}/content`;
+  fixture.objectId=fixture.id.replace('40000000','80000000');
+  await db.query("insert into storage.objects(id,bucket_id,name) values($1,'property-files',$2)",[fixture.objectId,fixture.path]);
+  await db.query("insert into public.property_files(id,property_id,document_type,object_path,original_filename,mime_type,size_bytes,sha256,purpose,uploaded_by,upload_status,validated_at,validated_object_id) values($1,$2,'other',$3,'fixture.png',$4,$5,$6,$7,$8,$9,$10,$11)",[
+    fixture.id,fixture.parent,fixture.path,fixture.uploader?'image/png':null,fixture.uploader?1024:null,fixture.uploader?testSha256:null,fixture.purpose,fixture.uploader,fixture.ready?'ready':'pending',fixture.validated?new Date().toISOString():null,fixture.validated?fixture.objectId:null,
+  ]);
+}
+const [firstCover,secondCover,certificateImage,pendingPhoto,legacyPhoto,crossPhoto]=coverFixtures;
+const coverSourceColumns='id,property_id,object_path,original_filename,mime_type,size_bytes,sha256,purpose,uploaded_by,upload_status,review_status,reviewed_by';
+const coverBefore=(await db.query(`select ${coverSourceColumns} from public.property_files where property_id=$1 order by id`,[coverProperty])).rows;
 await asUser(0);
-await check('cover_file_id column exists',async()=>{
-  const r=await db.query("select column_name from information_schema.columns where table_schema='public' and table_name='properties' and column_name='cover_file_id'");assert.equal(r.rows.length,1);
+await check('sales editor selects another uploader photo without granting ordinary cover writes',async()=>{
+  await db.query('select public.set_property_cover($1,$2)',[coverProperty,firstCover.id]);
+  assert.equal((await db.query('select cover_file_id from public.properties where id=$1',[coverProperty])).rows[0].cover_file_id,firstCover.id);
+  await fails('update public.properties set cover_file_id=$1 where id=$2',[secondCover.id,coverProperty],'42501');
+  await db.query("select set_config('app.cover_authorized',$1,false)",[secondCover.id]);
+  await fails('update public.properties set cover_file_id=$1 where id=$2',[secondCover.id,coverProperty],'42501');
+  await fails("insert into public.properties(property_code,listing_mode,cover_file_id) values('COVER-FORGE','sale',$1)",[firstCover.id],'42501');
 });
-await check('cover column is nullable',async()=>{
-  const r=await db.query("select is_nullable from information_schema.columns where table_schema='public' and table_name='properties' and column_name='cover_file_id'");assert.equal(r.rows[0].is_nullable,'YES');
+await check('document images, pending, unvalidated and cross-property cover candidates preserve selected photo',async()=>{
+  for(const [candidate,code] of [[certificateImage,'23514'],[pendingPhoto,'23514'],[legacyPhoto,'23514'],[crossPhoto,'42501']])
+    await fails('select public.set_property_cover($1,$2)',[coverProperty,candidate.id],code);
+  assert.equal((await db.query('select cover_file_id from public.properties where id=$1',[coverProperty])).rows[0].cover_file_id,firstCover.id);
 });
-await check('cover FK to property_files',async()=>{
-  const r=await db.query("select 1 from information_schema.table_constraints tc join information_schema.key_column_usage kcu using(constraint_catalog,constraint_schema,constraint_name,table_catalog,table_schema,table_name) where tc.constraint_type='FOREIGN KEY' and tc.table_schema='public' and tc.table_name='properties' and kcu.column_name='cover_file_id'");assert.equal(r.rows.length,1);
+await check('explicit ready legacy photo validation binds original nullable attribution and never selects a cover',async()=>{
+  const facts=[legacyPhoto.id,legacyPhoto.objectId,'image/png',1024,testSha256];
+  const originalPayload=['v1',legacyPhoto.id,coverProperty,'',legacyPhoto.path,legacyPhoto.objectId,'image/png','1024',testSha256].join('|');
+  const originalSignature=createHmac('sha256',Buffer.from(validationKey,'hex')).update(originalPayload).digest('hex');
+  await db.query(completionSql,[...facts,originalSignature]);
+  assert.deepEqual((await db.query('select uploaded_by,mime_type,size_bytes,sha256,validated_object_id from public.property_files where id=$1',[legacyPhoto.id])).rows,[{uploaded_by:null,mime_type:null,size_bytes:null,sha256:null,validated_object_id:legacyPhoto.objectId}]);
+  assert.equal((await db.query('select cover_file_id from public.properties where id=$1',[coverProperty])).rows[0].cover_file_id,firstCover.id);
+  const pendingPayload=['v1',pendingPhoto.id,coverProperty,pendingPhoto.uploader,pendingPhoto.path,pendingPhoto.objectId,'image/png','1024',testSha256].join('|');
+  await fails(completionSql,[pendingPhoto.id,pendingPhoto.objectId,'image/png',1024,testSha256,createHmac('sha256',Buffer.from(validationKey,'hex')).update(pendingPayload).digest('hex')],'42501');
+  assert.deepEqual((await db.query(`select ${coverSourceColumns} from public.property_files where property_id=$1 order by id`,[coverProperty])).rows,coverBefore.filter((row)=>row.upload_status==='ready'));
 });
-await check('set_property_cover exists as public invoker',async()=>{
-  const r=await db.query("select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='set_property_cover'");assert.equal(r.rows.length,1);
+await asUser(1);
+await check('photo uploader without property edit authority cannot set replace or clear its cover',async()=>{
+  for(const candidate of [firstCover.id,secondCover.id,null])
+    await fails('select public.set_property_cover($1,$2)',[coverProperty,candidate],'42501');
+  assert.equal((await db.query('select cover_file_id from public.properties where id=$1',[coverProperty])).rows[0].cover_file_id,firstCover.id);
 });
-await check('set_property_cover granted to authenticated',async()=>{
-  const r=await db.query("select has_function_privilege('authenticated','public.set_property_cover(uuid,uuid)','EXECUTE') as ok");assert.ok(r.rows[0].ok);
-});
-await check('direct cover UPDATE denied',()=>fails("update public.properties set cover_file_id=$1 where id=$2",[coverFile,coverProperty],'42501'));
-await check('direct cover INSERT denied',()=>fails("insert into public.properties(id,property_code,listing_mode,status,cover_file_id) values('20000000-0000-4000-8000-000000000010','COVER-FORGE','sale','available',$1)",[coverFile],'42501'));
-await check('set_property_cover sets cover',async()=>{
-  await db.query('select public.set_property_cover($1,$2)',[coverProperty,coverFile]);
-  const r=await db.query('select cover_file_id from public.properties where id=$1',[coverProperty]);assert.equal(r.rows[0].cover_file_id,coverFile);
-});
-await check('clear via set_property_cover NULL',async()=>{
+await asUser(5);
+await check('staff replaces then clears cover while all source attachment records remain',async()=>{
+  await db.query('select public.set_property_cover($1,$2)',[coverProperty,secondCover.id]);
+  assert.equal((await db.query('select cover_file_id from public.properties where id=$1',[coverProperty])).rows[0].cover_file_id,secondCover.id);
   await db.query('select public.set_property_cover($1,null)',[coverProperty]);
-  const r=await db.query('select cover_file_id from public.properties where id=$1',[coverProperty]);assert.equal(r.rows[0].cover_file_id,null);
+  assert.equal((await db.query('select cover_file_id from public.properties where id=$1',[coverProperty])).rows[0].cover_file_id,null);
+  assert.deepEqual((await db.query(`select ${coverSourceColumns} from public.property_files where property_id=$1 order by id`,[coverProperty])).rows,coverBefore.filter((row)=>row.upload_status==='ready'));
 });
-await check('rejects unvalidated photo',async()=>{
-  const unvalidatedFile='40000000-0000-4000-8000-000000000051';
-  await db.query("insert into public.property_files(id,property_id,original_filename,purpose,upload_status,uploaded_by,object_path,mime_type,file_size,sha256_hash) values($1,$2,'unvalidated.jpg','photo','ready',$3,'/cover/COVER-001/unvalidated.jpg','image/jpeg',1024,'b'.repeat(64))",[unvalidatedFile,coverProperty,employees[0]]);
-  await fails("select public.set_property_cover($1,$2)",[coverProperty,unvalidatedFile],'23514');
-});
-await check('rejects non-photo file',async()=>{
-  const docFile='40000000-0000-4000-8000-000000000052';
-  await db.query("insert into public.property_files(id,property_id,original_filename,purpose,upload_status,uploaded_by,object_path,mime_type,file_size,sha256_hash,validated_at) values($1,$2,'doc.pdf','document','ready',$3,'/cover/COVER-001/doc.pdf','application/pdf',1024,'c'.repeat(64),now())",[docFile,coverProperty,employees[0]]);
-  await fails("select public.set_property_cover($1,$2)",[coverProperty,docFile],'23514');
-});
-await check('rejects cross-property file',async()=>{
-  const crossFile='40000000-0000-4000-8000-000000000053';
-  await db.query("insert into public.property_files(id,property_id,original_filename,purpose,upload_status,uploaded_by,object_path,mime_type,file_size,sha256_hash,validated_at) values($1,$2,'other.jpg','photo','ready',$3,'/cover/COVER-OTHER/other.jpg','image/jpeg',1024,'d'.repeat(64),now())",[crossFile,other,employees[0]]);
-  await fails("select public.set_property_cover($1,$2)",[coverProperty,crossFile],'42501');
-});
+await asUser(null);
+await check('anonymous cover changes denied',()=>fails('select public.set_property_cover($1,$2)',[coverProperty,firstCover.id],'42501'));
+await asUser(4);
+await check('inactive cover changes denied',()=>fails('select public.set_property_cover($1,$2)',[coverProperty,firstCover.id],'42501'));
+await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
+await db.query('update public.properties set archived_at=now() where id=$1',[coverProperty]);
+await asUser(2);
+await check('even reviewer cannot change archived cover',()=>fails('select public.set_property_cover($1,$2)',[coverProperty,firstCover.id],'42501'));
+await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
+await db.query('update public.properties set archived_at=null where id=$1',[coverProperty]);
+await asUser(0);await db.exec('reset role');await db.query('update public.employees set is_active=false where id=$1',[employees[0]]);await db.exec('set role authenticated');
+await check('existing identity loses cover mutation authority after live deactivation',()=>fails('select public.set_property_cover($1,$2)',[coverProperty,firstCover.id],'42501'));
+await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");await db.query('update public.employees set is_active=true where id=$1',[employees[0]]);
+assert.deepEqual((await db.query(`select ${coverSourceColumns} from public.property_files where property_id=$1 order by id`,[coverProperty])).rows,coverBefore);
 const report={checked_at:new Date().toISOString(),engine:'PGlite embedded PostgreSQL; mocked auth/storage schemas',passed,
  limitations:['Not a live Supabase integration test','HTTP Auth, signed URLs, Vercel and browser flows not exercised','True multi-session concurrent transaction test remains a staging acceptance gate']};
 await fs.writeFile(path.join(root,'docs/validation-results.json'),JSON.stringify(report,null,2)+'\n');

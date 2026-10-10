@@ -140,23 +140,12 @@ Own pending metadata and bytes are visible only while the parent is unarchived, 
 
 ### Ticket #27 — Property cover photo
 
-Migration `20261010225135_property_cover_photo.sql` adds a nullable `cover_file_id` column to `properties` (FK to `property_files`), guarded by an invoker trigger that blocks direct INSERT/UPDATE by authenticated callers. A single `set_property_cover(p_property_id, p_file_id)` definer RPC (NULL = clear) handles set/clear after checking `private.can_edit_property()`, active employee, unarchived property, same-property validated photo.
+Migration `20261010225135_property_cover_photo.sql` adds nullable `properties.cover_file_id`, referencing a Property file. Only the guarded private `set_property_cover(property_id,file_id)` function, exposed through a public invoker wrapper, changes the pointer for a current property editor on an unarchived property. Parent property and then file rows are locked.
 
-**Cover eligibility rules:**
-- `purpose = 'photo'`, `upload_status = 'ready'`, `validated_at IS NOT NULL`
-- Legacy ready photos (validated_at=null) are rejected — editors must complete validation first
-- Cross-property and non-photo files are rejected
-
-**Cover guard mechanism:**
-- The `property_cover_guard` trigger is `security invoker` so it runs as the definer's caller
-- The definer RPC sets `app.cover_authorized` to the target `cover_file_id` before the UPDATE
-- The trigger allows the change only when `current_setting('app.cover_authorized')` matches
-- The session variable is set with `true` (local), preventing reuse
-
-**API endpoint:**
-- `POST /api/properties/{id}/cover` with `{fileId: "uuid" | null}` — null/empty clears cover
-- Returns `{status: "ok"}` on success
-- `invalid-cover` error code for 23514 constraint violations (non-photo, unvalidated, unready)
-
-**Schema type dependency:**
-The generated `src/types/database.ts` needs `cover_file_id` in the `properties` table type. Regenerate after deploying the migration.
+- Eligibility requires the same property, `purpose='photo'`, `upload_status='ready'` and both `validated_at` and `validated_object_id`. Document images, pending files, cross-property files and legacy photos without technical confirmation are rejected.
+- Selecting, replacing and clearing are explicit choices. Upload or technical validation never selects a cover, and clearing never deletes or reclassifies a file.
+- Legacy ready photos may be technically checked through the existing completion endpoint by a current editor. The server reads and decodes actual stored bytes, binds the HMAC to the original uploader (empty field when null), and preserves original metadata. This permission does not widen completion of pending uploads or access to pending bytes.
+- An invoker trigger rejects direct INSERT with a cover or UPDATE changing the cover under `anon`, `authenticated` or `service_role`. It relies on PostgreSQL execution identity, not forgeable session settings; the guarded private function executes under its owner.
+- `POST /api/properties/{id}/cover` accepts exactly `{fileId: UUID | null}` and returns the confirmed `{fileId}`. Only `null` clears; empty strings and extra fields are invalid. Constraint failures return localized `invalid-cover`; authorization failures return `access-denied`.
+- Cards and property detail share private native-image rendering, avoiding the shared Next image optimizer. Transient signed links renew before expiry through fresh authorization; focus/session failures clear protected data. A failed image clears its resource and offers a localized fresh-link retry.
+- Generate `src/types/database.ts` from the actual public schema after applying the migration.
