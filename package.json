@@ -20,6 +20,7 @@
     "test:unit": "node --test src/lib/environment.test.ts src/features/properties/format.test.ts scripts/release-guard.test.mjs",
     "test:schema": "node scripts/validate-schema.mjs",
     "test:acceptance": "node --env-file-if-exists=.env.local --env-file-if-exists=.env.acceptance.local scripts/employee-access-acceptance.mjs",
+    "test:files:acceptance": "node --env-file-if-exists=.env.local --env-file-if-exists=.env.acceptance.local scripts/property-files-acceptance.mjs",
     "test:import": "python -m unittest discover -s scripts -p test_*.py",
     "test": "npm run test:unit && npm run test:schema",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm test",
