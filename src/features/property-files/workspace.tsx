@@ -10,11 +10,13 @@ export function Workspace({
   locale,
   employeeId,
   archived,
+  onDenied,
 }: {
   propertyId: string;
   locale: Locale;
   employeeId: string | null;
   archived: boolean;
+  onDenied?: () => void;
 }) {
   const [files, setFiles] = useState<PropertyFileList['files'] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +29,7 @@ export function Workspace({
     const version = ++generation.current;
     controller.current?.abort();
     setError(null);
+    setSignError(null);
     setBusy(true);
     try {
       const data = await api<PropertyFileList>(
@@ -39,20 +42,21 @@ export function Workspace({
           failure instanceof RequestError &&
           (failure.status === 401 || failure.status === 403)
         ) {
-          setError(failure.code);
+          onDenied?.();
         } else setError('unavailable');
       }
     } finally {
       if (version === generation.current) setBusy(false);
     }
-  }, [propertyId]);
+  }, [propertyId, onDenied]);
   useEffect(() => {
-    load();
-    return () => {
-      generation.current++;
-      controller.current?.abort();
-    };
-  }, [load]);
+    if (employeeId) {
+      void load();
+    } else {
+      setFiles(null);
+      setBusy(false);
+    }
+  }, [employeeId, load]);
   const signedUrl = useCallback(
     async (fileId: string, download: boolean) => {
       setSigningFileId(fileId);
@@ -62,28 +66,38 @@ export function Workspace({
           `/api/properties/${propertyId}/files/${fileId}/signed`,
           { download },
         );
-        window.open(result.url, download ? '_blank' : '_blank');
+        if (download) {
+          // Navigate directly — Supabase signed URL triggers download header
+          window.location.href = result.url;
+        } else {
+          window.open(result.url, '_blank');
+        }
       } catch (failure) {
         if (
           failure instanceof RequestError &&
           (failure.status === 401 || failure.status === 403)
         ) {
-          setError(failure.code);
+          onDenied?.();
         } else setSignError('signedFailed');
       } finally {
         setSigningFileId(null);
       }
     },
-    [propertyId],
+    [propertyId, onDenied],
   );
   const text = globalMessages[locale];
   const fileText = fileMessages[locale];
+  // Map document_type to label key; six fixed types
+  const docTypeLabel = (docType: string): string => {
+    const key = docType.toLowerCase() as keyof typeof fileText;
+    if (key in fileText) return fileText[key];
+    return fileText.other;
+  };
   if (error)
     return (
       <section className="panel">
         <h2>{fileText.files}</h2>
-        <p role="alert">{error === 'access-denied' ? text.denied : text.unavailable}</p>
-        <button onClick={load}>{text.retry}</button>
+        <p role="alert">{error === 'unavailable' ? text.unavailable : error}</p>
       </section>
     );
   return (
@@ -99,6 +113,9 @@ export function Workspace({
             <li key={file.id} className="file-row">
               <span className="file-name" translate="no">
                 {file.original_filename}
+              </span>
+              <span className="file-type badge">
+                {docTypeLabel(file.document_type)}
               </span>
               <span className="file-actions">
                 <button
@@ -124,6 +141,7 @@ export function Workspace({
           ))}
         </ul>
       ) : null}
+      <p className="muted">{fileText.availabilityNote}</p>
       {signError ? (
         <p role="alert">
           {fileText.signedFailed}{' '}

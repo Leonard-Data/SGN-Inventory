@@ -8,7 +8,6 @@ export type PropertyFile = {
   size_bytes: number | null;
   sha256: string | null;
   upload_status: string;
-  review_status: string;
   uploaded_by: string | null;
   created_at: string;
 };

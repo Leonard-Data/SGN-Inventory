@@ -228,6 +228,10 @@ export function Detail({
                 locale={locale}
                 employeeId={employeeId ?? null}
                 archived={!!property.archived_at}
+                onDenied={() => {
+                  clear();
+                  window.location.replace('/access-denied');
+                }}
               />
             </div>
             <p className="muted">{text.pageViewNote}</p>
