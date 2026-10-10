@@ -185,7 +185,18 @@ The captain authorized only development project `tneucwzcrzteeixvttpu`, its decl
 - Inactive/unlinked authenticated identities returned zero direct file rows and `403` registration; another employee could not read the uploader's pending metadata.
 - The earlier read slice exercised actual signed-link expiry, authorized renewal, original download filename/content, and live deactivation with an existing JWT: new signing returned `403`, direct metadata returned no rows, refocus removed private files, and the already-issued bearer remained usable until expiry. The employee was restored.
 
-These are scoped development observations, not whole-spec acceptance. Recovery, categories, recategorization, covers and independent-session contention remain separate ticket gates. No object-delete or overwrite probe is claimed.
+These are scoped development observations, not whole-spec acceptance. Categories, recategorization and covers remain separate ticket gates.
+
+### Executed ticket #24 recovery evidence
+
+- Actual browser refresh found the uploader's durable no-object registration. A different local count/hash was rejected without creating an object. Closing the owned browser and logging in again recovered the same registration; matching bytes with a different local filename and no MIME hint completed against the original UUID/path/source name. Another employee read exactly the original PDF bytes.
+- A throwaway browser fetch interceptor interrupted only the completion request after real private Storage upload. The registration remained pending, the other employee could not read it, and refreshed recovery offered validation only. The native retry completed with zero additional Storage POSTs and retained exact content.
+- A separate interceptor discarded the response only after actual completion returned `200`. Authoritative reconciliation displayed one ready attachment; the real Data API and independent byte read confirmed its single identity and immutable object marker.
+- Two independently logged-in, isolated Chrome sessions sent completion concurrently for one pending object. Both returned `200`; one file UUID/path, original property/uploader and validated object remained, with exact bytes. A distinct unrelated attachment's SHA-256 was unchanged.
+- Another employee's pending recovery and wrong-property recovery returned `404`; existing authenticated inactive/unlinked sessions returned `403`. Native VI recovery controls and stored-invalid-content validation were observed, then the employee preference was returned to EN.
+- Strict types, lint and all 92 embedded workflow assertions passed. These real development observations do not claim byte-chunk resumption, cleanup, production or deployment.
+
+The separately authorized overwrite/delete probe targeted only a newly declared disposable synthetic object: overwrite returned `400`, delete returned `200` with an empty removal list, and an independent subsequent read retained the exact original bytes. No legacy or real object was targeted; no cleanup deletion was performed.
 
 ## Honest completion limits
 

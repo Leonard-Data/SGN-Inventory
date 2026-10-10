@@ -7,6 +7,8 @@ import type {
   PropertyFileList,
   SignedFileResponse,
   FileRegistrationResult,
+  FileRecoveryList,
+  RecoverableFile,
 } from './types';
 
 type Upload = {
@@ -35,6 +37,7 @@ export function Workspace({
   const [revision, setRevision] = useState(0);
   const [signing, setSigning] = useState<string | null>(null);
   const [uploads, setUploads] = useState<Upload[]>([]);
+  const [recoverable, setRecoverable] = useState<RecoverableFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [purpose, setPurpose] = useState<'photo' | 'document'>('document');
   const generation = useRef(0);
@@ -46,19 +49,30 @@ export function Workspace({
     const version = ++generation.current;
     const abort = new AbortController();
     controller.current = abort;
-    void api<PropertyFileList>(
-      `/api/properties/${propertyId}/files`,
-      undefined,
-      abort.signal,
-    )
-      .then((result) => {
+    void Promise.all([
+      api<PropertyFileList>(
+        `/api/properties/${propertyId}/files`,
+        undefined,
+        abort.signal,
+      ),
+      archived || !employeeId
+        ? Promise.resolve<FileRecoveryList>({ uploads: [] })
+        : api<FileRecoveryList>(
+            `/api/properties/${propertyId}/files/recovery`,
+            undefined,
+            abort.signal,
+          ),
+    ])
+      .then(([result, recovery]) => {
         if (generation.current !== version || abort.signal.aborted) return;
         setFiles(result.files);
+        setRecoverable(recovery.uploads);
         setError(null);
       })
       .catch((failure) => {
         if (generation.current !== version || abort.signal.aborted) return;
         setFiles([]);
+        setRecoverable([]);
         if (
           failure instanceof RequestError &&
           (failure.status === 401 || failure.status === 403)
@@ -74,7 +88,7 @@ export function Workspace({
           setBusy(false);
       });
     return () => abort.abort();
-  }, [propertyId, onDenied, revision]);
+  }, [propertyId, employeeId, archived, onDenied, revision]);
 
   function denied(failure: unknown) {
     if (
@@ -83,6 +97,7 @@ export function Workspace({
     ) {
       setFiles([]);
       setUploads([]);
+      setRecoverable([]);
       onDenied(failure.status);
       return true;
     }
@@ -114,59 +129,83 @@ export function Workspace({
       if (version === generation.current) setSigning(null);
     }
   }
-  async function selected(event: ChangeEvent<HTMLInputElement>) {
-    const selectedFiles = Array.from(event.target.files ?? []);
-    event.target.value = '';
-    if (!selectedFiles.length || uploading) return;
+  async function upload(file: File | null, recovery?: RecoverableFile) {
     const version = generation.current;
     const signal = controller.current?.signal;
-    setUploading(true);
-    for (const file of selectedFiles) {
-      if (generation.current !== version || signal?.aborted) break;
-      const id = crypto.randomUUID();
-      setUploads((rows) => [
-        ...rows,
-        { id, filename: file.name, state: 'registering' },
-      ]);
-      const update = (state: Upload['state'], code?: string) => {
-        if (generation.current === version && !signal?.aborted)
-          setUploads((rows) =>
-            rows.map((row) =>
-              row.id === id ? { ...row, state, error: code } : row,
-            ),
-          );
-      };
-      try {
+    const id = recovery?.file.id ?? crypto.randomUUID();
+    const filename = recovery?.file.original_filename ?? file!.name;
+    setUploads((rows) => [
+      ...rows.filter((row) => row.id !== id),
+      { id, filename, state: 'registering' },
+    ]);
+    const update = (state: Upload['state'], code?: string) => {
+      if (generation.current === version && !signal?.aborted)
+        setUploads((rows) =>
+          rows.map((row) =>
+            row.id === id ? { ...row, state, error: code } : row,
+          ),
+        );
+    };
+    try {
+      let sha256 = '';
+      if (file) {
         if (file.size <= 0) throw new RequestError(400, 'empty-file');
         if (file.size > 20 * 1024 * 1024)
           throw new RequestError(400, 'file-too-large');
-        if (
-          ![
-            'application/pdf',
-            'image/jpeg',
-            'image/png',
-            'image/webp',
-          ].includes(file.type)
-        )
-          throw new RequestError(400, 'unsupported-format');
         const digest = new Uint8Array(
           await crypto.subtle.digest('SHA-256', await file.arrayBuffer()),
         );
-        let sha256 = '';
         for (const byte of digest) sha256 += byte.toString(16).padStart(2, '0');
+      }
+      if (recovery) {
+        const state = await api<FileRecoveryList>(
+          `/api/properties/${propertyId}/files/recovery?fileId=${id}`,
+          undefined,
+          signal,
+        );
+        recovery = state.uploads[0];
+        if (!recovery) throw new RequestError(404, 'not-found');
+        if (
+          file &&
+          (file.size !== recovery.file.size_bytes ||
+            sha256 !== recovery.file.sha256)
+        )
+          throw new RequestError(400, 'file-mismatch');
+        if (
+          recovery.file.upload_status === 'ready' &&
+          recovery.file.validated_object_id
+        ) {
+          update('ready');
+          return true;
+        }
+        if (recovery.objectState === 'unknown')
+          throw new RequestError(503, 'unknown-object-state');
+        if (recovery.objectState === 'unusable')
+          throw new RequestError(400, 'replacement-required');
+        if (recovery.objectState === 'absent' && !file)
+          throw new RequestError(400, 'missing-bytes');
+      } else if (
+        !file ||
+        !['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(
+          file.type,
+        )
+      ) {
+        throw new RequestError(400, 'unsupported-format');
+      }
+      if (!recovery || recovery.objectState === 'absent') {
         const registration = await api<FileRegistrationResult>(
           `/api/properties/${propertyId}/files/register`,
           {
             fileId: id,
-            originalFilename: file.name,
-            mimeType: file.type,
-            sizeBytes: file.size,
-            sha256,
-            purpose,
+            originalFilename: filename,
+            mimeType: recovery?.file.mime_type ?? file!.type,
+            sizeBytes: recovery?.file.size_bytes ?? file!.size,
+            sha256: recovery?.file.sha256 ?? sha256,
+            purpose: recovery?.file.purpose ?? purpose,
           },
           signal,
         );
-        if (generation.current !== version || signal?.aborted) break;
+        if (generation.current !== version || signal?.aborted) return false;
         update('uploading');
         try {
           await fetch(registration.uploadUrl, {
@@ -175,7 +214,7 @@ export function Workspace({
             referrerPolicy: 'no-referrer',
             signal,
             headers: {
-              'Content-Type': file.type,
+              'Content-Type': recovery?.file.mime_type ?? file!.type,
               apikey: registration.publishableKey,
               Authorization: 'Bearer ' + registration.accessToken,
               'x-upsert': 'false',
@@ -186,24 +225,89 @@ export function Workspace({
         } catch (failure) {
           if (signal?.aborted) throw failure;
         }
-        // A lost transport response is not a verdict: authoritative byte validation decides completion.
-        update('validating');
+        // Lost transport responses never establish whether an immutable object exists.
+        const state = await api<FileRecoveryList>(
+          `/api/properties/${propertyId}/files/recovery?fileId=${id}`,
+          undefined,
+          signal,
+        );
+        const current = state.uploads[0];
+        if (
+          current?.file.upload_status === 'ready' &&
+          current.file.validated_object_id
+        ) {
+          update('ready');
+          return true;
+        }
+        if (current?.objectState !== 'present')
+          throw new RequestError(
+            400,
+            current?.error ??
+              (current?.objectState === 'absent'
+                ? 'missing-bytes'
+                : 'unknown-object-state'),
+          );
+      }
+      update('validating');
+      try {
         await api(
           `/api/properties/${propertyId}/files/${id}/complete`,
           {},
           signal,
         );
-        update('ready');
       } catch (failure) {
-        if (generation.current !== version || signal?.aborted) break;
-        if (denied(failure)) break;
-        update(
-          'failed',
-          failure instanceof RequestError ? failure.code : 'unavailable',
+        if (
+          signal?.aborted ||
+          (failure instanceof RequestError &&
+            [401, 403].includes(failure.status))
+        )
+          throw failure;
+        // Completion may have committed before its response was lost.
+        const state = await api<FileRecoveryList>(
+          `/api/properties/${propertyId}/files/recovery?fileId=${id}`,
+          undefined,
+          signal,
         );
+        if (
+          state.uploads[0]?.file.upload_status !== 'ready' ||
+          !state.uploads[0]?.file.validated_object_id
+        )
+          throw failure;
       }
+      update('ready');
+    } catch (failure) {
+      if (generation.current !== version || signal?.aborted || denied(failure))
+        return false;
+      update(
+        'failed',
+        failure instanceof RequestError ? failure.code : 'unavailable',
+      );
     }
-    if (generation.current === version && !signal?.aborted) {
+    return true;
+  }
+  async function selected(
+    event: ChangeEvent<HTMLInputElement>,
+    recovery?: RecoverableFile,
+  ) {
+    const selectedFiles = Array.from(event.target.files ?? []);
+    event.target.value = '';
+    if (!selectedFiles.length || uploading) return;
+    const version = generation.current;
+    setUploading(true);
+    for (const file of selectedFiles) {
+      if (!(await upload(file, recovery))) break;
+    }
+    if (generation.current === version && !controller.current?.signal.aborted) {
+      setUploading(false);
+      setRevision((value) => value + 1);
+    }
+  }
+  async function retry(recovery: RecoverableFile) {
+    if (uploading) return;
+    const version = generation.current;
+    setUploading(true);
+    await upload(null, recovery);
+    if (generation.current === version && !controller.current?.signal.aborted) {
       setUploading(false);
       setRevision((value) => value + 1);
     }
@@ -261,6 +365,45 @@ export function Workspace({
             </li>
           ))}
         </ul>
+      ) : null}
+      {!archived && recoverable.length ? (
+        <section aria-label={fileText.recovery}>
+          <h3>{fileText.recovery}</h3>
+          <p>{fileText.recoveryNote}</p>
+          <ul>
+            {recoverable.map((attempt) => (
+              <li key={attempt.file.id}>
+                <span translate="no">{attempt.file.original_filename}</span>
+                <p>{fileText[attempt.objectState]}</p>
+                {attempt.objectState === 'absent' ? (
+                  <label>
+                    {fileText.reselect}
+                    <input
+                      type="file"
+                      disabled={uploading}
+                      onChange={(event) => void selected(event, attempt)}
+                    />
+                  </label>
+                ) : attempt.objectState === 'present' ? (
+                  <button
+                    disabled={uploading}
+                    onClick={() => void retry(attempt)}
+                  >
+                    {fileText.retryValidation}
+                  </button>
+                ) : attempt.objectState === 'unknown' ? (
+                  <button
+                    disabled={uploading}
+                    onClick={() => setRevision((value) => value + 1)}
+                  >
+                    {text.retry}
+                  </button>
+                ) : null}
+                <p className="muted">{fileText.replacementNote}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
       ) : null}
       {busy ? <p role="status">{text.loading}</p> : null}
       {error ? (
