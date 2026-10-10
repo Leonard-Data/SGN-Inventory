@@ -112,3 +112,7 @@ _Avoid_: Document acceptance, review approval
 **Signed file URL**:
 A short-lived bearer link (recommended 60 seconds) authorized by live employee access and property membership. Expired links require a new authorized read; already-issued links cannot be recalled.
 _Avoid_: Permanent share link, public URL
+
+**Upload recovery**:
+An uploader resumes the original registered file after interruption or a new login. Authoritative Storage presence decides whether to validate existing bytes or reselect matching local content for the same UUID/path. Unknown outcomes are not absence; different or invalid occupied content requires a new attachment, preserving the original registration.
+_Avoid_: Byte-by-byte transfer resumption, orphan cleanup

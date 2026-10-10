@@ -26,3 +26,9 @@ export type FileRegistrationResult = {
   publishableKey: string;
   accessToken: string;
 };
+export type RecoverableFile = {
+  file: PropertyFile;
+  objectState: 'absent' | 'present' | 'unknown' | 'unusable';
+  error?: string;
+};
+export type FileRecoveryList = { uploads: RecoverableFile[] };
