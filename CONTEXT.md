@@ -102,17 +102,17 @@ _Avoid_: Pending lock, permanent property lock
 ### Property files
 
 **Property file**:
-A registered document or photo attached to a property, stored in the private `property-files` Storage bucket. Each file has a stable UUID and immutable path.
+A registered document or property photo attached to a property, with a stable identity and original content retained.
 _Avoid_: Uploaded image, attached document
 
 **File completion**:
-Technical validation of the actual stored object: supported content format, registered byte count and SHA-256, and immutable Storage identity. A server-only signed attestation authorizes readiness; browser claims alone cannot. Not human review, legal authenticity or ownership certification. Completed files are readable without a review gate.
+Technical confirmation that the stored content is supported, complete and matches its registration, making it privately available to current property readers. It is not human document review, legal authenticity, ownership certification or malware scanning.
 _Avoid_: Document acceptance, review approval
 
 **Signed file URL**:
-A short-lived bearer link (recommended 60 seconds) authorized by live employee access and property membership. Expired links require a new authorized read; already-issued links cannot be recalled.
+A short-lived bearer link granting access to an authorized private property file until expiry. It is not a permanent sharing permission or a promise to recall information already delivered.
 _Avoid_: Permanent share link, public URL
 
 **Upload recovery**:
-An uploader resumes the original registered file after interruption or a new login. Authoritative Storage presence decides whether to validate existing bytes or reselect matching local content for the same UUID/path. Unknown outcomes are not absence; different or invalid occupied content requires a new attachment, preserving the original registration.
+Resuming an uploader's original registered attachment after interruption or a new login, using matching local content when no stored object exists. Recovery preserves the original identity and unfinished attempt; different content is a new attachment, not an overwrite.
 _Avoid_: Byte-by-byte transfer resumption, orphan cleanup
