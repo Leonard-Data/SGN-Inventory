@@ -30,7 +30,7 @@ erDiagram
 | `admin_unit_crosswalks` | From/to version FKs, whole/partial/rename, effective date, source, notes, reviewer | Crosswalks do not directly set a property's address; partial transitions require boundary or property-level evidence |
 | `contacts` | UUID, name, normalized phone string array, untouched raw phone text, role and notes | No global merges based on generic owner name or masked phone ID |
 | `property_contacts` | Composite property/contact PK, relation, primary flag | Supports several owners/brokers; at most one primary contact per property |
-| `property_files` | UUID, property FK, type, private bucket, immutable object path, original filename, MIME/size/hash, upload/review state, uploader/reviewer | Registered path includes property ID and file ID; completion verifies stored object exists; ready-only reads require live property access |
+| `property_files` | UUID, property FK, legacy type, independent document/photo purpose, private bucket, immutable object path/name/MIME/count/hash/uploader, upload state, paired technical-validation time/object identity, historical review attribution | No direct authenticated metadata writes; registration and attested completion preserve identity; ready files are shared privately without human review, pending recovery remains uploader-only on unarchived parents |
 | `activity_events` | UUID, employee/property FK, page_view/site_visit, occurred/recorded timestamps, generated Vietnam day, source, idempotency key, visit decision | No direct client DML; one key per employee; only confirmed visits count as physical visit KPI; page_view has no visit status |
 | `property_locks` | UUID, property/claimant, reason, optional evidence, attribution reference, lifecycle state, expiry, independent decision | One approved row per property; one pending request per property/employee; effective reservation additionally requires future expiry |
 | `lock_events` | Identity key, lock FK, actor, action, reason, timestamp | Append-only client access; all approved/rejected/released/expired transitions retain trace |
@@ -54,6 +54,7 @@ erDiagram
 | `private.staging_rows` | Source sheet/physical row, original sanitized payload, issues and disposition; composite key supports reruns |
 | `private.property_source_map` | Reviewed source key → canonical property UUID; ambiguous keys require row-specific keys |
 | `private.import_entity_map` | Source row → destination entity UUID for properties/contacts/files/activity; prevents rerun duplication |
+| `private.file_validation_keys` | Owner-installed per-stage singleton HMAC secret; no client, anonymous or service-role table access |
 
 Rental agreements, monthly dues and manual receipt/refund tracking are included. There is no commission-rate, commission-payout, general accounting ledger or payment-gateway integration. `attribution_reference` is a nonfinancial business reference; the claimant comes from `requested_by`.
 
