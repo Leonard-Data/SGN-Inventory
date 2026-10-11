@@ -41,6 +41,7 @@ form {
   gap: 12px;
 }
 input,
+textarea,
 button,
 select {
   font: inherit;
@@ -49,7 +50,8 @@ select {
   border-radius: 6px;
   min-height: 44px;
 }
-input {
+input,
+textarea {
   width: 100%;
   background: white;
 }
@@ -153,7 +155,95 @@ dd {
 .muted {
   color: #4c6259;
 }
+.maintenance {
+  margin-block: 20px;
+}
+.maintenance summary {
+  cursor: pointer;
+  font-weight: 650;
+  min-height: 44px;
+  padding-block: 12px;
+}
+.maintenance fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 16px;
+}
+.maintenance legend {
+  font-weight: 650;
+  padding-block: 12px;
+}
+.maintenance label {
+  display: grid;
+  gap: 6px;
+}
+.maintenance select {
+  width: 100%;
+  max-width: 100%;
+}
+.maintenance
+  fieldset
+  > :is(p, h4, ul, a, label:has(textarea), label:has(input[type='checkbox'])) {
+  grid-column: 1 / -1;
+}
+.maintenance label:has(input[type='checkbox']) {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.maintenance input[type='checkbox'] {
+  width: auto;
+  min-height: 24px;
+  flex-shrink: 0;
+}
+.maintenance-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block: 12px;
+}
+.maintenance-editor,
+.history-event,
+.maintenance-address {
+  border-top: 1px solid #c4d0ca;
+  padding-top: 16px;
+  margin-top: 16px;
+}
+.maintenance-editor > button {
+  margin-top: 12px;
+}
+.history-comparison {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.history-field {
+  display: contents;
+}
+.proposal-choices {
+  display: grid;
+  gap: 8px;
+  margin-block: 12px;
+}
+.contact-choices small {
+  display: block;
+  white-space: pre-wrap;
+}
+.contact-choices {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 @media (max-width: 480px) {
+  .history-comparison {
+    grid-template-columns: 1fr;
+  }
   main {
     padding: 16px;
   }

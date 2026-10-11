@@ -14,6 +14,27 @@ export function formatVnd(value: string, locale: Locale): string {
     throw new Error('Whole VND decimal string required');
   return numberFormats[locale].format(BigInt(value)) + ' VND';
 }
+export function formatDecimal(value: string, locale: Locale): string {
+  if (!/^\d+(?:\.\d{1,2})?$/.test(value))
+    throw new Error('Exact decimal string required');
+  const [whole, fraction] = value.split('.');
+  return (
+    numberFormats[locale].format(BigInt(whole!)) +
+    (fraction ? (locale === 'vi' ? ',' : '.') + fraction : '')
+  );
+}
+export function vietnamTimestamp(value: string, locale: Locale): string {
+  return new Intl.DateTimeFormat(locale === 'vi' ? 'vi-VN' : 'en-GB', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).format(new Date(value));
+}
 export function vietnamDate(value: string): string {
   const parts = dateFormat.formatToParts(new Date(value));
   return ['day', 'month', 'year']

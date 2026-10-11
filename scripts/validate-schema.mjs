@@ -6,6 +6,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
+import { maintenanceContract } from './maintenance-contract.mjs';
+import { correctionContract } from './correction-contract.mjs';
 const root = process.env.SGN_PROJECT_ROOT || process.cwd();
 const db = new PGlite({extensions:{unaccent,pg_trgm,pgcrypto}});
 await db.exec(`
@@ -57,7 +59,7 @@ await check('inactive RPC denied',()=>fails('select public.request_property_lock
 await asUser(0);
 await check('active salesperson can read inventory',async()=>assert.equal((await db.query('select * from public.properties')).rows.length,2));
 await check('accent insensitive legacy address search',async()=>assert.equal((await db.query("select * from public.search_properties('ly thuong kiet')")).rows.length,1));
-await check('salesperson cannot edit another creator property',async()=>assert.equal((await db.query("update public.properties set notes='change' where id=$1 returning id",[other])).rows.length,0));
+await check('salesperson cannot bypass revision RPC for another creator property',()=>fails("update public.properties set notes='change' where id=$1 returning id",[other],'42501'));
 await check('salesperson cannot mark property sold',()=>fails("update public.properties set status='sold' where id=$1",[property],'42501'));
 await check('salesperson cannot grant admin role',async()=>assert.equal((await db.query("update public.employees set role='admin' where id=$1 returning id",[employees[0]])).rows.length,0));
 await check('salesperson cannot read import or audit tables',()=>fails('select * from private.audit_events',[],'42501'));
@@ -83,12 +85,17 @@ const own=(await db.query('select public.request_property_lock($1,$2) as id',[ot
 await check('manager self approval forbidden',()=>fails('select public.decide_property_lock($1,true,$2)',[own,'Attempting self approval is forbidden'],'42501'));
 const ownVisit=(await db.query("select public.record_property_activity($1,'site_visit',$2) as id",[other,'30000000-0000-4000-8000-000000000002'])).rows[0].id;
 await check('manager self visit confirmation forbidden',()=>fails('select public.review_property_visit($1,true)',[ownVisit],'42501'));
-await check('new address cannot contain district',()=>fails("insert into public.property_addresses(property_id,format,address_text,district_text) values($1,'current','Test','Quận 1')",[other],'23514'));
+const maintainSql='select public.maintain_property($1,$2,$3,$4,$5,(select revision from public.properties where id=$1)) as id';
+async function maintainFacts(id,changes){const rev=(await db.query('select revision from public.properties where id=$1',[id])).rows[0].revision;return db.query(maintainSql,[id,'property',id,rev,changes]);}
+async function addAddress(id,changes){const rev=(await db.query('select revision from public.properties where id=$1',[id])).rows[0].revision;return (await db.query(maintainSql,[id,'address',null,rev,changes])).rows[0].id;}
+await check('new address cannot contain district',()=>addAddress(other,{format:'current',address_text:'Test',district_text:'Quận 1'}).then(()=>assert.fail('must reject'),error=>assert.equal(error.code,'23514')));
 await check('unverified address stays in separate analytic bucket',async()=>assert.equal((await db.query('select * from public.v_admin_inventory_by_area')).rows[0].current_commune_label,'Chưa xác minh địa chỉ mới'));
-const verifiedAddressSql="insert into public.property_addresses(property_id,format,address_text,province_unit_id,commune_unit_id,mapping_status,verification_method,source_url,effective_on,verified_by,verified_at,commune_text) values($1,'current','Fixture current address',$2,$3,'verified','manual','https://example.test/evidence',$4,$5,now(),'Untrusted label')";
-await check('wrong current province/commune hierarchy rejected',()=>fails(verifiedAddressSql,[other,provinceB,commune,'2026-10-10',employees[2]]));
-await check('verified address outside unit validity rejected',()=>fails(verifiedAddressSql,[other,provinceA,commune,'2024-10-10',employees[2]]));
-await db.query(verifiedAddressSql,[other,provinceA,commune,'2026-10-10',employees[2]]);
+const verifiedId=await addAddress(other,{format:'current',address_text:'Fixture current address',commune_text:'Untrusted label'});
+const verifiedRev=(await db.query('select revision from public.property_addresses where id=$1',[verifiedId])).rows[0].revision;
+const verifiedChanges={province_unit_id:provinceA,commune_unit_id:commune,mapping_status:'verified',verification_method:'manual',source_url:'https://example.test/evidence',effective_on:'2026-10-10',mapping_evidence:'Property boundary checked against official evidence'};
+await check('wrong current province/commune hierarchy rejected',()=>fails(maintainSql,[other,'mapping',verifiedId,verifiedRev,{...verifiedChanges,province_unit_id:provinceB}],'23514'));
+await check('verified address outside unit validity rejected',()=>fails(maintainSql,[other,'mapping',verifiedId,verifiedRev,{...verifiedChanges,effective_on:'2024-10-10'}],'23514'));
+await db.query(maintainSql,[other,'mapping',verifiedId,verifiedRev,verifiedChanges]);
 await check('analytics uses canonical verified unit name',async()=>assert.ok((await db.query('select * from public.v_admin_inventory_by_area')).rows.some(r=>r.current_commune_label==='Fixture Commune')));
 await asUser(0);
 await check('salesperson admin analytics return no rows',async()=>assert.equal((await db.query('select * from public.v_admin_inventory_by_area')).rows.length,0));
@@ -177,17 +184,17 @@ await db.query(registerSql,[crossFile,other,'Ảnh nguồn.pdf','application/pdf
 await check('cross-owner contribution preserves uploader and grants no fact editing',async()=>{
   assert.deepEqual((await db.query('select property_id,uploaded_by,original_filename from public.property_files where id=$1',[crossFile])).rows,[{property_id:other,uploaded_by:employees[0],original_filename:'Ảnh nguồn.pdf'}]);
   assert.match((await db.query('select object_path from public.property_files where id=$1',[crossFile])).rows[0].object_path,/^[a-zA-Z0-9/.-]+$/);
-  assert.deepEqual((await db.query("update public.properties set notes='unauthorized' where id=$1 returning id",[other])).rows,[]);
+  await fails("update public.properties set notes='unauthorized' where id=$1 returning id",[other],'42501');
 });
 await check('validation secret inaccessible to ordinary clients',()=>fails('select * from private.file_validation_keys',[],'42501'));
-await asUser(2);await db.query('update public.properties set archived_at=now() where id=$1',[other]);
+await asUser(2);await maintainFacts(other,{archived_at:new Date().toISOString()});
 await asUser(0);
 await check('archiving hides uploader pending metadata and blocks further completion or registration',async()=>{
   assert.deepEqual((await db.query('select id from public.property_files where id=$1',[crossFile])).rows,[]);
   await fails(registerSql,['40000000-0000-4000-8000-000000000003',other,'archive.pdf','application/pdf',1024,testSha256,'document',otherCatId],'42501');
   await fails(completionSql,[crossFile,storageId,'application/pdf',1024,testSha256,signature],'42501');
 });
-await asUser(2);await db.query('update public.properties set archived_at=null where id=$1',[other]);
+await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");await db.query('update public.properties set archived_at=null where id=$1',[other]);
 await asUser(4);
 await check('deactivated employee cannot read ready file',async()=>assert.equal((await db.query('select * from storage.objects')).rows.length,0));
 await asUser(0);
@@ -314,7 +321,7 @@ await asUser(2);
 await db.query('select public.activate_rental_agreement($1)',[lease]);
 await check('activation creates exactly one row per calendar month',async()=>assert.equal((await db.query('select * from public.rental_months where agreement_id=$1',[lease])).rows.length,3));
 await check('current VN month is active rental month',async()=>assert.equal((await db.query('select * from public.v_rental_month_status where agreement_id=$1 and is_active_month',[lease])).rows.length,1));
-await check('active lease protects inventory availability',()=>fails("update public.properties set status='available' where id=$1",[rentProperty],'23514'));
+await check('active lease protects inventory availability',async()=>{const rev=(await db.query('select revision from public.properties where id=$1',[rentProperty])).rows[0].revision;await fails(maintainSql,[rentProperty,'property',rentProperty,rev,{status:'available'}],'23514');});
 const duplicateLease=(await db.query('select public.create_rental_agreement($1,$2,$3,$4,$5,$6) as id',[rentProperty,tenant,'RENT-TEST-2',dates.start,dates.finish,'12000000'])).rows[0].id;
 await asUser(3);
 await check('second active whole-property rental rejected',()=>fails('select public.activate_rental_agreement($1)',[duplicateLease],'23505'));
@@ -484,6 +491,8 @@ await asUser(0);await db.exec('reset role');await db.query('update public.employ
 await check('existing identity loses cover mutation authority after live deactivation',()=>fails('select public.set_property_cover($1,$2)',[coverProperty,firstCover.id],'42501'));
 await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");await db.query('update public.employees set is_active=true where id=$1',[employees[0]]);
 assert.deepEqual((await db.query(`select ${coverSourceColumns} from public.property_files where property_id=$1 order by id`,[coverProperty])).rows,coverBefore);
+const maintainedProperty=await maintenanceContract({db,asUser,check,fails,employees,property,other});
+await correctionContract({db,asUser,check,fails,employees,property:maintainedProperty});
 const report={checked_at:new Date().toISOString(),engine:'PGlite embedded PostgreSQL; mocked auth/storage schemas',passed,
  limitations:['Not a live Supabase integration test','HTTP Auth, signed URLs, Vercel and browser flows not exercised','True multi-session concurrent transaction test remains a staging acceptance gate']};
 await fs.writeFile(path.join(root,'docs/validation-results.json'),JSON.stringify(report,null,2)+'\n');

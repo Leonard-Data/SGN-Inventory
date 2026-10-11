@@ -107,6 +107,7 @@ export async function runRoute(
 export async function objectBody(
   request: NextRequest,
   context: RouteContext,
+  maxBytes = 8192,
 ): Promise<Record<string, unknown>> {
   if (request.headers.get('origin') !== context.environment.appUrl)
     throw new ApiError(403, 'invalid-origin');
@@ -121,7 +122,7 @@ export async function objectBody(
       const { value, done } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > 8192) {
+      if (size > maxBytes) {
         await reader.cancel();
         throw new ApiError(400, 'invalid-input');
       }

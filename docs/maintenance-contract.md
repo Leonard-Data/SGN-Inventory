@@ -1,0 +1,55 @@
+# Property maintenance contract — issue #7
+
+Implementation in forward migration `20261011055126_property_maintenance_history.sql`; not yet hosted staging acceptance. Ordinary changes publish immediately, not through record approval. Existing reservations/rentals retain their independent authorization and row-lock rules.
+
+## Transactional maintenance
+
+All active employees create via `create_property(p_mode text,p_facts jsonb,p_address jsonb) → uuid`. A nonblank legacy/current known address is mandatory, optional facts may remain null, current district fields are rejected. New stable `SGN-` codes are generated independently of location/creator; imported/existing codes are immutable. Property, address and business history commit together or roll back.
+
+`maintain_property(p_property_id uuid,p_target text,p_target_id uuid|null,p_expected_revision uuid,p_changes jsonb,p_property_revision uuid) → uuid` supports `property`, `address`, `mapping`, `contact`, `link`. Use the freshly read entity UUID revision and parent property UUID revision; null target for a new address/link uses the parent revision as both. `PT409` means stale context/entity: fetch current information and explicitly reconcile, never silently retry or merge. The stale code is deliberately not `40001`, because PostgREST retries transactions failing with that serialization code, which would time stale saves out behind the maintenance gate instead of returning the conflict; forward migration `20261011125329_stale_edit_conflict_code.sql` replaced that code in the four affected functions without changing any other definition. Direct authenticated/service-role writes to the replaced tables are revoked and invoker triggers deny bypasses; public wrappers are invokers over fixed-search-path, explicitly granted private definers with live membership/role checks.
+
+Sales edit their own unarchived property/address; staff/manager/admin maintain shared unarchived inventory. Existing reviewer-only legal/review/archive authority and active-rental guards are retained; the UI/correction workflow does not expose legal/review/archive changes. Ordinary sold transitions/reversal are excluded in favor of the independently owned sale workflow; no competing status rollback/date fields are added. Subsequent business changes clear obsolete record-review certification to pending without making it a publication gate.
+
+Property changes accept the existing typed ordinary fields. Money is a canonical whole-VND decimal string with at most 18 digits, dimensions are decimal strings with at most two fractional digits, counts are integer strings. Database constraints retain enum/range/nullability meaning; no float conversion or source rewriting.
+
+## Address evidence
+
+Legacy source contents are immutable even for owner-side writes. Correct an address by inserting a successor (`supersedes_address_id`) and retain its original. Substantive current-address correction also inserts a successor and clears the superseded/current obsolete verified designation atomically. Primary replacement retains preceding rows, with at most one primary per format. A primary-only selection updates that row without discarding valid mapping evidence. Nonprimary historical records remain searchable.
+
+Raw current addresses with no catalog match remain unresolved and usable. Current addresses contain no district. `mapping` requires manager/admin, a valid province→commune version hierarchy/effective date, supported verification method, HTTP(S) source URL and meaningful property-level `mapping_evidence`. `official_whole_mapping` additionally requires a reviewed whole/rename crosswalk; partial transitions are not substituted automatically. The same manager may designate their own address; no second approver. Unrelated prices/contacts do not invalidate address mapping.
+
+## Shared identities and local links
+
+`create_contact(p_changes jsonb) → uuid` requires staff/manager/admin. `contact_impact(p_contact_id uuid) → {revision,properties:[{id,property_code}]}` requires the same role and complete affected-property read authority. Show this impact before correcting a shared identity; changed membership invalidates the contact revision/preview.
+
+Contact identity fields: `display_name`, `phones` string array, `raw_phone_text`, `contact_type`, `notes`. Preserve source phone spelling. Link fields: `contact_id`, `relation`, `is_primary`; `{remove:true}` unlinks only that property relationship. Wrong-person replacement changes the local link, not shared identity. One primary contact per property is maintained atomically. No merge/deduplication/deletion.
+
+Maintenance uses a transaction-scoped advisory gate before parent row locks, then parent→target locks. This deliberately serializes short maintenance transactions in the single-company MVP to protect contact membership previews/fan-out and multi-parent ordering. Reservation/rental/file locks remain parent-first and otherwise unchanged. Real independent-session races are still required acceptance; embedded single-session tests do not prove them.
+
+## Property business history
+
+`property_history` is SELECT-only under live membership plus the property read RLS boundary (including archived reviewer restrictions). Columns: `id`, `property_id`, `actor_id`, `actor_name` snapshot, authoritative `occurred_at`, `target`, `target_id`, `changed_fields`, `before_values`, `after_values`, nullable `explanation` for a correction application. Explanation annotation is restricted to newly inserted events in the current transaction (`xmin = pg_current_xact_id()::xid`) after the operation start; unrelated/pre-existing/concurrent same-actor history is never annotated. JSON contains only changed allowlisted business fields. Numeric values are decimal strings. No private audit payloads, secrets or documents are exposed.
+
+Shared-contact edits append an event to every property linked at that instant. Later unlinking never removes that attribution. Creation/fact/address/primary/link changes and unlinking record actor/time/before/after in the same transaction. Existing imported history is not invented or backdated. Consumers order/keyset-page on `(occurred_at,id)` within a property; the supporting index is property-scoped. Asking-price report consumers may select property events whose changed_fields contains sale_price_vnd/monthly_rent_vnd; report/completion features remain issue #32's scope.
+
+## Correction requests
+
+Forward migration `20261011060659_correction_requests.sql` adds SELECT-only `correction_requests` and immutable `correction_amendments` with explicit grants/RLS. Any active employee submits an issue on a readable unarchived property; submission never changes inventory. Targets identify a property, address, shared contact linked to that property, or local link. Null address/link target reports a missing relationship/address. Categories: `incorrect`, `missing`, `other`. Explanation: 10–2000 characters. Replacement fields may be unknown (`{}`). Original observed allowlisted state, entity/parent revisions, requester and original proposal remain immutable.
+
+- `submit_correction(p_property_id,p_target,p_target_id,p_category,p_explanation,p_changes,p_revision,p_property_revision) → uuid` captures authoritative observed state under revision checks.
+- `amend_correction(p_request_id,p_request_revision,p_explanation,p_changes,p_revision,p_property_revision) → void` appends a separately attributed observation/proposal, preserving the original. The requester or authorized staff may amend an open request; staff reconciliation is explicit evidence, not automatic merging.
+- `decide_correction(p_request_id,p_request_revision,p_action,p_reason,p_changes=null) → void`: `apply`/`reject` require staff/manager/admin; `withdraw` requires the requester. Apply/reject require a meaningful reason. Apply uses the latest original/amended observation and revisions, with the processor's optional replacement fields, then commits actual maintenance, history with explanation and `applied` outcome together. Issue-only application needs actual correction fields. No reviewer/requester confirmation follows. Legal/review/archive corrections are excluded; existing sold/rented/rental constraints still apply.
+
+States: `open`, `applied`, `rejected`, `withdrawn`. Original submissions/amendments/terminal attribution remain retained; terminal reapplication and stale decisions fail. A shared maintenance gate then parent→request→target row locks serialize apply/reject/withdraw with one winner. Requesters read only their own requests/amendments; staff/manager/admin read the company queue subject to live property access. Shared property access does not grant sales another request's contents. Live deactivation and archived-property read boundaries also apply to requests/amendments/history. No mutation via direct Data API writes.
+
+## Application boundary
+
+The existing protected inventory/details shell hosts creation, immediate maintenance, correction submission/processing and property history in VI/EN. Language preference continues through `set_my_locale`; source text, phones and exact numeric strings are not translated or coerced. Staff contact selection distinguishes identity UUIDs and source phone spelling rather than deduplicating similar names/masks. Shared-contact saves and correction applications require an affected-property preview and explicit same-person confirmation in the UI, supplemented by database revision/access checks.
+
+Same-origin, session-scoped APIs validate keys, revisions, target fields, enums and numeric/source types. Feature JSON POSTs use a bounded 256 KiB streamed body budget for multi-field UTF-8 input; existing authentication callers retain their 8 KiB budget. Origin checks and stream cancellation remain enforced. SQL errors become sanitized codes; `PT409` becomes HTTP 409 with retained drafts and a current-record reconciliation link, not automatic retries.
+
+History is keyset-paged on timestamp/UUID. Correction lists are bounded to 30 requests with one latest embedded amendment each; full immutable amendments are lazily ordinal-paged 20 at a time. Request/evidence reads remain subject to their own RLS and property access. Authenticated data is no-store; denial clears the existing protected surfaces rather than retaining successful previous data.
+
+## Verification boundary
+
+The deterministic embedded harness supplements, but never replaces, actual authenticated VI/EN browser acceptance on real isolated Supabase plus direct Data API/RLS attempts and independent-session races. Hosted/browser/API/independent-session acceptance has not yet run and awaits coordinated operator handoff on the separately approved development target. This source implementation itself grants no migration, production import/provisioning or deployment authority. See `docs/testing.md` for the distinct required scenarios.

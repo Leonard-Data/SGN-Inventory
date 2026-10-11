@@ -76,6 +76,10 @@ _Avoid_: Record approval, automatic ward conversion
 A recorded issue or proposed correction by an active employee concerning property facts, addresses, contact details or contact links on an unarchived property. Applying it resolves the request without an approval handoff; submission does not grant editing authority.
 _Avoid_: Direct edit, completed correction
 
+**Correction amendment**:
+A separately attributed addition to an open Correction request's explanation, proposed correction and observed facts. It preserves the original submission rather than rewriting it.
+_Avoid_: Replacement request, edited original
+
 **Property change history**:
 The record of who changed information affecting a property, when, and its before/after values, including property facts, addresses, contact links and shared-contact details displayed on that property.
 _Avoid_: Approval queue, page-view history

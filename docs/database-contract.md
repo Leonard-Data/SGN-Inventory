@@ -75,10 +75,12 @@ No authenticated INSERT/UPDATE/DELETE grants exist on locks, lock events or acti
 
 ## Ordinary writes
 
+Issue #7's forward source migration replaces property/address/contact/link direct writes with [transactional maintenance and business history](maintenance-contract.md). Hosted schema application and real acceptance remain pending. The following role boundaries still apply; they are enforced through revision-checked operations, not parallel CRUD.
+
 - Active employees may create properties; the DB sets creator/updater from their session. Sales edit their own unarchived properties; staff/managers/admin can edit shared inventory.
 - Manager/admin decide record-review and legal statuses and set sold/rented states. Sales cannot claim review approval by patching a property.
 - Address writes follow property edit permission; verified mappings require manager/admin. Primary-address replacement must be atomic; the planned maintenance slice does not require a separate approver.
-- Contact maintenance and property/contact links require staff/manager/admin. The foundation has no correction-request table or in-app workflow; the planned maintenance contract below replaces external operational handoff with structured in-app requests once implemented.
+- Contact maintenance and property/contact links require staff/manager/admin. Unlinking retains the shared contact and other links; same-person corrections append history to every affected property.
 - Files: no direct authenticated metadata INSERT/UPDATE/DELETE. Registration and attested completion use invoker RPC wrappers around narrowly granted private definers. Historical review data is retained; review mutation RPCs are removed.
 - Admin maintains employees and official catalogs. Creating an employee row does not create an Auth user; invitations and confirmed account linkage are separate server operations.
 - Hard deletes are not exposed. When deactivating an employee, review their approved locks and release or let them expire; deactivation blocks new employee DB requests but does not erase attribution history.
@@ -102,7 +104,7 @@ The user confirmed the assembled [maintenance plan](delivery-plan.md#confirmed-p
 - Requests have `open`, `applied`, `rejected` or `withdrawn` states. Staff/manager/admin may apply or reject an open request within their existing edit authority; the requester may withdraw their own open request. Rejection requires a reason. Apply the actual correction, property-history entry and `applied` transition in one transaction; no reviewer handoff or requester confirmation. Retain the original request and amendments. Terminal requests cannot be reapplied.
 - Reject stale form saves and stale correction applications, show current information and require reconciliation. Do not silently merge or overwrite newer values. Preserve the original request and record amendments; serializing an application must also prevent concurrent withdrawal/rejection from succeeding on the same open request.
 
-**Implementation gaps:** the foundation has no creation/code-generation transaction, correction-request workflow or property-history endpoint. Unlink is unavailable to ordinary clients; direct table writes do not provide the agreed stale-edit guard or enforce immutable legacy source text. Existing private audit snapshots alone do not establish shared-contact attribution from each property's history. Optional verification/invalidation and atomic primary replacements need application/database implementation and regression coverage.
+**Source progress:** issue #7 implements transactional generated-code creation, property/address/contact/link maintenance, immutable legacy corrections, atomic primary transitions, optional mapping designation/invalidation, revision guards and property-scoped history with shared-contact fan-out. These are not hosted acceptance claims. Correction lifecycle and integrated application status are recorded in the maintenance contract as implementation proceeds.
 
 See the [planned maintenance acceptance scenarios](testing.md#property-contact-and-address-maintenance-acceptance-not-yet-executed). No application implementation, migration, provisioning or deployment is authorized by this planning record.
 
