@@ -5,6 +5,7 @@ import { useProtectedData } from '@/features/employees/use-protected-data';
 import { SessionHeader } from '@/features/employees/session-header';
 import { api, RequestError } from '@/features/employees/api';
 import { Workspace } from '@/features/property-files/workspace';
+import type { TodayActivity } from '@/features/employees/activity';
 import type { PropertyDetail } from './detail-data';
 import { Maintenance } from '@/features/property-maintenance/workspace';
 import { History } from '@/features/property-maintenance/history';
@@ -54,6 +55,9 @@ export function Detail({
     await reload();
     setRefreshTick((value) => value + 1);
   }
+  const [today, setToday] = useState<TodayActivity | null>(null);
+  const [todayError, setTodayError] = useState(false);
+  const todayRequest = useRef<Promise<void> | null>(null);
   const employeeId = employee?.id;
   const denyFiles = useCallback(
     (status: number) => {
@@ -88,11 +92,38 @@ export function Detail({
     viewRequest.current = promise;
     return promise;
   }, [clear, id]);
+  const loadToday = useCallback(async () => {
+    if (todayRequest.current) return todayRequest.current;
+    const promise = api<TodayActivity>('/api/activity/today')
+      .then((result) => {
+        setToday(result);
+        setTodayError(false);
+      })
+      .catch((failure) => {
+        if (
+          failure instanceof RequestError &&
+          (failure.status === 401 || failure.status === 403)
+        ) {
+          clear();
+          window.location.replace(
+            failure.status === 403 ? '/access-denied' : '/login',
+          );
+        } else {
+          setToday(null);
+          setTodayError(true);
+        }
+      })
+      .finally(() => {
+        todayRequest.current = null;
+      });
+    todayRequest.current = promise;
+    return promise;
+  }, [clear]);
   useEffect(() => {
     if (employeeId) {
-      void recordView();
+      void recordView().then(loadToday);
     }
-  }, [employeeId, recordView]);
+  }, [employeeId, recordView, loadToday]);
   const property = data?.property;
   const canEdit =
     !!employee &&
@@ -254,12 +285,6 @@ export function Detail({
                           <span className="badge">{text.primary}</span>
                         ) : null}
                       </p>
-                      <p>
-                        {text.phone}:{' '}
-                        {link.contacts?.raw_phone_text ||
-                          link.contacts?.phones.join(' / ') ||
-                          text.unknown}
-                      </p>
                     </article>
                   ))
                 ) : (
@@ -317,9 +342,31 @@ export function Detail({
             {viewError ? (
               <p role="alert">
                 {text.pageViewFailed}{' '}
-                <button onClick={recordView}>{text.retry}</button>
+                <button onClick={() => void recordView().then(loadToday)}>
+                  {text.retry}
+                </button>
               </p>
             ) : null}
+            <section className="panel" aria-labelledby="today-activity">
+              <h2 id="today-activity">{text.todayActivity}</h2>
+              {todayError ? (
+                <p role="alert">
+                  {text.todayActivityFailed}{' '}
+                  <button onClick={() => void loadToday()}>{text.retry}</button>
+                </p>
+              ) : today ? (
+                <dl>
+                  <dt>{text.todayDay}</dt>
+                  <dd>{vietnamDate(today.businessDay)}</dd>
+                  <dt>{text.todayPageViews}</dt>
+                  <dd>{numberFormat.format(today.pageViewEvents)}</dd>
+                  <dt>{text.todayProperties}</dt>
+                  <dd>{numberFormat.format(today.distinctPropertiesViewed)}</dd>
+                </dl>
+              ) : (
+                <p role="status">{text.loading}</p>
+              )}
+            </section>
           </>
         ) : null}
       </div>

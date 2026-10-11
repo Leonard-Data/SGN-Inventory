@@ -493,6 +493,37 @@ await db.exec('reset role');await db.query("select set_config('request.jwt.claim
 assert.deepEqual((await db.query(`select ${coverSourceColumns} from public.property_files where property_id=$1 order by id`,[coverProperty])).rows,coverBefore);
 const maintainedProperty=await maintenanceContract({db,asUser,check,fails,employees,property,other});
 await correctionContract({db,asUser,check,fails,employees,property:maintainedProperty});
+// Ticket #28: the personal today-activity report. Own rows only, for every role, on the Vietnam day.
+const vietnamDay=(await db.query("select (now() at time zone 'Asia/Ho_Chi_Minh')::date::text as day")).rows[0].day;
+await asUser(0);
+await check('today activity starts at explicit zeros and uses the database Vietnam day',async()=>{
+  const row=(await db.query('select business_day::text as business_day,page_view_events,distinct_properties_viewed from public.my_today_activity()')).rows[0];
+  assert.deepEqual({day:row.business_day,events:Number(row.page_view_events),properties:Number(row.distinct_properties_viewed)},{day:vietnamDay,events:0,properties:0});
+});
+await db.query("select public.record_property_activity($1,'page_view',$2)",[property,'30000000-0000-4000-8000-000000000021']);
+await db.query("select public.record_property_activity($1,'page_view',$2)",[literalProperty,'30000000-0000-4000-8000-000000000022']);
+await db.query("select public.record_property_activity($1,'page_view',$2)",[literalProperty,'30000000-0000-4000-8000-000000000022']);
+await check('today activity counts own page views and distinct properties once',async()=>{
+  const row=(await db.query('select * from public.my_today_activity()')).rows[0];
+  assert.deepEqual({events:Number(row.page_view_events),properties:Number(row.distinct_properties_viewed)},{events:2,properties:2});
+});
+await check('personal report stays own page views even for a reviewer who reads colleague activity',async()=>{
+  await asUser(1);
+  assert.deepEqual((await db.query('select * from public.my_today_activity()')).rows.map(row=>[Number(row.page_view_events),Number(row.distinct_properties_viewed)]),[[0,0]]);
+  assert.deepEqual((await db.query('select id from public.activity_events where employee_id=$1',[employees[0]])).rows,[]);
+  await asUser(5);
+  assert.deepEqual((await db.query('select * from public.my_today_activity()')).rows.map(row=>[Number(row.page_view_events),Number(row.distinct_properties_viewed)]),[[0,0]]);
+  assert.deepEqual((await db.query("select id from public.activity_events where employee_id=$1 and kind='page_view'",[employees[0]])).rows,[]);
+  await asUser(2);
+  const manager=(await db.query('select * from public.my_today_activity()')).rows[0];
+  assert.deepEqual({events:Number(manager.page_view_events),properties:Number(manager.distinct_properties_viewed)},{events:1,properties:1});
+  assert.ok((await db.query("select id from public.activity_events where employee_id=$1 and kind='site_visit'",[employees[2]])).rows.length>0,'own physical visit exists but stays out of the page-view report');
+  assert.ok((await db.query('select id from public.activity_events where employee_id=$1',[employees[0]])).rows.length>0,'reviewer RLS still reads colleague rows directly');
+});
+await asUser(null);
+await check('anonymous today activity denied',()=>fails('select * from public.my_today_activity()',[],'42501'));
+await asUser(4);
+await check('unlinked and inactive today activity denied',()=>fails('select * from public.my_today_activity()',[],'42501'));
 const report={checked_at:new Date().toISOString(),engine:'PGlite embedded PostgreSQL; mocked auth/storage schemas',passed,
  limitations:['Not a live Supabase integration test','HTTP Auth, signed URLs, Vercel and browser flows not exercised','True multi-session concurrent transaction test remains a staging acceptance gate']};
 await fs.writeFile(path.join(root,'docs/validation-results.json'),JSON.stringify(report,null,2)+'\n');

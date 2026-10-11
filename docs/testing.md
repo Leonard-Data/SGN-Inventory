@@ -82,10 +82,10 @@ Prepare sanitized fixtures through authorized administration:
 | Reorder address fragments | No fuzzy or reordered-token matching is promised; the UI does not advertise it |
 | Search similar addresses on distinct properties | Distinct property codes remain identifiable; cursor paging retains distinct results and address summaries are bounded to the current page |
 | Submit an over-120-character query or a query with no matches | Localized validation rejects the oversized query; a genuine empty result is distinguishable from access denial |
-| Open property/contact details | Required characteristics, typed VND/dimensions, preserved legacy/current addresses, verification badges and all linked owner/broker relationships are shown; unknown values are explicit |
+| Open property/contact details | Required characteristics, typed VND/dimensions, preserved legacy/current addresses, verification badges and all linked owner/broker relationships are shown with names, relations and primary markers; unknown values are explicit; no owner phone is presented automatically and no disclosure control is offered |
 | Open a property without a contact link or verified current mapping | No guessed contact or ward is supplied; the missing/unresolved state is visible |
 | Record/retry a detail open and switch language | The documented page-view RPC retains retry identity without duplicate events; no physical visit is created |
-| Switch VI → EN → VI while searching or viewing details | All journey strings change, including validation and denial states; query, result position and open property survive; source text, phones, VND, m² and Vietnam dates retain meaning |
+| Switch VI → EN → VI while searching or viewing details | All journey strings change, including validation and denial states; query, result position and open property survive; source text, VND, m² and Vietnam dates retain meaning |
 | Fail the language-preference request | Previous interface language remains; localized error appears; UI does not claim persistence |
 | Switch language successfully, sign out and sign in again | Employee preference survives login via `set_my_locale`; source records remain unchanged |
 | Inactive or unlinked identity attempts protected browser navigation | Localized access-denied screen with no inventory/contact details, not a misleading empty search |
@@ -127,6 +127,24 @@ Record observed browser results and sanitized HTTP statuses/response shapes with
 - Final local `npm run check` and `npm run build` passed after recovery restoration: formatting, ESLint, strict types, 10 native tests, 83 schema assertions and the production build. Final real acceptance passed all 12 automated observation groups; the sanitized report's runner-recorded `checkedAt` is `2026-10-10T15:19:34.470Z`. That automated report still excludes the separately completed human mailbox cases; it is not production acceptance.
 
 Separately, strict types and the production build passed; 10 native unit tests and 83 embedded schema assertions passed across all six migrations. Authorized hosted configuration was verified with closed signup, exact localhost recovery URLs and `public`-only Data API exposure (`private` read `406/PGRST106`, authenticated public read `200`). **Real active, inactive and unlinked mailbox/callback/password recovery are verified and the synthetic fixture is restored.** Private Storage, customer import, broader workflows, production and deployment are not claimed.
+
+### Ticket #28 — protected detail and personal today activity acceptance (not yet executed)
+
+Extends the employee-access matrix above; it does not replace it. Requires the authorized isolated development project with `20261011060031_personal_daily_activity.sql` applied and synthetic active, inactive, unlinked, operator and independent-employee fixtures.
+
+| Scenario | Required observation |
+| --- | --- |
+| Active employee opens a property through a direct authorized link | Recorded facts, preserved legacy/current addresses and owner/broker names, relations and primary markers appear; owner phones are absent from the page and no disclosure control is offered; unknown facts and missing relationships stay explicitly unknown |
+| Re-render, refocus or switch language on one open detail | The Page view keeps its UUID identity and yields exactly one event; a genuinely new navigation may add one more; no Owner-contact access or physical visit is created |
+| Read today's personal report in the browser | Rendered event count, distinct-property count and Vietnam day equal the live `my_today_activity` result for the signed-in employee, including the just-recorded open |
+| Employee with no Page view yet today | The report returns explicit zeros at the application boundary, not an error, blank panel or denial |
+| Anonymous, unlinked or inactive identity calls the report | `401` (anonymous) or `403/access-denied` (authenticated but not active), never a zero report |
+| Reviewer/operator reads their own report | Only that employee's activity appears even though their RLS spans colleague activity; no company-report UI is added |
+| Deactivate the open employee, then refocus; sign out and use Back or a protected direct link | The membership recheck clears the report with the rest of the protected surface; denial is never rendered as zero activity |
+| Switch VI/EN on an open detail | Activity labels, day and counts are localized; reported values and recorded source are unchanged and no extra event is recorded |
+| Mobile and keyboard use of the detail and report | Controls are keyboard reachable with accessible labels; a failed report is distinguishable from a genuine zero, an empty inventory and a missing property |
+
+`npm run test:schema` asserts own-only scope, the database Vietnam day and the zero-versus-`42501` boundary in embedded PostgreSQL. `scripts/employee-access-acceptance.mjs` exercises the hosted authenticated journey, including rendered report values matching the live session report. Hosted execution of this matrix still needs the separately authorized staging target, the applied migration and the synthetic fixtures; no hosted result is claimed here.
 
 ## Property, contact and address maintenance acceptance (not yet executed)
 

@@ -1617,6 +1617,14 @@ export type Database = {
           name: string;
         }[];
       };
+      my_today_activity: {
+        Args: never;
+        Returns: {
+          business_day: string;
+          distinct_properties_viewed: number;
+          page_view_events: number;
+        }[];
+      };
       record_property_activity: {
         Args: {
           p_key: string;
