@@ -2,17 +2,15 @@ import { api, RequestError } from '../employees/api.ts';
 import type { TodayActivity } from '../employees/activity';
 import type { PropertyDetail } from './detail-data';
 
-export async function loadDetailSnapshot(
+export function loadPropertyDetail(id: string, signal: AbortSignal) {
+  return api<PropertyDetail>('/api/properties/' + id, undefined, signal);
+}
+
+export async function loadTodayActivity(
   id: string,
   key: string,
   signal: AbortSignal,
 ) {
-  const detail = await api<PropertyDetail>(
-    '/api/properties/' + id,
-    undefined,
-    signal,
-  );
-  signal.throwIfAborted();
   let viewError = false;
   try {
     await api('/api/properties/' + id + '/page-view', { key }, signal);
@@ -40,5 +38,5 @@ export async function loadDetailSnapshot(
     todayError = true;
   }
   signal.throwIfAborted();
-  return { ...detail, viewError, today, todayError };
+  return { viewError, today, todayError };
 }

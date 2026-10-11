@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadDetailSnapshot } from './detail-loader.ts';
+import { loadPropertyDetail, loadTodayActivity } from './detail-loader.ts';
 import { RequestError } from '../employees/api.ts';
 
 const id = '11111111-1111-4111-8111-111111111111';
@@ -39,12 +39,20 @@ const today = {
   distinctPropertiesViewed: 2,
 };
 
+test('detail load resolves without waiting for the page view or today activity', async (t) => {
+  t.mock.method(globalThis, 'fetch', async (path) => {
+    if (path === `/api/properties/${id}`) return Response.json(detail);
+    return new Promise<Response>(() => {});
+  });
+  const loaded = await loadPropertyDetail(id, new AbortController().signal);
+  assert.deepEqual(loaded, detail);
+});
+
 test('revalidation refreshes the Vietnam day without adding another logical open', async (t) => {
   let businessDay = '2026-10-10';
   const recorded = new Set<string>();
   t.mock.method(globalThis, 'fetch', async (path, options) => {
     assert.ok(options?.signal);
-    if (path === `/api/properties/${id}`) return Response.json(detail);
     if (path === `/api/properties/${id}/page-view`) {
       const body = JSON.parse(String(options.body));
       assert.equal(body.key, key);
@@ -58,29 +66,27 @@ test('revalidation refreshes the Vietnam day without adding another logical open
       distinctPropertiesViewed: businessDay === '2026-10-10' ? 1 : 0,
     });
   });
-  const first = await loadDetailSnapshot(id, key, new AbortController().signal);
+  const first = await loadTodayActivity(id, key, new AbortController().signal);
   assert.deepEqual(first.today, {
     businessDay: '2026-10-10',
     pageViewEvents: 1,
     distinctPropertiesViewed: 1,
   });
   businessDay = '2026-10-11';
-  const next = await loadDetailSnapshot(id, key, new AbortController().signal);
+  const next = await loadTodayActivity(id, key, new AbortController().signal);
   assert.deepEqual(next.today, {
     businessDay: '2026-10-11',
     pageViewEvents: 0,
     distinctPropertiesViewed: 0,
   });
   assert.equal(recorded.size, 1);
-  assert.deepEqual(next.property, detail.property);
 });
 
-test('an invalidated employee report cannot replace the new employee snapshot', async (t) => {
+test('an invalidated activity load cannot replace the next load', async (t) => {
   const pending = Promise.withResolvers<Response>();
   const started = Promise.withResolvers<void>();
   let reports = 0;
   t.mock.method(globalThis, 'fetch', async (path) => {
-    if (path === `/api/properties/${id}`) return Response.json(detail);
     if (path === `/api/properties/${id}/page-view`)
       return new Response(null, { status: 204 });
     assert.equal(path, '/api/activity/today');
@@ -91,10 +97,10 @@ test('an invalidated employee report cannot replace the new employee snapshot', 
     return Response.json({ ...today, pageViewEvents: 1 });
   });
   const oldScope = new AbortController();
-  const old = loadDetailSnapshot(id, key, oldScope.signal);
+  const old = loadTodayActivity(id, key, oldScope.signal);
   await started.promise;
   oldScope.abort();
-  const next = await loadDetailSnapshot(id, key, new AbortController().signal);
+  const next = await loadTodayActivity(id, key, new AbortController().signal);
   assert.equal(next.today?.pageViewEvents, 1);
   const rejected = assert.rejects(old, { name: 'AbortError' });
   pending.resolve(Response.json(today));
@@ -102,7 +108,7 @@ test('an invalidated employee report cannot replace the new employee snapshot', 
   assert.equal(next.today?.pageViewEvents, 1);
 });
 
-test('activity denial rejects the entire protected snapshot', async (t) => {
+test('activity denial rejects the load', async (t) => {
   for (const deniedPath of [
     `/api/properties/${id}/page-view`,
     '/api/activity/today',
@@ -111,11 +117,10 @@ test('activity denial rejects the entire protected snapshot', async (t) => {
       const fetch = t.mock.method(globalThis, 'fetch', async (path) => {
         if (path === deniedPath)
           return Response.json({ error: 'access-denied' }, { status });
-        if (path === `/api/properties/${id}`) return Response.json(detail);
         return new Response(null, { status: 204 });
       });
       await assert.rejects(
-        loadDetailSnapshot(id, key, new AbortController().signal),
+        loadTodayActivity(id, key, new AbortController().signal),
         (failure: unknown) =>
           failure instanceof RequestError && failure.status === status,
       );
@@ -129,12 +134,9 @@ test('ordinary activity failure preserves detail and exposes retry state', async
     if (path === `/api/properties/${id}`) return Response.json(detail);
     return Response.json({ error: 'unavailable' }, { status: 503 });
   });
-  const result = await loadDetailSnapshot(
-    id,
-    key,
-    new AbortController().signal,
-  );
-  assert.deepEqual(result.property, detail.property);
+  const loaded = await loadPropertyDetail(id, new AbortController().signal);
+  const result = await loadTodayActivity(id, key, new AbortController().signal);
+  assert.deepEqual(loaded.property, detail.property);
   assert.equal(result.viewError, true);
   assert.equal(result.todayError, true);
   assert.equal(result.today, null);

@@ -1,10 +1,12 @@
 'use client';
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { label, messages, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { SessionHeader } from '@/features/employees/session-header';
+import { RequestError } from '@/features/employees/api';
 import { Workspace } from '@/features/property-files/workspace';
-import { loadDetailSnapshot } from './detail-loader';
+import { loadPropertyDetail, loadTodayActivity } from './detail-loader';
+import type { PropertyDetail } from './detail-data';
 import { Maintenance } from '@/features/property-maintenance/workspace';
 import { History } from '@/features/property-maintenance/history';
 import {
@@ -36,7 +38,7 @@ export function Detail({
   const loadDetail = useCallback(
     (signal: AbortSignal) => {
       viewKey.current ??= crypto.randomUUID();
-      return loadDetailSnapshot(id, viewKey.current, signal);
+      return loadPropertyDetail(id, signal);
     },
     [id],
   );
@@ -58,7 +60,49 @@ export function Detail({
     await reload();
     setRefreshTick((value) => value + 1);
   }
-  const { viewError = false, today = null, todayError = false } = data ?? {};
+  const [activity, setActivity] = useState<{
+    detail: PropertyDetail;
+    viewError: boolean;
+    today: Awaited<ReturnType<typeof loadTodayActivity>>['today'];
+    todayError: boolean;
+  } | null>(null);
+  useEffect(() => {
+    if (!data) return;
+    const abort = new AbortController();
+    let current = true;
+    setActivity(null);
+    void loadTodayActivity(id, viewKey.current ?? '', abort.signal)
+      .then((result) => {
+        if (current) setActivity({ detail: data, ...result });
+      })
+      .catch((failure) => {
+        if (!current || abort.signal.aborted) return;
+        if (
+          failure instanceof RequestError &&
+          (failure.status === 401 || failure.status === 403)
+        ) {
+          clear();
+          window.location.replace(
+            failure.status === 403 ? '/access-denied' : '/login',
+          );
+          return;
+        }
+        setActivity({
+          detail: data,
+          viewError: false,
+          today: null,
+          todayError: true,
+        });
+      });
+    return () => {
+      current = false;
+      abort.abort();
+    };
+  }, [data, id, clear]);
+  const own = activity?.detail === data ? activity : null;
+  const viewError = own?.viewError ?? false;
+  const today = own?.today ?? null;
+  const todayError = own?.todayError ?? false;
   const employeeId = employee?.id;
   const denyFiles = useCallback(
     (status: number) => {
