@@ -11,7 +11,7 @@
 | Record own page view / visit | Yes | Yes | Yes | Yes |
 | Read daily activity | Own | Own | All | All |
 | Approve/reject lock or confirm visit | No | No | Another employee only | Another employee only |
-| Set legal/review/sold/rented state | No | No | Yes | Yes |
+| Set legal/review state; sold/rented arrives with issue #32 sale transition | No | No | Yes | Yes |
 | Manage employee activation/roles and catalogs | No | No | No | Yes |
 | Read area/employee analytics | No | No | Yes | Yes |
 | Read staging/audit directly through API | No | No | No | No |

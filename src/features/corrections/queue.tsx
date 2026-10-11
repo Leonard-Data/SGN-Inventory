@@ -10,6 +10,7 @@ import type { ContactDetail } from '@/features/property-maintenance/data';
 import {
   maintenanceText,
   optionLabel,
+  requestStatusLabel,
 } from '@/features/property-maintenance/messages';
 import { vietnamTimestamp } from '@/features/properties/format';
 import { CorrectionDraft } from './draft';
@@ -302,7 +303,7 @@ export function CorrectionQueue({
                     <p>
                       {optionLabel(locale, request.category)} ·{' '}
                       <span className="badge">
-                        {optionLabel(locale, request.status)}
+                        {requestStatusLabel(locale, request.status)}
                       </span>{' '}
                       ·{' '}
                       <time dateTime={request.created_at}>

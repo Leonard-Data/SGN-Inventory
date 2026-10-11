@@ -823,5 +823,84 @@ export async function maintenanceContract({
       );
     },
   );
+  await asUser(0);
+  await check(
+    'multi-field Vietnamese change sets above the legacy 8 KiB cap still save',
+    async () => {
+      const bulk = 'ự'.repeat(2000);
+      await db.query(mutate, [
+        created,
+        'property',
+        created,
+        await revision('properties', created),
+        { notes: bulk, construction_text: bulk, area_raw: bulk },
+      ]);
+      assert.deepEqual(
+        (
+          await db.query(
+            'select notes,construction_text,area_raw from public.properties where id=$1',
+            [created],
+          )
+        ).rows[0],
+        { notes: bulk, construction_text: bulk, area_raw: bulk },
+      );
+    },
+  );
+  await db.exec('reset role');
+  await db.query("select set_config('request.jwt.claim.sub','',false)");
+  const alternate = (
+    await db.query(
+      "insert into public.property_addresses(property_id,format,address_text,is_primary) values($1,'alternate','Địa chỉ khác chưa phân loại',false) returning id,revision",
+      [created],
+    )
+  ).rows[0];
+  await asUser(0);
+  await check(
+    'an existing alternate address can be corrected without changing its format',
+    async () => {
+      const successor = (
+        await db.query(mutate, [
+          created,
+          'address',
+          alternate.id,
+          await revision('property_addresses', alternate.id),
+          { address_text: 'Địa chỉ khác đã đính chính' },
+        ])
+      ).rows[0].id;
+      assert.deepEqual(
+        (
+          await db.query(
+            'select format,supersedes_address_id,address_text from public.property_addresses where id=$1',
+            [successor],
+          )
+        ).rows[0],
+        {
+          format: 'alternate',
+          supersedes_address_id: alternate.id,
+          address_text: 'Địa chỉ khác đã đính chính',
+        },
+      );
+      assert.deepEqual(
+        (
+          await db.query(
+            'select address_text,is_primary from public.property_addresses where id=$1',
+            [alternate.id],
+          )
+        ).rows[0],
+        { address_text: 'Địa chỉ khác chưa phân loại', is_primary: false },
+      );
+      const event = (
+        await db.query(
+          "select before_values,after_values from public.property_history where property_id=$1 and target='address' and target_id=$2",
+          [created, successor],
+        )
+      ).rows[0];
+      assert.equal(
+        event.after_values.address_text,
+        'Địa chỉ khác đã đính chính',
+      );
+      assert.equal(event.after_values.format, 'alternate');
+    },
+  );
   return created;
 }

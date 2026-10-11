@@ -163,10 +163,6 @@ const values: Record<string, readonly [string, string]> = {
   incorrect: ['Thông tin sai', 'Incorrect information'],
   missing: ['Thiếu thông tin', 'Missing information'],
   other: ['Vấn đề khác', 'Other issue'],
-  open: ['Đang mở', 'Open'],
-  applied: ['Đã áp dụng', 'Applied'],
-  rejected: ['Đã từ chối', 'Rejected'],
-  withdrawn: ['Đã rút', 'Withdrawn'],
   manual: ['Đối chiếu thủ công có bằng chứng', 'Evidence-based manual mapping'],
   boundary: ['Bằng chứng ranh giới', 'Boundary evidence'],
   document: ['Bằng chứng tài liệu', 'Document evidence'],
@@ -190,4 +186,15 @@ const values: Record<string, readonly [string, string]> = {
 };
 export function optionLabel(locale: Locale, value: string) {
   return values[value]?.[locale === 'vi' ? 0 : 1] ?? label(locale, value);
+}
+const requestStatuses: Record<string, readonly [string, string]> = {
+  open: ['Đang mở', 'Open'],
+  applied: ['Đã áp dụng', 'Applied'],
+  rejected: ['Đã từ chối', 'Rejected'],
+  withdrawn: ['Đã rút', 'Withdrawn'],
+};
+export function requestStatusLabel(locale: Locale, value: string) {
+  return (
+    requestStatuses[value]?.[locale === 'vi' ? 0 : 1] ?? label(locale, value)
+  );
 }

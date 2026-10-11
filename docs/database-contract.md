@@ -78,7 +78,7 @@ No authenticated INSERT/UPDATE/DELETE grants exist on locks, lock events or acti
 Issue #7's forward source migration replaces property/address/contact/link direct writes with [transactional maintenance and business history](maintenance-contract.md). Hosted schema application and real acceptance remain pending. The following role boundaries still apply; they are enforced through revision-checked operations, not parallel CRUD.
 
 - Active employees may create properties; the DB sets creator/updater from their session. Sales edit their own unarchived properties; staff/managers/admin can edit shared inventory.
-- Manager/admin decide record-review and legal statuses and set sold/rented states. Sales cannot claim review approval by patching a property.
+- Manager/admin decide record-review and legal statuses. Ordinary maintenance cannot confirm or reverse a sale; sold/rented transitions arrive with the independent sale transition (issue #32). Sales cannot claim review approval by patching a property.
 - Address writes follow property edit permission; verified mappings require manager/admin. Primary-address replacement must be atomic; the planned maintenance slice does not require a separate approver.
 - Contact maintenance and property/contact links require staff/manager/admin. Unlinking retains the shared contact and other links; same-person corrections append history to every affected property.
 - Files: no direct authenticated metadata INSERT/UPDATE/DELETE. Registration and attested completion use invoker RPC wrappers around narrowly granted private definers. Historical review data is retained; review mutation RPCs are removed.
