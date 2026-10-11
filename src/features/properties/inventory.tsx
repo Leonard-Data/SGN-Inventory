@@ -35,10 +35,13 @@ export function Inventory({
   const locale = employee?.locale ?? initialLocale;
   const text = messages[locale];
   const [searchError, setSearchError] = useState(false);
-  const denyFiles = useCallback((status: number) => {
-    clear();
-    window.location.replace(status === 401 ? '/login' : '/access-denied');
-  }, [clear]);
+  const denyFiles = useCallback(
+    (status: number) => {
+      clear();
+      window.location.replace(status === 401 ? '/login' : '/access-denied');
+    },
+    [clear],
+  );
   const cursors = trail
     ? trail
         .split(',')

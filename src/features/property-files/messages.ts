@@ -120,7 +120,8 @@ const en: Record<keyof typeof vi, string> = {
   noCover: 'No cover selected',
   coverPlaceholder: 'Property cover photo',
   coverLoading: 'Loading cover…',
-  coverImageFailed: 'Could not load the cover. Retry with a newly authorized link.',
+  coverImageFailed:
+    'Could not load the cover. Retry with a newly authorized link.',
   changingCover: 'Saving cover…',
   selectedCover: 'Selected cover',
   checkPhoto: 'Technically validate photo before selection',
@@ -152,7 +153,8 @@ const errorsVi: Record<string, string> = {
     'Không xác định được dữ liệu đã lưu hay chưa. Tải lại trạng thái; không tải lên khi chưa rõ.',
   'replacement-required':
     'Đăng ký này không thể tiếp tục. Chọn nội dung thay thế thành một tập tin mới; giữ nguyên đăng ký cũ.',
-  'invalid-cover': 'Chọn ảnh bất động sản đã kiểm tra kỹ thuật và thuộc đúng bất động sản này.',
+  'invalid-cover':
+    'Chọn ảnh bất động sản đã kiểm tra kỹ thuật và thuộc đúng bất động sản này.',
   'invalid-category': 'Danh mục không hợp lệ.',
 };
 
@@ -177,7 +179,8 @@ const errorsEn: Record<keyof typeof errorsVi, string> = {
     'The stored object state is unknown. Reload state; do not upload blindly.',
   'replacement-required':
     'This registration cannot resume. Upload replacement content as a new attachment; the original registration is retained.',
-  'invalid-cover': 'Choose a technically validated Property photo belonging to this property.',
+  'invalid-cover':
+    'Choose a technically validated Property photo belonging to this property.',
   'invalid-category': 'Invalid category.',
 };
 

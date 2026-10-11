@@ -77,7 +77,8 @@ export async function registerFile(
     p_size_bytes: body.sizeBytes,
     p_sha256: body.sha256,
     p_purpose: body.purpose,
-    p_category_id: typeof body.categoryId === 'string' ? body.categoryId : undefined,
+    p_category_id:
+      typeof body.categoryId === 'string' ? body.categoryId : undefined,
   });
   if (error) databaseFailure(error);
   if (
@@ -185,7 +186,9 @@ export async function validateAndCompleteFile(
   }
   if (
     (file.mime_type !== null && mimeType !== file.mime_type) ||
-    (file.mime_type !== null && info.contentType && info.contentType.split(';')[0]?.trim() !== mimeType) ||
+    (file.mime_type !== null &&
+      info.contentType &&
+      info.contentType.split(';')[0]?.trim() !== mimeType) ||
     (file.purpose === 'photo' && mimeType === 'application/pdf')
   )
     throw new ApiError(400, 'file-mismatch');

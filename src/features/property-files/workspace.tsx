@@ -50,8 +50,11 @@ export function Workspace({
   const [recoverable, setRecoverable] = useState<RecoverableFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [purpose, setPurpose] = useState<'photo' | 'document'>('document');
-  const [categories, setCategories] = useState<DocumentCategoryList['categories']>([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>(otherCategoryId);
+  const [categories, setCategories] = useState<
+    DocumentCategoryList['categories']
+  >([]);
+  const [selectedCategoryId, setSelectedCategoryId] =
+    useState<string>(otherCategoryId);
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [creatingCategory, setCreatingCategory] = useState(false);
@@ -140,10 +143,17 @@ export function Workspace({
       await api(`/api/properties/${propertyId}/cover`, { fileId }, signal);
       if (generation.current === version && !signal?.aborted) onCoverChanged();
     } catch (failure) {
-      if (generation.current === version && !signal?.aborted && !denied(failure))
-        setCoverError(failure instanceof RequestError ? failure.code : 'unavailable');
+      if (
+        generation.current === version &&
+        !signal?.aborted &&
+        !denied(failure)
+      )
+        setCoverError(
+          failure instanceof RequestError ? failure.code : 'unavailable',
+        );
     } finally {
-      if (generation.current === version && !signal?.aborted) setCoverBusy(false);
+      if (generation.current === version && !signal?.aborted)
+        setCoverBusy(false);
     }
   }
   async function checkPhoto(fileId: string) {
@@ -152,14 +162,25 @@ export function Workspace({
     setCheckingPhoto(fileId);
     setCoverError(null);
     try {
-      await api(`/api/properties/${propertyId}/files/${fileId}/complete`, {}, signal);
+      await api(
+        `/api/properties/${propertyId}/files/${fileId}/complete`,
+        {},
+        signal,
+      );
       if (generation.current === version && !signal?.aborted)
         setRevision((value) => value + 1);
     } catch (failure) {
-      if (generation.current === version && !signal?.aborted && !denied(failure))
-        setCoverError(failure instanceof RequestError ? failure.code : 'unavailable');
+      if (
+        generation.current === version &&
+        !signal?.aborted &&
+        !denied(failure)
+      )
+        setCoverError(
+          failure instanceof RequestError ? failure.code : 'unavailable',
+        );
     } finally {
-      if (generation.current === version && !signal?.aborted) setCheckingPhoto(null);
+      if (generation.current === version && !signal?.aborted)
+        setCheckingPhoto(null);
     }
   }
   async function open(fileId: string, download: boolean) {
@@ -184,7 +205,8 @@ export function Workspace({
     if (cat.builtin === 'land_certificate') return fileText.land_certificate;
     if (cat.builtin === 'sale_contract') return fileText.sale_contract;
     if (cat.builtin === 'planning') return fileText.planning;
-    if (cat.builtin === 'construction_permit') return fileText.construction_permit;
+    if (cat.builtin === 'construction_permit')
+      return fileText.construction_permit;
     if (cat.builtin === 'photo') return fileText.photo;
     return cat.name;
   }
@@ -385,16 +407,30 @@ export function Workspace({
     setError(null);
     setCreatingCategory(true);
     try {
-      const result = await api<{ id: string }>('/api/document-categories', { name }, signal);
-      const fresh = await api<DocumentCategoryList>('/api/document-categories', undefined, signal);
+      const result = await api<{ id: string }>(
+        '/api/document-categories',
+        { name },
+        signal,
+      );
+      const fresh = await api<DocumentCategoryList>(
+        '/api/document-categories',
+        undefined,
+        signal,
+      );
       if (generation.current !== version || signal?.aborted) return;
       setCategories(fresh.categories);
       setSelectedCategoryId(result.id);
       setShowNewCategory(false);
       setNewCategoryName('');
     } catch (failure) {
-      if (generation.current === version && !signal?.aborted && !denied(failure))
-        setError(failure instanceof RequestError ? failure.code : 'unavailable');
+      if (
+        generation.current === version &&
+        !signal?.aborted &&
+        !denied(failure)
+      )
+        setError(
+          failure instanceof RequestError ? failure.code : 'unavailable',
+        );
     } finally {
       if (generation.current === version) setCreatingCategory(false);
     }
@@ -406,15 +442,29 @@ export function Workspace({
     setCategoryBusy(true);
     setCategoryError(null);
     try {
-      await api(`/api/properties/${propertyId}/files/${fileId}/category`, { categoryId: editingCategoryId }, signal);
+      await api(
+        `/api/properties/${propertyId}/files/${fileId}/category`,
+        { categoryId: editingCategoryId },
+        signal,
+      );
       if (generation.current !== version || signal?.aborted) return;
-      const fresh = await api<PropertyFileList>(`/api/properties/${propertyId}/files`, undefined, signal);
+      const fresh = await api<PropertyFileList>(
+        `/api/properties/${propertyId}/files`,
+        undefined,
+        signal,
+      );
       if (generation.current !== version || signal?.aborted) return;
       setFiles(fresh.files);
       setEditingFileId(null);
     } catch (failure) {
-      if (generation.current === version && !signal?.aborted && !denied(failure))
-        setCategoryError(failure instanceof RequestError ? failure.code : 'unavailable');
+      if (
+        generation.current === version &&
+        !signal?.aborted &&
+        !denied(failure)
+      )
+        setCategoryError(
+          failure instanceof RequestError ? failure.code : 'unavailable',
+        );
     } finally {
       if (generation.current === version) setCategoryBusy(false);
     }
@@ -445,7 +495,9 @@ export function Workspace({
             {fileText.photo}
           </label>
           <div>
-            <label htmlFor={'category-' + propertyId}>{fileText.category}</label>
+            <label htmlFor={'category-' + propertyId}>
+              {fileText.category}
+            </label>
             <select
               id={'category-' + propertyId}
               value={selectedCategoryId}
@@ -564,9 +616,18 @@ export function Workspace({
       ) : null}
       <section className="cover-section" aria-label={fileText.cover}>
         <h3>{fileText.cover}</h3>
-        <CoverImage propertyId={propertyId} fileId={coverFileId} locale={locale} onDenied={onDenied} />
+        <CoverImage
+          propertyId={propertyId}
+          fileId={coverFileId}
+          locale={locale}
+          onDenied={onDenied}
+        />
         {canEdit && !archived && coverFileId ? (
-          <button type="button" disabled={coverBusy || checkingPhoto !== null} onClick={() => void changeCover(null)}>
+          <button
+            type="button"
+            disabled={coverBusy || checkingPhoto !== null}
+            onClick={() => void changeCover(null)}
+          >
             {coverBusy ? fileText.changingCover : fileText.clearCover}
           </button>
         ) : null}
@@ -614,33 +675,86 @@ export function Workspace({
               </button>
               {canEdit && !archived && file.purpose === 'photo' ? (
                 file.validated_at && file.validated_object_id ? (
-                  coverFileId === file.id ? <span className="badge">{fileText.selectedCover}</span> : (
-                    <button type="button" disabled={coverBusy || checkingPhoto !== null} onClick={() => void changeCover(file.id)}>
-                      {coverBusy ? fileText.changingCover : coverFileId ? fileText.replaceCover : fileText.setCover}
+                  coverFileId === file.id ? (
+                    <span className="badge">{fileText.selectedCover}</span>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={coverBusy || checkingPhoto !== null}
+                      onClick={() => void changeCover(file.id)}
+                    >
+                      {coverBusy
+                        ? fileText.changingCover
+                        : coverFileId
+                          ? fileText.replaceCover
+                          : fileText.setCover}
                     </button>
                   )
                 ) : (
-                  <button type="button" disabled={coverBusy || checkingPhoto !== null} onClick={() => void checkPhoto(file.id)}>
-                    {checkingPhoto === file.id ? fileText.validating : fileText.checkPhoto}
+                  <button
+                    type="button"
+                    disabled={coverBusy || checkingPhoto !== null}
+                    onClick={() => void checkPhoto(file.id)}
+                  >
+                    {checkingPhoto === file.id
+                      ? fileText.validating
+                      : fileText.checkPhoto}
                   </button>
                 )
               ) : null}
               {!archived && (canEdit || file.uploaded_by === employeeId) ? (
                 editingFileId === file.id ? (
                   <div>
-                    <label htmlFor={'edit-category-' + file.id}>{fileText.category}</label>
-                    <select id={'edit-category-' + file.id} value={editingCategoryId} disabled={categoryBusy}
-                      onChange={(event) => setEditingCategoryId(event.target.value)}>
-                      {categories.map((category) => <option key={category.id} value={category.id}>{categoryName(category.id)}</option>)}
+                    <label htmlFor={'edit-category-' + file.id}>
+                      {fileText.category}
+                    </label>
+                    <select
+                      id={'edit-category-' + file.id}
+                      value={editingCategoryId}
+                      disabled={categoryBusy}
+                      onChange={(event) =>
+                        setEditingCategoryId(event.target.value)
+                      }
+                    >
+                      {categories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {categoryName(category.id)}
+                        </option>
+                      ))}
                     </select>
-                    <button type="button" disabled={categoryBusy || !editingCategoryId} onClick={() => void changeCategory(file.id)}>
+                    <button
+                      type="button"
+                      disabled={categoryBusy || !editingCategoryId}
+                      onClick={() => void changeCategory(file.id)}
+                    >
                       {categoryBusy ? fileText.savingCategory : fileText.save}
                     </button>
-                    <button type="button" disabled={categoryBusy} onClick={() => {setEditingFileId(null);setCategoryError(null);}}>{fileText.cancel}</button>
-                    {categoryError ? <p role="alert">{fileText.errors[categoryError] ?? text.unavailable}</p> : null}
+                    <button
+                      type="button"
+                      disabled={categoryBusy}
+                      onClick={() => {
+                        setEditingFileId(null);
+                        setCategoryError(null);
+                      }}
+                    >
+                      {fileText.cancel}
+                    </button>
+                    {categoryError ? (
+                      <p role="alert">
+                        {fileText.errors[categoryError] ?? text.unavailable}
+                      </p>
+                    ) : null}
                   </div>
                 ) : (
-                  <button type="button" disabled={categoryBusy} onClick={() => {setEditingFileId(file.id);setEditingCategoryId(file.category_id);setCategoryError(null);}}>
+                  <button
+                    type="button"
+                    disabled={categoryBusy}
+                    onClick={() => {
+                      setEditingFileId(file.id);
+                      setEditingCategoryId(file.category_id);
+                      setCategoryError(null);
+                    }}
+                  >
                     {fileText.changeCategory}
                   </button>
                 )

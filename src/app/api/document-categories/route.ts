@@ -6,18 +6,14 @@ import {
   createOrGetCategory,
 } from '@/features/property-files/upload-data';
 
-export function GET(
-  request: NextRequest,
-) {
+export function GET(request: NextRequest) {
   return runRoute(request, async (context) => {
     await activeEmployee(context);
     return NextResponse.json(await listCategories(context));
   });
 }
 
-export function POST(
-  request: NextRequest,
-) {
+export function POST(request: NextRequest) {
   return runRoute(request, async (context) => {
     await activeEmployee(context);
     const body = await objectBody(request, context);

@@ -15,10 +15,7 @@ export function POST(
       Object.keys(body).some((key) => !['categoryId'].includes(key)) ||
       typeof body.categoryId !== 'string'
     )
-      return NextResponse.json(
-        { error: 'invalid-input' },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: 'invalid-input' }, { status: 400 });
     await setFileCategory(context, id, fileId, body.categoryId);
     return NextResponse.json({ status: 'ok' });
   });

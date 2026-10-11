@@ -1,6 +1,7 @@
 import type { Database } from '@/types/database';
 
-export type DocumentCategory = Database['public']['Tables']['document_categories']['Row'];
+export type DocumentCategory =
+  Database['public']['Tables']['document_categories']['Row'];
 
 export type PropertyFile = Pick<
   Database['public']['Tables']['property_files']['Row'],

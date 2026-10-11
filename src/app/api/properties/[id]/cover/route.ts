@@ -11,7 +11,10 @@ export function POST(
     await activeEmployee(context);
     const body = await objectBody(request, context);
     const propertyId = (await route.params).id;
-    if (Object.keys(body).length !== 1 || (body.fileId !== null && !uuid(body.fileId)))
+    if (
+      Object.keys(body).length !== 1 ||
+      (body.fileId !== null && !uuid(body.fileId))
+    )
       throw new ApiError(400, 'invalid-input');
     return NextResponse.json(await setCover(context, propertyId, body.fileId));
   });

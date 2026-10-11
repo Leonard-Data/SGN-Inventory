@@ -2,7 +2,7 @@
 
 ## Executed verification
 
-`npm run test:schema` executes all six migrations in embedded PostgreSQL (PGlite) with the real unaccent/pg_trgm extensions. It creates mock Supabase Auth/Storage schemas and fixture employee accounts. It checks real database grants, RLS, workflow state and data constraints; it does not emulate HTTP APIs.
+`npm run test:schema` executes all twelve migrations in embedded PostgreSQL (PGlite) with the real unaccent/pg_trgm extensions. It creates mock Supabase Auth/Storage schemas and fixture employee accounts. It checks real database grants, RLS, workflow state and data constraints; it does not emulate HTTP APIs.
 
 Results are in `validation-results.json`. Covered behaviors include anonymous/inactive denial, property edit restrictions, denied privilege escalation, accent-insensitive search, reservation approval and conflict, self approval/visit denial, activity retry, Vietnam dates, effective expiry/release, private staging/audit access and registered private-file access.
 
@@ -245,6 +245,24 @@ The separately authorized overwrite/delete probe targeted only a newly declared 
 On the isolated development project, the native VI/EN workspace created a surrounding-Unicode-whitespace category and retained its accented spelling across saved locale changes. Two separately authenticated browser employees selected that same company category on different properties and uploaded valid PDFs; an independent employee read retained the exact original bytes. Other was the initial localized picker choice, and an actual omitted-category API registration/upload/completion produced a ready Other document.
 
 Two independent employee JWT sessions concurrently created case/Unicode-edge variants of one new name and received the same category identity. Application and direct-RPC whitespace-only requests returned `400`; inactive/unlinked category reads returned no rows and creation returned `403`. Anonymous application reads returned `401`. An unlinked assignment attempt returned `403`; a forged category returned `400` with no file metadata. The migration preserved all three original legacy rows, including equivalent creation instants, and the existing reservation evidence reference. Embedded category/cover integration currently passes 107 assertions; complete-spec verification remains the later gate.
+
+### Executed ticket #26 category correction evidence
+
+Distinct uploader and sales-owner browser actors exercised VI/EN correction on the owner's unarchived property. The uploader had no property-fact edit authority but changed their own attachment to Other and saw the fresh localized badge. The owner then corrected that other employee's attachment back to the custom category and saw its unchanged spelling. An unrelated contributor had no correction control; application and direct RPC requests returned `403` without changing the file. A live admin correction succeeded, and another employee's Storage read retained the exact original PDF.
+
+Forged category and mismatched property-path requests returned `400`, preserving the assignment. Direct metadata PATCH and inactive/unlinked RPC requests returned `403`. Temporary archive and deactivation probes used the existing owner/uploader cookies and previously issued JWTs: both application and RPC mutations returned `403` and preserved all file attributes; archive and activation were restored and re-read. The embedded runner now passes 119 assertions, including historical null-uploader denial, staff/manager/admin correction, original-field/history preservation and immediate existing-session deactivation.
+
+### Executed ticket #27 private cover evidence
+
+The sales-owner workspace completed two real PNG Property photos without selecting a cover. A certificate-image PNG deliberately used the Photo category but retained document purpose. Native VI selection rendered the chosen image in property detail and the actual filtered inventory card (`naturalWidth=8`), directly from private Storage rather than `/_next/image`. An independent admin used native replacement and English clearing controls; fresh cards reflected the final pointer or a neutral no-cover placeholder with no first-image fallback. Two independent owner/admin browser sessions concurrently selected valid photos; both returned `200`, leaving one eligible same-property pointer and unchanged original file attributes.
+
+The real application rejected same-property pending, failed and unvalidated-ready candidates, the certificate image and another property's photo, preserving the selection. Direct cover UPDATE and INSERT returned `403` with no new property row. Non-editor/inactive/unlinked set and clear RPCs returned `403`; an uploader completed their own photo on another employee's property but still received `403` selecting it. A current admin technically checked an existing ready legacy photo through actual Storage reads and decoding; original nullable registration/history remained intact, and validation did not choose a cover.
+
+The card obtained a different newly authorized signed link after expiry; the previous link returned `400`. A real expired-image request displayed the localized failure and removed the image; native Retry obtained a fresh link and rendered pixels. Deactivating the existing card actor denied new signing and mutation with `403`, and focus revalidation removed protected images and navigated to `/access-denied`. The already delivered bearer still returned the exact PNG before its TTL expired. Archiving hid the property from ordinary cards, denied fresh ordinary signing with `404` and denied owner/admin cover mutations with `403`, retaining the pointer. Activation and archive were restored and re-read. No original object was replaced or deleted.
+
+### Final integrated engineering verification
+
+The complete Spec #33 branch passed `npm run check`: formatting, ESLint, strict TypeScript, 12 unit regressions and 119 embedded database assertions. The production Next.js build compiled successfully with all file/category/cover routes. All seven workbook preparation regressions passed using the existing pinned Python virtual environment; the unactivated system Python lacked `openpyxl`. Canonical public database types were generated from the actual development schema after each authorized forward migration.
 
 ## Honest completion limits
 
