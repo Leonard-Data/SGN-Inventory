@@ -144,7 +144,22 @@ Extends the employee-access matrix above; it does not replace it. Requires the a
 | Switch VI/EN on an open detail | Activity labels, day and counts are localized; reported values and recorded source are unchanged and no extra event is recorded |
 | Mobile and keyboard use of the detail and report | Controls are keyboard reachable with accessible labels; a failed report is distinguishable from a genuine zero, an empty inventory and a missing property |
 
-`npm run test:schema` asserts own-only scope, the database Vietnam day and the zero-versus-`42501` boundary in embedded PostgreSQL. `scripts/employee-access-acceptance.mjs` exercises the hosted authenticated journey, including rendered report values matching the live session report. Hosted execution of this matrix still needs the separately authorized staging target, the applied migration and the synthetic fixtures; no hosted result is claimed here.
+`npm run test:schema` asserts own-only scope, the database Vietnam day and the zero-versus-`42501` boundary in embedded PostgreSQL. `scripts/employee-access-acceptance.mjs` exercises the hosted authenticated journey, including rendered report values matching the live session report.
+
+**Executed against the authorized development project (11 October 2026).** Migration `20261011060031_personal_daily_activity.sql` was applied through the reviewed forward path: the CLI dry-run reported exactly that one pending migration with no seeds or roles, the push applied only it, the follow-up dry-run reported up to date, `my_today_activity` moved from `404 PGRST202` to `403/42501` for an unauthenticated caller, and every read-only row baseline was unchanged. A disjoint synthetic namespace (five Auth users, four employees, three properties with owner/broker contacts, one archived) was created through the operator plane; the existing fixtures and the supplied development login were untouched.
+
+Real individual-session results over hosted Auth/Data API/RLS (task-local runner, sanitized output):
+
+- anonymous report, detail and page-view → `401`;
+- an event-free employee's own report → `200` with explicit `0/0` and the database Vietnam day;
+- one logical open, retried with the same key, → one `page_view` event and no site visit, and the same key cannot be reused for another property;
+- a new logical open → exactly one more event and one more distinct property;
+- a colleague sees only their own zeros;
+- inactive and unlinked identities → `403/access-denied` on report, detail and page-view;
+- archived detail → `404` for the ordinary employee, `200` for the reviewer, whose report stays own-only;
+- a JWT issued before deactivation → `403` on the next protected request with recorded events unchanged, and restoration re-enables the same employee.
+
+**Still open:** the browser-rendered half (detail DOM rendering, no owner phone in the page, panel labels/counts in VI/EN, mobile/keyboard use, refocus/Back clearing) was **not** executed. `chrome-devtools-axi` could not launch a browser on this host (`Protocol error (Target.setDiscoverTargets): Target closed`) with the installed `0.1.33`, including with a local Linux Chromium, `--no-sandbox`/`--disable-dev-shm-usage` and headed mode; the project pins a compatible `0.1.39`. The disjoint synthetic fixtures remain in place for that run, and their private restoration manifest still owes the final cleanup. No browser result is claimed here.
 
 ## Property, contact and address maintenance acceptance (not yet executed)
 
