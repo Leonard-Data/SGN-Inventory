@@ -902,5 +902,36 @@ export async function maintenanceContract({
       assert.equal(event.after_values.format, 'alternate');
     },
   );
+  await check(
+    'a new address cannot be created with format alternate',
+    async () => {
+      const before = (
+        await db.query(
+          'select id from public.property_addresses where property_id=$1 order by id',
+          [created],
+        )
+      ).rows;
+      await fails(
+        mutate,
+        [
+          created,
+          'address',
+          null,
+          await revision('properties', created),
+          { format: 'alternate', address_text: 'Không được tạo mới' },
+        ],
+        '23514',
+      );
+      assert.deepEqual(
+        (
+          await db.query(
+            'select id from public.property_addresses where property_id=$1 order by id',
+            [created],
+          )
+        ).rows,
+        before,
+      );
+    },
+  );
   return created;
 }
