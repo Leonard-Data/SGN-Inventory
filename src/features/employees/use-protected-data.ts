@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Employee } from './types';
 import { api, RequestError } from './api';
+import { loadProtected } from './protected-load';
 
 export function useProtectedData<T>(
   source: string | ((signal: AbortSignal) => Promise<T>),
@@ -13,6 +14,7 @@ export function useProtectedData<T>(
   const generation = useRef(0);
   const controller = useRef<AbortController | null>(null);
   const surfaceElement = useRef<HTMLDivElement | null>(null);
+  const renderedFor = useRef<string | null>(null);
   const savedLocale = useRef<{
     employeeId: string;
     locale: Employee['locale'];
@@ -31,6 +33,7 @@ export function useProtectedData<T>(
   }, [invalidate]);
   const clear = useCallback(() => {
     conceal();
+    renderedFor.current = null;
     setData(null);
     setEmployee(null);
   }, [conceal]);
@@ -41,27 +44,35 @@ export function useProtectedData<T>(
     const abort = new AbortController();
     controller.current = abort;
     try {
-      const [session, result] = await Promise.all([
-        api<{ employee: Employee }>('/api/session', undefined, abort.signal),
-        typeof source === 'string'
-          ? api<T>(source, undefined, abort.signal)
-          : source(abort.signal),
-      ]);
+      const { employee: sessionEmployee, data: result } =
+        await loadProtected<T>({
+          source,
+          signal: abort.signal,
+          renderedFor: renderedFor.current,
+          onIdentityChange: () => {
+            if (surfaceElement.current) surfaceElement.current.hidden = true;
+            renderedFor.current = null;
+            setData(null);
+            setEmployee(null);
+          },
+        });
       if (version !== generation.current) return;
       const latest = savedLocale.current;
       const active =
         latest &&
         latest.revision !== localeRevision &&
-        latest.employeeId === session.employee.id
-          ? { ...session.employee, locale: latest.locale }
-          : session.employee;
+        latest.employeeId === sessionEmployee.id
+          ? { ...sessionEmployee, locale: latest.locale }
+          : sessionEmployee;
       setEmployee(active);
       setData(result);
+      renderedFor.current = active.id;
       setError(null);
       document.documentElement.lang = active.locale;
       if (surfaceElement.current) surfaceElement.current.hidden = false;
     } catch (failure) {
       if (version !== generation.current || abort.signal.aborted) return;
+      renderedFor.current = null;
       setData(null);
       setEmployee(null);
       if (
