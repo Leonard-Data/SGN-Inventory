@@ -14,6 +14,8 @@ export function POST(
     // Reject unknown keys; only 'download' allowed
     if (Object.keys(body).some((key) => key !== 'download'))
       throw new ApiError(400, 'invalid-input');
+    if ('download' in body && typeof body.download !== 'boolean')
+      throw new ApiError(400, 'invalid-input');
     const download = body.download === true;
     return NextResponse.json(
       await authorizeAndSignFile(context, id, fileId, download),

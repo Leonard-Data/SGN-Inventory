@@ -75,12 +75,13 @@ export function Workspace({
     const version = ++generation.current;
     const abort = new AbortController();
     controller.current = abort;
+    const filesRequest = api<PropertyFileList>(
+      `/api/properties/${propertyId}/files`,
+      undefined,
+      abort.signal,
+    );
     void Promise.all([
-      api<PropertyFileList>(
-        `/api/properties/${propertyId}/files`,
-        undefined,
-        abort.signal,
-      ),
+      filesRequest,
       archived || !employeeId
         ? Promise.resolve<FileRecoveryList>({ uploads: [] })
         : api<FileRecoveryList>(
@@ -88,10 +89,12 @@ export function Workspace({
             undefined,
             abort.signal,
           ),
-      api<DocumentCategoryList>(
-        '/api/document-categories',
-        undefined,
-        abort.signal,
+      filesRequest.then(() =>
+        api<DocumentCategoryList>(
+          '/api/document-categories',
+          undefined,
+          abort.signal,
+        ),
       ),
     ])
       .then(([result, recovery, cats]) => {
@@ -184,17 +187,27 @@ export function Workspace({
     }
   }
   async function open(fileId: string, download: boolean) {
+    const version = generation.current;
+    const signal = controller.current?.signal;
     setSigning(fileId);
+    setError(null);
     try {
       const result = await api<SignedFileResponse>(
         `/api/properties/${propertyId}/files/${fileId}/signed`,
         { download },
+        signal,
       );
-      window.open(result.url, '_blank');
+      if (generation.current !== version || signal?.aborted) return;
+      window.open(result.url, '_blank', 'noopener,noreferrer');
     } catch (failure) {
-      denied(failure);
+      if (generation.current !== version || signal?.aborted) return;
+      if (!denied(failure))
+        setError(
+          failure instanceof RequestError ? failure.code : 'unavailable',
+        );
     } finally {
-      setSigning(null);
+      if (generation.current === version && !signal?.aborted)
+        setSigning(null);
     }
   }
 
@@ -447,13 +460,18 @@ export function Workspace({
         { categoryId: editingCategoryId },
         signal,
       );
-      if (generation.current !== version || signal?.aborted) return;
       const fresh = await api<PropertyFileList>(
         `/api/properties/${propertyId}/files`,
         undefined,
         signal,
       );
+      const freshCategories = await api<DocumentCategoryList>(
+        '/api/document-categories',
+        undefined,
+        signal,
+      );
       if (generation.current !== version || signal?.aborted) return;
+      setCategories(freshCategories.categories);
       setFiles(fresh.files);
       setEditingFileId(null);
     } catch (failure) {
