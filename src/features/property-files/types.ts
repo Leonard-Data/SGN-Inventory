@@ -38,13 +38,3 @@ export type RecoverableFile = {
 };
 export type FileRecoveryList = { uploads: RecoverableFile[] };
 
-export type CoverSetResult = { status: 'ok' };
-export type CoverFileInfo = {
-  id: string;
-  original_filename: string;
-  object_path: string;
-  purpose: string;
-  upload_status: string;
-  validated_at: string | null;
-  mime_type: string;
-};
