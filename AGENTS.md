@@ -32,7 +32,7 @@ Read `CONTEXT.md` and `docs/database-contract.md` before changing the project. T
 - Every new exposed table needs explicit grants and RLS in the same migration. Never grant `anon` access to inventory.
 - Use `security_invoker = true` for views. Keep privileged functions in `private`, use a fixed search path, explicitly revoke default EXECUTE and check the live employee role.
 - Public RPC wrappers are invoker functions. Do not add a public definer function to bypass an access error.
-- No direct client writes to `property_locks`, `lock_events` or `activity_events`. Use documented RPCs.
+- No direct client writes to `property_locks`, `lock_events`, `activity_events`, `properties`, `property_addresses`, `contacts` or `property_contacts`. Use documented RPCs.
 - Lock transitions acquire the parent property row `FOR UPDATE` before the lock row; keep this order everywhere. Preserve the partial unique index for one approved reservation.
 - Never allow self approval or self visit confirmation. Database enforcement is required even when UI controls are hidden.
 - Effective lock = approved AND expiry after current time. Pending requests do not reserve. Do not build a second lock boolean on properties.

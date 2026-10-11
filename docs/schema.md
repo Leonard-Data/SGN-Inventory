@@ -19,6 +19,11 @@ erDiagram
   PROPERTY_LOCKS ||--o{ LOCK_EVENTS : records
   EMPLOYEES ||--o{ ACTIVITY_EVENTS : performs
   PROPERTIES ||--o{ ACTIVITY_EVENTS : concerns
+  PROPERTIES ||--o{ PROPERTY_HISTORY : records
+  EMPLOYEES ||--o{ PROPERTY_HISTORY : performs
+  PROPERTIES ||--o{ CORRECTION_REQUESTS : concerns
+  EMPLOYEES ||--o{ CORRECTION_REQUESTS : requests
+  CORRECTION_REQUESTS ||--o{ CORRECTION_AMENDMENTS : amends
 ```
 
 ## Business tables
@@ -32,11 +37,16 @@ erDiagram
 | `admin_unit_crosswalks` | From/to version FKs, whole/partial/rename, effective date, source, notes, reviewer | Crosswalks do not directly set a property's address; partial transitions require boundary or property-level evidence |
 | `contacts` | UUID, name, normalized phone string array, untouched raw phone text, role and notes | No global merges based on generic owner name or masked phone ID |
 | `property_contacts` | Composite property/contact PK, relation, primary flag | Supports several owners/brokers; at most one primary contact per property |
+| `property_history` | UUID, property/actor FKs, actor name snapshot, `occurred_at`, target and target ID, changed fields, before/after JSON, optional correction explanation | No direct client DML; written in the same transaction as the change; only changed allowlisted business fields, with numeric values as decimal strings |
+| `correction_requests` | UUID, property/requester FKs, target and target ID, category, explanation, proposed/observed JSON, revision, `open`/`applied`/`rejected`/`withdrawn`, decision attribution | No direct client DML; the original observed state and proposal are immutable; terminal requests cannot be reapplied |
+| `correction_amendments` | UUID, request/requester FKs, explanation, proposed/observed JSON, revision, created time | Append-only; preserves the original submission instead of rewriting it |
 | `property_files` | UUID, property FK, historical legacy type, one category FK, independent document/photo purpose, private bucket, immutable object path/name/MIME/count/hash/uploader, upload state, paired technical-validation time/object identity, historical review attribution | No direct authenticated metadata writes; registration and attested completion preserve identity; ready files are shared privately without human review; pending recovery remains uploader-only on unarchived parents; only uploader/current editor corrects category, without changing content or readiness |
 | `document_categories` | UUID, trimmed accented name, optional known builtin marker, nullable creator and creation time | Active employees read/create-or-reuse company categories; normalized case/Unicode-edge uniqueness preserves accents; Other is the localized default; custom names remain verbatim; no rename/delete/merge/multiple tags |
 | `activity_events` | UUID, employee/property FK, page_view/site_visit, occurred/recorded timestamps, generated Vietnam day, source, idempotency key, visit decision | No direct client DML; one key per employee; only confirmed visits count as physical visit KPI; page_view has no visit status |
 | `property_locks` | UUID, property/claimant, reason, optional evidence, attribution reference, lifecycle state, expiry, independent decision | One approved row per property; one pending request per property/employee; effective reservation additionally requires future expiry |
 | `lock_events` | Identity key, lock FK, actor, action, reason, timestamp | Append-only client access; all approved/rejected/released/expired transitions retain trace |
+
+`properties`, `property_addresses`, `contacts` and `property_contacts` each carry a `revision` UUID that guards stale maintenance saves. Issue #7's maintenance RPCs, correction lifecycle and history rules are in [maintenance-contract.md](maintenance-contract.md).
 
 ## Rental tables (migration 4)
 
@@ -92,4 +102,4 @@ Rental agreements, monthly dues and manual receipt/refund tracking are included.
 
 ## Change boundaries
 
-Employees/properties/addresses/contact metadata may be edited according to RLS; lock and activity changes only use RPCs. There is no authenticated hard-delete grant. Archived properties cannot be edited with the current policies; restoration requires a future reviewed admin action. Admin-unit catalogs are admin-maintained and versioned; do not edit historical units to represent new geography.
+Property, address, contact and link changes use the revision-checked maintenance RPCs, not direct table writes; audit, lock and activity changes also use RPCs. There is no authenticated hard-delete grant. Archived properties cannot be edited with the current policies; restoration requires a future reviewed admin action. Admin-unit catalogs are admin-maintained and versioned; do not edit historical units to represent new geography.
