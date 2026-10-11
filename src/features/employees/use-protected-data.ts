@@ -3,7 +3,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Employee } from './types';
 import { api, RequestError } from './api';
 
-export function useProtectedData<T>(endpoint: string) {
+export function useProtectedData<T>(
+  source: string | ((signal: AbortSignal) => Promise<T>),
+) {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +40,9 @@ export function useProtectedData<T>(endpoint: string) {
     try {
       const [session, result] = await Promise.all([
         api<{ employee: Employee }>('/api/session', undefined, abort.signal),
-        api<T>(endpoint, undefined, abort.signal),
+        typeof source === 'string'
+          ? api<T>(source, undefined, abort.signal)
+          : source(abort.signal),
       ]);
       if (version !== generation.current) return;
       const latest = savedLocale.current;
@@ -70,7 +74,7 @@ export function useProtectedData<T>(endpoint: string) {
     } finally {
       if (version === generation.current) setBusy(false);
     }
-  }, [endpoint, invalidate]);
+  }, [source, invalidate]);
   const reload = useCallback(() => {
     setBusy(true);
     setError(null);

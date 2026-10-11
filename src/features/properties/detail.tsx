@@ -1,12 +1,10 @@
 'use client';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { label, messages, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { SessionHeader } from '@/features/employees/session-header';
-import { api, RequestError } from '@/features/employees/api';
 import { Workspace } from '@/features/property-files/workspace';
-import type { TodayActivity } from '@/features/employees/activity';
-import type { PropertyDetail } from './detail-data';
+import { loadDetailSnapshot } from './detail-loader';
 import { Maintenance } from '@/features/property-maintenance/workspace';
 import { History } from '@/features/property-maintenance/history';
 import {
@@ -34,6 +32,14 @@ export function Detail({
   initialLocale: Locale;
   returnTo: string;
 }) {
+  const viewKey = useRef<string | null>(null);
+  const loadDetail = useCallback(
+    (signal: AbortSignal) => {
+      viewKey.current ??= crypto.randomUUID();
+      return loadDetailSnapshot(id, viewKey.current, signal);
+    },
+    [id],
+  );
   const {
     employee,
     data,
@@ -44,20 +50,15 @@ export function Detail({
     applyLocale,
     clear,
     reload,
-  } = useProtectedData<PropertyDetail>('/api/properties/' + id);
+  } = useProtectedData(loadDetail);
   const locale = employee?.locale ?? initialLocale;
   const text = messages[locale];
-  const viewKey = useRef<string | null>(null);
-  const viewRequest = useRef<Promise<void> | null>(null);
-  const [viewError, setViewError] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
   async function changed() {
     await reload();
     setRefreshTick((value) => value + 1);
   }
-  const [today, setToday] = useState<TodayActivity | null>(null);
-  const [todayError, setTodayError] = useState(false);
-  const todayRequest = useRef<Promise<void> | null>(null);
+  const { viewError = false, today = null, todayError = false } = data ?? {};
   const employeeId = employee?.id;
   const denyFiles = useCallback(
     (status: number) => {
@@ -66,64 +67,6 @@ export function Detail({
     },
     [clear],
   );
-  const recordView = useCallback(async () => {
-    if (viewRequest.current) return viewRequest.current;
-    viewKey.current ??= crypto.randomUUID();
-    const promise = api('/api/properties/' + id + '/page-view', {
-      key: viewKey.current,
-    })
-      .then(() => {
-        setViewError(false);
-      })
-      .catch((failure) => {
-        if (
-          failure instanceof RequestError &&
-          (failure.status === 401 || failure.status === 403)
-        ) {
-          clear();
-          window.location.replace(
-            failure.status === 403 ? '/access-denied' : '/login',
-          );
-        } else setViewError(true);
-      })
-      .finally(() => {
-        viewRequest.current = null;
-      });
-    viewRequest.current = promise;
-    return promise;
-  }, [clear, id]);
-  const loadToday = useCallback(async () => {
-    if (todayRequest.current) return todayRequest.current;
-    const promise = api<TodayActivity>('/api/activity/today')
-      .then((result) => {
-        setToday(result);
-        setTodayError(false);
-      })
-      .catch((failure) => {
-        if (
-          failure instanceof RequestError &&
-          (failure.status === 401 || failure.status === 403)
-        ) {
-          clear();
-          window.location.replace(
-            failure.status === 403 ? '/access-denied' : '/login',
-          );
-        } else {
-          setToday(null);
-          setTodayError(true);
-        }
-      })
-      .finally(() => {
-        todayRequest.current = null;
-      });
-    todayRequest.current = promise;
-    return promise;
-  }, [clear]);
-  useEffect(() => {
-    if (employeeId) {
-      void recordView().then(loadToday);
-    }
-  }, [employeeId, recordView, loadToday]);
   const property = data?.property;
   const canEdit =
     !!employee &&
@@ -342,9 +285,7 @@ export function Detail({
             {viewError ? (
               <p role="alert">
                 {text.pageViewFailed}{' '}
-                <button onClick={() => void recordView().then(loadToday)}>
-                  {text.retry}
-                </button>
+                <button onClick={reload}>{text.retry}</button>
               </p>
             ) : null}
             <section className="panel" aria-labelledby="today-activity">
@@ -352,7 +293,7 @@ export function Detail({
               {todayError ? (
                 <p role="alert">
                   {text.todayActivityFailed}{' '}
-                  <button onClick={() => void loadToday()}>{text.retry}</button>
+                  <button onClick={reload}>{text.retry}</button>
                 </p>
               ) : today ? (
                 <dl>
