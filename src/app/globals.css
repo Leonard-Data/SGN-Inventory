@@ -1,13 +1,6 @@
 :root {
   color-scheme: light;
-  font-family:
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
+  font-family: Arial, Helvetica, sans-serif;
   color: #1c2925;
   background: #f6f8f6;
   --ink: #1c2925;
@@ -30,9 +23,9 @@ body {
     radial-gradient(circle at 85% 0%, #edf7f0 0, transparent 30rem), #f6f8f6;
 }
 main {
-  max-width: 1240px;
+  max-width: 1280px;
   margin: auto;
-  padding: 28px clamp(20px, 4vw, 56px) 64px;
+  padding: 24px clamp(20px, 4vw, 56px) 72px;
 }
 .auth-shell {
   max-width: 460px;
@@ -65,12 +58,67 @@ header {
   justify-content: space-between;
   align-items: center;
   gap: 24px;
-  padding: 14px 18px;
-  margin-bottom: 42px;
-  background: rgba(255, 255, 255, 0.82);
+  padding: 12px 4px 20px;
+  margin-bottom: 44px;
+  background: transparent;
+  border-bottom: 1px solid var(--line);
+}
+.page-intro {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 32px;
+  margin-bottom: 24px;
+}
+.eyebrow {
+  margin: 0 0 8px;
+  color: var(--green);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.intro-copy {
+  max-width: 360px;
+  margin: 0 0 8px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+.search-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+  padding: 18px;
+  margin-bottom: 28px;
+  background: var(--paper);
   border: 1px solid var(--line);
-  border-radius: 16px;
-  box-shadow: 0 10px 30px rgba(22, 55, 39, 0.05);
+  border-radius: 14px;
+}
+.search-panel label,
+.search-panel .muted {
+  grid-column: 1 / -1;
+}
+.search-panel .muted {
+  margin: -4px 0 0;
+}
+.property-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 24px;
+  padding: 18px 0 24px;
+  border-bottom: 1px solid var(--line);
+}
+.property-hero h2 {
+  margin: 0;
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+  letter-spacing: -0.04em;
+}
+.property-hero-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 h1 {
   margin: 0 0 24px;
@@ -198,6 +246,44 @@ dd {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding: 0 0 18px;
+  border-radius: 14px;
+}
+.property-card > :first-child {
+  min-height: 190px;
+  border-radius: 14px 14px 0 0;
+  overflow: hidden;
+}
+.property-card h2,
+.property-card p {
+  margin-left: 20px;
+  margin-right: 20px;
+}
+@media (max-width: 680px) {
+  .page-intro,
+  .property-hero {
+    display: block;
+  }
+  .intro-copy {
+    margin-top: 16px;
+  }
+  .search-panel {
+    grid-template-columns: 1fr;
+  }
+  .search-panel button {
+    width: 100%;
+  }
+  .property-hero-meta {
+    margin-top: 14px;
+  }
+  header {
+    align-items: flex-start;
+    flex-direction: column;
+    margin-bottom: 28px;
+  }
+  nav {
+    width: 100%;
+  }
 }
 .property-card h2 {
   margin: 6px 0 0;

@@ -146,7 +146,18 @@ export function Detail({
       <div ref={surface} hidden={!property || busy}>
         {property && data ? (
           <>
-            <h2 translate="no">{property.property_code}</h2>
+            <section className="property-hero">
+              <div>
+                <p className="eyebrow">{text.details}</p>
+                <h2 translate="no">{property.property_code}</h2>
+              </div>
+              <div className="property-hero-meta">
+                <span className="badge">{label(locale, property.status)}</span>
+                <span className="muted">
+                  {vietnamDate(property.updated_at)}
+                </span>
+              </div>
+            </section>
             {property.archived_at ? (
               <p className="badge">
                 {text.archived} · {vietnamDate(property.archived_at)}
