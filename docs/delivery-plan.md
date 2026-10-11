@@ -110,7 +110,7 @@ The confirmed journey is: an invited, active employee signs in → searches a le
 - Use accent-insensitive contiguous-substring legacy-address search. Treat `%` and `_` literally; do not offer fuzzy or reordered-token matching. Show the matching address format and verification state without inventing a current ward mapping.
 - Retain the contracted 30-row default page, UUID cursor and 120-character query validation. Bound address-summary queries to the current page.
 - Show property code, listing mode, physical type, access type, inventory/review/legal statuses, prices, dimensions, original legacy address and current address when present, with verification labels. Missing data remains visibly unknown.
-- Show all linked owner/broker contacts, their relationship and primary marker, names and preserved phone text. Do not fabricate missing contact relationships.
+- Show all linked owner/broker contacts, their relationship, primary marker and names. Do not present owner phone numbers automatically on the ordinary detail; owner contact and phone disclosure arrives only through the deliberate disclosure flow owned by issue #29. Do not fabricate missing contact relationships.
 - Detail opens record idempotent page views through the documented activity RPC, never physical visits. UI retries or language switches must not create duplicate opens.
 
 ### Language, denial and sign-out
