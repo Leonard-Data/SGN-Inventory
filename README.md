@@ -13,24 +13,24 @@ For engineering setup, start with [docs/setup.md](docs/setup.md) and [docs/devel
 
 ## Included work
 
-| Path                                                    | Purpose                                                                                                    |
-| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `supabase/migrations/`                                  | Twelve migrations: foundation, search, archived views and the complete private-file/category/cover contract |
-| `supabase/config.toml`                                  | Local configuration; only `public` is exposed; open signup disabled                                        |
-| `scripts/prepare_workbook.py`                           | Read-only analysis; optional credential-free local staging                                                 |
-| `scripts/validate-schema.mjs`                           | Executes migrations and authorization/business assertions in embedded PostgreSQL                           |
-| `docs/workbook-profile.json`                            | Sanitized full-workbook counts and migration issues                                                        |
-| `docs/workbook-mapping.md`                              | Actual source columns and transformation rules                                                             |
-| `docs/address-model.md`                                 | Legacy/current addresses, official versions and ambiguous boundary changes                                 |
-| `docs/rental-localization-contract.md`                  | Mandatory VI/EN UI, rental lifecycle, active months, dues and manual receipts/refunds                      |
-| `docs/workflows-security.md`                            | Employee roles, approvals, KPIs and file access                                                            |
-| `docs/delivery-plan.md`                                 | Next.js structure, implementation order and acceptance gates                                               |
-| `docs/validation-results.json`                          | Actual test results with explicit limitations                                                              |
+| Path                                                    | Purpose                                                                                                            |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `supabase/migrations/`                                  | Twelve migrations: foundation, search, archived views and the complete private-file/category/cover contract        |
+| `supabase/config.toml`                                  | Local configuration; only `public` is exposed; open signup disabled                                                |
+| `scripts/prepare_workbook.py`                           | Read-only analysis; optional credential-free local staging                                                         |
+| `scripts/validate-schema.mjs`                           | Executes migrations and authorization/business assertions in embedded PostgreSQL                                   |
+| `docs/workbook-profile.json`                            | Sanitized full-workbook counts and migration issues                                                                |
+| `docs/workbook-mapping.md`                              | Actual source columns and transformation rules                                                                     |
+| `docs/address-model.md`                                 | Legacy/current addresses, official versions and ambiguous boundary changes                                         |
+| `docs/rental-localization-contract.md`                  | Mandatory VI/EN UI, rental lifecycle, active months, dues and manual receipts/refunds                              |
+| `docs/workflows-security.md`                            | Employee roles, approvals, KPIs and file access                                                                    |
+| `docs/delivery-plan.md`                                 | Next.js structure, implementation order and acceptance gates                                                       |
+| `docs/validation-results.json`                          | Actual test results with explicit limitations                                                                      |
 | `src/app/`, `src/features/`, `src/i18n/`, `src/lib/`    | Employee access and private-file/category/cover routes, user-scoped data access, VI/EN UI and configuration health |
-| `.github/workflows/`                                    | Read-only CI; manually gated app deployment and database dry-run/apply                                     |
-| `.husky/pre-commit`                                     | Staged formatting, lint, types and JavaScript/schema tests                                                 |
-| `.env.example`, `.env.dev.example`, `.env.prod.example` | Credential-free local/dev/prod configuration examples                                                      |
-| `scripts/employee-access-acceptance.mjs`                | Reusable real-browser/application/Supabase development acceptance; no mocked authorization                 |
+| `.github/workflows/`                                    | Read-only CI; manually gated app deployment and database dry-run/apply                                             |
+| `.husky/pre-commit`                                     | Staged formatting, lint, types and JavaScript/schema tests                                                         |
+| `.env.example`, `.env.dev.example`, `.env.prod.example` | Credential-free local/dev/prod configuration examples                                                              |
+| `scripts/employee-access-acceptance.mjs`                | Reusable real-browser/application/Supabase development acceptance; no mocked authorization                         |
 
 ## Required initial setup and local verification
 

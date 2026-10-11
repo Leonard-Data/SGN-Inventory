@@ -206,8 +206,7 @@ export function Workspace({
           failure instanceof RequestError ? failure.code : 'unavailable',
         );
     } finally {
-      if (generation.current === version && !signal?.aborted)
-        setSigning(null);
+      if (generation.current === version && !signal?.aborted) setSigning(null);
     }
   }
 

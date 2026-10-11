@@ -264,6 +264,18 @@ The card obtained a different newly authorized signed link after expiry; the pre
 
 The complete Spec #33 branch passed `npm run check`: formatting, ESLint, strict TypeScript, 12 unit regressions and 119 embedded database assertions. The production Next.js build compiled successfully with all file/category/cover routes. All seven workbook preparation regressions passed using the existing pinned Python virtual environment; the unactivated system Python lacked `openpyxl`. Canonical public database types were generated from the actual development schema after each authorized forward migration.
 
+### Final review corrections and executed checks
+
+The two parallel independent review workers failed with their provider's quota error. Inline review found one input-boundary standards violation, two unused cover-type exports (a possible Speculative Generality smell), and two specification defects: a newly assigned uncached category displayed as Other, and failed file signing was silent. One isolated implementer fixed every finding; its complete branch was merged through a separate merger.
+
+Actual browser/API regression checks reproduced the failures before editing and exercised the merged corrections:
+
+- Five malformed download value types return `400/invalid-input` without signing; boolean true/false and omitted values retain authorized `200` signing.
+- A real category creation/correction inserted between a save and its fresh file read displays the exact new custom name, not Other.
+- Opening a declared synthetic ready record whose object is absent returns actual `503/unavailable`; native VI and independent EN controls now show localized failures while retaining completed rows.
+- Native logout during a held successful signing response navigated to `/login`, cleared all file rows and destroyed the pending request's browser context. No bearer response was printed or retained outside the private test process.
+
+
 ## Honest completion limits
 
-Issue #1 has real development Supabase and scoped app/Auth/Data API/browser evidence, plus separately completed active/inactive/unlinked delivered recovery with fixture restoration; historical foundation-only evidence above remains separate. Embedded Auth/Storage shims do not prove email delivery, Storage signed URLs, HTTP deployment protections or cloud release correctness. Private files, production imports, broader workflows and production deployment still require separate staging gates and authorization. Independent review agents remain unavailable due provider credentials; human PR review is still required.
+Issue #1 has real development Supabase and scoped app/Auth/Data API/browser evidence, plus separately completed active/inactive/unlinked delivered recovery with fixture restoration; historical foundation-only evidence above remains separate. Spec #33 has the complete six-ticket private-files journey and real isolated-development browser/API/RLS/Storage acceptance documented above. Embedded Auth/Storage shims alone do not prove email delivery, signed URLs, HTTP deployment protections or cloud release correctness. Production rollout still requires the separate staging/release gates and authorization; imports, broader workflows and deployment are not part of this delivery. Independent Spec #33 review workers were quota-blocked; inline review and all resulting corrections were completed, but independent human PR review remains required.
