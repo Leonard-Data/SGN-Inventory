@@ -83,10 +83,21 @@ export function Inventory({
         applyLocale={applyLocale}
         clear={clear}
       />
-      <h1 id="main-content" tabIndex={-1}>
-        {text.inventory}
-      </h1>
-      <form action="/properties" method="get" onSubmit={search}>
+      <section className="page-intro">
+        <div>
+          <p className="eyebrow">{text.title}</p>
+          <h1 id="main-content" tabIndex={-1}>
+            {text.inventory}
+          </h1>
+        </div>
+        <p className="intro-copy">{text.searchHint}</p>
+      </section>
+      <form
+        className="search-panel"
+        action="/properties"
+        method="get"
+        onSubmit={search}
+      >
         <label htmlFor="query">{text.search}</label>
         <input
           id="query"

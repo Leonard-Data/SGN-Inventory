@@ -109,7 +109,23 @@ export async function objectBody(
   context: RouteContext,
   maxBytes = 8192,
 ): Promise<Record<string, unknown>> {
-  if (request.headers.get('origin') !== context.environment.appUrl)
+  const origin = request.headers.get('origin');
+  const requestOrigin = request.nextUrl.origin;
+  const referer = request.headers.get('referer');
+  let refererOrigin = '';
+  try {
+    refererOrigin = referer ? new URL(referer).origin : '';
+  } catch {
+    refererOrigin = '';
+  }
+  const sameOriginRequest =
+    origin === context.environment.appUrl ||
+    origin === requestOrigin ||
+    (!origin &&
+      (refererOrigin === context.environment.appUrl ||
+        refererOrigin === requestOrigin ||
+        request.headers.get('sec-fetch-site') === 'same-origin'));
+  if (context.environment.stage === 'prod' && !sameOriginRequest)
     throw new ApiError(403, 'invalid-origin');
   if (!request.headers.get('content-type')?.startsWith('application/json'))
     throw new ApiError(400, 'invalid-input');

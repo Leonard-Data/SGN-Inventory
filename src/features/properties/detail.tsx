@@ -124,10 +124,24 @@ export function Detail({
         applyLocale={applyLocale}
         clear={clear}
       />
-      <a href={returnTo}>{text.back}</a>
-      <h1 id="main-content" tabIndex={-1}>
-        {text.details}
-      </h1>
+      <nav className="detail-breadcrumb" aria-label={text.back}>
+        <a href={returnTo}>{text.back}</a>
+        <span aria-hidden="true">/</span>
+        <span>{text.details}</span>
+      </nav>
+      <div className="detail-heading">
+        <div>
+          <p className="eyebrow">{text.details}</p>
+          <h1 id="main-content" tabIndex={-1}>
+            {property?.property_code ?? text.details}
+          </h1>
+        </div>
+        {property ? (
+          <span className="badge detail-status">
+            {label(locale, property.status)}
+          </span>
+        ) : null}
+      </div>
       {busy ? <p role="status">{text.loading}</p> : null}
       {error ? (
         <p role="alert">
@@ -146,7 +160,6 @@ export function Detail({
       <div ref={surface} hidden={!property || busy}>
         {property && data ? (
           <>
-            <h2 translate="no">{property.property_code}</h2>
             {property.archived_at ? (
               <p className="badge">
                 {text.archived} · {vietnamDate(property.archived_at)}
