@@ -2,6 +2,8 @@ import 'server-only';
 import { createServerClient } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
 import type { CookieOptions } from '@supabase/ssr';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Environment } from '@/lib/environment';
 import type { Database } from '@/types/database';
 import { readEnvironment } from '@/lib/environment';
 
@@ -19,7 +21,13 @@ const privateHeaders = {
   Expires: '0',
   'Referrer-Policy': 'no-referrer',
 };
-export function createRouteContext(request: NextRequest) {
+export interface RouteContext {
+  client: SupabaseClient<Database>;
+  environment: Environment;
+  finish: (response: NextResponse) => NextResponse;
+  setLocale: (locale: 'vi' | 'en') => void;
+}
+export function createRouteContext(request: NextRequest): RouteContext {
   const environment = readEnvironment(
     process.env,
     process.env.EXPECTED_SUPABASE_PROJECT_REF,
@@ -77,7 +85,6 @@ export function createRouteContext(request: NextRequest) {
   }
   return { client, environment, finish, setLocale };
 }
-export type RouteContext = ReturnType<typeof createRouteContext>;
 export async function runRoute(
   request: NextRequest,
   handler: (context: RouteContext) => Promise<NextResponse>,

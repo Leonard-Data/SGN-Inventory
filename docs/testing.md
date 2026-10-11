@@ -2,7 +2,7 @@
 
 ## Executed verification
 
-`npm run test:schema` executes all six migrations in embedded PostgreSQL (PGlite) with the real unaccent/pg_trgm extensions. It creates mock Supabase Auth/Storage schemas and fixture employee accounts. It checks real database grants, RLS, workflow state and data constraints; it does not emulate HTTP APIs.
+`npm run test:schema` executes all twelve migrations in embedded PostgreSQL (PGlite) with the real unaccent/pg_trgm extensions. It creates mock Supabase Auth/Storage schemas and fixture employee accounts. It checks real database grants, RLS, workflow state and data constraints; it does not emulate HTTP APIs.
 
 Results are in `validation-results.json`. Covered behaviors include anonymous/inactive denial, property edit restrictions, denied privilege escalation, accent-insensitive search, reservation approval and conflict, self approval/visit denial, activity retry, Vietnam dates, effective expiry/release, private staging/audit access and registered private-file access.
 
@@ -167,10 +167,115 @@ Prepare distinct active sales/staff/manager/admin identities, an inactive and an
 Add embedded database regressions only for consumer-visible invariants and run `npm run test:schema` when implementing the schema/workflow changes. Browser, real Data API/Storage boundaries and separate-session contention remain distinct staging proof. Record sanitized observations without tokens, private source payloads or customer records; no scenario above has been executed by this documentation change.
 
 
+
+## Property files staging acceptance
+
+Scope: [private-file protocol](property-files-spec.md) and [document protocol](database-contract.md#document-storage-and-access). Use isolated development/staging with real Supabase Auth, Data API/RLS, Storage and the actual browser interface. The executed development evidence below is separate from these repeatable acceptance gates; embedded tests do not prove hosted permissions or concurrent transactions.
+
+Prepare sanitized fixtures through authorized administration:
+
+- The five existing employee identities (`active`, `english`, `inactive`, `unlinked`, `operator`) — `active` and `english` serve as the two distinct sales employees for cross-owner upload tests; `operator` serves as the property editor for correction and cover photo tests.
+- Three property descriptors in `fileProperties`: `salesOwn` (actor: `active`), `salesOther` (actor: `english`), and `shared` (operator-owned, where three legacy files live).
+- `archivedProperty` for archived-property denial tests.
+- Three legacy files on the shared property, created before #23 migration: accepted certificate PDF, issue-flagged PDF, and unreviewed photo PNG. Exact records in `legacyFiles[]` with `bytes_fixture` paths and `sha256` hashes for content-integrity verification.
+- Synthetic genuinely decoded PDF, JPEG, PNG and WebP, exact 20 MiB supported content, truncated/empty/oversized/unsupported content and source filenames containing Vietnamese accents.
+
+| Scenario | Required observation |
+| --- | --- |
+| Active employee registers an attachment with safe filename, expected MIME/size/hash, and purpose (document or photo); uploads matching bytes; completion validates stored content type/count/hash | File appears in the property workspace as completed with original filename and purpose; a salesperson can upload to another employee's unarchived property without acquiring edit authority |
+| Register but never upload; upload but never complete; complete with mismatched hash/count/type | File does not appear in completed file list; pending/incomplete state is distinguishable; no ready file results from absent or invalid bytes |
+| Legacy files with upload_status='ready' preserve identity, content hash (sha256), original filename, MIME type, size, uploader attribution, review status; signed URL returns exact bytes matching bytes_fixture | All ready-status legacy files appear in the file list; #22 API filters on upload_status='ready' |
+| Attempt empty, oversized (>20 MiB), unsupported-format, and unsafe-path inputs | Localized validation failure before Storage; no partial state, no leaked diagnostics |
+| Uploader retries completion after a lost response; concurrent completion from two browser sessions | One authoritative attachment; exact stored content matches original bytes; no duplicate registration or object overwrite |
+| Network interruption before object creation, after bytes stored but before completion, after completion before response observed | Recovery across refresh, browser closure and subsequent login finds the same registered upload; reselecting matching content reuses same UUID/path; different content is rejected |
+| Uploader creates a company-wide Document category with accented name; another employee reuses it; Other default is applied when no category is selected | Category is available across employees and properties; normalized duplicate creation returns existing category; accented names are preserved; Other is localized per interface language |
+| Uploader corrects own file's category on unarchived property (no property-edit authority needed) | Fresh file list shows corrected category; original content/identity/readiness unchanged |
+| Authorized property editor (operator) corrects another uploader's file category | Same observation as uploader correction; an unrelated contributor (not uploader, not operator) is denied |
+| Authorized property editor sets a completed Property photo (purpose=photo) as the cover | Card and detail show the selected photo; a document scan (purpose=document, even if JPEG) is rejected as cover candidate |
+| Authorized property editor replaces the cover with another eligible photo, then clears it | Cover changes without deleting attachments; no selection shows a neutral placeholder |
+| Employee without property-edit authority attempts cover set/replace/clear | Denied; current cover unchanged |
+| Property reader opens/downloads a completed file through a signed URL; link expires and is renewed | Newly authorized link returned while access remains valid; expired link does not permanently block access |
+| Inactive/unlinked/anonymous attempts file operations | Denied through both browser and direct API; no protected file data exposed |
+| Archived-property file operations (upload, category change, cover) attempted by ordinary employee | Denied; reviewer (operator) can still read archived property files |
+| Live deactivation while file workspace is open | Subsequent requests deny access; protected request/refocus clears displayed file data; restored activation re-enables access |
+| Switch VI/EN during upload, category selection, recovery, and cover operations | Equivalent labels, validation and statuses; filenames, category names, and document bytes remain unchanged |
+| Direct API attempts: metadata readiness mutation, forged completion attestation and old completion/review signatures | Denied without publishing unvalidated bytes; direct overwrite/delete probes need concrete authorization for a newly disposable synthetic object and subsequent exact-byte verification |
+
+Add embedded database regressions only for consumer-visible invariants and run `npm run test:schema` for schema/workflow changes. Browser, real Data API/Storage/RLS and separate-session contention remain distinct proof. Record sanitized observations without tokens, signed URLs, private source payloads or customer records. Never run destructive probes on legacy or real objects or infer cleanup authority.
+
+### Executed property-files evidence
+
+See the scoped development observations below. They distinguish actual browser/API/Storage and independent-session checks from embedded assertions and unexecuted production gates.
+
 ## Contention test procedure
 
 Prepare two pending requests from different employees. In session A use an authenticated reviewer JWT context, call `decide_property_lock(A, true, reason)` within a transaction and hold the transaction open. In session B use a different connection and reviewer context to approve B. B must wait on the same parent property row. Commit A; B must fail with reservation conflict. Query effective locks and audit/events to confirm one approval. Repeat with A rolling back: B may then succeed. Do not treat parallel calls in a single embedded DB connection as a proof of real multi-session locking.
 
+## Spec #33 development evidence — upload slice
+
+The captain authorized only development project `tneucwzcrzteeixvttpu`, its declared synthetic fixtures and scoped Spec #33 migrations/key installation. No production migration, import or deployment is included.
+
+- Real authenticated browser uploads completed PDF, JPEG, PNG and WebP against private Storage, with actual server download/format/hash validation and paired immutable-object completion evidence. Uploading to another employee's unarchived property succeeded without granting property-edit authority.
+- A supported PDF of exactly 20 MiB completed through direct user-JWT Storage transport; the application request carried registration/completion JSON, not the file body.
+- A different active employee downloaded the newly completed PDF and its exact SHA-256 matched the synthetic source. Truncated PNG bytes remained pending/private and produced a Vietnamese content-validation error.
+- Actual application registration rejected unsafe filenames, zero size, unsupported MIME and >20 MiB with `400` localized error codes. Direct metadata readiness mutation and a forged completion attestation returned `403`.
+- The actual VI→EN header action persisted the employee preference and rendered English file controls without changing the original filenames.
+- Hosted Storage rejected the initial Unicode key with `400/InvalidKey`. The additive ASCII-key migration left that failed registration and all prior paths unchanged; a new registration with the same Vietnamese original filename completed and another employee retrieved exact bytes. Native download `filename*` decoding also matched the original exactly after avoiding SDK query double-encoding.
+- Before the PDF parser fix, an EOF/xref-looking payload with no PDF object graph was misclassified as PDF. Afterward the permanent regression and real browser upload rejected it without sharing; the exact 20 MiB genuine PDF still revalidated successfully.
+- Real stored PDF bytes with a wrong registered count or SHA-256, PNG bytes declared as PDF, and PDF bytes disguised as a Property photo all returned `400/file-mismatch`. Each retained one pending registration with no validation marker; another employee saw no metadata and could not read the bytes.
+- Inactive/unlinked authenticated identities returned zero direct file rows and `403` registration; another employee could not read the uploader's pending metadata.
+- The earlier read slice exercised actual signed-link expiry, authorized renewal, original download filename/content, and live deactivation with an existing JWT: new signing returned `403`, direct metadata returned no rows, refocus removed private files, and the already-issued bearer remained usable until expiry. The employee was restored.
+- Temporary archive of the declared synthetic parent exposed no ordinary file metadata (`200` with empty API/Data API lists), denied ordinary Storage reads and signing (`404`), and denied recovery (`403`). The reviewer retained all three ready legacy records and exact PDF bytes, but could not read archived pending metadata. The original archive state was restored through the separately authorized owner connection and confirmed by a fresh user API read; ordinary archive-update permission cannot restore an already archived property.
+
+These are scoped development observations, not whole-spec acceptance. Categories, recategorization and covers remain separate ticket gates.
+
+### Executed ticket #24 recovery evidence
+
+- Actual browser refresh found the uploader's durable no-object registration. A different local count/hash was rejected without creating an object. Closing the owned browser and logging in again recovered the same registration; matching bytes with a different local filename and no MIME hint completed against the original UUID/path/source name. Another employee read exactly the original PDF bytes.
+- A throwaway browser fetch interceptor interrupted only the completion request after real private Storage upload. The registration remained pending, the other employee could not read it, and refreshed recovery offered validation only. The native retry completed with zero additional Storage POSTs and retained exact content.
+- A separate interceptor discarded the response only after actual completion returned `200`. Authoritative reconciliation displayed one ready attachment; the real Data API and independent byte read confirmed its single identity and immutable object marker.
+- Two independently logged-in, isolated Chrome sessions sent completion concurrently for one pending object. Both returned `200`; one file UUID/path, original property/uploader and validated object remained, with exact bytes. A distinct unrelated attachment's SHA-256 was unchanged.
+- Another employee's pending recovery and wrong-property recovery returned `404`; existing authenticated inactive/unlinked sessions returned `403`. Native VI recovery controls and stored-invalid-content validation were observed, then the employee preference was returned to EN.
+- Strict types, lint and all 92 embedded workflow assertions passed. These real development observations do not claim byte-chunk resumption, cleanup, production or deployment.
+
+The separately authorized overwrite/delete probe targeted only a newly declared disposable synthetic object: overwrite returned `400`, delete returned `200` with an empty removal list, and an independent subsequent read retained the exact original bytes. No legacy or real object was targeted; no cleanup deletion was performed.
+
+### Executed ticket #25 category evidence
+
+On the isolated development project, the native VI/EN workspace created a surrounding-Unicode-whitespace category and retained its accented spelling across saved locale changes. Two separately authenticated browser employees selected that same company category on different properties and uploaded valid PDFs; an independent employee read retained the exact original bytes. Other was the initial localized picker choice, and an actual omitted-category API registration/upload/completion produced a ready Other document.
+
+Two independent employee JWT sessions concurrently created case/Unicode-edge variants of one new name and received the same category identity. Application and direct-RPC whitespace-only requests returned `400`; inactive/unlinked category reads returned no rows and creation returned `403`. Anonymous application reads returned `401`. An unlinked assignment attempt returned `403`; a forged category returned `400` with no file metadata. The migration preserved all three original legacy rows, including equivalent creation instants, and the existing reservation evidence reference. Embedded category/cover integration currently passes 107 assertions; complete-spec verification remains the later gate.
+
+### Executed ticket #26 category correction evidence
+
+Distinct uploader and sales-owner browser actors exercised VI/EN correction on the owner's unarchived property. The uploader had no property-fact edit authority but changed their own attachment to Other and saw the fresh localized badge. The owner then corrected that other employee's attachment back to the custom category and saw its unchanged spelling. An unrelated contributor had no correction control; application and direct RPC requests returned `403` without changing the file. A live admin correction succeeded, and another employee's Storage read retained the exact original PDF.
+
+Forged category and mismatched property-path requests returned `400`, preserving the assignment. Direct metadata PATCH and inactive/unlinked RPC requests returned `403`. Temporary archive and deactivation probes used the existing owner/uploader cookies and previously issued JWTs: both application and RPC mutations returned `403` and preserved all file attributes; archive and activation were restored and re-read. The embedded runner now passes 119 assertions, including historical null-uploader denial, staff/manager/admin correction, original-field/history preservation and immediate existing-session deactivation.
+
+### Executed ticket #27 private cover evidence
+
+The sales-owner workspace completed two real PNG Property photos without selecting a cover. A certificate-image PNG deliberately used the Photo category but retained document purpose. Native VI selection rendered the chosen image in property detail and the actual filtered inventory card (`naturalWidth=8`), directly from private Storage rather than `/_next/image`. An independent admin used native replacement and English clearing controls; fresh cards reflected the final pointer or a neutral no-cover placeholder with no first-image fallback. Two independent owner/admin browser sessions concurrently selected valid photos; both returned `200`, leaving one eligible same-property pointer and unchanged original file attributes.
+
+The real application rejected same-property pending, failed and unvalidated-ready candidates, the certificate image and another property's photo, preserving the selection. Direct cover UPDATE and INSERT returned `403` with no new property row. Non-editor/inactive/unlinked set and clear RPCs returned `403`; an uploader completed their own photo on another employee's property but still received `403` selecting it. A current admin technically checked an existing ready legacy photo through actual Storage reads and decoding; original nullable registration/history remained intact, and validation did not choose a cover.
+
+The card obtained a different newly authorized signed link after expiry; the previous link returned `400`. A real expired-image request displayed the localized failure and removed the image; native Retry obtained a fresh link and rendered pixels. Deactivating the existing card actor denied new signing and mutation with `403`, and focus revalidation removed protected images and navigated to `/access-denied`. The already delivered bearer still returned the exact PNG before its TTL expired. Archiving hid the property from ordinary cards, denied fresh ordinary signing with `404` and denied owner/admin cover mutations with `403`, retaining the pointer. Activation and archive were restored and re-read. No original object was replaced or deleted.
+
+### Final integrated engineering verification
+
+The complete Spec #33 branch passed `npm run check`: formatting, ESLint, strict TypeScript, 12 unit regressions and 119 embedded database assertions. The production Next.js build compiled successfully with all file/category/cover routes. All seven workbook preparation regressions passed using the existing pinned Python virtual environment; the unactivated system Python lacked `openpyxl`. Canonical public database types were generated from the actual development schema after each authorized forward migration.
+
+### Final review corrections and executed checks
+
+The two parallel independent review workers failed with their provider's quota error. Inline review found one input-boundary standards violation, two unused cover-type exports (a possible Speculative Generality smell), and two specification defects: a newly assigned uncached category displayed as Other, and failed file signing was silent. One isolated implementer fixed every finding; its complete branch was merged through a separate merger.
+
+Actual browser/API regression checks reproduced the failures before editing and exercised the merged corrections:
+
+- Five malformed download value types return `400/invalid-input` without signing; boolean true/false and omitted values retain authorized `200` signing.
+- A real category creation/correction inserted between a save and its fresh file read displays the exact new custom name, not Other.
+- Opening a declared synthetic ready record whose object is absent returns actual `503/unavailable`; native VI and independent EN controls now show localized failures while retaining completed rows.
+- Native logout during a held successful signing response navigated to `/login`, cleared all file rows and destroyed the pending request's browser context. No bearer response was printed or retained outside the private test process.
+
+
 ## Honest completion limits
 
-Issue #1 has real development Supabase and scoped app/Auth/Data API/browser evidence, plus separately completed active/inactive/unlinked delivered recovery with fixture restoration; historical foundation-only evidence above remains separate. Embedded Auth/Storage shims do not prove email delivery, Storage signed URLs, HTTP deployment protections or cloud release correctness. Private files, production imports, broader workflows and production deployment still require separate staging gates and authorization. Independent review agents remain unavailable due provider credentials; human PR review is still required.
+Issue #1 has real development Supabase and scoped app/Auth/Data API/browser evidence, plus separately completed active/inactive/unlinked delivered recovery with fixture restoration; historical foundation-only evidence above remains separate. Spec #33 has the complete six-ticket private-files journey and real isolated-development browser/API/RLS/Storage acceptance documented above. Embedded Auth/Storage shims alone do not prove email delivery, signed URLs, HTTP deployment protections or cloud release correctness. Production rollout still requires the separate staging/release gates and authorization; imports, broader workflows and deployment are not part of this delivery. Independent Spec #33 review workers were quota-blocked; inline review and all resulting corrections were completed, but independent human PR review remains required.

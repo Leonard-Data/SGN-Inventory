@@ -1,0 +1,786 @@
+'use client';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { messages as globalMessages, type Locale } from '@/i18n/messages';
+import { fileMessages } from './messages';
+import { api, RequestError } from '@/features/employees/api';
+import { CoverImage } from './cover-image';
+import type {
+  PropertyFileList,
+  SignedFileResponse,
+  FileRegistrationResult,
+  FileRecoveryList,
+  RecoverableFile,
+  DocumentCategoryList,
+} from './types';
+
+type Upload = {
+  id: string;
+  filename: string;
+  state: 'registering' | 'uploading' | 'validating' | 'ready' | 'failed';
+  error?: string;
+};
+
+const otherCategoryId = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
+
+export function Workspace({
+  propertyId,
+  locale,
+  employeeId,
+  archived,
+  onDenied,
+  canEdit,
+  coverFileId,
+  onCoverChanged,
+}: {
+  propertyId: string;
+  locale: Locale;
+  employeeId: string | null;
+  archived: boolean;
+  onDenied: (status: number) => void;
+  canEdit: boolean;
+  coverFileId: string | null;
+  onCoverChanged: () => void;
+}) {
+  const [files, setFiles] = useState<PropertyFileList['files']>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(true);
+  const [revision, setRevision] = useState(0);
+  const [signing, setSigning] = useState<string | null>(null);
+  const [uploads, setUploads] = useState<Upload[]>([]);
+  const [recoverable, setRecoverable] = useState<RecoverableFile[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [purpose, setPurpose] = useState<'photo' | 'document'>('document');
+  const [categories, setCategories] = useState<
+    DocumentCategoryList['categories']
+  >([]);
+  const [selectedCategoryId, setSelectedCategoryId] =
+    useState<string>(otherCategoryId);
+  const [showNewCategory, setShowNewCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [creatingCategory, setCreatingCategory] = useState(false);
+  const [editingFileId, setEditingFileId] = useState<string | null>(null);
+  const [editingCategoryId, setEditingCategoryId] = useState('');
+  const [categoryBusy, setCategoryBusy] = useState(false);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const generation = useRef(0);
+  const controller = useRef<AbortController | null>(null);
+  const [coverBusy, setCoverBusy] = useState(false);
+  const [coverError, setCoverError] = useState<string | null>(null);
+  const [checkingPhoto, setCheckingPhoto] = useState<string | null>(null);
+
+  const text = globalMessages[locale];
+  const fileText = fileMessages[locale];
+
+  useEffect(() => {
+    const version = ++generation.current;
+    const abort = new AbortController();
+    controller.current = abort;
+    const filesRequest = api<PropertyFileList>(
+      `/api/properties/${propertyId}/files`,
+      undefined,
+      abort.signal,
+    );
+    void Promise.all([
+      filesRequest,
+      archived || !employeeId
+        ? Promise.resolve<FileRecoveryList>({ uploads: [] })
+        : api<FileRecoveryList>(
+            `/api/properties/${propertyId}/files/recovery`,
+            undefined,
+            abort.signal,
+          ),
+      filesRequest.then(() =>
+        api<DocumentCategoryList>(
+          '/api/document-categories',
+          undefined,
+          abort.signal,
+        ),
+      ),
+    ])
+      .then(([result, recovery, cats]) => {
+        if (generation.current !== version || abort.signal.aborted) return;
+        setFiles(result.files);
+        setRecoverable(recovery.uploads);
+        setCategories(cats.categories);
+        setError(null);
+      })
+      .catch((failure) => {
+        if (generation.current !== version || abort.signal.aborted) return;
+        setFiles([]);
+        setRecoverable([]);
+        setCategories([]);
+        if (
+          failure instanceof RequestError &&
+          (failure.status === 401 || failure.status === 403)
+        )
+          onDenied(failure.status);
+        else
+          setError(
+            failure instanceof RequestError ? failure.code : 'unavailable',
+          );
+      })
+      .finally(() => {
+        if (generation.current === version && !abort.signal.aborted)
+          setBusy(false);
+      });
+    return () => abort.abort();
+  }, [propertyId, employeeId, archived, onDenied, revision]);
+
+  function denied(failure: unknown) {
+    if (
+      failure instanceof RequestError &&
+      (failure.status === 401 || failure.status === 403)
+    ) {
+      onDenied(failure.status);
+      return true;
+    }
+    return false;
+  }
+
+  async function changeCover(fileId: string | null) {
+    const version = generation.current;
+    const signal = controller.current?.signal;
+    setCoverBusy(true);
+    setCoverError(null);
+    try {
+      await api(`/api/properties/${propertyId}/cover`, { fileId }, signal);
+      if (generation.current === version && !signal?.aborted) onCoverChanged();
+    } catch (failure) {
+      if (
+        generation.current === version &&
+        !signal?.aborted &&
+        !denied(failure)
+      )
+        setCoverError(
+          failure instanceof RequestError ? failure.code : 'unavailable',
+        );
+    } finally {
+      if (generation.current === version && !signal?.aborted)
+        setCoverBusy(false);
+    }
+  }
+  async function checkPhoto(fileId: string) {
+    const version = generation.current;
+    const signal = controller.current?.signal;
+    setCheckingPhoto(fileId);
+    setCoverError(null);
+    try {
+      await api(
+        `/api/properties/${propertyId}/files/${fileId}/complete`,
+        {},
+        signal,
+      );
+      if (generation.current === version && !signal?.aborted)
+        setRevision((value) => value + 1);
+    } catch (failure) {
+      if (
+        generation.current === version &&
+        !signal?.aborted &&
+        !denied(failure)
+      )
+        setCoverError(
+          failure instanceof RequestError ? failure.code : 'unavailable',
+        );
+    } finally {
+      if (generation.current === version && !signal?.aborted)
+        setCheckingPhoto(null);
+    }
+  }
+  async function open(fileId: string, download: boolean) {
+    const version = generation.current;
+    const signal = controller.current?.signal;
+    setSigning(fileId);
+    setError(null);
+    try {
+      const result = await api<SignedFileResponse>(
+        `/api/properties/${propertyId}/files/${fileId}/signed`,
+        { download },
+        signal,
+      );
+      if (generation.current !== version || signal?.aborted) return;
+      window.open(result.url, '_blank', 'noopener,noreferrer');
+    } catch (failure) {
+      if (generation.current !== version || signal?.aborted) return;
+      if (!denied(failure))
+        setError(
+          failure instanceof RequestError ? failure.code : 'unavailable',
+        );
+    } finally {
+      if (generation.current === version && !signal?.aborted) setSigning(null);
+    }
+  }
+
+  function categoryName(id: string): string {
+    const cat = categories.find((c) => c.id === id);
+    if (!cat) return fileText.otherCategory;
+    if (cat.builtin === 'other') return fileText.otherCategory;
+    if (cat.builtin === 'land_certificate') return fileText.land_certificate;
+    if (cat.builtin === 'sale_contract') return fileText.sale_contract;
+    if (cat.builtin === 'planning') return fileText.planning;
+    if (cat.builtin === 'construction_permit')
+      return fileText.construction_permit;
+    if (cat.builtin === 'photo') return fileText.photo;
+    return cat.name;
+  }
+
+  async function upload(file: File | null, recovery?: RecoverableFile) {
+    const version = generation.current;
+    const signal = controller.current?.signal;
+    const id = recovery?.file.id ?? crypto.randomUUID();
+    const filename = recovery?.file.original_filename ?? file!.name;
+    const categoryId = recovery?.file.category_id ?? selectedCategoryId;
+    setUploads((rows) => [
+      ...rows.filter((row) => row.id !== id),
+      { id, filename, state: 'registering' },
+    ]);
+    const update = (state: Upload['state'], code?: string) => {
+      if (generation.current === version && !signal?.aborted)
+        setUploads((rows) =>
+          rows.map((row) =>
+            row.id === id ? { ...row, state, error: code } : row,
+          ),
+        );
+    };
+    try {
+      let sha256 = '';
+      if (file) {
+        if (file.size <= 0) throw new RequestError(400, 'empty-file');
+        if (file.size > 20 * 1024 * 1024)
+          throw new RequestError(400, 'file-too-large');
+        const digest = new Uint8Array(
+          await crypto.subtle.digest('SHA-256', await file.arrayBuffer()),
+        );
+        for (const byte of digest) sha256 += byte.toString(16).padStart(2, '0');
+      }
+      if (recovery) {
+        const state = await api<FileRecoveryList>(
+          `/api/properties/${propertyId}/files/recovery?fileId=${id}`,
+          undefined,
+          signal,
+        );
+        recovery = state.uploads[0];
+        if (!recovery) throw new RequestError(404, 'not-found');
+        if (
+          file &&
+          (file.size !== recovery.file.size_bytes ||
+            sha256 !== recovery.file.sha256)
+        )
+          throw new RequestError(400, 'file-mismatch');
+        if (
+          recovery.file.upload_status === 'ready' &&
+          recovery.file.validated_object_id
+        ) {
+          update('ready');
+          return true;
+        }
+        if (recovery.objectState === 'unknown')
+          throw new RequestError(503, 'unknown-object-state');
+        if (recovery.objectState === 'unusable')
+          throw new RequestError(400, 'replacement-required');
+        if (recovery.objectState === 'absent' && !file)
+          throw new RequestError(400, 'missing-bytes');
+      } else if (
+        !file ||
+        !['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(
+          file.type,
+        )
+      ) {
+        throw new RequestError(400, 'unsupported-format');
+      }
+      if (!recovery || recovery.objectState === 'absent') {
+        const registration = await api<FileRegistrationResult>(
+          `/api/properties/${propertyId}/files/register`,
+          {
+            fileId: id,
+            originalFilename: filename,
+            mimeType: recovery?.file.mime_type ?? file!.type,
+            sizeBytes: recovery?.file.size_bytes ?? file!.size,
+            sha256: recovery?.file.sha256 ?? sha256,
+            purpose: recovery?.file.purpose ?? purpose,
+            categoryId,
+          },
+          signal,
+        );
+        if (generation.current !== version || signal?.aborted) return false;
+        update('uploading');
+        try {
+          await fetch(registration.uploadUrl, {
+            method: 'POST',
+            cache: 'no-store',
+            referrerPolicy: 'no-referrer',
+            signal,
+            headers: {
+              'Content-Type': recovery?.file.mime_type ?? file!.type,
+              apikey: registration.publishableKey,
+              Authorization: 'Bearer ' + registration.accessToken,
+              'x-upsert': 'false',
+              'cache-control': 'private, no-store',
+            },
+            body: file,
+          });
+        } catch (failure) {
+          if (signal?.aborted) throw failure;
+        }
+        // Lost transport responses never establish whether an immutable object exists.
+        const state = await api<FileRecoveryList>(
+          `/api/properties/${propertyId}/files/recovery?fileId=${id}`,
+          undefined,
+          signal,
+        );
+        const current = state.uploads[0];
+        if (
+          current?.file.upload_status === 'ready' &&
+          current.file.validated_object_id
+        ) {
+          update('ready');
+          return true;
+        }
+        if (current?.objectState !== 'present')
+          throw new RequestError(
+            400,
+            current?.error ??
+              (current?.objectState === 'absent'
+                ? 'missing-bytes'
+                : 'unknown-object-state'),
+          );
+      }
+      update('validating');
+      try {
+        await api(
+          `/api/properties/${propertyId}/files/${id}/complete`,
+          {},
+          signal,
+        );
+      } catch (failure) {
+        if (
+          signal?.aborted ||
+          (failure instanceof RequestError &&
+            [401, 403].includes(failure.status))
+        )
+          throw failure;
+        // Completion may have committed before its response was lost.
+        const state = await api<FileRecoveryList>(
+          `/api/properties/${propertyId}/files/recovery?fileId=${id}`,
+          undefined,
+          signal,
+        );
+        if (
+          state.uploads[0]?.file.upload_status !== 'ready' ||
+          !state.uploads[0]?.file.validated_object_id
+        )
+          throw failure;
+      }
+      update('ready');
+    } catch (failure) {
+      if (generation.current !== version || signal?.aborted || denied(failure))
+        return false;
+      update(
+        'failed',
+        failure instanceof RequestError ? failure.code : 'unavailable',
+      );
+    }
+    return true;
+  }
+
+  async function selected(
+    event: ChangeEvent<HTMLInputElement>,
+    recovery?: RecoverableFile,
+  ) {
+    const selectedFiles = Array.from(event.target.files ?? []);
+    event.target.value = '';
+    if (!selectedFiles.length || uploading) return;
+    const version = generation.current;
+    setUploading(true);
+    for (const file of selectedFiles) {
+      if (!(await upload(file, recovery))) break;
+    }
+    if (generation.current === version && !controller.current?.signal.aborted) {
+      setUploading(false);
+      setRevision((value) => value + 1);
+    }
+  }
+
+  async function retry(recovery: RecoverableFile) {
+    if (uploading) return;
+    const version = generation.current;
+    setUploading(true);
+    await upload(null, recovery);
+    if (generation.current === version && !controller.current?.signal.aborted) {
+      setUploading(false);
+      setRevision((value) => value + 1);
+    }
+  }
+
+  async function handleCreateCategory() {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    const version = generation.current;
+    const signal = controller.current?.signal;
+    setError(null);
+    setCreatingCategory(true);
+    try {
+      const result = await api<{ id: string }>(
+        '/api/document-categories',
+        { name },
+        signal,
+      );
+      const fresh = await api<DocumentCategoryList>(
+        '/api/document-categories',
+        undefined,
+        signal,
+      );
+      if (generation.current !== version || signal?.aborted) return;
+      setCategories(fresh.categories);
+      setSelectedCategoryId(result.id);
+      setShowNewCategory(false);
+      setNewCategoryName('');
+    } catch (failure) {
+      if (
+        generation.current === version &&
+        !signal?.aborted &&
+        !denied(failure)
+      )
+        setError(
+          failure instanceof RequestError ? failure.code : 'unavailable',
+        );
+    } finally {
+      if (generation.current === version) setCreatingCategory(false);
+    }
+  }
+
+  async function changeCategory(fileId: string) {
+    const version = generation.current;
+    const signal = controller.current?.signal;
+    setCategoryBusy(true);
+    setCategoryError(null);
+    try {
+      await api(
+        `/api/properties/${propertyId}/files/${fileId}/category`,
+        { categoryId: editingCategoryId },
+        signal,
+      );
+      const fresh = await api<PropertyFileList>(
+        `/api/properties/${propertyId}/files`,
+        undefined,
+        signal,
+      );
+      const freshCategories = await api<DocumentCategoryList>(
+        '/api/document-categories',
+        undefined,
+        signal,
+      );
+      if (generation.current !== version || signal?.aborted) return;
+      setCategories(freshCategories.categories);
+      setFiles(fresh.files);
+      setEditingFileId(null);
+    } catch (failure) {
+      if (
+        generation.current === version &&
+        !signal?.aborted &&
+        !denied(failure)
+      )
+        setCategoryError(
+          failure instanceof RequestError ? failure.code : 'unavailable',
+        );
+    } finally {
+      if (generation.current === version) setCategoryBusy(false);
+    }
+  }
+
+  return (
+    <section className="panel" aria-label={fileText.files}>
+      <h2>{fileText.files}</h2>
+      {!archived && employeeId ? (
+        <fieldset disabled={uploading || creatingCategory || busy}>
+          <legend>{fileText.purpose}</legend>
+          <label>
+            <input
+              type="radio"
+              name="file-purpose"
+              checked={purpose === 'document'}
+              onChange={() => setPurpose('document')}
+            />
+            {fileText.document}
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="file-purpose"
+              checked={purpose === 'photo'}
+              onChange={() => setPurpose('photo')}
+            />
+            {fileText.photo}
+          </label>
+          <div>
+            <label htmlFor={'category-' + propertyId}>
+              {fileText.category}
+            </label>
+            <select
+              id={'category-' + propertyId}
+              value={selectedCategoryId}
+              onChange={(e) => {
+                if (e.target.value === '__new__') {
+                  setShowNewCategory(true);
+                } else {
+                  setSelectedCategoryId(e.target.value);
+                  setShowNewCategory(false);
+                }
+              }}
+            >
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {categoryName(cat.id)}
+                </option>
+              ))}
+              <option value="__new__">{fileText.newCategory}</option>
+            </select>
+          </div>
+          {showNewCategory ? (
+            <div>
+              <label htmlFor={'new-category-' + propertyId}>
+                {fileText.categoryName}
+              </label>
+              <input
+                id={'new-category-' + propertyId}
+                type="text"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                disabled={creatingCategory}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void handleCreateCategory();
+                  }
+                }}
+              />
+              <button
+                type="button"
+                disabled={creatingCategory || !newCategoryName.trim()}
+                onClick={() => void handleCreateCategory()}
+              >
+                {fileText.createCategory}
+              </button>
+            </div>
+          ) : null}
+          <label htmlFor={'files-' + propertyId}>{fileText.selectFiles}</label>
+          <input
+            id={'files-' + propertyId}
+            type="file"
+            multiple
+            accept="application/pdf,image/jpeg,image/png,image/webp"
+            aria-describedby={'upload-note-' + propertyId}
+            onChange={(event) => void selected(event)}
+          />
+          <p id={'upload-note-' + propertyId} className="muted">
+            {fileText.uploadNote}
+          </p>
+        </fieldset>
+      ) : null}
+      {uploads.length ? (
+        <ul aria-live="polite">
+          {uploads.map((upload) => (
+            <li key={upload.id}>
+              <span translate="no">{upload.filename}</span>
+              {' — '}
+              {fileText[upload.state]}
+              {upload.error ? (
+                <p role="alert">
+                  {fileText.errors[upload.error] ?? text.unavailable}
+                </p>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {!archived && recoverable.length ? (
+        <section aria-label={fileText.recovery}>
+          <h3>{fileText.recovery}</h3>
+          <p>{fileText.recoveryNote}</p>
+          <ul>
+            {recoverable.map((attempt) => (
+              <li key={attempt.file.id}>
+                <span translate="no">{attempt.file.original_filename}</span>
+                <p>{fileText[attempt.objectState]}</p>
+                {attempt.objectState === 'absent' ? (
+                  <label>
+                    {fileText.reselect}
+                    <input
+                      type="file"
+                      disabled={uploading}
+                      onChange={(event) => void selected(event, attempt)}
+                    />
+                  </label>
+                ) : attempt.objectState === 'present' ? (
+                  <button
+                    disabled={uploading}
+                    onClick={() => void retry(attempt)}
+                  >
+                    {fileText.retryValidation}
+                  </button>
+                ) : attempt.objectState === 'unknown' ? (
+                  <button
+                    disabled={uploading}
+                    onClick={() => setRevision((value) => value + 1)}
+                  >
+                    {text.retry}
+                  </button>
+                ) : null}
+                <p className="muted">{fileText.replacementNote}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      <section className="cover-section" aria-label={fileText.cover}>
+        <h3>{fileText.cover}</h3>
+        <CoverImage
+          propertyId={propertyId}
+          fileId={coverFileId}
+          locale={locale}
+          onDenied={onDenied}
+        />
+        {canEdit && !archived && coverFileId ? (
+          <button
+            type="button"
+            disabled={coverBusy || checkingPhoto !== null}
+            onClick={() => void changeCover(null)}
+          >
+            {coverBusy ? fileText.changingCover : fileText.clearCover}
+          </button>
+        ) : null}
+        {coverError ? (
+          <p role="alert">{fileText.errors[coverError] ?? text.unavailable}</p>
+        ) : null}
+      </section>
+      {busy ? <p role="status">{text.loading}</p> : null}
+      {error ? (
+        <p role="alert">
+          {fileText.errors[error] ?? text.unavailable}{' '}
+          <button
+            disabled={uploading}
+            onClick={() => setRevision((value) => value + 1)}
+          >
+            {text.retry}
+          </button>
+        </p>
+      ) : null}
+      {!busy && !error && !files.length ? <p>{fileText.noFiles}</p> : null}
+      {!busy ? (
+        <ul className="file-list">
+          {files.map((file) => (
+            <li key={file.id} className="file-row">
+              <span className="file-name" translate="no">
+                {file.original_filename}
+              </span>{' '}
+              <span className="badge">{categoryName(file.category_id)}</span>{' '}
+              <span className="badge">
+                {file.purpose === 'photo' ? fileText.photo : fileText.document}
+              </span>{' '}
+              <button
+                type="button"
+                disabled={signing !== null}
+                onClick={() => void open(file.id, false)}
+              >
+                {signing === file.id ? fileText.signingFile : fileText.open}
+              </button>{' '}
+              <button
+                type="button"
+                disabled={signing !== null}
+                onClick={() => void open(file.id, true)}
+              >
+                {fileText.download}
+              </button>
+              {canEdit && !archived && file.purpose === 'photo' ? (
+                file.validated_at && file.validated_object_id ? (
+                  coverFileId === file.id ? (
+                    <span className="badge">{fileText.selectedCover}</span>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={coverBusy || checkingPhoto !== null}
+                      onClick={() => void changeCover(file.id)}
+                    >
+                      {coverBusy
+                        ? fileText.changingCover
+                        : coverFileId
+                          ? fileText.replaceCover
+                          : fileText.setCover}
+                    </button>
+                  )
+                ) : (
+                  <button
+                    type="button"
+                    disabled={coverBusy || checkingPhoto !== null}
+                    onClick={() => void checkPhoto(file.id)}
+                  >
+                    {checkingPhoto === file.id
+                      ? fileText.validating
+                      : fileText.checkPhoto}
+                  </button>
+                )
+              ) : null}
+              {!archived && (canEdit || file.uploaded_by === employeeId) ? (
+                editingFileId === file.id ? (
+                  <div>
+                    <label htmlFor={'edit-category-' + file.id}>
+                      {fileText.category}
+                    </label>
+                    <select
+                      id={'edit-category-' + file.id}
+                      value={editingCategoryId}
+                      disabled={categoryBusy}
+                      onChange={(event) =>
+                        setEditingCategoryId(event.target.value)
+                      }
+                    >
+                      {categories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {categoryName(category.id)}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      disabled={categoryBusy || !editingCategoryId}
+                      onClick={() => void changeCategory(file.id)}
+                    >
+                      {categoryBusy ? fileText.savingCategory : fileText.save}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={categoryBusy}
+                      onClick={() => {
+                        setEditingFileId(null);
+                        setCategoryError(null);
+                      }}
+                    >
+                      {fileText.cancel}
+                    </button>
+                    {categoryError ? (
+                      <p role="alert">
+                        {fileText.errors[categoryError] ?? text.unavailable}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={categoryBusy}
+                    onClick={() => {
+                      setEditingFileId(file.id);
+                      setEditingCategoryId(file.category_id);
+                      setCategoryError(null);
+                    }}
+                  >
+                    {fileText.changeCategory}
+                  </button>
+                )
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <p className="muted">{fileText.availabilityNote}</p>
+    </section>
+  );
+}

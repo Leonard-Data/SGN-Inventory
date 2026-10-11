@@ -4,8 +4,10 @@ import { label, messages, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { SessionHeader } from '@/features/employees/session-header';
 import { api, RequestError } from '@/features/employees/api';
+import { Workspace } from '@/features/property-files/workspace';
 import type { PropertyDetail } from './detail-data';
 import { formatVnd, vietnamDate } from './format';
+
 const directionKeys: Record<string, string> = {
   N: 'north',
   NE: 'northeast',
@@ -42,6 +44,13 @@ export function Detail({
   const viewRequest = useRef<Promise<void> | null>(null);
   const [viewError, setViewError] = useState(false);
   const employeeId = employee?.id;
+  const denyFiles = useCallback(
+    (status: number) => {
+      clear();
+      window.location.replace(status === 401 ? '/login' : '/access-denied');
+    },
+    [clear],
+  );
   const recordView = useCallback(async () => {
     if (viewRequest.current) return viewRequest.current;
     viewKey.current ??= crypto.randomUUID();
@@ -74,6 +83,13 @@ export function Detail({
     }
   }, [employeeId, recordView]);
   const property = data?.property;
+  const canEdit =
+    !!employee &&
+    !!property &&
+    !property.archived_at &&
+    (employee.id === property.created_by ||
+      ['staff', 'manager', 'admin'].includes(employee.role));
+  const coverFileId = property?.cover_file_id ?? null;
   const numberFormat = useMemo(
     () => new Intl.NumberFormat(locale === 'vi' ? 'vi-VN' : 'en-GB'),
     [locale],
@@ -222,6 +238,17 @@ export function Detail({
                   <p>{text.noContacts}</p>
                 )}
               </section>
+              <Workspace
+                key={`${id}:${employeeId}`}
+                propertyId={id}
+                locale={locale}
+                employeeId={employeeId ?? null}
+                archived={!!property.archived_at}
+                onDenied={denyFiles}
+                canEdit={canEdit}
+                coverFileId={coverFileId}
+                onCoverChanged={reload}
+              />
             </div>
             <p className="muted">{text.pageViewNote}</p>
             {viewError ? (

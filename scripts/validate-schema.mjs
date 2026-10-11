@@ -1,11 +1,13 @@
 import { PGlite } from '@electric-sql/pglite';
 import { unaccent } from '@electric-sql/pglite/contrib/unaccent';
 import { pg_trgm } from '@electric-sql/pglite/contrib/pg_trgm';
+import { pgcrypto } from '@electric-sql/pglite/contrib/pgcrypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
 const root = process.env.SGN_PROJECT_ROOT || process.cwd();
-const db = new PGlite({extensions:{unaccent,pg_trgm}});
+const db = new PGlite({extensions:{unaccent,pg_trgm,pgcrypto}});
 await db.exec(`
   create role anon; create role authenticated; create role service_role bypassrls;
   create schema auth; create table auth.users(id uuid primary key);
@@ -15,7 +17,7 @@ await db.exec(`
   grant usage on schema auth to authenticated,anon,service_role;
   create schema storage;
   create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
-  create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text);
+  create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text,unique(bucket_id,name));
   alter table storage.objects enable row level security;
   grant usage on schema storage to authenticated,anon;
   grant select,insert,update,delete on storage.objects to authenticated;
@@ -102,19 +104,195 @@ await check('expired approved rows are not effective',async()=>assert.equal((awa
 await asUser(0);
 await db.query('select public.request_property_lock($1,$2)',[property,'New request expires stale reservation first']);
 await check('new request lazily expires previous approved row',async()=>assert.equal((await db.query('select status from public.property_locks where id=$1',[stale])).rows[0].status,'expired'));
-const fileId='40000000-0000-4000-8000-000000000001';const objectPath=`${property}/${fileId}/fixture.pdf`;
+const fileId="40000000-0000-4000-8000-000000000001";let objectPath;
+const otherCatId='ffffffff-ffff-ffff-ffff-ffffffffffff';
+const testSha256='a'.repeat(64);const validationKey='b'.repeat(64);
+const storageId='80000000-0000-4000-8000-000000000001';
+const registerSql='select public.register_property_file($1,$2,$3,$4,$5,$6,$7,$8) as result';
+const registration=[fileId,property,'fixture.pdf','application/pdf',1024,testSha256,'document',otherCatId];
+const completionSql='select public.complete_property_upload($1,$2,$3,$4,$5,$6)';
+await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
+await db.query('insert into private.file_validation_keys(id,key_hex) values(1,$1)',[validationKey]);
 await asUser(0);
-await db.query("insert into public.property_files(id,property_id,document_type,object_path,original_filename,uploaded_by) values($1,$2,'land_certificate',$3,'fixture.pdf',$4)",[fileId,property,objectPath,employees[0]]);
-await check('file cannot be completed without bytes',()=>fails('select public.complete_property_upload($1)',[fileId]));
-await check('direct file completion update is denied',()=>fails("update public.property_files set upload_status='ready' where id=$1",[fileId],'42501'));
-await check('unregistered file upload denied',()=>fails("insert into storage.objects(bucket_id,name) values('property-files','unregistered.pdf')",[],'42501'));
-await db.query("insert into storage.objects(bucket_id,name) values('property-files',$1)",[objectPath]);
-await check('pending file is not readable',async()=>assert.equal((await db.query('select * from storage.objects')).rows.length,0));
-await db.query('select public.complete_property_upload($1)',[fileId]);
-await check('ready registered file readable to active employee',async()=>assert.equal((await db.query('select * from storage.objects')).rows.length,1));
-await check('object overwrite is blocked',async()=>assert.equal((await db.query("update storage.objects set name='renamed' returning id")).rows.length,0));
+await check('legacy completion and review mutation paths removed',async()=>{
+  await fails('select public.complete_property_upload($1)',[fileId],'42883');
+  await fails('select public.review_property_file($1,$2)',[fileId,'accepted'],'42883');
+});
+await check('direct ready insertion and update denied',async()=>{
+  await fails("insert into public.property_files(id,property_id,document_type,object_path,original_filename,uploaded_by,upload_status) values($1,$2,'other',$3,'fixture.pdf',$4,'ready')",[fileId,property,objectPath,employees[0]],'42501');
+  await fails("update public.property_files set upload_status='ready' where id=$1",[fileId],'42501');
+});
+objectPath=(await db.query(registerSql,registration)).rows[0].result.objectPath;
+const payload=['v1',fileId,property,employees[0],objectPath,storageId,'application/pdf','1024',testSha256].join('|');
+const signature=createHmac('sha256',Buffer.from(validationKey,'hex')).update(payload).digest('hex');
+const completion=[fileId,storageId,'application/pdf',1024,testSha256,signature];
+await check('same registration key converges without replacing expectations',async()=>{
+  await db.query(registerSql,registration);
+  await fails(registerSql,[fileId,property,'changed.pdf','application/pdf',1024,testSha256,'document',otherCatId],'42501');
+  assert.deepEqual((await db.query('select id,original_filename,size_bytes from public.property_files where id=$1',[fileId])).rows,[{id:fileId,original_filename:'fixture.pdf',size_bytes:1024}]);
+});
+await check('unsafe names, empty and oversized expectations rejected atomically',async()=>{
+  for(const [name,size] of [['../bad.pdf',1024],[' ',1024],['empty.pdf',0],['large.pdf',20971521]])
+    await fails(registerSql,['40000000-0000-4000-8000-000000000002',property,name,'application/pdf',size,testSha256,'document',otherCatId],'23514');
+  assert.deepEqual((await db.query('select id from public.property_files')).rows,[{id:fileId}]);
+});
+await check('PDF cannot be registered with photo purpose',()=>fails(registerSql,['40000000-0000-4000-8000-000000000002',property,'scan.pdf','application/pdf',1024,testSha256,'photo',otherCatId],'23514'));
+await check('completion requires actual authoritative object identity and unforgeable attestation',async()=>{
+  await fails(completionSql,completion,'23514');
+  await fails(completionSql,[...completion.slice(0,5),'0'.repeat(64)],'42501');
+  assert.equal((await db.query('select upload_status from public.property_files where id=$1',[fileId])).rows[0].upload_status,'pending');
+});
+await check('unregistered Storage insertion denied',()=>fails("insert into storage.objects(bucket_id,name) values('property-files','unregistered.pdf')",[],'42501'));
+await db.query("insert into storage.objects(id,bucket_id,name) values($1,'property-files',$2)",[storageId,objectPath]);
+await check('only original uploader may inspect pending bytes',async()=>{
+  assert.deepEqual((await db.query('select name from storage.objects where name=$1',[objectPath])).rows,[{name:objectPath}]);
+  await asUser(1);
+  assert.deepEqual((await db.query('select id from public.property_files where id=$1',[fileId])).rows,[]);
+  assert.deepEqual((await db.query('select name from storage.objects where name=$1',[objectPath])).rows,[]);
+  await fails(completionSql,completion,'42501');
+  await asUser(0);
+});
+await check('false count or object attestation cannot publish pending attachment',async()=>{
+  await fails(completionSql,[fileId,storageId,'application/pdf',1025,testSha256,signature],'23514');
+  await fails(completionSql,[fileId,'80000000-0000-4000-8000-000000000002','application/pdf',1024,testSha256,signature],'42501');
+  assert.equal((await db.query('select upload_status from public.property_files where id=$1',[fileId])).rows[0].upload_status,'pending');
+});
+await db.query(completionSql,completion);
+await check('repeated signed completion converges and preserves original identity',async()=>{
+  const first=(await db.query('select id,property_id,uploaded_by,object_path,upload_status,validated_object_id,validated_at from public.property_files where id=$1',[fileId])).rows;
+  assert.equal(first[0].upload_status,'ready');assert.equal(first[0].validated_object_id,storageId);
+  assert.equal(first[0].property_id,property);assert.equal(first[0].uploaded_by,employees[0]);assert.equal(first[0].object_path,objectPath);
+  await db.query(completionSql,completion);
+  assert.deepEqual((await db.query('select id,property_id,uploaded_by,object_path,upload_status,validated_object_id,validated_at from public.property_files where id=$1',[fileId])).rows,first);
+});
+await asUser(1);
+await check('ready bytes are privately shared with another property reader',async()=>assert.deepEqual((await db.query('select name from storage.objects where name=$1',[objectPath])).rows,[{name:objectPath}]));
+await check('ordinary object overwrite and delete denied',async()=>{
+  assert.deepEqual((await db.query("update storage.objects set name='changed' where id=$1 returning id",[storageId])).rows,[]);
+  assert.deepEqual((await db.query('delete from storage.objects where id=$1 returning id',[storageId])).rows,[]);
+});
+await asUser(0);
+const crossFile='40000000-0000-4000-8000-000000000002';
+await db.query(registerSql,[crossFile,other,'Ảnh nguồn.pdf','application/pdf',1024,testSha256,'document',otherCatId]);
+await check('cross-owner contribution preserves uploader and grants no fact editing',async()=>{
+  assert.deepEqual((await db.query('select property_id,uploaded_by,original_filename from public.property_files where id=$1',[crossFile])).rows,[{property_id:other,uploaded_by:employees[0],original_filename:'Ảnh nguồn.pdf'}]);
+  assert.match((await db.query('select object_path from public.property_files where id=$1',[crossFile])).rows[0].object_path,/^[a-zA-Z0-9/.-]+$/);
+  assert.deepEqual((await db.query("update public.properties set notes='unauthorized' where id=$1 returning id",[other])).rows,[]);
+});
+await check('validation secret inaccessible to ordinary clients',()=>fails('select * from private.file_validation_keys',[],'42501'));
+await asUser(2);await db.query('update public.properties set archived_at=now() where id=$1',[other]);
+await asUser(0);
+await check('archiving hides uploader pending metadata and blocks further completion or registration',async()=>{
+  assert.deepEqual((await db.query('select id from public.property_files where id=$1',[crossFile])).rows,[]);
+  await fails(registerSql,['40000000-0000-4000-8000-000000000003',other,'archive.pdf','application/pdf',1024,testSha256,'document',otherCatId],'42501');
+  await fails(completionSql,[crossFile,storageId,'application/pdf',1024,testSha256,signature],'42501');
+});
+await asUser(2);await db.query('update public.properties set archived_at=null where id=$1',[other]);
 await asUser(4);
 await check('deactivated employee cannot read ready file',async()=>assert.equal((await db.query('select * from storage.objects')).rows.length,0));
+await asUser(0);
+let customCategory;
+await check('category creation normalizes Unicode edges and case without folding accents',async()=>{
+  const edges='\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff';
+  customCategory=(await db.query('select public.create_or_get_category($1) as id',[`${edges}Pháp lý${edges}`])).rows[0].id;
+  const original=(await db.query('select name,created_by,builtin from public.document_categories where id=$1',[customCategory])).rows[0];
+  assert.deepEqual(original,{name:'Pháp lý',created_by:employees[0],builtin:null});
+  await asUser(1);
+  assert.equal((await db.query('select public.create_or_get_category($1) as id',['PHÁP LÝ'])).rows[0].id,customCategory);
+  assert.notEqual((await db.query('select public.create_or_get_category($1) as id',['Phap ly'])).rows[0].id,customCategory);
+  await fails('select public.create_or_get_category($1)',[edges],'23514');
+  await asUser(0);
+});
+await check('category reads and creation obey active-employee and direct-write boundaries',async()=>{
+  await fails('insert into public.document_categories(name) values($1)',['Unauthorized'],'42501');
+  await fails('update public.document_categories set name=$1 where id=$2',['Unauthorized',customCategory],'42501');
+  await fails('delete from public.document_categories where id=$1',[customCategory],'42501');
+  for(const actor of [4,null]){
+    await asUser(actor);
+    if(actor===null) await fails('select * from public.document_categories',[],'42501');
+    else assert.deepEqual((await db.query('select * from public.document_categories')).rows,[]);
+    await fails('select public.create_or_get_category($1)',['Unauthorized'],'42501');
+  }
+  await asUser(0);
+});
+await check('register_property_file defaults to Other category',async()=>{
+  const fid='40000000-0000-4000-8000-000000000003';
+  await db.query('select public.register_property_file($1,$2,$3,$4,$5,$6,$7)',[fid,property,'default-cat.pdf','application/pdf',1024,testSha256,'document']);
+  const f=await db.query('select category_id from public.property_files where id=$1',[fid]);
+  assert.equal(f.rows[0].category_id,otherCatId);
+});
+await check('register_property_file accepts explicit category',async()=>{
+  const fid='40000000-0000-4000-8000-000000000004';
+  await db.query(registerSql,[fid,property,'explicit-cat.pdf','application/pdf',1024,testSha256,'document',customCategory]);
+  const f=await db.query('select category_id from public.property_files where id=$1',[fid]);
+  assert.equal(f.rows[0].category_id,customCategory);
+});
+await check('forged category UUID rejected',()=>fails(registerSql,['40000000-0000-4000-8000-000000000005',property,'bad-cat.pdf','application/pdf',1024,testSha256,'document','00000000-0000-0000-0000-000000000000'],'23514'));
+await check('retry preserves existing category (no recategorization)',async()=>{
+  const cat=await db.query("select public.create_or_get_category('Giấy tờ khác') as id");
+  const fid='40000000-0000-4000-8000-000000000006';
+  await db.query(registerSql,[fid,property,'retry-cat.pdf','application/pdf',1024,testSha256,'document',cat.rows[0].id]);
+  // Retry with same identity but default category should NOT overwrite.
+  await db.query(registerSql,[fid,property,'retry-cat.pdf','application/pdf',1024,testSha256,'document',otherCatId]);
+  const f=await db.query('select category_id from public.property_files where id=$1',[fid]);
+  assert.equal(f.rows[0].category_id,cat.rows[0].id);
+});
+await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
+const categoryProperty='22000000-0000-4000-8000-000000000001';
+const categoryFile='42000000-0000-4000-8000-000000000001';
+const nullUploaderFile='42000000-0000-4000-8000-000000000002';
+await db.query("insert into public.properties(id,property_code,listing_mode,status,created_by) values($1,'SGN-CATEGORY','sale','available',$2)",[categoryProperty,employees[0]]);
+await asUser(1);
+await db.query(registerSql,[categoryFile,categoryProperty,'category-correction.pdf','application/pdf',1024,testSha256,'document',otherCatId]);
+await db.exec('reset role');
+await db.query("insert into public.property_files(id,property_id,document_type,object_path,original_filename,purpose,upload_status,uploaded_by,review_status,reviewed_by) values($1,$2,'other',$3,'legacy-category.pdf','document','ready',null,'accepted',$4)",[nullUploaderFile,categoryProperty,`${categoryProperty}/${nullUploaderFile}/content`,employees[2]]);
+const categoryOriginal=(await db.query('select * from public.property_files where id=$1',[categoryFile])).rows[0];
+const nullUploaderOriginal=(await db.query('select * from public.property_files where id=$1',[nullUploaderFile])).rows[0];
+await asUser(1);
+const correctionCategory=(await db.query("select public.create_or_get_category('Hồ sơ chỉnh sửa') as id")).rows[0].id;
+const correctionSql='select public.set_file_category($1,$2,$3)';
+await check('uploader without property edit authority corrects only category and can choose Other',async()=>{
+  await db.query(correctionSql,[categoryProperty,categoryFile,correctionCategory]);
+  assert.deepEqual((await db.query('select * from public.property_files where id=$1',[categoryFile])).rows[0],{...categoryOriginal,category_id:correctionCategory});
+  await db.query(correctionSql,[categoryProperty,categoryFile,otherCatId]);
+  assert.deepEqual((await db.query('select * from public.property_files where id=$1',[categoryFile])).rows[0],categoryOriginal);
+});
+await check('NULL historical uploader does not grant contributor correction authority',()=>fails(correctionSql,[categoryProperty,nullUploaderFile,correctionCategory],'42501'));
+await check('category creator cannot correct another uploader attachment without edit authority',()=>fails(correctionSql,[property,fileId,correctionCategory],'42501'));
+await asUser(0);
+await check('sales owner corrects another employee file without changing its state or identity',async()=>{
+  await db.query(correctionSql,[categoryProperty,categoryFile,correctionCategory]);
+  await db.exec('reset role');
+  assert.deepEqual((await db.query('select * from public.property_files where id=$1',[categoryFile])).rows[0],{...categoryOriginal,category_id:correctionCategory});
+  await asUser(0);
+});
+await check('unknown category, missing file and mismatched property leave assignment unchanged',async()=>{
+  await fails(correctionSql,[categoryProperty,categoryFile,'00000000-0000-0000-0000-000000000000'],'23514');
+  await fails(correctionSql,[categoryProperty,'42000000-0000-4000-8000-ffffffffffff',otherCatId],'23514');
+  await fails(correctionSql,[property,categoryFile,otherCatId],'23514');
+  await db.exec('reset role');
+  assert.deepEqual((await db.query('select * from public.property_files where id=$1',[categoryFile])).rows[0],{...categoryOriginal,category_id:correctionCategory});
+});
+for(const actor of [5,2,3]){
+  await asUser(actor);
+  await check(`editor ${actor} can correct historical NULL-uploader attachment`,async()=>{
+    await db.query(correctionSql,[categoryProperty,nullUploaderFile,correctionCategory]);
+    assert.deepEqual((await db.query('select * from public.property_files where id=$1',[nullUploaderFile])).rows[0],{...nullUploaderOriginal,category_id:correctionCategory});
+  });
+}
+for(const actor of [null,4]){
+  await asUser(actor);
+  await check(`${actor===null?'anonymous':'inactive'} category correction denied`,()=>fails(correctionSql,[categoryProperty,nullUploaderFile,otherCatId],'42501'));
+}
+await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");await db.query('update public.properties set archived_at=now() where id=$1',[categoryProperty]);
+await asUser(2);
+await check('even editor cannot correct archived attachment',()=>fails(correctionSql,[categoryProperty,nullUploaderFile,otherCatId],'42501'));
+await db.exec('reset role');await db.query('update public.properties set archived_at=null where id=$1',[categoryProperty]);
+await asUser(1);await db.exec('reset role');await db.query('update public.employees set is_active=false where id=$1',[employees[1]]);
+await db.exec('set role authenticated');
+await check('existing session loses uploader correction authority immediately after deactivation',()=>fails(correctionSql,[categoryProperty,categoryFile,otherCatId],'42501'));
+await db.exec('reset role');await db.query('update public.employees set is_active=true where id=$1',[employees[1]]);
+await asUser(0);
 await db.exec('reset role');
 await check('audit records exist for workflow mutations',async()=>assert.ok((await db.query('select count(*)::int as n from private.audit_events')).rows[0].n>0));
 await check('Vietnam day boundary is applied',async()=>assert.equal((await db.query("select ('2026-10-09 17:05:00+00'::timestamptz at time zone 'Asia/Ho_Chi_Minh')::date::text as day")).rows[0].day,'2026-10-10'));
@@ -231,6 +409,81 @@ await db.exec('reset role');await db.query('update public.employees set is_activ
 await asUser(2);
 await check('deactivated reviewer cannot replay an archived page-view identity',()=>fails("select public.record_property_activity($1,'page_view',$2)",[archivedProperty,archivedViewKey],'42501'));
 await db.exec('reset role');await db.query('update public.employees set is_active=true where id=$1',[employees[2]]);
+await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
+const coverProperty='20000000-0000-4000-8000-000000000009';
+await db.query("insert into public.properties(id,property_code,listing_mode,status,created_by) values($1,'COVER-001','sale','available',$2)",[coverProperty,employees[0]]);
+const coverFixtures=[
+  {id:'40000000-0000-4000-8000-000000000050',purpose:'photo',ready:true,validated:true,parent:coverProperty,uploader:employees[1]},
+  {id:'40000000-0000-4000-8000-000000000051',purpose:'photo',ready:true,validated:true,parent:coverProperty,uploader:employees[1]},
+  {id:'40000000-0000-4000-8000-000000000052',purpose:'document',ready:true,validated:true,parent:coverProperty,uploader:employees[1]},
+  {id:'40000000-0000-4000-8000-000000000053',purpose:'photo',ready:false,validated:false,parent:coverProperty,uploader:employees[1]},
+  {id:'40000000-0000-4000-8000-000000000054',purpose:'photo',ready:true,validated:false,parent:coverProperty,uploader:null},
+  {id:'40000000-0000-4000-8000-000000000055',purpose:'photo',ready:true,validated:true,parent:other,uploader:employees[1]},
+];
+for(const fixture of coverFixtures) {
+  fixture.path=`${fixture.parent}/${fixture.id}/content`;
+  fixture.objectId=fixture.id.replace('40000000','80000000');
+  await db.query("insert into storage.objects(id,bucket_id,name) values($1,'property-files',$2)",[fixture.objectId,fixture.path]);
+  await db.query("insert into public.property_files(id,property_id,document_type,object_path,original_filename,mime_type,size_bytes,sha256,purpose,uploaded_by,upload_status,validated_at,validated_object_id) values($1,$2,'other',$3,'fixture.png',$4,$5,$6,$7,$8,$9,$10,$11)",[
+    fixture.id,fixture.parent,fixture.path,fixture.uploader?'image/png':null,fixture.uploader?1024:null,fixture.uploader?testSha256:null,fixture.purpose,fixture.uploader,fixture.ready?'ready':'pending',fixture.validated?new Date().toISOString():null,fixture.validated?fixture.objectId:null,
+  ]);
+}
+const [firstCover,secondCover,certificateImage,pendingPhoto,legacyPhoto,crossPhoto]=coverFixtures;
+const coverSourceColumns='id,property_id,object_path,original_filename,mime_type,size_bytes,sha256,purpose,uploaded_by,upload_status,review_status,reviewed_by';
+const coverBefore=(await db.query(`select ${coverSourceColumns} from public.property_files where property_id=$1 order by id`,[coverProperty])).rows;
+await asUser(0);
+await check('sales editor selects another uploader photo without granting ordinary cover writes',async()=>{
+  await db.query('select public.set_property_cover($1,$2)',[coverProperty,firstCover.id]);
+  assert.equal((await db.query('select cover_file_id from public.properties where id=$1',[coverProperty])).rows[0].cover_file_id,firstCover.id);
+  await fails('update public.properties set cover_file_id=$1 where id=$2',[secondCover.id,coverProperty],'42501');
+  await db.query("select set_config('app.cover_authorized',$1,false)",[secondCover.id]);
+  await fails('update public.properties set cover_file_id=$1 where id=$2',[secondCover.id,coverProperty],'42501');
+  await fails("insert into public.properties(property_code,listing_mode,cover_file_id) values('COVER-FORGE','sale',$1)",[firstCover.id],'42501');
+});
+await check('document images, pending, unvalidated and cross-property cover candidates preserve selected photo',async()=>{
+  for(const [candidate,code] of [[certificateImage,'23514'],[pendingPhoto,'23514'],[legacyPhoto,'23514'],[crossPhoto,'42501']])
+    await fails('select public.set_property_cover($1,$2)',[coverProperty,candidate.id],code);
+  assert.equal((await db.query('select cover_file_id from public.properties where id=$1',[coverProperty])).rows[0].cover_file_id,firstCover.id);
+});
+await check('explicit ready legacy photo validation binds original nullable attribution and never selects a cover',async()=>{
+  const facts=[legacyPhoto.id,legacyPhoto.objectId,'image/png',1024,testSha256];
+  const originalPayload=['v1',legacyPhoto.id,coverProperty,'',legacyPhoto.path,legacyPhoto.objectId,'image/png','1024',testSha256].join('|');
+  const originalSignature=createHmac('sha256',Buffer.from(validationKey,'hex')).update(originalPayload).digest('hex');
+  await db.query(completionSql,[...facts,originalSignature]);
+  assert.deepEqual((await db.query('select uploaded_by,mime_type,size_bytes,sha256,validated_object_id from public.property_files where id=$1',[legacyPhoto.id])).rows,[{uploaded_by:null,mime_type:null,size_bytes:null,sha256:null,validated_object_id:legacyPhoto.objectId}]);
+  assert.equal((await db.query('select cover_file_id from public.properties where id=$1',[coverProperty])).rows[0].cover_file_id,firstCover.id);
+  const pendingPayload=['v1',pendingPhoto.id,coverProperty,pendingPhoto.uploader,pendingPhoto.path,pendingPhoto.objectId,'image/png','1024',testSha256].join('|');
+  await fails(completionSql,[pendingPhoto.id,pendingPhoto.objectId,'image/png',1024,testSha256,createHmac('sha256',Buffer.from(validationKey,'hex')).update(pendingPayload).digest('hex')],'42501');
+  assert.deepEqual((await db.query(`select ${coverSourceColumns} from public.property_files where property_id=$1 order by id`,[coverProperty])).rows,coverBefore.filter((row)=>row.upload_status==='ready'));
+});
+await asUser(1);
+await check('photo uploader without property edit authority cannot set replace or clear its cover',async()=>{
+  for(const candidate of [firstCover.id,secondCover.id,null])
+    await fails('select public.set_property_cover($1,$2)',[coverProperty,candidate],'42501');
+  assert.equal((await db.query('select cover_file_id from public.properties where id=$1',[coverProperty])).rows[0].cover_file_id,firstCover.id);
+});
+await asUser(5);
+await check('staff replaces then clears cover while all source attachment records remain',async()=>{
+  await db.query('select public.set_property_cover($1,$2)',[coverProperty,secondCover.id]);
+  assert.equal((await db.query('select cover_file_id from public.properties where id=$1',[coverProperty])).rows[0].cover_file_id,secondCover.id);
+  await db.query('select public.set_property_cover($1,null)',[coverProperty]);
+  assert.equal((await db.query('select cover_file_id from public.properties where id=$1',[coverProperty])).rows[0].cover_file_id,null);
+  assert.deepEqual((await db.query(`select ${coverSourceColumns} from public.property_files where property_id=$1 order by id`,[coverProperty])).rows,coverBefore.filter((row)=>row.upload_status==='ready'));
+});
+await asUser(null);
+await check('anonymous cover changes denied',()=>fails('select public.set_property_cover($1,$2)',[coverProperty,firstCover.id],'42501'));
+await asUser(4);
+await check('inactive cover changes denied',()=>fails('select public.set_property_cover($1,$2)',[coverProperty,firstCover.id],'42501'));
+await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
+await db.query('update public.properties set archived_at=now() where id=$1',[coverProperty]);
+await asUser(2);
+await check('even reviewer cannot change archived cover',()=>fails('select public.set_property_cover($1,$2)',[coverProperty,firstCover.id],'42501'));
+await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
+await db.query('update public.properties set archived_at=null where id=$1',[coverProperty]);
+await asUser(0);await db.exec('reset role');await db.query('update public.employees set is_active=false where id=$1',[employees[0]]);await db.exec('set role authenticated');
+await check('existing identity loses cover mutation authority after live deactivation',()=>fails('select public.set_property_cover($1,$2)',[coverProperty,firstCover.id],'42501'));
+await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");await db.query('update public.employees set is_active=true where id=$1',[employees[0]]);
+assert.deepEqual((await db.query(`select ${coverSourceColumns} from public.property_files where property_id=$1 order by id`,[coverProperty])).rows,coverBefore);
 const report={checked_at:new Date().toISOString(),engine:'PGlite embedded PostgreSQL; mocked auth/storage schemas',passed,
  limitations:['Not a live Supabase integration test','HTTP Auth, signed URLs, Vercel and browser flows not exercised','True multi-session concurrent transaction test remains a staging acceptance gate']};
 await fs.writeFile(path.join(root,'docs/validation-results.json'),JSON.stringify(report,null,2)+'\n');

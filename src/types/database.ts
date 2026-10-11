@@ -231,6 +231,45 @@ export type Database = {
         };
         Relationships: [];
       };
+      document_categories: {
+        Row: {
+          builtin: string | null;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          name: string;
+        };
+        Insert: {
+          builtin?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          name: string;
+        };
+        Update: {
+          builtin?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          name?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'document_categories_created_by_fkey';
+            columns: ['created_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'document_categories_created_by_fkey';
+            columns: ['created_by'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+        ];
+      };
       employees: {
         Row: {
           auth_user_id: string | null;
@@ -331,6 +370,7 @@ export type Database = {
           bathrooms: number | null;
           bedrooms: number | null;
           construction_text: string | null;
+          cover_file_id: string | null;
           created_at: string;
           created_by: string | null;
           depth_m: number | null;
@@ -364,6 +404,7 @@ export type Database = {
           bathrooms?: number | null;
           bedrooms?: number | null;
           construction_text?: string | null;
+          cover_file_id?: string | null;
           created_at?: string;
           created_by?: string | null;
           depth_m?: number | null;
@@ -397,6 +438,7 @@ export type Database = {
           bathrooms?: number | null;
           bedrooms?: number | null;
           construction_text?: string | null;
+          cover_file_id?: string | null;
           created_at?: string;
           created_by?: string | null;
           depth_m?: number | null;
@@ -424,6 +466,13 @@ export type Database = {
           updated_by?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: 'properties_cover_file_id_fkey';
+            columns: ['cover_file_id'];
+            isOneToOne: false;
+            referencedRelation: 'property_files';
+            referencedColumns: ['id'];
+          },
           {
             foreignKeyName: 'properties_created_by_fkey';
             columns: ['created_by'];
@@ -608,6 +657,7 @@ export type Database = {
       property_files: {
         Row: {
           bucket_id: string;
+          category_id: string;
           created_at: string;
           document_type: string;
           id: string;
@@ -615,15 +665,19 @@ export type Database = {
           object_path: string;
           original_filename: string;
           property_id: string;
+          purpose: string;
           review_status: string;
           reviewed_by: string | null;
           sha256: string | null;
           size_bytes: number | null;
           upload_status: string;
           uploaded_by: string | null;
+          validated_at: string | null;
+          validated_object_id: string | null;
         };
         Insert: {
           bucket_id?: string;
+          category_id?: string;
           created_at?: string;
           document_type: string;
           id?: string;
@@ -631,15 +685,19 @@ export type Database = {
           object_path: string;
           original_filename: string;
           property_id: string;
+          purpose?: string;
           review_status?: string;
           reviewed_by?: string | null;
           sha256?: string | null;
           size_bytes?: number | null;
           upload_status?: string;
           uploaded_by?: string | null;
+          validated_at?: string | null;
+          validated_object_id?: string | null;
         };
         Update: {
           bucket_id?: string;
+          category_id?: string;
           created_at?: string;
           document_type?: string;
           id?: string;
@@ -647,14 +705,24 @@ export type Database = {
           object_path?: string;
           original_filename?: string;
           property_id?: string;
+          purpose?: string;
           review_status?: string;
           reviewed_by?: string | null;
           sha256?: string | null;
           size_bytes?: number | null;
           upload_status?: string;
           uploaded_by?: string | null;
+          validated_at?: string | null;
+          validated_object_id?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: 'property_files_category_id_fkey';
+            columns: ['category_id'];
+            isOneToOne: false;
+            referencedRelation: 'document_categories';
+            referencedColumns: ['id'];
+          },
           {
             foreignKeyName: 'property_files_property_id_fkey';
             columns: ['property_id'];
@@ -1365,9 +1433,17 @@ export type Database = {
         Returns: undefined;
       };
       complete_property_upload: {
-        Args: { p_file_id: string };
+        Args: {
+          p_file_id: string;
+          p_mime_type: string;
+          p_object_id: string;
+          p_sha256: string;
+          p_signature: string;
+          p_size_bytes: number;
+        };
         Returns: undefined;
       };
+      create_or_get_category: { Args: { p_name: string }; Returns: string };
       create_rental_agreement: {
         Args: {
           p_code: string;
@@ -1395,6 +1471,16 @@ export type Database = {
         Args: { p_action: string; p_payment_id: string; p_reason: string };
         Returns: undefined;
       };
+      list_document_categories: {
+        Args: never;
+        Returns: {
+          builtin: string;
+          created_at: string;
+          created_by: string;
+          id: string;
+          name: string;
+        }[];
+      };
       record_property_activity: {
         Args: {
           p_key: string;
@@ -1417,6 +1503,19 @@ export type Database = {
         };
         Returns: string;
       };
+      register_property_file: {
+        Args: {
+          p_category_id?: string;
+          p_file_id: string;
+          p_mime_type: string;
+          p_original_filename: string;
+          p_property_id: string;
+          p_purpose?: string;
+          p_sha256: string;
+          p_size_bytes: number;
+        };
+        Returns: Json;
+      };
       release_property_lock: {
         Args: { p_lock_id: string; p_reason: string };
         Returns: undefined;
@@ -1429,10 +1528,6 @@ export type Database = {
           p_reference?: string;
         };
         Returns: string;
-      };
-      review_property_file: {
-        Args: { p_file_id: string; p_status: string };
-        Returns: undefined;
       };
       review_property_visit: {
         Args: { p_confirm: boolean; p_event_id: string };
@@ -1455,6 +1550,7 @@ export type Database = {
           bathrooms: number | null;
           bedrooms: number | null;
           construction_text: string | null;
+          cover_file_id: string | null;
           created_at: string;
           created_by: string | null;
           depth_m: number | null;
@@ -1488,7 +1584,19 @@ export type Database = {
           isSetofReturn: true;
         };
       };
+      set_file_category: {
+        Args: {
+          p_category_id: string;
+          p_file_id: string;
+          p_property_id: string;
+        };
+        Returns: undefined;
+      };
       set_my_locale: { Args: { p_locale: string }; Returns: undefined };
+      set_property_cover: {
+        Args: { p_file_id?: string; p_property_id: string };
+        Returns: undefined;
+      };
     };
     Enums: {
       [_ in never]: never;
