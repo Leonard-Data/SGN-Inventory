@@ -60,7 +60,7 @@ Build auth + inventory first, then reservations/visits, then analytics and compl
 
 ## Confirmed property, contact and address maintenance plan
 
-The user confirmed this assembled maintenance plan on 10 October 2026, including requester-only request history and the authorized staff processing queue. Confirmation authorizes documenting the agreement, not maintenance implementation, provisioning, import or deployment. Employee access and read-only inventory do not implement the maintenance workflows below.
+The user confirmed this assembled maintenance plan on 10 October 2026, including requester-only request history and the authorized staff processing queue. Issue #7 implements the journey below in source; hosted staging/browser acceptance, provisioning, import and deployment remain separate authorizations. See [maintenance-contract.md](maintenance-contract.md) for the implemented contract.
 
 ### End-to-end journey
 
@@ -88,7 +88,7 @@ History reads must project allowlisted property business fields, obey live acces
 
 ### Gaps and boundaries
 
-- Current SQL supports direct property/address/contact writes, private audit snapshots and reservation approval, not the complete maintenance journey. No atomic create/code generator, correction workflow, ordinary unlink, scoped history endpoint or agreed stale-edit guard exists yet. Original legacy text is not database-enforced immutable.
+- Issue #7's migrations replace direct property/address/contact/link writes with revision-checked maintenance RPCs, an atomic create/code generator, contact unlink, a correction workflow, a scoped history endpoint and database-enforced legacy source immutability. Hosted application and real browser/API acceptance remain pending; private audit snapshots and reservation approval are unchanged.
 - Official address catalogs are not seeded. Unverified raw current entry is allowed without guessing units; optional verification requires reviewed catalog data and evidence. Catalog ingestion/provisioning is a separate prerequisite, not a reason to reject a known-address save.
 - Literal `%`, `_` and backslash search is implemented by the applied forward migration and verified against distinct hosted matching/nonmatching controls. Address summaries remain bounded to the current result page.
 - Existing record-review fields must not become a maintenance gate or misleading certification of changed facts. Preserve unrelated legal/sold/rented authority and active-rental protections.

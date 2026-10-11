@@ -6,6 +6,8 @@ import type { PropertyPage } from './types';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { SessionHeader } from '@/features/employees/session-header';
 import { CoverImage } from '@/features/property-files/cover-image';
+import { CreateProperty } from '@/features/property-maintenance/create';
+import { CorrectionQueue } from '@/features/corrections/queue';
 
 export function Inventory({
   initialLocale,
@@ -182,6 +184,16 @@ export function Inventory({
                 </a>
               ) : null}
             </nav>
+            {employee ? (
+              <>
+                <CreateProperty locale={locale} onDenied={denyFiles} />
+                <CorrectionQueue
+                  employee={employee}
+                  locale={locale}
+                  onDenied={denyFiles}
+                />
+              </>
+            ) : null}
           </>
         ) : null}
       </div>

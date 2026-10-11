@@ -1,0 +1,151 @@
+'use client';
+import { useState } from 'react';
+import type { Json } from '@/types/database';
+import type { Locale } from '@/i18n/messages';
+import { useProtectedData } from '@/features/employees/use-protected-data';
+import {
+  formatVnd,
+  formatDecimal,
+  vietnamTimestamp,
+} from '@/features/properties/format';
+import type { HistoryPage } from './data';
+import { fields } from './fields';
+import { maintenanceText, optionLabel } from './messages';
+const extraLabels: Record<string, readonly [string, string]> = {
+  property_code: ['Mã bất động sản', 'Property code'],
+  verified_by: ['Người chỉ định ánh xạ', 'Mapping designator'],
+  verified_at: ['Thời điểm xác minh', 'Verification time'],
+  supersedes_address_id: [
+    'Địa chỉ được giữ lại trước đó',
+    'Retained preceding address',
+  ],
+};
+export function BusinessValues({
+  values,
+  locale,
+}: {
+  values: Json;
+  locale: Locale;
+}) {
+  if (!values || typeof values !== 'object' || Array.isArray(values))
+    return null;
+  const text = maintenanceText(locale);
+  return (
+    <dl>
+      {Object.entries(values).map(([name, value]) => {
+        const field = fields[name];
+        const content =
+          value == null
+            ? text.unknown
+            : typeof value === 'boolean'
+              ? value
+                ? text.yes
+                : text.no
+              : typeof value === 'string' && field?.kind === 'money'
+                ? formatVnd(value, locale)
+                : typeof value === 'string' && field?.kind === 'decimal'
+                  ? formatDecimal(value, locale)
+                  : typeof value === 'string' && field?.options
+                    ? optionLabel(locale, value)
+                    : name === 'verified_at' && typeof value === 'string'
+                      ? vietnamTimestamp(value, locale)
+                      : Array.isArray(value)
+                        ? value.join(' / ')
+                        : String(value);
+        return (
+          <div className="history-field" key={name}>
+            <dt>
+              {field?.[locale] ??
+                extraLabels[name]?.[locale === 'vi' ? 0 : 1] ??
+                name}
+            </dt>
+            <dd translate="no">{content}</dd>
+          </div>
+        );
+      })}
+    </dl>
+  );
+}
+export function History({
+  propertyId,
+  locale,
+}: {
+  propertyId: string;
+  locale: Locale;
+}) {
+  const [cursor, setCursor] = useState<{
+    before: string;
+    beforeId: string;
+  } | null>(null);
+  const endpoint =
+    '/api/properties/' +
+    propertyId +
+    '/history' +
+    (cursor ? '?' + new URLSearchParams(cursor) : '');
+  const { data, error, busy, surface, reload } =
+      useProtectedData<HistoryPage>(endpoint),
+    text = maintenanceText(locale);
+  return (
+    <section className="panel maintenance">
+      <h2>{text.history}</h2>
+      {busy ? <p role="status">{text.loading}</p> : null}
+      {error ? (
+        <p role="alert">
+          {text.unavailable} <button onClick={reload}>{text.refresh}</button>
+        </p>
+      ) : null}
+      <div ref={surface} hidden={!data || busy}>
+        {data ? (
+          <>
+            {data.events.length ? (
+              data.events.map((event) => (
+                <article className="history-event" key={event.id}>
+                  <h3>{optionLabel(locale, event.target)}</h3>
+                  <p>
+                    {text.actor}: <span translate="no">{event.actor_name}</span>{' '}
+                    ·{' '}
+                    <time dateTime={event.occurred_at}>
+                      {vietnamTimestamp(event.occurred_at, locale)}
+                    </time>{' '}
+                    ({text.time})
+                  </p>
+                  <div className="history-comparison">
+                    <section>
+                      <h4>{text.before}</h4>
+                      <BusinessValues
+                        values={event.before_values}
+                        locale={locale}
+                      />
+                    </section>
+                    <section>
+                      <h4>{text.after}</h4>
+                      <BusinessValues
+                        values={event.after_values}
+                        locale={locale}
+                      />
+                    </section>
+                  </div>
+                  {event.explanation ? (
+                    <p translate="no">{event.explanation}</p>
+                  ) : null}
+                </article>
+              ))
+            ) : (
+              <p>{text.emptyHistory}</p>
+            )}
+            <nav aria-label={text.history}>
+              {cursor ? (
+                <button onClick={() => setCursor(null)}>{text.first}</button>
+              ) : null}
+              {data.nextCursor ? (
+                <button onClick={() => setCursor(data.nextCursor)}>
+                  {text.more}
+                </button>
+              ) : null}
+            </nav>
+          </>
+        ) : null}
+      </div>
+    </section>
+  );
+}

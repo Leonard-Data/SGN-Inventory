@@ -14,6 +14,73 @@ export type Database = {
   };
   public: {
     Tables: {
+      property_history: {
+        Row: {
+          id: string;
+          property_id: string;
+          actor_id: string;
+          actor_name: string;
+          occurred_at: string;
+          target: string;
+          target_id: string;
+          changed_fields: string[];
+          before_values: Json;
+          after_values: Json;
+          explanation: string | null;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      correction_requests: {
+        Row: {
+          id: string;
+          property_id: string;
+          requester_id: string;
+          target: string;
+          target_id: string | null;
+          category: string;
+          explanation: string;
+          proposed_values: Json;
+          observed_values: Json;
+          observed_revision: string;
+          property_revision: string;
+          created_at: string;
+          revision: string;
+          status: string;
+          outcome_actor_id: string | null;
+          outcome_at: string | null;
+          outcome_reason: string | null;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      correction_amendments: {
+        Row: {
+          id: string;
+          request_id: string;
+          actor_id: string;
+          explanation: string;
+          proposed_values: Json;
+          observed_values: Json;
+          observed_revision: string;
+          property_revision: string;
+          created_at: string;
+          ordinal: number;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [
+          {
+            foreignKeyName: 'correction_amendments_request_id_fkey';
+            columns: ['request_id'];
+            isOneToOne: false;
+            referencedRelation: 'correction_requests';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       activity_events: {
         Row: {
           business_day: string | null;
@@ -210,6 +277,7 @@ export type Database = {
           notes: string | null;
           phones: string[];
           raw_phone_text: string | null;
+          revision: string;
         };
         Insert: {
           contact_type?: string;
@@ -219,6 +287,7 @@ export type Database = {
           notes?: string | null;
           phones?: string[];
           raw_phone_text?: string | null;
+          revision?: string;
         };
         Update: {
           contact_type?: string;
@@ -228,6 +297,7 @@ export type Database = {
           notes?: string | null;
           phones?: string[];
           raw_phone_text?: string | null;
+          revision?: string;
         };
         Relationships: [];
       };
@@ -392,6 +462,7 @@ export type Database = {
           property_code: string;
           property_type: string;
           record_review_status: string;
+          revision: string;
           sale_price_vnd: number | null;
           status: string;
           updated_at: string;
@@ -426,6 +497,7 @@ export type Database = {
           property_code: string;
           property_type?: string;
           record_review_status?: string;
+          revision?: string;
           sale_price_vnd?: number | null;
           status?: string;
           updated_at?: string;
@@ -460,6 +532,7 @@ export type Database = {
           property_code?: string;
           property_type?: string;
           record_review_status?: string;
+          revision?: string;
           sale_price_vnd?: number | null;
           status?: string;
           updated_at?: string;
@@ -517,6 +590,9 @@ export type Database = {
           id: string;
           is_primary: boolean;
           mapping_status: string;
+          mapping_evidence: string | null;
+          revision: string;
+          supersedes_address_id: string | null;
           property_id: string;
           province_text: string | null;
           province_unit_id: string | null;
@@ -540,6 +616,9 @@ export type Database = {
           id?: string;
           is_primary?: boolean;
           mapping_status?: string;
+          mapping_evidence?: string | null;
+          revision?: string;
+          supersedes_address_id?: string | null;
           property_id: string;
           province_text?: string | null;
           province_unit_id?: string | null;
@@ -563,6 +642,9 @@ export type Database = {
           id?: string;
           is_primary?: boolean;
           mapping_status?: string;
+          mapping_evidence?: string | null;
+          revision?: string;
+          supersedes_address_id?: string | null;
           property_id?: string;
           province_text?: string | null;
           province_unit_id?: string | null;
@@ -624,18 +706,21 @@ export type Database = {
           is_primary: boolean;
           property_id: string;
           relation: string;
+          revision: string;
         };
         Insert: {
           contact_id: string;
           is_primary?: boolean;
           property_id: string;
           relation?: string;
+          revision?: string;
         };
         Update: {
           contact_id?: string;
           is_primary?: boolean;
           property_id?: string;
           relation?: string;
+          revision?: string;
         };
         Relationships: [
           {
@@ -1419,6 +1504,57 @@ export type Database = {
       };
     };
     Functions: {
+      create_property: {
+        Args: { p_mode: string; p_facts: Json; p_address: Json };
+        Returns: string;
+      };
+      maintain_property: {
+        Args: {
+          p_property_id: string;
+          p_target: string;
+          p_target_id: string | null;
+          p_expected_revision: string;
+          p_changes: Json;
+          p_property_revision: string;
+        };
+        Returns: string;
+      };
+      create_contact: { Args: { p_changes: Json }; Returns: string };
+      contact_impact: { Args: { p_contact_id: string }; Returns: Json };
+      submit_correction: {
+        Args: {
+          p_property_id: string;
+          p_target: string;
+          p_target_id: string | null;
+          p_category: string;
+          p_explanation: string;
+          p_changes: Json;
+          p_revision: string;
+          p_property_revision: string;
+        };
+        Returns: string;
+      };
+      amend_correction: {
+        Args: {
+          p_request_id: string;
+          p_request_revision: string;
+          p_explanation: string;
+          p_changes: Json;
+          p_revision: string;
+          p_property_revision: string;
+        };
+        Returns: undefined;
+      };
+      decide_correction: {
+        Args: {
+          p_request_id: string;
+          p_request_revision: string;
+          p_action: string;
+          p_reason: string | null;
+          p_changes?: Json;
+        };
+        Returns: undefined;
+      };
       activate_rental_agreement: {
         Args: { p_agreement_id: string };
         Returns: undefined;

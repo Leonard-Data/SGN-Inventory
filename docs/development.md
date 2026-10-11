@@ -29,7 +29,7 @@ The implemented environment Module is an example: `readEnvironment(values, expec
 
 ## Source layout
 
-Implemented foundation and employee-access slice:
+Implemented foundation, employee-access, private-file and issue #7 maintenance slices:
 
 ```text
 src/
@@ -46,6 +46,8 @@ src/
   features/employees/          # Membership guard, auth screens, protected state
   features/properties/         # Bounded queries, details, page views and formatting
   features/property-files/     # Private file read workspace, types, signed URLs
+  features/property-maintenance/ # Create/edit maintenance, address/contact forms, history
+  features/corrections/        # Correction submission, queue and amendment rendering
   i18n/messages.ts             # Equivalent typed VI/EN journey dictionaries
   lib/supabase/route.ts         # User-scoped SSR cookies/cache/input boundary
   types/database.ts            # Generated from the live dev public schema
@@ -56,6 +58,8 @@ scripts/
   release-guard.mjs             # Branch/project isolation and release smoke
   release-guard.test.mjs        # Cross-stage regression risks
   validate-schema.mjs           # Existing embedded SQL assertions
+  maintenance-contract.mjs      # Embedded maintenance/history regressions
+  correction-contract.mjs       # Embedded correction-workflow regressions
   employee-access-acceptance.mjs # Real app/browser/Auth/RLS dev fixture acceptance
   prepare_workbook.py           # Existing private, dry-run preparation
   test_preparation.py
@@ -66,7 +70,7 @@ supabase/
 .husky/pre-commit
 ```
 
-Create additional feature directories only for approved backlog work. Employee access and read-only inventory are implemented; reservation, rental and maintenance UI remains in [delivery-plan.md](delivery-plan.md). The real-mailbox recovery gate prevents claiming completed issue #1 acceptance.
+Create additional feature directories only for approved backlog work. Employee access, read-only inventory, private files and issue #7 maintenance/corrections are implemented; reservation, rental and remaining UI work is tracked in [delivery-plan.md](delivery-plan.md). The real-mailbox recovery gate prevents claiming completed issue #1 acceptance.
 
 - `src/app/`: route composition, presentation, narrow validated Server Actions/Route Handlers. No direct inventory SQL/query orchestration in rendering.
 - `src/features/<feature>/`: validation, feature data access, domain results and workflow operations; keep feature-specific rendering beside the feature when useful. Export a small Interface, not every internal helper.

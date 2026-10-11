@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { formatVnd, vietnamDate } from './format.ts';
+import {
+  formatVnd,
+  formatDecimal,
+  vietnamDate,
+  vietnamTimestamp,
+} from './format.ts';
 
 test('whole VND remains exact beyond JavaScript safe integer precision', () => {
   assert.equal(
@@ -16,6 +21,14 @@ test('whole VND remains exact beyond JavaScript safe integer precision', () => {
     '999,999,999,999,999,999 VND',
   );
   assert.equal(formatVnd('0', 'vi'), '0 VND');
+});
+test('decimal dimensions remain exact and history instants show Vietnam time', () => {
+  assert.equal(formatDecimal('1234567890.50', 'vi'), '1.234.567.890,50');
+  assert.equal(formatDecimal('1234567890.50', 'en'), '1,234,567,890.50');
+  assert.match(
+    vietnamTimestamp('2026-10-09T17:05:00Z', 'en'),
+    /10\/10\/2026.*00:05/,
+  );
 });
 test('money rejects noncanonical decimal and scientific notation', () => {
   for (const value of ['1.5', '1e3', '-1', ''])

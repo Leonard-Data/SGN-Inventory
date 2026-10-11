@@ -6,7 +6,13 @@ import { SessionHeader } from '@/features/employees/session-header';
 import { api, RequestError } from '@/features/employees/api';
 import { Workspace } from '@/features/property-files/workspace';
 import type { PropertyDetail } from './detail-data';
-import { formatVnd, vietnamDate } from './format';
+import { Maintenance } from '@/features/property-maintenance/workspace';
+import { History } from '@/features/property-maintenance/history';
+import {
+  CorrectionQueue,
+  CorrectionReport,
+} from '@/features/corrections/queue';
+import { formatVnd, formatDecimal, vietnamDate } from './format';
 
 const directionKeys: Record<string, string> = {
   N: 'north',
@@ -43,6 +49,11 @@ export function Detail({
   const viewKey = useRef<string | null>(null);
   const viewRequest = useRef<Promise<void> | null>(null);
   const [viewError, setViewError] = useState(false);
+  const [refreshTick, setRefreshTick] = useState(0);
+  async function changed() {
+    await reload();
+    setRefreshTick((value) => value + 1);
+  }
   const employeeId = employee?.id;
   const denyFiles = useCallback(
     (status: number) => {
@@ -94,8 +105,12 @@ export function Detail({
     () => new Intl.NumberFormat(locale === 'vi' ? 'vi-VN' : 'en-GB'),
     [locale],
   );
-  const number = (value: number | null, unit = '') =>
-    value === null ? text.unknown : numberFormat.format(value) + unit;
+  const number = (value: number | string | null, unit = '') =>
+    value === null
+      ? text.unknown
+      : (typeof value === 'string'
+          ? formatDecimal(value, locale)
+          : numberFormat.format(value)) + unit;
   return (
     <main lang={locale}>
       <a className="skip-link" href="#main-content">
@@ -250,6 +265,41 @@ export function Detail({
                 onCoverChanged={reload}
               />
             </div>
+            {employee ? (
+              <>
+                <Maintenance
+                  key={property.id}
+                  detail={data}
+                  employee={employee}
+                  locale={locale}
+                  onSaved={changed}
+                  onDenied={denyFiles}
+                />
+                <CorrectionReport
+                  key={property.id}
+                  detail={data}
+                  locale={locale}
+                  role={employee.role}
+                  onDenied={denyFiles}
+                  onSaved={changed}
+                />
+                <CorrectionQueue
+                  key={'requests' + property.id + refreshTick}
+                  propertyId={property.id}
+                  employee={employee}
+                  locale={locale}
+                  onDenied={denyFiles}
+                  onChanged={() => void changed()}
+                />
+                <History
+                  key={
+                    'history' + property.id + property.revision + refreshTick
+                  }
+                  propertyId={property.id}
+                  locale={locale}
+                />
+              </>
+            ) : null}
             <p className="muted">{text.pageViewNote}</p>
             {viewError ? (
               <p role="alert">

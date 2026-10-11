@@ -8,10 +8,12 @@
 | Create property / request reservation | Yes | Yes | Yes | Yes |
 | Edit property/address | Own unarchived | All unarchived | All unarchived | All unarchived |
 | Maintain contact records | No | Yes | Yes | Yes |
+| Submit correction request | Yes | Yes | Yes | Yes |
+| Process/reject correction requests | No | Yes | Yes | Yes |
 | Record own page view / visit | Yes | Yes | Yes | Yes |
 | Read daily activity | Own | Own | All | All |
 | Approve/reject lock or confirm visit | No | No | Another employee only | Another employee only |
-| Set legal/review/sold/rented state | No | No | Yes | Yes |
+| Set legal/review state; sold/rented arrives with issue #32 sale transition | No | No | Yes | Yes |
 | Manage employee activation/roles and catalogs | No | No | No | Yes |
 | Read area/employee analytics | No | No | Yes | Yes |
 | Read staging/audit directly through API | No | No | No | No |
@@ -33,7 +35,7 @@ stateDiagram-v2
 
 A rejected/released/expired request is terminal; a later claim is a new request. Approved is effective only while `expires_at > now()`. Pending requests are visible for review and do not reserve the property. Competing pending requests are allowed; approval serializes on the property row, then checks the partial unique index. The database forbids self approval, even for admins.
 
-Reviewers inspect the deal reason, customer agreement evidence and claimant, then record a decision reason. The reference/evidence links are commission-attribution evidence only. Advertised sale price is not an agreed deal value or a commission basis. Selling/renting an inventory record is a separate manager/admin action; it does not record a payment.
+Reviewers inspect the deal reason, customer agreement evidence and claimant, then record a decision reason. The reference/evidence links are commission-attribution evidence only. Advertised sale price is not an agreed deal value or a commission basis. Selling/renting an inventory record is outside ordinary maintenance; the sold/rented transition arrives with the independent sale transition (issue #32) and does not record a payment.
 
 Each transition writes a lock event and an audit snapshot. Expired rows are cleaned lazily when a reservation RPC operates on the same property. Dashboards always use effective locks, so expiry is correct even before cleanup. A scheduled sweeper is optional; if added, acquire the property lock first and append expiry events. Do not let a stale approved row block an approval without expiring it within the same transaction.
 
