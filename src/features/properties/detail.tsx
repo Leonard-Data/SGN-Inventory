@@ -160,7 +160,7 @@ export function Detail({
           </span>
         ) : null}
       </div>
-      {busy ? <p role="status">{text.loading}</p> : null}
+      {busy && !property ? <p role="status">{text.loading}</p> : null}
       {error ? (
         <p role="alert">
           {error === 'not-found'
@@ -175,7 +175,7 @@ export function Detail({
           </button>
         </p>
       ) : null}
-      <div ref={surface} hidden={!property || busy}>
+      <div ref={surface} hidden={!property}>
         {property && data ? (
           <>
             {property.archived_at ? (

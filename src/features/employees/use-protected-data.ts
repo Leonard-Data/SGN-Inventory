@@ -24,13 +24,16 @@ export function useProtectedData<T>(
   const invalidate = useCallback(() => {
     generation.current++;
     controller.current?.abort();
-    if (surfaceElement.current) surfaceElement.current.hidden = true;
   }, []);
-  const clear = useCallback(() => {
+  const conceal = useCallback(() => {
     invalidate();
+    if (surfaceElement.current) surfaceElement.current.hidden = true;
+  }, [invalidate]);
+  const clear = useCallback(() => {
+    conceal();
     setData(null);
     setEmployee(null);
-  }, [invalidate]);
+  }, [conceal]);
   const load = useCallback(async () => {
     invalidate();
     const version = generation.current;
@@ -100,13 +103,13 @@ export function useProtectedData<T>(
     window.addEventListener('pagehide', hide);
     window.addEventListener('pageshow', show);
     return () => {
-      invalidate();
+      conceal();
       channel.close();
       window.removeEventListener('focus', focus);
       window.removeEventListener('pagehide', hide);
       window.removeEventListener('pageshow', show);
     };
-  }, [load, reload, clear, invalidate]);
+  }, [load, reload, clear, conceal]);
   async function logout() {
     clear();
     setBusy(true);
