@@ -24,7 +24,9 @@ export function Inventory({
     new URLSearchParams({ query: initialQuery, ...(after ? { after } : {}) });
   const { employee, data, error, busy, surface, logout, clear, reload } =
     useProtectedData<PropertyPage>(endpoint);
-  const locale = employee?.locale ?? initialLocale;
+  // From the sgn-locale cookie the page resolved server-side, so the language switch
+  // re-renders this body after its refresh (see detail.tsx).
+  const locale = initialLocale;
   const text = messages[locale];
   const [searchError, setSearchError] = useState(false);
   const denyFiles = useCallback(
@@ -80,6 +82,18 @@ export function Inventory({
             role="search"
           >
             <div className="search">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <path d="M20.5 20.5 16.7 16.7" />
+              </svg>
               <label className="sr" htmlFor="query">
                 {text.search}
               </label>
@@ -98,7 +112,18 @@ export function Inventory({
                 type="submit"
                 aria-label={text.search}
               >
-                {text.search}
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="M20.5 20.5 16.7 16.7" />
+                </svg>
               </button>
             </div>
           </form>

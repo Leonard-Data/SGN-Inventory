@@ -86,7 +86,10 @@ export function Detail({
   );
   const { employee, data, error, busy, surface, logout, clear, reload } =
     useProtectedData(loadDetail);
-  const locale = employee?.locale ?? initialLocale;
+  // The server layout and page both derive this from the sgn-locale cookie, which
+  // set_my_locale, login and the request proxy keep equal to the saved preference, so
+  // a language switch re-renders the body instead of leaving it on the fetched value.
+  const locale = initialLocale;
   const text = messages[locale];
   const [refreshTick, setRefreshTick] = useState(0);
   const [creditTick, setCreditTick] = useState(0);
@@ -552,7 +555,7 @@ export function Detail({
                           {address.address_text}
                         </p>
                         <p className="record-meta">
-                          {vietnamDate(address.effective_on ?? '')} ·{' '}
+                          {vietnamDate(address.effective_on) ?? text.unknown} ·{' '}
                           {address.verified_by ?? text.unknown}
                         </p>
                       </div>
@@ -717,7 +720,7 @@ export function Detail({
             {employee ? (
               <>
                 <Maintenance
-                  key={property.id}
+                  key={'maintenance' + property.id}
                   detail={data}
                   employee={employee}
                   locale={locale}
@@ -725,7 +728,7 @@ export function Detail({
                   onDenied={denyFiles}
                 />
                 <CorrectionReport
-                  key={property.id}
+                  key={'correction' + property.id}
                   detail={data}
                   locale={locale}
                   role={employee.role}

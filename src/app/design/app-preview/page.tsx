@@ -65,8 +65,23 @@ export default function AppPreviewPage() {
               aria-label={text.search}
               readOnly
             />
-            <button type="button" className="search-btn">
-              {text.search}
+            <button
+              type="button"
+              className="search-btn"
+              aria-label={text.search}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <path d="M20.5 20.5 16.7 16.7" />
+              </svg>
             </button>
           </div>
           <p className="search-hint">{text.searchHint}</p>

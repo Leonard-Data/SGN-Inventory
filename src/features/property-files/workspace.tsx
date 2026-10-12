@@ -694,9 +694,9 @@ export function Workspace({
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
-                    stroke-width="1.7"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
+                    strokeWidth="1.7"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
                     width="20"
                     height="20"
                   >
@@ -706,20 +706,19 @@ export function Workspace({
                     <line x1="16" y1="17" x2="8" y2="17" />
                   </svg>
                 </span>
-                <span className="doc-name" translate="no">
-                  {file.original_filename}
-                </span>
-                <span className="doc-meta">
-                  <span className="badge" data-tone="neutral">
-                    {categoryName(file.category_id)}
+                <span>
+                  <span className="doc-name" translate="no">
+                    {file.original_filename}
                   </span>
-                  <span
-                    className="badge"
-                    data-tone={file.purpose === 'photo' ? 'neutral' : 'neutral'}
-                  >
-                    {file.purpose === 'photo'
-                      ? fileText.photo
-                      : fileText.document}
+                  <span className="doc-meta">
+                    <span className="badge" data-tone="neutral">
+                      {categoryName(file.category_id)}
+                    </span>
+                    <span className="badge" data-tone="neutral">
+                      {file.purpose === 'photo'
+                        ? fileText.photo
+                        : fileText.document}
+                    </span>
                   </span>
                 </span>
                 <span className="doc-actions">

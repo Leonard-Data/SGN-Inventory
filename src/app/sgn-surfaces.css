@@ -12,3 +12,27 @@
   height: 100%;
   object-fit: cover;
 }
+
+/* The package's dropzone is one flex row for an icon and two lines of copy. This
+   application puts the whole upload form inside it, so the row wraps and its controls
+   may shrink instead of forcing the page wider than the viewport. */
+.dropzone {
+  flex-wrap: wrap;
+}
+.dropzone .field {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.dropzone input[type='file'] {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* A recorded file category is user text and can be long. The package's badge is sized
+   for a short status word and does not wrap, so inside a document row it wraps within
+   the middle cell the row's grid already limits. */
+.doc-row .badge {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

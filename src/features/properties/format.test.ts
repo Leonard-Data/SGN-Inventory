@@ -26,10 +26,18 @@ test('whole VND remains exact beyond JavaScript safe integer precision', () => {
 test('decimal dimensions remain exact and history instants show Vietnam time', () => {
   assert.equal(formatDecimal('1234567890.50', 'vi'), '1.234.567.890,50');
   assert.equal(formatDecimal('1234567890.50', 'en'), '1,234,567,890.50');
-  assert.match(
-    vietnamTimestamp('2026-10-09T17:05:00Z', 'en'),
-    /10\/10\/2026.*00:05/,
-  );
+  const stamp = vietnamTimestamp('2026-10-09T17:05:00Z', 'en');
+  assert.ok(stamp);
+  assert.match(stamp, /10\/10\/2026.*00:05/);
+});
+test('an absent or unparseable recorded date reports no value instead of throwing', () => {
+  // A nullable recorded date (an address with no effective date, an imported row)
+  // must reach the unknown marker, not crash the page that renders it.
+  for (const value of [null, undefined, '', 'not a date'])
+    assert.equal(vietnamDate(value), null);
+  assert.equal(vietnamTimestamp(null, 'vi'), null);
+  assert.equal(vietnamTimestamp('', 'en'), null);
+  assert.equal(vietnamDate('2026-10-09'), '09/10/2026');
 });
 test('money rejects noncanonical decimal and scientific notation', () => {
   for (const value of ['1.5', '1e3', '-1', ''])

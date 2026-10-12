@@ -55,7 +55,6 @@ export function useProtectedData<T>(
       setData(result);
       renderedFor.current = sessionEmployee.id;
       setError(null);
-      document.documentElement.lang = sessionEmployee.locale;
       if (surfaceElement.current) surfaceElement.current.hidden = false;
     } catch (failure) {
       if (version !== generation.current || abort.signal.aborted) return;
