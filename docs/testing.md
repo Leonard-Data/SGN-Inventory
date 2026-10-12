@@ -196,7 +196,34 @@ Scope: the disclosure-to-today's-report path of [issue #29](https://github.com/L
 | Denial and boundaries | Anonymous, unlinked and inactive identities are denied; direct client activity writes stay denied; no phone value is stored in the activity row |
 | Midnight | A new next-day disclosure counts for that day and a pre-midnight disclosure retried after midnight keeps its day (embedded deterministic boundary; no production backdating API) |
 
-Executed results for this ticket are recorded below once the hosted run completes.
+**Executed on 12 October 2026** against the authorized development project `tneucwzcrzteeixvttpu`, with the repository's forward migration applied through the reviewed dry-run/push path (the dry-run reported exactly `20261012051509_owner_contact_access.sql` with no seeds or roles, the push exited `0`, the follow-up dry-run reported up to date, `reveal_owner_contact` moved from `404 PGRST202` to `403/42501` for an unauthenticated caller, and every read-only row baseline was unchanged). A disjoint `SGN29` namespace was created through the operator plane and removed after the run.
+
+Real individual-session Auth/Data API/RLS matrix (15 recorded observations, module `acceptance-29.py`):
+
+- Event-free report returns an explicit zero owner-contact count.
+- The recorded `relation='owner'` link and an available phone decide disclosure and credit one property, even though the shared contact's global `contact_type` is `broker`.
+- A same-key retry recovers the original event reference and Vietnam day with exactly one row.
+- Two genuinely independent app sessions revealing with one shared key concurrently converge on one event and one property.
+- Reusing that key for another property is rejected; the same recorded owner through another property counts another property.
+- A broker-only relation and a recorded owner without a phone are explicit (`owner-contact-missing`, `owner-phone-missing`) and add no credit.
+- Direct client `activity_events` INSERT remains denied.
+- Archived review keeps contact access with `credited=false` and no new credit, while the ordinary employee receives `404`.
+- Anonymous, unlinked and inactive identities are denied on both the app route and the direct RPC.
+
+Rendered VI/default and EN browser journey on the local application against the hosted project:
+
+- Opening the detail shows no owner phone, records no owner-contact credit, and leaves the panel at an explicit zero.
+- A deliberate Show owner contact reveals the recorded phone with an accessible `tel:` Call link, no button afterwards (no copy control), `user-select: none`, and one credited property matching the live session report.
+- The Call click and VI→EN→VI switching keep the source phone string and create no extra credit event.
+- A broker-only property shows the localized Vietnamese missing-data message and, after switching to English, the English message.
+- The reviewer's archived disclosure shows the phone and adds no owner-contact credit.
+- At the emulated 390×844 viewport the disclosure control is a focusable, labelled native `button`, activation reveals the phone, and `document.scrollWidth` stays within the viewport.
+
+**Automation caveats (disclosed, not smoothed over).** The pinned `chrome-devtools-axi` 0.1.39 attached to a task-private headless Chromium over `BROWSER_URL`. On this host its `fill`/`click`/`press` did not reliably reach the refactored React auth form or controls below the fold, so the run drove the same real handlers through the input's native value setter plus an `input` event, the form's own `requestSubmit()`, and the control's own activation; the reveal click, language switching and mobile reveal used those paths. The Call assertion is the link's real `tel:` href plus an unchanged activity count, because following `tel:` in headless Chrome leaves the protected page. These are harness behaviours, not observed product failures; the underlying app handlers and endpoints are the real ones.
+
+**Fixture cleanup.** The disjoint `SGN29` namespace was created for this run (5 Auth users, 4 employees, 5 properties, 1 address, 3 contacts, 6 contact links) and fully removed through the approved operator boundary after verifying each declared id by a read first; the synthetic Auth users were removed through the Auth-admin API. The project is restored to its prior baseline — 19 employees, 50 properties, 9 contacts, 7 property-contacts, 54 addresses, 127 activity events — which matches the reconciled baseline recorded by the discussion slice, and no `SGN29` row or Auth user remains. The `baseline-before` snapshot recorded 23 employees only because four synthetic rows from an earlier failed fixture attempt were still present when it was taken; the four were purged by the same run and are not part of the project baseline. The supplied development login and every pre-existing fixture were untouched throughout, and the task's server, Chromium and bridge were stopped with ports 3103/9333/9953 free.
+
+The Vietnam-midnight and next-day credit rules (a new next-day disclosure counts for that day, a pre-midnight disclosure retried after midnight keeps its day, device timezone changes do not affect credit) are proven by the embedded schema suite; no production backdating API was added.
 
 ## Property, contact and address maintenance acceptance (not yet executed)
 
