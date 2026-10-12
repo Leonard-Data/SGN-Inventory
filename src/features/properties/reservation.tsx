@@ -402,8 +402,9 @@ export function Reservation({
             <>
               <h3>{text.reservationRequests}</h3>
               {state.pending.length ? (
-                state.pending.map((request) =>
-                  request.claimantId === employeeId ? (
+                state.pending.map((request) => {
+                  const isOwn = request.claimantId === employeeId;
+                  return isOwn || archived ? (
                     <article className="reservation-request" key={request.id}>
                       <h4 translate="no">{request.claimantName}</h4>
                       <p className="field-hint">
@@ -412,7 +413,9 @@ export function Reservation({
                       </p>
                       <p translate="no">{request.reason}</p>
                       <p className="field-hint">
-                        {text.reservationSelfApproval}
+                        {isOwn
+                          ? text.reservationSelfApproval
+                          : text.reservationArchived}
                       </p>
                     </article>
                   ) : (
@@ -435,8 +438,8 @@ export function Reservation({
                         void decide(request.id, approve, form)
                       }
                     />
-                  ),
-                )
+                  );
+                })
               ) : (
                 <p className="field-hint">{text.reservationNoRequests}</p>
               )}
