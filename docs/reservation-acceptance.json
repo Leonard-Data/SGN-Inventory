@@ -90,26 +90,41 @@
       "lockEvents": 5,
       "activityRows": 6
     },
-    "restored": {
-      "baseline": {
-        "properties": 50,
-        "employees": 22,
-        "property_locks": 5,
-        "lock_events": 7,
-        "activity_events": 139
+    "originalInventory": {
+      "employees": 19,
+      "properties": 50,
+      "property_addresses": 54,
+      "contacts": 9,
+      "property_contacts": 7,
+      "property_files": 34,
+      "activity_events": {
+        "beforeUnrelatedAdditions": 132,
+        "after": 139
       },
-      "after": {
-        "properties": 50,
-        "employees": 22,
-        "property_locks": 5,
-        "lock_events": 7,
-        "activity_events": 139
-      }
+      "property_locks": 5,
+      "lock_events": 7,
+      "property_history": 39,
+      "note": "Measured over the original inventory before any fixture existed (14:40Z) and again after fixture removal. Employees (19), properties, addresses, contacts, contact links, files, pre-existing reservation rows, pre-existing lock events and history rows are byte-identical by ordered-id hash; the 7 activity additions are unrelated page views on SGN-TEST-001 recorded between 14:38Z and 15:02Z and are not this task's writes. Restoration is proven per row identity, not by a global count."
+    },
+    "harnessWindow": {
+      "employees": 22,
+      "properties": 50,
+      "property_locks": 5,
+      "lock_events": 7,
+      "activity_events": {
+        "before": 139,
+        "after": 139
+      },
+      "unrelatedAdditions": 0,
+      "note": "Harness-start scope with the three SGN-TEST-18 fixtures present. The harness's own after-state is identical to this baseline, with zero unrelated additions derived inside its window and no pre-run row identity missing."
     }
   },
   "unrelatedActivity": {
-    "note": "A pre-existing development login that is not a task fixture kept recording single page views on SGN-TEST-001 throughout the window. Those rows are additions by another identity: no pre-run row identity disappeared, and none of them is attributed to this task or removed by it.",
-    "observedRows": 7,
+    "note": "A pre-existing development login that is not a task fixture kept recording single page views on SGN-TEST-001 during the task window. No pre-run row identity disappeared, and none of these rows is attributed to this task or removed by it. These are per-scope observations, not a global no-drift measurement.",
+    "observedRows": {
+      "wholeTaskWindow": 7,
+      "harnessWindow": 0
+    },
     "property": "SGN-TEST-001",
     "kind": "page_view"
   },

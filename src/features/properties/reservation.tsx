@@ -241,7 +241,9 @@ export function Reservation({
       else setDecisionError({ id: lockId, code: 'unavailable' });
       if (
         problem instanceof RequestError &&
-        problem.code === 'reservation-unavailable'
+        ['reservation-conflict', 'reservation-unavailable'].includes(
+          problem.code,
+        )
       )
         setRefresh((value) => value + 1);
     } finally {
