@@ -186,7 +186,7 @@ Migration `20261011060031_personal_daily_activity.sql` adds `public.my_today_act
 
 `GET /api/activity/today` validates the session and live employee through the request-scoped publishable-key client before returning the caller's own report for that day; Ticket #29 below lists the current fields. An event-free day is a successful `200` with explicit zeros; an anonymous, unlinked or inactive identity receives `401`/`403` with `access-denied` instead of an empty or zero report. No employee identifier, colleague activity or phone value appears in the response.
 
-The ordinary property detail keeps one logical detail open per mount: the client reuses one UUID across retries and language switches, so a genuine new navigation is the only thing that adds a Page view. Today's own counts load after that Page view resolves, so the current open is included. The ordinary detail presents recorded contact names, relationships and primary markers. Owner-contact disclosure arrives with Ticket #29 below; personal date-range reporting and company activity reporting stay with later tickets.
+The ordinary property detail keeps one logical detail open per mount: the client reuses one UUID across retries and language switches, so a genuine new navigation is the only thing that adds a Page view. Today's own counts load after that Page view resolves, so the current open is included. The ordinary detail presents recorded contact names, relationships and primary markers. Owner-contact disclosure arrives with Ticket #29 and company activity reporting with Ticket #31, both below; personal date-range reporting stays with a later ticket.
 
 ### Ticket #44 — Shared Property discussion
 
