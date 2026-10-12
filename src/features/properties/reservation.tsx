@@ -9,13 +9,21 @@ import {
 } from 'react';
 import { messages, type Locale } from '@/i18n/messages';
 import { api, RequestError } from '@/features/employees/api';
+import {
+  RESERVATION_DAYS_DEFAULT,
+  RESERVATION_DAYS_MAX,
+  RESERVATION_DAYS_MIN,
+  RESERVATION_REASON_MAX,
+  RESERVATION_REASON_MIN,
+} from './reservation-rules';
 import { vietnamTimestamp } from './format';
 import type { ReservationState } from './types';
 
 const requestable = ['available', 'negotiating'];
-// Mirrors the decision bounds the database enforces; the server validates again.
-const days = Array.from({ length: 30 }, (_, index) => index + 1);
-const defaultDays = 7;
+const days = Array.from(
+  { length: RESERVATION_DAYS_MAX - RESERVATION_DAYS_MIN + 1 },
+  (_, index) => RESERVATION_DAYS_MIN + index,
+);
 
 function DecisionForm({
   claimantName,
@@ -44,7 +52,7 @@ function DecisionForm({
       <p className="field-hint">
         {text.reservationRequestedAt}: {vietnamTimestamp(requestedAt, locale)}
       </p>
-      <p>{reason}</p>
+      <p translate="no">{reason}</p>
       <form
         onSubmit={(event: FormEvent<HTMLFormElement>) => {
           event.preventDefault();
@@ -63,8 +71,8 @@ function DecisionForm({
             name="reason"
             rows={3}
             required
-            minLength={10}
-            maxLength={2000}
+            minLength={RESERVATION_REASON_MIN}
+            maxLength={RESERVATION_REASON_MAX}
             aria-describedby={helpId}
             disabled={busy}
           />
@@ -80,7 +88,7 @@ function DecisionForm({
             id={daysId}
             className="select"
             name="days"
-            defaultValue={defaultDays}
+            defaultValue={RESERVATION_DAYS_DEFAULT}
             disabled={busy}
           >
             {days.map((value) => (
@@ -146,6 +154,12 @@ export function Reservation({
   const [notice, setNotice] = useState<string | null>(null);
   const inFlight = useRef<AbortController | null>(null);
   const generation = useRef(0);
+  // A mutation's snapshot wins over any read that started before it committed.
+  const apply = useCallback((next: ReservationState) => {
+    inFlight.current?.abort();
+    generation.current += 1;
+    setState(next);
+  }, []);
   const failure = useCallback(
     (problem: unknown, set: (code: string) => void) => {
       if (
@@ -199,7 +213,7 @@ export function Reservation({
         '/api/properties/' + propertyId + '/reservations',
         { reason: draft },
       );
-      setState(next);
+      apply(next);
       setDraft('');
       setNotice(text.reservationRequested);
     } catch (problem) {
@@ -243,7 +257,7 @@ export function Reservation({
           days: Number(data.get('days')),
         },
       );
-      setState(next);
+      apply(next);
       setNotice(approve ? text.reservationApproved : text.reservationRejected);
     } catch (problem) {
       if (
@@ -355,8 +369,8 @@ export function Reservation({
                     name="reason"
                     rows={3}
                     required
-                    minLength={10}
-                    maxLength={2000}
+                    minLength={RESERVATION_REASON_MIN}
+                    maxLength={RESERVATION_REASON_MAX}
                     aria-describedby={requestHelpId}
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
@@ -396,7 +410,7 @@ export function Reservation({
                         {text.reservationRequestedAt}:{' '}
                         {vietnamTimestamp(request.requestedAt, locale)}
                       </p>
-                      <p>{request.reason}</p>
+                      <p translate="no">{request.reason}</p>
                       <p className="field-hint">
                         {text.reservationSelfApproval}
                       </p>

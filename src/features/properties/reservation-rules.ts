@@ -4,6 +4,7 @@ export const RESERVATION_REASON_MIN = 10;
 export const RESERVATION_REASON_MAX = 2000;
 export const RESERVATION_DAYS_MIN = 1;
 export const RESERVATION_DAYS_MAX = 30;
+export const RESERVATION_DAYS_DEFAULT = 7;
 
 // Source text is preserved verbatim apart from trimming, in either interface language.
 export function reservationReason(value: unknown): string | null {
