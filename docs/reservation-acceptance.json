@@ -1,0 +1,122 @@
+{
+  "checkedAt": "2026-10-12T15:07:01.202Z",
+  "head": "7f161f7",
+  "environment": "authorized hosted development Supabase / local real Next.js application",
+  "projectRef": "tneucwzcrzteeixvttpu",
+  "namespace": "SGN-TEST-18",
+  "identities": [
+    {
+      "name": "claimant",
+      "role": "sales",
+      "employeeId": "18000000-0000-4000-8000-000000000001"
+    },
+    {
+      "name": "manager",
+      "role": "manager",
+      "employeeId": "18000000-0000-4000-8000-000000000002"
+    },
+    {
+      "name": "admin",
+      "role": "admin",
+      "employeeId": "18000000-0000-4000-8000-000000000003"
+    }
+  ],
+  "inventory": [
+    {
+      "code": "SGN-TEST-002",
+      "status": "available"
+    },
+    {
+      "code": "SGN-TEST-003",
+      "status": "available"
+    }
+  ],
+  "observations": [
+    {
+      "name": "anonymous application and direct reservation access denied"
+    },
+    {
+      "name": "VI detail action submits a request and shows only a pending state"
+    },
+    {
+      "name": "pending request is visible to its own claimant, who cannot decide"
+    },
+    {
+      "name": "sales decision and direct lock/event writes are denied"
+    },
+    {
+      "name": "manager cannot approve their own request through the UI, the application or the RPC"
+    },
+    {
+      "name": "a manager rejects another employee request with a reason and no reservation is created"
+    },
+    {
+      "name": "independent-session competing approvals leave exactly one effective reservation",
+      "statuses": [
+        200,
+        409
+      ],
+      "effective": 1
+    },
+    {
+      "name": "the application read agrees with the committed reservation row"
+    },
+    {
+      "name": "VI/default and EN detail render the same effective reservation with claimant and expiry"
+    },
+    {
+      "name": "live deactivation denies the reservation surface without erasing committed reservations",
+      "directRows": 0
+    },
+    {
+      "name": "sign-out and Back navigation reveal no reservation detail"
+    }
+  ],
+  "fixtureRows": {
+    "created": {
+      "identities": 3,
+      "linkedAuthUsers": 3,
+      "reservationRows": 3,
+      "lockEvents": 5,
+      "activityRows": 6,
+      "properties": 0,
+      "propertyOrContactRows": 0
+    },
+    "removed": {
+      "identities": 3,
+      "linkedAuthUsers": 3,
+      "reservationRows": 3,
+      "lockEvents": 5,
+      "activityRows": 6
+    },
+    "restored": {
+      "baseline": {
+        "properties": 50,
+        "employees": 22,
+        "property_locks": 5,
+        "lock_events": 7,
+        "activity_events": 139
+      },
+      "after": {
+        "properties": 50,
+        "employees": 22,
+        "property_locks": 5,
+        "lock_events": 7,
+        "activity_events": 139
+      }
+    }
+  },
+  "unrelatedActivity": {
+    "note": "A pre-existing development login that is not a task fixture kept recording single page views on SGN-TEST-001 throughout the window. Those rows are additions by another identity: no pre-run row identity disappeared, and none of them is attributed to this task or removed by it.",
+    "observedRows": 7,
+    "property": "SGN-TEST-001",
+    "kind": "page_view"
+  },
+  "limits": [
+    "The pinned browser bridge cannot reliably reach the React form through its snapshot/fill/click path on this host, so the harness drives the same real DOM handlers with the input native value setter plus an input event, the form own requestSubmit and the control own activation; the application handlers and endpoints are the real ones.",
+    "The competing approvals use two independent authenticated sessions; this is not a production contention gate.",
+    "Fixture-only writes: the SGN-TEST-18 identities and their linked Auth users are created and removed by this task outside the harness; the harness writes only reservation and page-view rows and removes them by exact ID.",
+    "Existing inventory (SGN-TEST-002 and SGN-TEST-003) is used read-only: no property, address, contact, file or history row was written, archived, relinked or reactivated.",
+    "Real mailbox recovery, production import and deployment remain outside this run."
+  ]
+}
