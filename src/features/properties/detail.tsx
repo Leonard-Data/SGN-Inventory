@@ -3,8 +3,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { label, messages, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { SessionHeader } from '@/features/employees/session-header';
-import { api, RequestError } from '@/features/employees/api';
+import { RequestError } from '@/features/employees/api';
 import { Workspace } from '@/features/property-files/workspace';
+import { loadPropertyDetail, loadTodayActivity } from './detail-loader';
 import type { PropertyDetail } from './detail-data';
 import { Maintenance } from '@/features/property-maintenance/workspace';
 import { History } from '@/features/property-maintenance/history';
@@ -33,6 +34,14 @@ export function Detail({
   initialLocale: Locale;
   returnTo: string;
 }) {
+  const viewKey = useRef<string | null>(null);
+  const loadDetail = useCallback(
+    (signal: AbortSignal) => {
+      viewKey.current ??= crypto.randomUUID();
+      return loadPropertyDetail(id, signal);
+    },
+    [id],
+  );
   const {
     employee,
     data,
@@ -43,35 +52,30 @@ export function Detail({
     applyLocale,
     clear,
     reload,
-  } = useProtectedData<PropertyDetail>('/api/properties/' + id);
+  } = useProtectedData(loadDetail);
   const locale = employee?.locale ?? initialLocale;
   const text = messages[locale];
-  const viewKey = useRef<string | null>(null);
-  const viewRequest = useRef<Promise<void> | null>(null);
-  const [viewError, setViewError] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
   async function changed() {
     await reload();
     setRefreshTick((value) => value + 1);
   }
-  const employeeId = employee?.id;
-  const denyFiles = useCallback(
-    (status: number) => {
-      clear();
-      window.location.replace(status === 401 ? '/login' : '/access-denied');
-    },
-    [clear],
-  );
-  const recordView = useCallback(async () => {
-    if (viewRequest.current) return viewRequest.current;
-    viewKey.current ??= crypto.randomUUID();
-    const promise = api('/api/properties/' + id + '/page-view', {
-      key: viewKey.current,
-    })
-      .then(() => {
-        setViewError(false);
+  const [activity, setActivity] = useState<{
+    detail: PropertyDetail;
+    viewError: boolean;
+    today: Awaited<ReturnType<typeof loadTodayActivity>>['today'];
+    todayError: boolean;
+  } | null>(null);
+  useEffect(() => {
+    if (!data) return;
+    const abort = new AbortController();
+    let current = true;
+    void loadTodayActivity(id, viewKey.current ?? '', abort.signal)
+      .then((result) => {
+        if (current) setActivity({ detail: data, ...result });
       })
       .catch((failure) => {
+        if (!current || abort.signal.aborted) return;
         if (
           failure instanceof RequestError &&
           (failure.status === 401 || failure.status === 403)
@@ -80,19 +84,32 @@ export function Detail({
           window.location.replace(
             failure.status === 403 ? '/access-denied' : '/login',
           );
-        } else setViewError(true);
-      })
-      .finally(() => {
-        viewRequest.current = null;
+          return;
+        }
+        setActivity({
+          detail: data,
+          viewError: false,
+          today: null,
+          todayError: true,
+        });
       });
-    viewRequest.current = promise;
-    return promise;
-  }, [clear, id]);
-  useEffect(() => {
-    if (employeeId) {
-      void recordView();
-    }
-  }, [employeeId, recordView]);
+    return () => {
+      current = false;
+      abort.abort();
+    };
+  }, [data, id, clear]);
+  const own = activity?.detail === data ? activity : null;
+  const viewError = own?.viewError ?? false;
+  const today = own?.today ?? null;
+  const todayError = own?.todayError ?? false;
+  const employeeId = employee?.id;
+  const denyFiles = useCallback(
+    (status: number) => {
+      clear();
+      window.location.replace(status === 401 ? '/login' : '/access-denied');
+    },
+    [clear],
+  );
   const property = data?.property;
   const canEdit =
     !!employee &&
@@ -142,7 +159,7 @@ export function Detail({
           </span>
         ) : null}
       </div>
-      {busy ? <p role="status">{text.loading}</p> : null}
+      {busy && !property ? <p role="status">{text.loading}</p> : null}
       {error ? (
         <p role="alert">
           {error === 'not-found'
@@ -157,7 +174,7 @@ export function Detail({
           </button>
         </p>
       ) : null}
-      <div ref={surface} hidden={!property || busy}>
+      <div ref={surface} hidden={!property}>
         {property && data ? (
           <>
             {property.archived_at ? (
@@ -254,12 +271,6 @@ export function Detail({
                           <span className="badge">{text.primary}</span>
                         ) : null}
                       </p>
-                      <p>
-                        {text.phone}:{' '}
-                        {link.contacts?.raw_phone_text ||
-                          link.contacts?.phones.join(' / ') ||
-                          text.unknown}
-                      </p>
                     </article>
                   ))
                 ) : (
@@ -317,9 +328,29 @@ export function Detail({
             {viewError ? (
               <p role="alert">
                 {text.pageViewFailed}{' '}
-                <button onClick={recordView}>{text.retry}</button>
+                <button onClick={reload}>{text.retry}</button>
               </p>
             ) : null}
+            <section className="panel" aria-labelledby="today-activity">
+              <h2 id="today-activity">{text.todayActivity}</h2>
+              {todayError ? (
+                <p role="alert">
+                  {text.todayActivityFailed}{' '}
+                  <button onClick={reload}>{text.retry}</button>
+                </p>
+              ) : today ? (
+                <dl>
+                  <dt>{text.todayDay}</dt>
+                  <dd>{vietnamDate(today.businessDay)}</dd>
+                  <dt>{text.todayPageViews}</dt>
+                  <dd>{numberFormat.format(today.pageViewEvents)}</dd>
+                  <dt>{text.todayProperties}</dt>
+                  <dd>{numberFormat.format(today.distinctPropertiesViewed)}</dd>
+                </dl>
+              ) : (
+                <p role="status">{text.loading}</p>
+              )}
+            </section>
           </>
         ) : null}
       </div>

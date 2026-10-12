@@ -88,12 +88,16 @@ const vi = {
   broker: 'Môi giới',
   representative: 'Đại diện',
   primary: 'Liên hệ chính',
-  phone: 'Điện thoại',
   noCurrent: 'Chưa có địa chỉ mới được ghi nhận.',
   pageViewFailed:
     'Chưa ghi nhận được lượt xem. Thử lại không tạo lượt xem trùng.',
   pageViewNote:
     'Mở trang chỉ ghi nhận lượt xem, không xác nhận đã thăm bất động sản.',
+  todayActivity: 'Hoạt động hôm nay của tôi',
+  todayDay: 'Ngày (giờ Việt Nam)',
+  todayPageViews: 'Lượt xem trang',
+  todayProperties: 'Bất động sản đã xem',
+  todayActivityFailed: 'Chưa tải được hoạt động hôm nay.',
   savedLocaleFailed:
     'Không lưu được ngôn ngữ. Ngôn ngữ hiện tại được giữ nguyên.',
   recovery: 'Quên mật khẩu?',
@@ -216,12 +220,16 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     broker: 'Broker',
     representative: 'Representative',
     primary: 'Primary contact',
-    phone: 'Phone',
     noCurrent: 'No current address recorded.',
     pageViewFailed:
       'Page view not recorded. Retrying will not create a duplicate.',
     pageViewNote:
       'Opening this page records a page view, not a confirmed physical visit.',
+    todayActivity: 'My activity today',
+    todayDay: 'Day (Vietnam time)',
+    todayPageViews: 'Page views',
+    todayProperties: 'Distinct properties viewed',
+    todayActivityFailed: "Today's activity could not be loaded.",
     savedLocaleFailed:
       'Unable to save language. The current language is unchanged.',
     recovery: 'Forgot password?',

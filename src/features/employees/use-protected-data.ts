@@ -2,8 +2,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Employee } from './types';
 import { api, RequestError } from './api';
+import { loadProtected } from './protected-load';
 
-export function useProtectedData<T>(endpoint: string) {
+export function useProtectedData<T>(
+  source: string | ((signal: AbortSignal) => Promise<T>),
+) {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -11,6 +14,7 @@ export function useProtectedData<T>(endpoint: string) {
   const generation = useRef(0);
   const controller = useRef<AbortController | null>(null);
   const surfaceElement = useRef<HTMLDivElement | null>(null);
+  const renderedFor = useRef<string | null>(null);
   const savedLocale = useRef<{
     employeeId: string;
     locale: Employee['locale'];
@@ -22,13 +26,17 @@ export function useProtectedData<T>(endpoint: string) {
   const invalidate = useCallback(() => {
     generation.current++;
     controller.current?.abort();
-    if (surfaceElement.current) surfaceElement.current.hidden = true;
   }, []);
-  const clear = useCallback(() => {
+  const conceal = useCallback(() => {
     invalidate();
+    if (surfaceElement.current) surfaceElement.current.hidden = true;
+  }, [invalidate]);
+  const clear = useCallback(() => {
+    conceal();
+    renderedFor.current = null;
     setData(null);
     setEmployee(null);
-  }, [invalidate]);
+  }, [conceal]);
   const load = useCallback(async () => {
     invalidate();
     const version = generation.current;
@@ -36,25 +44,35 @@ export function useProtectedData<T>(endpoint: string) {
     const abort = new AbortController();
     controller.current = abort;
     try {
-      const [session, result] = await Promise.all([
-        api<{ employee: Employee }>('/api/session', undefined, abort.signal),
-        api<T>(endpoint, undefined, abort.signal),
-      ]);
+      const { employee: sessionEmployee, data: result } =
+        await loadProtected<T>({
+          source,
+          signal: abort.signal,
+          renderedFor: renderedFor.current,
+          onIdentityChange: () => {
+            if (surfaceElement.current) surfaceElement.current.hidden = true;
+            renderedFor.current = null;
+            setData(null);
+            setEmployee(null);
+          },
+        });
       if (version !== generation.current) return;
       const latest = savedLocale.current;
       const active =
         latest &&
         latest.revision !== localeRevision &&
-        latest.employeeId === session.employee.id
-          ? { ...session.employee, locale: latest.locale }
-          : session.employee;
+        latest.employeeId === sessionEmployee.id
+          ? { ...sessionEmployee, locale: latest.locale }
+          : sessionEmployee;
       setEmployee(active);
       setData(result);
+      renderedFor.current = active.id;
       setError(null);
       document.documentElement.lang = active.locale;
       if (surfaceElement.current) surfaceElement.current.hidden = false;
     } catch (failure) {
       if (version !== generation.current || abort.signal.aborted) return;
+      renderedFor.current = null;
       setData(null);
       setEmployee(null);
       if (
@@ -70,7 +88,7 @@ export function useProtectedData<T>(endpoint: string) {
     } finally {
       if (version === generation.current) setBusy(false);
     }
-  }, [endpoint, invalidate]);
+  }, [source, invalidate]);
   const reload = useCallback(() => {
     setBusy(true);
     setError(null);
@@ -96,13 +114,13 @@ export function useProtectedData<T>(endpoint: string) {
     window.addEventListener('pagehide', hide);
     window.addEventListener('pageshow', show);
     return () => {
-      invalidate();
+      conceal();
       channel.close();
       window.removeEventListener('focus', focus);
       window.removeEventListener('pagehide', hide);
       window.removeEventListener('pageshow', show);
     };
-  }, [load, reload, clear, invalidate]);
+  }, [load, reload, clear, conceal]);
   async function logout() {
     clear();
     setBusy(true);

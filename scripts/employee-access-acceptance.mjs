@@ -121,15 +121,30 @@ function click(name, session) {
 function wait(text, session) {
   browser(['wait', text], session);
 }
+function waitUntil(expression, session = primary) {
+  for (let attempt = 0; attempt < 60; attempt++) {
+    if (evaluate(expression, session)) return;
+    browser(['wait', '500'], session);
+  }
+  assert.fail('Timed out waiting for browser state');
+}
 function screen(session) {
   return evaluate(
-    "() => ({path: location.pathname, query: location.search, locale: document.querySelector('main')?.lang, text: document.querySelector('main')?.innerText, codes: [...document.querySelectorAll('.property-card h2')].map(node=>node.textContent), scroll: scrollY})",
+    "() => ({path: location.pathname, query: location.search, locale: document.querySelector('main')?.lang, text: document.querySelector('main')?.innerText, codes: [...document.querySelectorAll('.property-card h2')].map(node=>node.textContent), today: [...document.querySelectorAll('section[aria-labelledby=today-activity] dd')].map(node=>node.textContent), scroll: scrollY})",
     session,
   );
 }
 function observed(name, details = {}) {
   observations.push({ name, ...details });
   console.log('PASS', name);
+}
+function expectedToday(row, locale) {
+  const format = new Intl.NumberFormat(locale === 'en' ? 'en-GB' : 'vi-VN');
+  return [
+    row.business_day.split('-').reverse().join('/'),
+    format.format(Number(row.page_view_events)),
+    format.format(Number(row.distinct_properties_viewed)),
+  ];
 }
 function completedApi(route, session = primary) {
   return evaluate(
@@ -254,6 +269,7 @@ try {
   initializeBrowser(secondary);
   const anonymous = new ApplicationSession();
   assert.equal((await anonymous.request('/api/properties')).status, 401);
+  assert.equal((await anonymous.request('/api/activity/today')).status, 401);
   const anonDirect = await fetch(
     environment.supabaseUrl + '/rest/v1/properties?select=id',
     { headers: { apikey: environment.publishableKey } },
@@ -407,6 +423,7 @@ try {
       '/api/session',
       '/api/properties',
       '/api/properties/' + fixtures.properties[0].id,
+      '/api/activity/today',
     ]) {
       const result = await denied.request(route);
       assert.equal(result.status, 403);
@@ -431,6 +448,7 @@ try {
       (await client.rpc('set_my_locale', { p_locale: 'en' })).error?.code,
       '42501',
     );
+    assert.equal((await client.rpc('my_today_activity')).error?.code, '42501');
     assert.equal(
       (
         await client.rpc('record_property_activity', {
@@ -506,6 +524,27 @@ try {
   );
   assert.equal(opens.length, 1);
   assert.equal(opens[0].kind, 'page_view');
+  waitUntil(
+    "() => document.querySelectorAll('section[aria-labelledby=today-activity] dd').length === 3",
+  );
+  assert.ok(screen().text.includes('Hoạt động hôm nay của tôi'));
+  const todayReport = await active.rpc('my_today_activity');
+  assert.equal(todayReport.error, null, 'Cannot read the live personal report');
+  const todayRow = todayReport.data[0];
+  assert.deepEqual(screen().today, expectedToday(todayRow, 'vi'));
+  observed(
+    'real browser own-today page views and distinct properties match the live session report',
+    {
+      businessDay: todayRow.business_day,
+      pageViewEvents: Number(todayRow.page_view_events),
+      distinctPropertiesViewed: Number(todayRow.distinct_properties_viewed),
+    },
+  );
+  assert.ok(screen().text.includes('Chủ nhà thử nghiệm'));
+  assert.ok(screen().text.includes('Môi giới thử nghiệm'));
+  assert.ok(screen().text.includes('Liên hệ chính'));
+  assert.ok(!screen().text.includes('0900 000 001'));
+  assert.ok(!screen().text.includes('0900 000 002'));
   const detailLocation = screen().path + screen().query;
   browser(['emulate', '--network', 'Offline']);
   networkOffline = true;
@@ -518,13 +557,18 @@ try {
   wait('Property details');
   assert.equal(screen().path + screen().query, detailLocation);
   assert.ok(screen().text.includes('9,007,199,254,740,993 VND'));
-  assert.ok(screen().text.includes('0900 000 001 / +84 900 000 001'));
+  assert.ok(screen().text.includes('My activity today'));
+  assert.deepEqual(screen().today, expectedToday(todayRow, 'en'));
+  assert.ok(screen().text.includes('Chủ nhà thử nghiệm'));
+  assert.ok(!screen().text.includes('0900 000 001'));
   assert.deepEqual(await activity(active), afterOpen);
   click('Tiếng Việt');
   wait('Chi tiết bất động sản');
   assert.equal(screen().path + screen().query, detailLocation);
   assert.ok(screen().text.includes('9.007.199.254.740.993 VND'));
-  assert.ok(screen().text.includes('0900 000 001 / +84 900 000 001'));
+  assert.ok(screen().text.includes('Hoạt động hôm nay của tôi'));
+  assert.deepEqual(screen().today, expectedToday(todayRow, 'vi'));
+  assert.ok(!screen().text.includes('0900 000 001'));
   assert.deepEqual(await activity(active), afterOpen);
   click('English');
   wait('Property details');
@@ -635,6 +679,25 @@ try {
   browserLogin('english', primary);
   assert.equal(screen().locale, 'en');
   observed('independent employee saved language');
+  const independent = new ApplicationSession();
+  assert.equal((await independent.login('english')).status, 200);
+  const independentToday = await independent.request('/api/activity/today');
+  assert.equal(independentToday.status, 200);
+  assert.deepEqual(Object.keys(independentToday.body).sort(), [
+    'businessDay',
+    'distinctPropertiesViewed',
+    'pageViewEvents',
+  ]);
+  assert.equal(independentToday.body.businessDay, todayRow.business_day);
+  assert.ok(Number.isInteger(independentToday.body.pageViewEvents));
+  assert.ok(Number.isInteger(independentToday.body.distinctPropertiesViewed));
+  assert.ok(
+    independentToday.body.distinctPropertiesViewed <=
+      independentToday.body.pageViewEvents,
+  );
+  observed(
+    'independent employee personal report uses the same database Vietnam day and exposes no other identity',
+  );
   assert.ok(
     (await activity(active)).every((event) => event.kind === 'page_view'),
     'Reading detail must never create a physical visit',
@@ -650,8 +713,27 @@ try {
     200,
   );
   assert.ok(!screen().text.includes('Chưa ghi nhận được lượt xem'));
+  waitUntil(
+    "() => document.querySelectorAll('section[aria-labelledby=today-activity] dd').length === 3",
+  );
+  const reviewerReport = await operator.rpc('my_today_activity');
+  assert.equal(
+    reviewerReport.error,
+    null,
+    'Cannot read the live personal report',
+  );
+  const reviewerRow = reviewerReport.data[0];
+  assert.deepEqual(screen().today, expectedToday(reviewerRow, screen().locale));
   observed(
     'real archived reviewer detail surface without physical-visit creation',
+  );
+  observed(
+    'reviewer who may read colleague activity still sees only their own',
+    {
+      businessDay: reviewerRow.business_day,
+      pageViewEvents: Number(reviewerRow.page_view_events),
+      distinctPropertiesViewed: Number(reviewerRow.distinct_properties_viewed),
+    },
   );
 } finally {
   if (networkOffline) browser(['emulate', '--network', 'Fast 4G']);

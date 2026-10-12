@@ -82,10 +82,10 @@ Prepare sanitized fixtures through authorized administration:
 | Reorder address fragments | No fuzzy or reordered-token matching is promised; the UI does not advertise it |
 | Search similar addresses on distinct properties | Distinct property codes remain identifiable; cursor paging retains distinct results and address summaries are bounded to the current page |
 | Submit an over-120-character query or a query with no matches | Localized validation rejects the oversized query; a genuine empty result is distinguishable from access denial |
-| Open property/contact details | Required characteristics, typed VND/dimensions, preserved legacy/current addresses, verification badges and all linked owner/broker relationships are shown; unknown values are explicit |
+| Open property/contact details | Required characteristics, typed VND/dimensions, preserved legacy/current addresses, verification badges and all linked owner/broker relationships are shown with names, relations and primary markers; unknown values are explicit; no owner phone is presented automatically and no disclosure control is offered |
 | Open a property without a contact link or verified current mapping | No guessed contact or ward is supplied; the missing/unresolved state is visible |
 | Record/retry a detail open and switch language | The documented page-view RPC retains retry identity without duplicate events; no physical visit is created |
-| Switch VI → EN → VI while searching or viewing details | All journey strings change, including validation and denial states; query, result position and open property survive; source text, phones, VND, m² and Vietnam dates retain meaning |
+| Switch VI → EN → VI while searching or viewing details | All journey strings change, including validation and denial states; query, result position and open property survive; source text, VND, m² and Vietnam dates retain meaning |
 | Fail the language-preference request | Previous interface language remains; localized error appears; UI does not claim persistence |
 | Switch language successfully, sign out and sign in again | Employee preference survives login via `set_my_locale`; source records remain unchanged |
 | Inactive or unlinked identity attempts protected browser navigation | Localized access-denied screen with no inventory/contact details, not a misleading empty search |
@@ -127,6 +127,43 @@ Record observed browser results and sanitized HTTP statuses/response shapes with
 - Final local `npm run check` and `npm run build` passed after recovery restoration: formatting, ESLint, strict types, 10 native tests, 83 schema assertions and the production build. Final real acceptance passed all 12 automated observation groups; the sanitized report's runner-recorded `checkedAt` is `2026-10-10T15:19:34.470Z`. That automated report still excludes the separately completed human mailbox cases; it is not production acceptance.
 
 Separately, strict types and the production build passed; 10 native unit tests and 83 embedded schema assertions passed across all six migrations. Authorized hosted configuration was verified with closed signup, exact localhost recovery URLs and `public`-only Data API exposure (`private` read `406/PGRST106`, authenticated public read `200`). **Real active, inactive and unlinked mailbox/callback/password recovery are verified and the synthetic fixture is restored.** Private Storage, customer import, broader workflows, production and deployment are not claimed.
+
+### Ticket #28 — protected detail and personal today activity acceptance (earlier revision executed; revised head not reproduced)
+
+Extends the employee-access matrix above; it does not replace it. Real authorized Supabase Auth/Data API/RLS and browser evidence is required; mocks are not acceptance. Requires the authorized isolated development project with `20261011060031_personal_daily_activity.sql` applied and synthetic active, inactive, unlinked, operator and independent-employee fixtures.
+
+**Revised-head status (11 October 2026).** The evidence below was gathered at the pre-review revision `65d1ad1`. The review change `c16889e` then re-scoped personal activity to protected revalidation and changed the stale-report and refocus paths, and the revised head has not reproduced that authenticated acceptance. This worktree has no scoped credentials or fixtures, no accessible cached Supabase query channel and no verified served target, so the real hosted Auth/Data API/RLS matrix and browser journey remain unverified at the revised head; embedded schema assertions and anonymous login HTML do not establish this acceptance.
+
+| Scenario | Required observation |
+| --- | --- |
+| Active employee opens a property through a direct authorized link | Recorded facts, preserved legacy/current addresses and owner/broker names, relations and primary markers appear; owner phones are absent from the page and no disclosure control is offered; unknown facts and missing relationships stay explicitly unknown |
+| Re-render, refocus or switch language on one open detail | The Page view keeps its UUID identity and yields exactly one event; a genuinely new navigation may add one more; no Owner-contact access or physical visit is created |
+| Read today's personal report in the browser | Rendered event count, distinct-property count and Vietnam day equal the live `my_today_activity` result for the signed-in employee, including the just-recorded open |
+| Employee with no Page view yet today | The report returns explicit zeros at the application boundary, not an error, blank panel or denial |
+| Anonymous, unlinked or inactive identity calls the report | `401` (anonymous) or `403/access-denied` (authenticated but not active), never a zero report |
+| Reviewer/operator reads their own report | Only that employee's activity appears even though their RLS spans colleague activity; no company-report UI is added |
+| Deactivate the open employee, then refocus; sign out and use Back or a protected direct link | The membership recheck clears the report with the rest of the protected surface; denial is never rendered as zero activity |
+| Switch VI/EN on an open detail | Activity labels, day and counts are localized; reported values and recorded source are unchanged and no extra event is recorded |
+| Mobile and keyboard use of the detail and report | Controls are keyboard reachable with accessible labels; a failed report is distinguishable from a genuine zero, an empty inventory and a missing property |
+
+`npm run test:schema` asserts own-only scope, the database Vietnam day and the zero-versus-`42501` boundary in embedded PostgreSQL. `scripts/employee-access-acceptance.mjs` exercises the hosted authenticated journey, including rendered report values matching the live session report.
+
+**Executed against the authorized development project at the pre-review revision `65d1ad1` (11 October 2026); not re-run at the revised head.** Migration `20261011060031_personal_daily_activity.sql` was applied through the reviewed forward path: the CLI dry-run reported exactly that one pending migration with no seeds or roles, the push applied only it, the follow-up dry-run reported up to date, `my_today_activity` moved from `404 PGRST202` to `403/42501` for an unauthenticated caller, and every read-only row baseline was unchanged. A disjoint synthetic namespace (five Auth users, four employees, three properties with owner/broker contacts, one archived) was created through the operator plane; the existing fixtures and the supplied development login were untouched.
+
+Real individual-session results over hosted Auth/Data API/RLS (task-local runner, sanitized output):
+
+- anonymous report, detail and page-view → `401`;
+- an event-free employee's own report → `200` with explicit `0/0` and the database Vietnam day;
+- one logical open, retried with the same key, → one `page_view` event and no site visit, and the same key cannot be reused for another property;
+- a new logical open → exactly one more event and one more distinct property;
+- a colleague sees only their own zeros;
+- inactive and unlinked identities → `403/access-denied` on report, detail and page-view;
+- archived detail → `404` for the ordinary employee, `200` for the reviewer, whose report stays own-only;
+- a JWT issued before deactivation → `403` on the next protected request with recorded events unchanged, and restoration re-enables the same employee.
+
+**Executed browser journey at the pre-review revision `65d1ad1` (11 October 2026); not re-run at the revised head.** Run with the repository-pinned `chrome-devtools-axi` 0.1.39 in task-private tooling, attached to a task-private headless Chromium through the documented `BROWSER_URL` mode with a private HOME, profile, session and ports (the installed 0.1.33 could not launch a browser on this host, and the pinned driver's own launch path failed the same way; a direct headless Chromium worked, which is what the documented attach mode uses). Observed: the direct link renders recorded facts, preserved legacy/current addresses, owner and broker names, relations and the primary marker **with no owner phone anywhere in the DOM and no disclosure control**; today's own panel matches the live report (Vietnam day, 1 event/1 property, then 2/2 on a genuinely new open); retry and VI→EN→VI keep the same open property with no duplicate event; an event-free employee sees explicit zeros; anonymous `401` and inactive/unlinked `403`; archived detail `404` for the ordinary employee and readable by the reviewer; deactivation clears the panel on refocus; sign-out clears state and Back/direct navigation expose no protected data; at the emulated 390×844 viewport `document.scrollWidth` equals the viewport with no overflowing element, and the skip link moves focus to the main region with the labelled activity panel present.
+
+**Fixture cleanup.** The disjoint `SGN28` namespace was created for this run and has been fully removed through the approved operator boundary after verifying each exact manifest ID by a read first: 5 activity events, 2 contact links, 3 addresses, 3 properties, 2 contacts and 4 employees deleted (HTTP 200 with the expected row counts), the synthetic Auth users removed through the Auth-admin API, and the project restored to its prior baseline (39 properties, 5 employees, 2 contacts, 82 activity events, 39 addresses, 32 files, 1 lock, 11 categories). An earlier blanket `404` during cleanup was a local request-builder bug — a missing leading slash before the resource path — not a permission boundary; no grant, policy, trigger or protection was changed. The supplied development login and all pre-existing fixtures were untouched throughout.
 
 ## Property, contact and address maintenance acceptance (not yet executed)
 

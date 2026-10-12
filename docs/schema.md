@@ -97,7 +97,7 @@ Rental agreements, monthly dues and manual receipt/refund tracking are included.
 - Address GIN trigram index on accent-normalized text from both formats. Property code has a unique B-tree index. Very short substring searches can scan more records; inspect plans before adding another index.
 - Daily activity indexed by employee/day/kind; reservation expiry indexed only for open states.
 - Approved-reservation uniqueness is a partial index over state, not a time-dependent predicate. Workflow RPCs expire stale state while holding the property row lock.
-- Analytic views use invoker security and base-table RLS. Area counts join only primary address rows and the single effective lock, avoiding contact/file multiplication.
+- Analytic views use invoker security and base-table RLS. Area counts join only primary address rows and the single effective lock, avoiding contact/file multiplication. `public.my_today_activity()` is an invoker report over `activity_events` scoped to the caller's own employee for the database Vietnam day, so a reviewer's wider activity read never widens it.
 - No persisted daily totals or separate lock boolean: derive these to avoid drift. Introduce summary tables only after measurement justifies them.
 
 ## Change boundaries
