@@ -117,7 +117,7 @@ _Avoid_: Pending lock, permanent property lock
 ### Discussion
 
 **Property comment**:
-A plain-text message an active employee posts to a property's shared flat discussion. Its author identity, text and posting time are retained from creation and are not edited or removed in this slice.
+A plain-text message an active employee posts to a property's shared flat discussion. Its author identity, property, posting time and position are retained from creation; only its own author may later correct the text in place through a guarded edit that keeps every earlier version.
 _Avoid_: Note, activity entry, private message
 
 **Property discussion**:
@@ -127,6 +127,14 @@ _Avoid_: Chat, live feed, moderation queue
 **Submission key**:
 An employee-scoped key identifying one comment submission, so an interrupted or ambiguous post retries the same original comment instead of creating another. Reusing it with different property or text is rejected.
 _Avoid_: Draft identity, temporary ID
+
+**Comment edit**:
+An author's correction of their own current Property comment while the property is unarchived. It changes only the displayed text and its revision; the comment keeps its identity, author, property and posting time and position, and readers see an edited marker. A stale expected revision is rejected instead of merged.
+_Avoid_: New comment, re-post, moderation, rewrite
+
+**Retained comment revision**:
+The append-only evidence of one committed comment edit: the text that was replaced, the text that replaced it, and the editing actor and time. Readable only by an active manager/admin with current property access, never by ordinary readers or the comment's ordinary author.
+_Avoid_: Full history browser, audit log, deleted original
 
 
 ### Property files

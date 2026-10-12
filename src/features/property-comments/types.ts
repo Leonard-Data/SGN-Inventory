@@ -8,6 +8,7 @@ export interface Comment {
   body: string;
   createdAt: string;
   revision: string;
+  editedAt: string | null;
 }
 export type CommentCursor = {
   before: string;

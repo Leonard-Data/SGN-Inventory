@@ -38,10 +38,28 @@ export type Database = {
           author_name: string;
           body: string;
           created_at: string;
+          edited_at: string | null;
           id: string;
           idempotency_key: string;
           property_id: string;
           revision: string;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      property_comment_revisions: {
+        Row: {
+          sequence: number;
+          comment_id: string;
+          property_id: string;
+          actor_id: string;
+          actor_name: string;
+          edited_at: string;
+          before_revision: string;
+          after_revision: string;
+          before_body: string;
+          after_body: string;
         };
         Insert: never;
         Update: never;
@@ -1643,6 +1661,7 @@ export type Database = {
           author_name: string;
           body: string;
           created_at: string;
+          edited_at: string | null;
           id: string;
           property_id: string;
           revision: string;
@@ -1679,6 +1698,14 @@ export type Database = {
       };
       post_property_comment: {
         Args: { p_body: string; p_key: string; p_property_id: string };
+        Returns: Json;
+      };
+      edit_property_comment: {
+        Args: {
+          p_comment_id: string;
+          p_body: string;
+          p_expected_revision: string;
+        };
         Returns: Json;
       };
       record_property_activity: {

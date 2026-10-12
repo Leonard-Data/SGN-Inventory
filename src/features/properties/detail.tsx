@@ -855,6 +855,7 @@ export function Detail({
                     propertyId={property.id}
                     locale={locale}
                     archived={!!property.archived_at}
+                    employeeId={employeeId ?? null}
                     onDenied={denyFiles}
                   />
                 </section>

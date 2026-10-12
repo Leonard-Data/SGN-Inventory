@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
-select plan(19);
+select plan(23);
 select ok(not has_table_privilege('anon','public.properties','SELECT'),'anonymous inventory select revoked');
 select ok(not has_table_privilege('authenticated','public.property_locks','UPDATE'),'direct lock mutation revoked');
 select ok(not has_table_privilege('authenticated','public.activity_events','INSERT'),'direct activity insertion revoked');
@@ -22,5 +22,9 @@ select ok(not has_table_privilege('anon','public.property_comments','SELECT'),'a
 select ok(not has_table_privilege('authenticated','public.property_comments','INSERT'),'direct comment insertion revoked');
 select ok(not has_table_privilege('authenticated','public.property_comments','UPDATE') and not has_table_privilege('authenticated','public.property_comments','DELETE'),'direct comment mutation revoked');
 select ok(exists(select 1 from pg_indexes where schemaname='public' and indexname='property_comments_author_id_idempotency_key_key'),'one comment identity per employee submission key exists');
+select ok(not has_table_privilege('anon','public.property_comment_revisions','SELECT'),'anonymous retained-revision select revoked');
+select ok(not has_table_privilege('authenticated','public.property_comment_revisions','INSERT') and not has_table_privilege('authenticated','public.property_comment_revisions','UPDATE') and not has_table_privilege('authenticated','public.property_comment_revisions','DELETE'),'direct retained-revision mutation revoked');
+select ok(exists(select 1 from pg_indexes where schemaname='public' and indexname='property_comment_revisions_comment_idx'),'retained revisions are reachable per comment in commit order');
+select ok(exists(select 1 from information_schema.columns where table_schema='public' and table_name='property_comments' and column_name='edited_at'),'the current comment carries its edited marker');
 select * from finish();
 rollback;

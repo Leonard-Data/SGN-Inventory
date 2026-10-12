@@ -12,11 +12,10 @@ const timestamp =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|\+00:00)$/;
 
 function databaseError(error: { code?: string }) {
-  const denied = error.code === '42501';
-  throw new ApiError(
-    denied ? 403 : 503,
-    denied ? 'access-denied' : 'unavailable',
-  );
+  if (error.code === '42501') throw new ApiError(403, 'access-denied');
+  // PT409 is PostgREST's custom conflict status: a stale save is rejected, never merged.
+  if (error.code === 'PT409') throw new ApiError(409, 'stale-edit');
+  throw new ApiError(503, 'unavailable');
 }
 // Rows arrive from the guarded RPC or a live read; never trust their shape.
 function comment(row: unknown): Comment {
@@ -31,7 +30,8 @@ function comment(row: unknown): Comment {
     typeof value.author_name !== 'string' ||
     typeof value.body !== 'string' ||
     typeof value.created_at !== 'string' ||
-    !uuid(value.revision)
+    !uuid(value.revision) ||
+    (value.edited_at !== null && typeof value.edited_at !== 'string')
   )
     throw new ApiError(503, 'unavailable');
   return {
@@ -42,6 +42,7 @@ function comment(row: unknown): Comment {
     body: value.body,
     createdAt: value.created_at,
     revision: value.revision,
+    editedAt: value.edited_at,
   };
 }
 
@@ -107,6 +108,41 @@ export async function postComment(
   if (error) {
     if (error.code === '42501') throw new ApiError(403, 'access-denied');
     if (error.code === '23505') throw new ApiError(409, 'comment-conflict');
+    if (error.code === '23514') throw new ApiError(400, 'invalid-input');
+    throw new ApiError(503, 'unavailable');
+  }
+  return comment(data);
+}
+
+// The author's guarded edit of their own current comment on an unarchived Property. The route
+// validates the shape; the database rechecks author, revision, archive state and membership.
+export async function editComment(
+  context: RouteContext,
+  id: string,
+  commentId: string,
+  body: Record<string, unknown>,
+): Promise<Comment> {
+  if (
+    !uuid(id) ||
+    !uuid(commentId) ||
+    Object.keys(body).some((key) => key !== 'body' && key !== 'revision') ||
+    typeof body.body !== 'string' ||
+    !uuid(body.revision)
+  )
+    throw new ApiError(400, 'invalid-input');
+  const text = body.body.trim();
+  const length = [...text].length;
+  if (length < 1 || length > COMMENT_MAX_LENGTH)
+    throw new ApiError(400, 'invalid-input');
+  const { data, error } = await context.client.rpc('edit_property_comment', {
+    p_comment_id: commentId,
+    p_body: text,
+    p_expected_revision: body.revision,
+  });
+  if (error) {
+    // The RPC returns JSON, so a denied author or a stale save is a database error, not data.
+    if (error.code === '42501') throw new ApiError(403, 'access-denied');
+    if (error.code === 'PT409') throw new ApiError(409, 'stale-edit');
     if (error.code === '23514') throw new ApiError(400, 'invalid-input');
     throw new ApiError(503, 'unavailable');
   }

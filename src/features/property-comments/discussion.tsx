@@ -27,17 +27,20 @@ export function Discussion({
   propertyId,
   locale,
   archived,
+  employeeId,
   onDenied,
 }: {
   propertyId: string;
   locale: Locale;
   archived: boolean;
+  employeeId: string | null;
   onDenied: (status: number) => void;
 }) {
   const text = messages[locale],
     headingId = useId(),
     fieldId = useId(),
-    helpId = useId();
+    helpId = useId(),
+    editBaseId = useId();
   const [comments, setComments] = useState<Comment[]>([]);
   const [next, setNext] = useState<CommentCursor | null>(null);
   const [busy, setBusy] = useState(true);
@@ -47,6 +50,12 @@ export function Discussion({
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // One author edit at a time: the open draft survives a stale conflict for reconciliation.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editNotice, setEditNotice] = useState<string | null>(null);
   const inFlight = useRef<AbortController | null>(null);
   const generation = useRef(0);
   // One submission key per draft: an ambiguous failure retries the original comment, a conflict
@@ -109,6 +118,7 @@ export function Discussion({
   }, [load, stop]);
   function refresh() {
     setBusy(true);
+    setEditNotice(null);
     void load();
   }
   async function loadMore() {
@@ -192,6 +202,73 @@ export function Discussion({
     }
   }
   const loadingMore = busy || more;
+  const editMessage =
+    editError === 'required'
+      ? text.commentRequired
+      : editError === 'too-long'
+        ? text.commentTooLong
+        : editError === 'stale-edit'
+          ? text.commentEditStale
+          : editError === 'failed'
+            ? text.commentEditFailed
+            : null;
+  function beginEdit(row: Comment) {
+    setEditingId(row.id);
+    setEditDraft(row.body);
+    setEditError(null);
+    setEditNotice(null);
+  }
+  function cancelEdit() {
+    setEditingId(null);
+    setEditDraft('');
+    setEditError(null);
+  }
+  async function saveEdit(row: Comment) {
+    const value = editDraft.trim();
+    const length = [...value].length;
+    if (length < 1) {
+      setEditError('required');
+      return;
+    }
+    if (length > COMMENT_MAX_LENGTH) {
+      setEditError('too-long');
+      return;
+    }
+    setSaving(true);
+    setEditError(null);
+    let updated: Comment;
+    try {
+      updated = (
+        await api<{ comment: Comment }>(
+          '/api/properties/' + propertyId + '/comments/' + row.id,
+          { body: value, revision: row.revision },
+        )
+      ).comment;
+    } catch (problem) {
+      if (
+        problem instanceof RequestError &&
+        (problem.status === 401 || problem.status === 403)
+      ) {
+        onDenied(problem.status);
+        return;
+      }
+      const stale =
+        problem instanceof RequestError && problem.code === 'stale-edit';
+      setSaving(false);
+      // The draft stays in the open editor; refreshing exposes the current saved text so the
+      // author can reconcile instead of silently overwriting the newer edit.
+      setEditError(stale ? 'stale-edit' : 'failed');
+      if (stale) refresh();
+      return;
+    }
+    setSaving(false);
+    setEditingId(null);
+    setEditDraft('');
+    setEditNotice(text.commentEdited);
+    setComments((rows) =>
+      rows.map((entry) => (entry.id === updated.id ? updated : entry)),
+    );
+  }
   return (
     <section className="panel" aria-labelledby={headingId}>
       <div className="panel-head">
@@ -244,17 +321,101 @@ export function Discussion({
                     <time dateTime={row.createdAt}>
                       {vietnamTimestamp(row.createdAt, locale)}
                     </time>{' '}
-                    <span className="field-hint">({text.vietnamTime})</span>
+                    <span className="field-hint">
+                      {`(${text.vietnamTime}${row.editedAt ? ` · ${text.commentEditedMark}` : ''})`}
+                    </span>
                   </p>
-                  <p className="comment-body" translate="no">
-                    {row.body}
-                  </p>
+                  {editingId === row.id ? (
+                    <form
+                      className="composer"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void saveEdit(row);
+                      }}
+                    >
+                      <div className="field">
+                        <label
+                          className="field-label"
+                          htmlFor={`${editBaseId}-${row.id}`}
+                        >
+                          {text.editComment}
+                        </label>
+                        <textarea
+                          id={`${editBaseId}-${row.id}`}
+                          className="textarea"
+                          name="comment-edit"
+                          rows={4}
+                          maxLength={COMMENT_MAX_LENGTH}
+                          value={editDraft}
+                          onChange={(event) => setEditDraft(event.target.value)}
+                          aria-describedby={`${editBaseId}-${row.id}-help`}
+                          disabled={saving}
+                        />
+                      </div>
+                      <p
+                        className="field-hint"
+                        id={`${editBaseId}-${row.id}-help`}
+                      >
+                        {text.commentHint}{' '}
+                        <span translate="no">
+                          {[...editDraft.trim()].length}/{COMMENT_MAX_LENGTH}
+                        </span>
+                      </p>
+                      {editMessage ? <p role="alert">{editMessage}</p> : null}
+                      {editError === 'stale-edit' ? (
+                        <>
+                          <p className="field-hint">
+                            {text.commentEditCurrent}
+                          </p>
+                          <p className="comment-body" translate="no">
+                            {row.body}
+                          </p>
+                        </>
+                      ) : null}
+                      <div className="composer-foot">
+                        <button
+                          type="submit"
+                          className="btn btn-primary btn-sm"
+                          disabled={saving}
+                        >
+                          {saving ? text.saving : text.saveComment}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          onClick={cancelEdit}
+                          disabled={saving}
+                        >
+                          {text.cancel}
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <>
+                      <p className="comment-body" translate="no">
+                        {row.body}
+                      </p>
+                      {employeeId === row.authorId && !archived ? (
+                        <div className="comment-actions">
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-ghost"
+                            onClick={() => beginEdit(row)}
+                            disabled={editingId !== null}
+                          >
+                            {text.editComment}
+                          </button>
+                        </div>
+                      ) : null}
+                    </>
+                  )}
                 </div>
               </article>
             </li>
           );
         })}
       </ol>
+      {editNotice ? <p role="status">{editNotice}</p> : null}
       {!busy && !error && !comments.length ? <p>{text.noComments}</p> : null}
       {next ? (
         <p>

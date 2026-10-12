@@ -148,6 +148,16 @@ const vi = {
     'Khóa gửi này đã được ghi với nội dung khác. Hãy làm mới để xem bình luận đã ghi.',
   noComments: 'Chưa có bình luận nào.',
   moreComments: 'Xem bình luận cũ hơn',
+  editComment: 'Sửa bình luận',
+  saveComment: 'Lưu bình luận',
+  saving: 'Đang lưu…',
+  cancel: 'Hủy',
+  commentEdited: 'Đã cập nhật bình luận.',
+  commentEditedMark: 'đã chỉnh sửa',
+  commentEditCurrent: 'Nội dung hiện tại trên hệ thống:',
+  commentEditStale:
+    'Bình luận này đã được sửa ở nơi khác. Bản nháp của bạn được giữ lại; hãy đối chiếu với nội dung hiện tại rồi lưu lại.',
+  commentEditFailed: 'Chưa lưu được bản sửa. Bản nháp được giữ lại.',
   refresh: 'Làm mới',
   vietnamTime: 'giờ Việt Nam',
   savedLocaleFailed:
@@ -421,6 +431,16 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
       'This submission key already recorded different text. Refresh to see the recorded comment.',
     noComments: 'No comments yet.',
     moreComments: 'More comments',
+    editComment: 'Edit comment',
+    saveComment: 'Save comment',
+    saving: 'Saving…',
+    cancel: 'Cancel',
+    commentEdited: 'Comment updated.',
+    commentEditedMark: 'edited',
+    commentEditCurrent: 'Current saved text:',
+    commentEditStale:
+      'This comment was edited elsewhere. Your draft is kept; compare it with the current text and save again.',
+    commentEditFailed: 'The edit was not saved. Your draft is kept.',
     refresh: 'Refresh',
     vietnamTime: 'Vietnam time',
     savedLocaleFailed:
