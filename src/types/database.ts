@@ -32,6 +32,21 @@ export type Database = {
         Update: never;
         Relationships: [];
       };
+      property_comments: {
+        Row: {
+          author_id: string;
+          author_name: string;
+          body: string;
+          created_at: string;
+          id: string;
+          idempotency_key: string;
+          property_id: string;
+          revision: string;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
       correction_requests: {
         Row: {
           id: string;
@@ -1617,6 +1632,23 @@ export type Database = {
           name: string;
         }[];
       };
+      list_property_comments: {
+        Args: {
+          p_before_created_at?: string;
+          p_before_id?: string;
+          p_limit?: number;
+          p_property_id: string;
+        };
+        Returns: {
+          author_id: string;
+          author_name: string;
+          body: string;
+          created_at: string;
+          id: string;
+          property_id: string;
+          revision: string;
+        }[];
+      };
       my_today_activity: {
         Args: never;
         Returns: {
@@ -1624,6 +1656,10 @@ export type Database = {
           distinct_properties_viewed: number;
           page_view_events: number;
         }[];
+      };
+      post_property_comment: {
+        Args: { p_body: string; p_key: string; p_property_id: string };
+        Returns: Json;
       };
       record_property_activity: {
         Args: {

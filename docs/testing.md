@@ -18,6 +18,8 @@ Rental/locale tests also cover preferred language, activation, month generation,
 - The prototype's simulated sign-in success and reset timers are not reproduced. The recovery step-two lead uses the application's generic localised copy and never echoes an entered email, because the verified identity comes from the real callback rather than the typed address.
 - Not executed here: real authorized Auth/email/callback acceptance and the production `next build` smoke against a configured Supabase project, which remain staging gates.
 
+Property-discussion tests (#44) also cover anonymous/inactive/deactivated denial on both the table and the RPC, cross-owner posting without property-edit authority, blank and over-limit validation, retained attribution with immutable property/author/time, employee-scoped submission-key convergence and conflicting reuse, the archived read/post boundary, no side effects on property facts, and tied-time keyset paging without omission or duplication.
+
 ### Engineering foundation verification
 
 Local engineering setup was exercised separately from business acceptance:
@@ -67,6 +69,10 @@ These checks use inert fixtures and do not establish Supabase connectivity, real
 | Independent activation and payment confirmation | Self decisions and unauthorized direct writes denied |
 | Concurrent rent receipts or refunds | Serialized month decisions; cannot exceed dues or confirmed receipt balance |
 | Early termination of a prepaid agreement | Future dues voided; receipts retained; refund due visible; actual refund separately recorded |
+| Direct Data API/RPC access to another property's discussion as anonymous, inactive, unlinked or deactivated identity | No rows and `42501` on guarded RPCs, including with a JWT issued before deactivation |
+| Retry one comment submission with the same employee submission key | One original comment identity; no duplicate; conflicting property or text reuse rejected |
+| Read and post archived-property discussion by role | Reviewer reads; ordinary employees do not; posting denied for every role |
+| Two live sessions post and archive the same property | Serialized on the parent property; no comment commits after the archive commits |
 | Production recovery rehearsal | New user writes preserved; backup/import map available |
 
 Use Supabase CLI advisors and the real local/staging database when available. Inspect the current command's `--help` rather than assuming old flags. Run the SQL pgTAP structural checks in `supabase/tests/` on the local stack.
@@ -251,6 +257,27 @@ Add embedded database regressions only for consumer-visible invariants and run `
 ### Executed property-files evidence
 
 See the scoped development observations below. They distinguish actual browser/API/Storage and independent-session checks from embedded assertions and unexecuted production gates.
+
+## Property discussion acceptance (not yet executed)
+
+Scope: [ticket #44 shared Property discussion](database-contract.md#ticket-44--shared-property-discussion). Planned acceptance gates, not executed results and not authorization to provision staging. Use sanitized fixtures, real Supabase Auth/Data API/RLS, the actual VI/EN browser interface and independent connections for contention. Issue #44 stopped before this hosted/browser work because the shared development project was held by issue #28; none of the rows below has an observed outcome yet.
+
+Prepare two active sales employees with distinct properties, an active staff identity, a manager or admin reviewer, an inactive linked identity, an unlinked authenticated identity, and archived/unarchived properties carrying 35+ comments with deliberately tied posting times.
+
+| Scenario | Required observation |
+| --- | --- |
+| Active employee opens another employee's protected property detail | Real protected detail loads its discussion; author name and Vietnam posting time show newest-first; posting succeeds without granting property-edit authority |
+| Post Vietnamese text with accents and internal line breaks, then reload | Stored and displayed text is byte-identical to the trimmed input; `body` renders as plain text and HTML-like input cannot execute script |
+| Submit blank, whitespace-only and 2001-character text through the browser and direct API/RPC | Localized validation on both boundaries; no comment row is created |
+| Ambiguous or failed post (network dropped after commit, and before commit) with the draft retained; retry with the same submission key | Commit visible immediately; the failure is never reported as success; retry converges on one original comment identity and creates no duplicate; conflicting reuse of that key is rejected |
+| Anonymous, inactive, unlinked and live-deactivated identities call the endpoint and the direct Data API/RPC with an existing JWT | Discussion rows are invisible, guarded RPCs answer `42501`/`403`, and refocus clears displayed discussion without cached protected navigation exposure |
+| Manager/admin and an ordinary employee open an archived property detail | Reviewer reads archived discussion; ordinary employees do not; posting is denied for every role |
+| Two real sessions: one posts while another archives the same property | The two serialize on the parent property row; the post either commits before the archive or is denied after it, never after the archive commits |
+| Page a 35+ comment discussion with many identical posting times | Pages of 30 are newest-first, cursor-based and complete: no comment is omitted or duplicated across pages |
+| Switch VI → EN → VI while the discussion is open | Labels, validation, empty and error states switch; source comment text, author names and the open property are unchanged |
+| Keyboard-only and 360px mobile use of the comment form, refresh and paging controls | All controls are reachable and operable; focus and announcements work; no horizontal overflow |
+
+Add embedded database regressions only for consumer-visible invariants and run `npm run test:schema` for schema/workflow changes. Browser, real Data API/RLS and separate-session contention remain distinct proof. Record sanitized observations without tokens, credentials, private source payloads or customer records.
 
 ## Contention test procedure
 

@@ -14,6 +14,7 @@ import {
   CorrectionReport,
 } from '@/features/corrections/queue';
 import { formatVnd, formatDecimal, vietnamDate } from './format';
+import { Discussion } from '@/features/property-comments/discussion';
 
 const directionKeys: Record<string, string> = {
   N: 'north',
@@ -324,6 +325,13 @@ export function Detail({
                 />
               </>
             ) : null}
+            <Discussion
+              key={property.id}
+              propertyId={property.id}
+              locale={locale}
+              archived={!!property.archived_at}
+              onDenied={denyFiles}
+            />
             <p className="muted">{text.pageViewNote}</p>
             {viewError ? (
               <p role="alert">
