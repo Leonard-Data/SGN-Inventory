@@ -14,10 +14,15 @@
 }
 
 /* The package's dropzone is one flex row for an icon and two lines of copy. This
-   application puts the whole upload form inside it, so the row wraps and its controls
-   may shrink instead of forcing the page wider than the viewport. */
+   application puts the whole upload form inside it, and the hint's min-content is a
+   single word, so as flex items the controls crowded a narrow column and the row never
+   wrapped. The hint takes its own line and the fields and native file control may
+   shrink instead of forcing the page wider than the viewport. */
 .dropzone {
   flex-wrap: wrap;
+}
+.dropzone > p {
+  flex: 1 0 100%;
 }
 .dropzone .field {
   flex: 1 1 200px;

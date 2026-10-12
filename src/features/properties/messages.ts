@@ -2,6 +2,9 @@ import type { Locale } from '@/i18n/messages';
 
 const vi = {
   back: 'Về kết quả',
+  tabOverview: 'Tổng quan',
+  tabDocs: 'Tài liệu',
+  tabComments: 'Thảo luận',
   facts: 'Thông tin hồ sơ',
   addresses: 'Địa chỉ',
   contacts: 'Liên hệ chủ nhà / môi giới',
@@ -20,6 +23,9 @@ const vi = {
 
 const en: Record<keyof typeof vi, string> = {
   back: 'Back to results',
+  tabOverview: 'Overview',
+  tabDocs: 'Documents',
+  tabComments: 'Discussion',
   facts: 'Record facts',
   addresses: 'Addresses',
   contacts: 'Owner / agent contacts',

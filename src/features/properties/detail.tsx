@@ -1,5 +1,12 @@
 'use client';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from 'react';
 import { label, messages, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { RequestError } from '@/features/employees/api';
@@ -27,6 +34,10 @@ import {
 } from './format';
 import { Discussion } from '@/features/property-comments/discussion';
 import { detailMessages } from './messages';
+// The record screen groups its content the way the design package does: the record's own
+// facts, its documents and its discussion.
+const RECORD_TABS = ['overview', 'docs', 'comments'] as const;
+type RecordTab = (typeof RECORD_TABS)[number];
 const directionKeys: Record<string, string> = {
   N: 'north',
   NE: 'northeast',
@@ -91,6 +102,25 @@ export function Detail({
   // a language switch re-renders the body instead of leaving it on the fetched value.
   const locale = initialLocale;
   const text = messages[locale];
+  const [tab, setTab] = useState<RecordTab>('overview');
+  // Roving tabindex: the arrow keys move both focus and selection across the three tabs.
+  function onTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    const index = RECORD_TABS.indexOf(tab);
+    const next =
+      event.key === 'ArrowRight'
+        ? RECORD_TABS[(index + 1) % RECORD_TABS.length]
+        : event.key === 'ArrowLeft'
+          ? RECORD_TABS[(index + RECORD_TABS.length - 1) % RECORD_TABS.length]
+          : event.key === 'Home'
+            ? RECORD_TABS[0]
+            : event.key === 'End'
+              ? RECORD_TABS[RECORD_TABS.length - 1]
+              : null;
+    if (!next) return;
+    event.preventDefault();
+    setTab(next);
+    document.getElementById('record-tab-' + next)?.focus();
+  }
   const [refreshTick, setRefreshTick] = useState(0);
   const [creditTick, setCreditTick] = useState(0);
   async function changed() {
@@ -322,477 +352,523 @@ export function Detail({
             ) : null}
 
             <div className="detail-body">
-              {/* plate hero — record cover */}
-              <div className="panel plate-hero" data-od-id="record-plate">
-                {coverFileId ? (
-                  <CoverImage
-                    propertyId={id}
-                    fileId={coverFileId}
-                    locale={locale}
-                    onDenied={denyFiles}
-                  />
-                ) : (
-                  <Plate
-                    variant="hero"
-                    locale={locale}
-                    record={{
-                      property_code: property.property_code,
-                      frontage_m: property.frontage_m,
-                      depth_m: property.depth_m,
-                      land_area_m2: property.land_area_m2,
-                      floor_area_m2: property.floor_area_m2,
-                      floors: property.floors,
-                      direction: property.direction,
-                      access_type: property.access_type,
-                    }}
-                  />
-                )}
-              </div>
+              <div>
+                <div
+                  className="tabs"
+                  role="tablist"
+                  aria-label={dt.facts}
+                  data-od-id="record-tabs"
+                >
+                  {RECORD_TABS.map((id) => (
+                    <button
+                      key={id}
+                      className="tab"
+                      type="button"
+                      role="tab"
+                      id={'record-tab-' + id}
+                      aria-controls={'record-panel-' + id}
+                      aria-selected={tab === id}
+                      tabIndex={tab === id ? 0 : -1}
+                      onClick={() => setTab(id)}
+                      onKeyDown={onTabKeyDown}
+                    >
+                      {id === 'overview'
+                        ? dt.tabOverview
+                        : id === 'docs'
+                          ? dt.tabDocs
+                          : dt.tabComments}
+                    </button>
+                  ))}
+                </div>
 
-              {/* facts */}
-              <div className="panel" data-od-id="panel-facts">
-                <div className="panel-head">
-                  <h2>{dt.facts}</h2>
-                  <span className="panel-note num">
-                    {property.property_code}
-                  </span>
-                </div>
-                <div className="panel-body">
-                  <dl className="facts">
-                    <div className="fact">
-                      <dt>{text.listingMode}</dt>
-                      <dd
-                        className={
-                          property.listing_mode ? undefined : 'is-unknown'
-                        }
-                      >
-                        {label(locale, property.listing_mode)}
-                      </dd>
-                    </div>
-                    <div className="fact">
-                      <dt>{text.propertyType}</dt>
-                      <dd
-                        className={
-                          property.property_type ? undefined : 'is-unknown'
-                        }
-                      >
-                        {label(locale, property.property_type)}
-                      </dd>
-                    </div>
-                    <div className="fact">
-                      <dt>{text.accessType}</dt>
-                      <dd
-                        className={
-                          property.access_type ? undefined : 'is-unknown'
-                        }
-                      >
-                        {label(locale, property.access_type)}
-                      </dd>
-                    </div>
-                    <div className="fact">
-                      <dt>{text.status}</dt>
-                      <dd>{label(locale, property.status)}</dd>
-                    </div>
-                    <div className="fact">
-                      <dt>{text.reviewStatus}</dt>
-                      <dd>{label(locale, property.record_review_status)}</dd>
-                    </div>
-                    <div className="fact">
-                      <dt>{text.legalStatus}</dt>
-                      <dd
-                        className={
-                          property.legal_status ? undefined : 'is-unknown'
-                        }
-                      >
-                        {label(locale, property.legal_status)}
-                      </dd>
-                    </div>
-                    <div className="fact">
-                      <dt>{text.salePrice}</dt>
-                      <dd
-                        className={
-                          property.sale_price_vnd === null
-                            ? 'is-unknown'
-                            : 'num'
-                        }
-                      >
-                        {property.sale_price_vnd === null
-                          ? text.unknown
-                          : formatVnd(property.sale_price_vnd, locale)}
-                      </dd>
-                    </div>
-                    <div className="fact">
-                      <dt>{text.monthlyRent}</dt>
-                      <dd
-                        className={
-                          property.monthly_rent_vnd === null
-                            ? 'is-unknown'
-                            : 'num'
-                        }
-                      >
-                        {property.monthly_rent_vnd === null
-                          ? text.unknown
-                          : formatVnd(property.monthly_rent_vnd, locale)}
-                      </dd>
-                    </div>
-                    <div className="fact">
-                      <dt>{text.landArea}</dt>
-                      <dd
-                        className={
-                          property.land_area_m2 === null ? 'is-unknown' : 'num'
-                        }
-                      >
-                        {number(property.land_area_m2, ' m²')}
-                      </dd>
-                    </div>
-                    <div className="fact">
-                      <dt>{text.floorArea}</dt>
-                      <dd
-                        className={
-                          property.floor_area_m2 === null ? 'is-unknown' : 'num'
-                        }
-                      >
-                        {number(property.floor_area_m2, ' m²')}
-                      </dd>
-                    </div>
-                    <div className="fact">
-                      <dt>{text.frontage}</dt>
-                      <dd
-                        className={
-                          property.frontage_m === null ? 'is-unknown' : 'num'
-                        }
-                      >
-                        {number(property.frontage_m, ' m')}
-                      </dd>
-                    </div>
-                    <div className="fact">
-                      <dt>{text.depth}</dt>
-                      <dd
-                        className={
-                          property.depth_m === null ? 'is-unknown' : 'num'
-                        }
-                      >
-                        {number(property.depth_m, ' m')}
-                      </dd>
-                    </div>
-                    <div className="fact">
-                      <dt>{text.floors}</dt>
-                      <dd
-                        className={
-                          property.floors === null ? 'is-unknown' : 'num'
-                        }
-                      >
-                        {number(property.floors)}
-                      </dd>
-                    </div>
-                    <div className="fact">
-                      <dt>{text.bedrooms}</dt>
-                      <dd
-                        className={
-                          property.bedrooms === null ? 'is-unknown' : 'num'
-                        }
-                      >
-                        {number(property.bedrooms)}
-                      </dd>
-                    </div>
-                    <div className="fact">
-                      <dt>{text.bathrooms}</dt>
-                      <dd
-                        className={
-                          property.bathrooms === null ? 'is-unknown' : 'num'
-                        }
-                      >
-                        {number(property.bathrooms)}
-                      </dd>
-                    </div>
-                    <div className="fact">
-                      <dt>{text.direction}</dt>
-                      <dd
-                        className={
-                          !property.direction ? 'is-unknown' : undefined
-                        }
-                      >
-                        {label(
-                          locale,
-                          property.direction
-                            ? directionKeys[property.direction]
-                            : null,
-                        )}
-                      </dd>
-                    </div>
-                    <div className="fact">
-                      <dt>{text.updated}</dt>
-                      <dd className="num">
-                        {vietnamDate(property.updated_at)}
-                      </dd>
-                    </div>
-                  </dl>
-                  <p className="field-hint">{text.legalNote}</p>
-                </div>
-              </div>
+                <section
+                  className="tabpanel"
+                  role="tabpanel"
+                  id="record-panel-overview"
+                  aria-labelledby="record-tab-overview"
+                  hidden={tab !== 'overview'}
+                >
+                  {/* plate hero — record cover */}
+                  <div className="panel plate-hero" data-od-id="record-plate">
+                    {coverFileId ? (
+                      <CoverImage
+                        propertyId={id}
+                        fileId={coverFileId}
+                        locale={locale}
+                        onDenied={denyFiles}
+                      />
+                    ) : (
+                      <Plate
+                        variant="hero"
+                        locale={locale}
+                        record={{
+                          property_code: property.property_code,
+                          frontage_m: property.frontage_m,
+                          depth_m: property.depth_m,
+                          land_area_m2: property.land_area_m2,
+                          floor_area_m2: property.floor_area_m2,
+                          floors: property.floors,
+                          direction: property.direction,
+                          access_type: property.access_type,
+                        }}
+                      />
+                    )}
+                  </div>
 
-              {/* addresses */}
-              <div className="panel" data-od-id="panel-addresses">
-                <div className="panel-head">
-                  <h2>{dt.addresses}</h2>
-                </div>
-                <div className="panel-body">
-                  {data.addresses.length ? (
-                    data.addresses.map((address) => (
-                      <div className="record" key={address.id}>
-                        <div className="record-head">
-                          <span className="record-title">
-                            {label(locale, address.format)}
-                          </span>
-                          <span
-                            className="badge"
-                            data-tone={mappingTone(address.mapping_status)}
-                          >
-                            {label(locale, address.mapping_status)}
-                          </span>
-                        </div>
-                        <p className="record-body" translate="no">
-                          {address.address_text}
-                        </p>
-                        <p className="record-meta">
-                          {vietnamDate(address.effective_on) ?? text.unknown} ·{' '}
-                          {address.verified_by ?? text.unknown}
-                        </p>
-                      </div>
-                    ))
-                  ) : (
-                    <p>{dt.noAddresses}</p>
-                  )}
-                  {!data.addresses.some(
-                    (address) => address.format === 'current',
-                  ) ? (
-                    <p className="field-hint">{text.noCurrent}</p>
-                  ) : null}
-                  <p className="field-hint">{dt.addrNote}</p>
-                </div>
-              </div>
-
-              {/* contacts */}
-              <div className="panel" data-od-id="panel-contacts">
-                <div className="panel-head">
-                  <h2>{dt.contacts}</h2>
-                </div>
-                <div className="panel-body">
-                  {data.contacts.length ? (
-                    data.contacts.map((link) => (
-                      <div
-                        className="record"
-                        key={link.contacts?.id ?? link.contact_id}
-                      >
-                        <div className="record-head">
-                          <span className="record-title" translate="no">
-                            {link.contacts?.display_name ?? text.unknown}
-                          </span>
-                          <span
-                            className="badge"
-                            data-tone={
-                              link.relation === 'owner' ? 'accent' : 'neutral'
+                  {/* facts */}
+                  <div className="panel" data-od-id="panel-facts">
+                    <div className="panel-head">
+                      <h2>{dt.facts}</h2>
+                      <span className="panel-note num">
+                        {property.property_code}
+                      </span>
+                    </div>
+                    <div className="panel-body">
+                      <dl className="facts">
+                        <div className="fact">
+                          <dt>{text.listingMode}</dt>
+                          <dd
+                            className={
+                              property.listing_mode ? undefined : 'is-unknown'
                             }
                           >
-                            {link.relation === 'owner'
-                              ? dt.owner
-                              : link.relation === 'broker' ||
-                                  link.relation === 'agent'
-                                ? dt.agent
-                                : link.relation === 'representative'
-                                  ? dt.representative
-                                  : label(locale, link.relation)}
-                          </span>
-                          {link.is_primary ? (
-                            <span
-                              className="badge badge-plain"
-                              data-tone="neutral"
-                            >
-                              {dt.primary}
-                            </span>
-                          ) : null}
+                            {label(locale, property.listing_mode)}
+                          </dd>
                         </div>
-                        <p className="record-body num">
-                          {link.contacts?.raw_phone_text ?? text.unknown}
-                        </p>
-                        <p className="record-meta">
-                          {link.is_primary
-                            ? dt.contactConsent
-                            : dt.contactSource}
-                        </p>
-                      </div>
-                    ))
-                  ) : (
-                    <p>{dt.noContacts}</p>
-                  )}
-
-                  {/* owner-contact disclosure (#56) */}
-                  <div className="owner-disclosure">
-                    <div className="record-head">
-                      <span className="record-title">{dt.owner}</span>
-                    </div>
-                    {ownerContact ? (
-                      ownerContact.contact ? (
-                        <>
-                          <div className="record-body">
-                            <p translate="no">
-                              {ownerContact.contact.displayName}
-                            </p>
-                            <p className="owner-phone" translate="no">
-                              {ownerContact.contact.phone}
-                            </p>
-                          </div>
-                          <div className="record-meta">
-                            {dial ? (
-                              <a
-                                className="btn btn-sm btn-primary"
-                                href={'tel:' + dial}
-                              >
-                                <span className="btn-label">{text.call}</span>
-                              </a>
-                            ) : (
-                              <span className="field-hint">
-                                {text.callUnavailable}
-                              </span>
-                            )}
-                          </div>
-                        </>
-                      ) : (
-                        <p className="field-hint">
-                          {text.ownerContactUnavailable}
-                        </p>
-                      )
-                    ) : (
-                      <>
-                        {disclosureError ? (
-                          <div
-                            className="alert"
-                            data-tone="danger"
-                            role="alert"
+                        <div className="fact">
+                          <dt>{text.propertyType}</dt>
+                          <dd
+                            className={
+                              property.property_type ? undefined : 'is-unknown'
+                            }
                           >
-                            <svg
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="1.7"
-                              strokeLinecap="round"
-                              aria-hidden="true"
-                            >
-                              <circle cx="12" cy="12" r="10" />
-                              <path d="M12 8v4M12 16h.01" />
-                            </svg>
-                            <span>{disclosureMessage}</span>
-                          </div>
-                        ) : null}
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-ghost"
-                          onClick={showOwnerContact}
-                          disabled={busy || ownerBusy}
-                          aria-busy={ownerBusy}
-                        >
-                          {ownerBusy
-                            ? text.loading
-                            : disclosureError
-                              ? text.retry
-                              : text.showOwnerContact}
-                        </button>
-                      </>
-                    )}
-                    <p className="field-hint">{text.ownerContactNote}</p>
+                            {label(locale, property.property_type)}
+                          </dd>
+                        </div>
+                        <div className="fact">
+                          <dt>{text.accessType}</dt>
+                          <dd
+                            className={
+                              property.access_type ? undefined : 'is-unknown'
+                            }
+                          >
+                            {label(locale, property.access_type)}
+                          </dd>
+                        </div>
+                        <div className="fact">
+                          <dt>{text.status}</dt>
+                          <dd>{label(locale, property.status)}</dd>
+                        </div>
+                        <div className="fact">
+                          <dt>{text.reviewStatus}</dt>
+                          <dd>
+                            {label(locale, property.record_review_status)}
+                          </dd>
+                        </div>
+                        <div className="fact">
+                          <dt>{text.legalStatus}</dt>
+                          <dd
+                            className={
+                              property.legal_status ? undefined : 'is-unknown'
+                            }
+                          >
+                            {label(locale, property.legal_status)}
+                          </dd>
+                        </div>
+                        <div className="fact">
+                          <dt>{text.salePrice}</dt>
+                          <dd
+                            className={
+                              property.sale_price_vnd === null
+                                ? 'is-unknown'
+                                : 'num'
+                            }
+                          >
+                            {property.sale_price_vnd === null
+                              ? text.unknown
+                              : formatVnd(property.sale_price_vnd, locale)}
+                          </dd>
+                        </div>
+                        <div className="fact">
+                          <dt>{text.monthlyRent}</dt>
+                          <dd
+                            className={
+                              property.monthly_rent_vnd === null
+                                ? 'is-unknown'
+                                : 'num'
+                            }
+                          >
+                            {property.monthly_rent_vnd === null
+                              ? text.unknown
+                              : formatVnd(property.monthly_rent_vnd, locale)}
+                          </dd>
+                        </div>
+                        <div className="fact">
+                          <dt>{text.landArea}</dt>
+                          <dd
+                            className={
+                              property.land_area_m2 === null
+                                ? 'is-unknown'
+                                : 'num'
+                            }
+                          >
+                            {number(property.land_area_m2, ' m²')}
+                          </dd>
+                        </div>
+                        <div className="fact">
+                          <dt>{text.floorArea}</dt>
+                          <dd
+                            className={
+                              property.floor_area_m2 === null
+                                ? 'is-unknown'
+                                : 'num'
+                            }
+                          >
+                            {number(property.floor_area_m2, ' m²')}
+                          </dd>
+                        </div>
+                        <div className="fact">
+                          <dt>{text.frontage}</dt>
+                          <dd
+                            className={
+                              property.frontage_m === null
+                                ? 'is-unknown'
+                                : 'num'
+                            }
+                          >
+                            {number(property.frontage_m, ' m')}
+                          </dd>
+                        </div>
+                        <div className="fact">
+                          <dt>{text.depth}</dt>
+                          <dd
+                            className={
+                              property.depth_m === null ? 'is-unknown' : 'num'
+                            }
+                          >
+                            {number(property.depth_m, ' m')}
+                          </dd>
+                        </div>
+                        <div className="fact">
+                          <dt>{text.floors}</dt>
+                          <dd
+                            className={
+                              property.floors === null ? 'is-unknown' : 'num'
+                            }
+                          >
+                            {number(property.floors)}
+                          </dd>
+                        </div>
+                        <div className="fact">
+                          <dt>{text.bedrooms}</dt>
+                          <dd
+                            className={
+                              property.bedrooms === null ? 'is-unknown' : 'num'
+                            }
+                          >
+                            {number(property.bedrooms)}
+                          </dd>
+                        </div>
+                        <div className="fact">
+                          <dt>{text.bathrooms}</dt>
+                          <dd
+                            className={
+                              property.bathrooms === null ? 'is-unknown' : 'num'
+                            }
+                          >
+                            {number(property.bathrooms)}
+                          </dd>
+                        </div>
+                        <div className="fact">
+                          <dt>{text.direction}</dt>
+                          <dd
+                            className={
+                              !property.direction ? 'is-unknown' : undefined
+                            }
+                          >
+                            {label(
+                              locale,
+                              property.direction
+                                ? directionKeys[property.direction]
+                                : null,
+                            )}
+                          </dd>
+                        </div>
+                        <div className="fact">
+                          <dt>{text.updated}</dt>
+                          <dd className="num">
+                            {vietnamDate(property.updated_at)}
+                          </dd>
+                        </div>
+                      </dl>
+                      <p className="field-hint">{text.legalNote}</p>
+                    </div>
                   </div>
-                </div>
-              </div>
 
-              <Workspace
-                key={`${id}:${employeeId}`}
-                propertyId={id}
-                locale={locale}
-                employeeId={employeeId ?? null}
-                archived={!!property.archived_at}
-                onDenied={denyFiles}
-                canEdit={canEdit}
-                coverFileId={coverFileId}
-                onCoverChanged={reload}
-              />
-            </div>
+                  {/* addresses */}
+                  <div className="panel" data-od-id="panel-addresses">
+                    <div className="panel-head">
+                      <h2>{dt.addresses}</h2>
+                    </div>
+                    <div className="panel-body">
+                      {data.addresses.length ? (
+                        data.addresses.map((address) => (
+                          <div className="record" key={address.id}>
+                            <div className="record-head">
+                              <span className="record-title">
+                                {label(locale, address.format)}
+                              </span>
+                              <span
+                                className="badge"
+                                data-tone={mappingTone(address.mapping_status)}
+                              >
+                                {label(locale, address.mapping_status)}
+                              </span>
+                            </div>
+                            <p className="record-body" translate="no">
+                              {address.address_text}
+                            </p>
+                            <p className="record-meta">
+                              {vietnamDate(address.effective_on) ??
+                                text.unknown}{' '}
+                              · {address.verified_by ?? text.unknown}
+                            </p>
+                          </div>
+                        ))
+                      ) : (
+                        <p>{dt.noAddresses}</p>
+                      )}
+                      {!data.addresses.some(
+                        (address) => address.format === 'current',
+                      ) ? (
+                        <p className="field-hint">{text.noCurrent}</p>
+                      ) : null}
+                      <p className="field-hint">{dt.addrNote}</p>
+                    </div>
+                  </div>
 
-            {employee ? (
-              <>
-                <Maintenance
-                  key={'maintenance' + property.id}
-                  detail={data}
-                  employee={employee}
-                  locale={locale}
-                  onSaved={changed}
-                  onDenied={denyFiles}
-                />
-                <CorrectionReport
-                  key={'correction' + property.id}
-                  detail={data}
-                  locale={locale}
-                  role={employee.role}
-                  onDenied={denyFiles}
-                  onSaved={changed}
-                />
-                <CorrectionQueue
-                  key={'requests' + property.id + refreshTick}
-                  propertyId={property.id}
-                  employee={employee}
-                  locale={locale}
-                  onDenied={denyFiles}
-                  onChanged={() => void changed()}
-                />
-                <History
-                  key={
-                    'history' + property.id + property.revision + refreshTick
-                  }
-                  propertyId={property.id}
-                  locale={locale}
-                />
-              </>
-            ) : null}
+                  {/* contacts */}
+                  <div className="panel" data-od-id="panel-contacts">
+                    <div className="panel-head">
+                      <h2>{dt.contacts}</h2>
+                    </div>
+                    <div className="panel-body">
+                      {data.contacts.length ? (
+                        data.contacts.map((link) => (
+                          <div
+                            className="record"
+                            key={link.contacts?.id ?? link.contact_id}
+                          >
+                            <div className="record-head">
+                              <span className="record-title" translate="no">
+                                {link.contacts?.display_name ?? text.unknown}
+                              </span>
+                              <span
+                                className="badge"
+                                data-tone={
+                                  link.relation === 'owner'
+                                    ? 'accent'
+                                    : 'neutral'
+                                }
+                              >
+                                {link.relation === 'owner'
+                                  ? dt.owner
+                                  : link.relation === 'broker' ||
+                                      link.relation === 'agent'
+                                    ? dt.agent
+                                    : link.relation === 'representative'
+                                      ? dt.representative
+                                      : label(locale, link.relation)}
+                              </span>
+                              {link.is_primary ? (
+                                <span
+                                  className="badge badge-plain"
+                                  data-tone="neutral"
+                                >
+                                  {dt.primary}
+                                </span>
+                              ) : null}
+                            </div>
+                            <p className="record-body num">
+                              {link.contacts?.raw_phone_text ?? text.unknown}
+                            </p>
+                            <p className="record-meta">
+                              {link.is_primary
+                                ? dt.contactConsent
+                                : dt.contactSource}
+                            </p>
+                          </div>
+                        ))
+                      ) : (
+                        <p>{dt.noContacts}</p>
+                      )}
 
-            <Discussion
-              key={property.id}
-              propertyId={property.id}
-              locale={locale}
-              archived={!!property.archived_at}
-              onDenied={denyFiles}
-            />
+                      {/* owner-contact disclosure (#56) */}
+                      <div className="owner-disclosure">
+                        <div className="record-head">
+                          <span className="record-title">{dt.owner}</span>
+                        </div>
+                        {ownerContact ? (
+                          ownerContact.contact ? (
+                            <>
+                              <div className="record-body">
+                                <p translate="no">
+                                  {ownerContact.contact.displayName}
+                                </p>
+                                <p className="owner-phone" translate="no">
+                                  {ownerContact.contact.phone}
+                                </p>
+                              </div>
+                              <div className="record-meta">
+                                {dial ? (
+                                  <a
+                                    className="btn btn-sm btn-primary"
+                                    href={'tel:' + dial}
+                                  >
+                                    <span className="btn-label">
+                                      {text.call}
+                                    </span>
+                                  </a>
+                                ) : (
+                                  <span className="field-hint">
+                                    {text.callUnavailable}
+                                  </span>
+                                )}
+                              </div>
+                            </>
+                          ) : (
+                            <p className="field-hint">
+                              {text.ownerContactUnavailable}
+                            </p>
+                          )
+                        ) : (
+                          <>
+                            {disclosureError ? (
+                              <div
+                                className="alert"
+                                data-tone="danger"
+                                role="alert"
+                              >
+                                <svg
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="1.7"
+                                  strokeLinecap="round"
+                                  aria-hidden="true"
+                                >
+                                  <circle cx="12" cy="12" r="10" />
+                                  <path d="M12 8v4M12 16h.01" />
+                                </svg>
+                                <span>{disclosureMessage}</span>
+                              </div>
+                            ) : null}
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-ghost"
+                              onClick={showOwnerContact}
+                              disabled={busy || ownerBusy}
+                              aria-busy={ownerBusy}
+                            >
+                              {ownerBusy
+                                ? text.loading
+                                : disclosureError
+                                  ? text.retry
+                                  : text.showOwnerContact}
+                            </button>
+                          </>
+                        )}
+                        <p className="field-hint">{text.ownerContactNote}</p>
+                      </div>
+                    </div>
+                  </div>
 
-            <p className="field-hint">{text.pageViewNote}</p>
+                  {employee ? (
+                    <>
+                      <Maintenance
+                        key={'maintenance' + property.id}
+                        detail={data}
+                        employee={employee}
+                        locale={locale}
+                        onSaved={changed}
+                        onDenied={denyFiles}
+                      />
+                      <CorrectionReport
+                        key={'correction' + property.id}
+                        detail={data}
+                        locale={locale}
+                        role={employee.role}
+                        onDenied={denyFiles}
+                        onSaved={changed}
+                      />
+                      <CorrectionQueue
+                        key={'requests' + property.id + refreshTick}
+                        propertyId={property.id}
+                        employee={employee}
+                        locale={locale}
+                        onDenied={denyFiles}
+                        onChanged={() => void changed()}
+                      />
+                    </>
+                  ) : null}
+                </section>
 
-            {viewError ? (
-              <div className="alert" data-tone="danger" role="alert">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                  strokeLinecap="round"
-                  aria-hidden="true"
+                <section
+                  className="tabpanel"
+                  role="tabpanel"
+                  id="record-panel-docs"
+                  aria-labelledby="record-tab-docs"
+                  hidden={tab !== 'docs'}
                 >
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 8v4M12 16h.01" />
-                </svg>
-                <span>{text.pageViewFailed}</span>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-ghost"
-                  onClick={reload}
-                >
-                  {text.retry}
-                </button>
-              </div>
-            ) : null}
+                  <Workspace
+                    key={`${id}:${employeeId}`}
+                    propertyId={id}
+                    locale={locale}
+                    employeeId={employeeId ?? null}
+                    archived={!!property.archived_at}
+                    onDenied={denyFiles}
+                    canEdit={canEdit}
+                    coverFileId={coverFileId}
+                    onCoverChanged={reload}
+                  />
+                </section>
 
-            <section className="panel" aria-labelledby="today-activity">
-              <div className="panel-head">
-                <h2 id="today-activity">{text.todayActivity}</h2>
+                <section
+                  className="tabpanel"
+                  role="tabpanel"
+                  id="record-panel-comments"
+                  aria-labelledby="record-tab-comments"
+                  hidden={tab !== 'comments'}
+                >
+                  <Discussion
+                    key={property.id}
+                    propertyId={property.id}
+                    locale={locale}
+                    archived={!!property.archived_at}
+                    onDenied={denyFiles}
+                  />
+                </section>
               </div>
-              <div className="panel-body">
-                {todayError ? (
+
+              <aside className="detail-rail">
+                {employee ? (
+                  <>
+                    <History
+                      key={
+                        'history' +
+                        property.id +
+                        property.revision +
+                        refreshTick
+                      }
+                      propertyId={property.id}
+                      locale={locale}
+                    />
+                  </>
+                ) : null}
+
+                <p className="field-hint">{text.pageViewNote}</p>
+
+                {viewError ? (
                   <div className="alert" data-tone="danger" role="alert">
                     <svg
                       viewBox="0 0 24 24"
@@ -805,7 +881,7 @@ export function Detail({
                       <circle cx="12" cy="12" r="10" />
                       <path d="M12 8v4M12 16h.01" />
                     </svg>
-                    <span>{text.todayActivityFailed}</span>
+                    <span>{text.pageViewFailed}</span>
                     <button
                       type="button"
                       className="btn btn-sm btn-ghost"
@@ -814,36 +890,71 @@ export function Detail({
                       {text.retry}
                     </button>
                   </div>
-                ) : today ? (
-                  <dl className="facts">
-                    <div className="fact">
-                      <dt>{text.todayDay}</dt>
-                      <dd className="num">{vietnamDate(today.businessDay)}</dd>
-                    </div>
-                    <div className="fact">
-                      <dt>{text.todayPageViews}</dt>
-                      <dd className="num">
-                        {numberFormat.format(today.pageViewEvents)}
-                      </dd>
-                    </div>
-                    <div className="fact">
-                      <dt>{text.todayProperties}</dt>
-                      <dd className="num">
-                        {numberFormat.format(today.distinctPropertiesViewed)}
-                      </dd>
-                    </div>
-                    <div className="fact">
-                      <dt>{text.todayOwnerContacts}</dt>
-                      <dd className="num">
-                        {numberFormat.format(today.ownerContactProperties)}
-                      </dd>
-                    </div>
-                  </dl>
-                ) : (
-                  <p role="status">{text.loading}</p>
-                )}
-              </div>
-            </section>
+                ) : null}
+
+                <section className="panel" aria-labelledby="today-activity">
+                  <div className="panel-head">
+                    <h2 id="today-activity">{text.todayActivity}</h2>
+                  </div>
+                  <div className="panel-body">
+                    {todayError ? (
+                      <div className="alert" data-tone="danger" role="alert">
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.7"
+                          strokeLinecap="round"
+                          aria-hidden="true"
+                        >
+                          <circle cx="12" cy="12" r="10" />
+                          <path d="M12 8v4M12 16h.01" />
+                        </svg>
+                        <span>{text.todayActivityFailed}</span>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          onClick={reload}
+                        >
+                          {text.retry}
+                        </button>
+                      </div>
+                    ) : today ? (
+                      <dl className="facts">
+                        <div className="fact">
+                          <dt>{text.todayDay}</dt>
+                          <dd className="num">
+                            {vietnamDate(today.businessDay)}
+                          </dd>
+                        </div>
+                        <div className="fact">
+                          <dt>{text.todayPageViews}</dt>
+                          <dd className="num">
+                            {numberFormat.format(today.pageViewEvents)}
+                          </dd>
+                        </div>
+                        <div className="fact">
+                          <dt>{text.todayProperties}</dt>
+                          <dd className="num">
+                            {numberFormat.format(
+                              today.distinctPropertiesViewed,
+                            )}
+                          </dd>
+                        </div>
+                        <div className="fact">
+                          <dt>{text.todayOwnerContacts}</dt>
+                          <dd className="num">
+                            {numberFormat.format(today.ownerContactProperties)}
+                          </dd>
+                        </div>
+                      </dl>
+                    ) : (
+                      <p role="status">{text.loading}</p>
+                    )}
+                  </div>
+                </section>
+              </aside>
+            </div>
           </>
         ) : null}
       </div>

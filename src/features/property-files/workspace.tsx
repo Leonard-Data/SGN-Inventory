@@ -574,17 +574,19 @@ export function Workspace({
                 </button>
               </div>
             ) : null}
-            <label htmlFor={'files-' + propertyId}>
-              {fileText.selectFiles}
-            </label>
-            <input
-              id={'files-' + propertyId}
-              type="file"
-              multiple
-              accept="application/pdf,image/jpeg,image/png,image/webp"
-              aria-describedby={'upload-note-' + propertyId}
-              onChange={(event) => void selected(event)}
-            />
+            <div className="field">
+              <label className="field-label" htmlFor={'files-' + propertyId}>
+                {fileText.selectFiles}
+              </label>
+              <input
+                id={'files-' + propertyId}
+                type="file"
+                multiple
+                accept="application/pdf,image/jpeg,image/png,image/webp"
+                aria-describedby={'upload-note-' + propertyId}
+                onChange={(event) => void selected(event)}
+              />
+            </div>
             <p id={'upload-note-' + propertyId} className="field-hint">
               {fileText.uploadNote}
             </p>

@@ -117,19 +117,28 @@ Shipped: the card cover is the site plate drawn from the record's own fields; a 
   quiet back link (.link-quiet) → returnTo (keeps the filtered result position)
   detail-head: .example eyebrow · h1 (record code) · .chips.head-chips (status + review status badges)
   archived notice: .alert[data-tone="neutral"] with the archive mark
-  detail-body (two-column grid, single column under 1040px):
-      panel .plate-hero (top of the grid)  → Plate(hero) | stored cover photograph
-      panel Facts      → dl.facts with .fact rows; unknown values print Chưa rõ
-      panel Addresses  → .record rows + mapping .badge, .addrNote policy line
-      panel Contacts   → .record rows + owner-contact disclosure (.owner-disclosure/.owner-phone)
-      panel Files      → property-files Workspace (.doc-row vocabulary)
-      panel Maintenance→ in-page maintenance workspace (revision-checked)
-      panel Discussion → 30-item list newest-first, .composer, edit/remove
+  detail-body (two-column grid, single column under 1180px): main column + aside.detail-rail
+    main column:
+      .tabs[role=tablist] "Tổng quan · Tài liệu · Thảo luận" (roving tabindex, arrow/Home/End)
+      .tabpanel "Tổng quan":
+        panel .plate-hero (top of the grid)  → Plate(hero) | stored cover photograph
+        panel Facts      → dl.facts with .fact rows; unknown values print Chưa rõ
+        panel Addresses  → .record rows + mapping .badge, .addrNote policy line
+        panel Contacts   → .record rows + owner-contact disclosure (.owner-disclosure/.owner-phone)
+        panel Maintenance→ in-page maintenance workspace (revision-checked)
+        panel Corrections→ report + role-scoped queue
+      .tabpanel "Tài liệu": panel Files → property-files Workspace (.doc-row vocabulary, cover, dropzone)
+      .tabpanel "Thảo luận": Discussion → 30-item list newest-first, .composer, edit/remove
+    aside.detail-rail (sticky):
       panel History    → maintenance history rows (.hist-row)
-      panel Activity   → today's own counts
-      panel Corrections→ report + role-scoped queue
+      page-view note, then panel Activity → today's own counts
 ```
-Shipped as above. **Not implemented:** the sticky `.section-nav` (Facts · Addresses · …), the separate asking-price timeline (the app has no price-history endpoint; recorded price changes appear through the history rows), and the record's Edit action — there is no `/properties/[id]/edit` route, so editing stays the in-page maintenance disclosure. No new route was added.
+Shipped as above. The three groups and the main/rail split follow the package's own record screen
+(`ui_kits/app/components/App.jsx`: `overview | docs | comments` inside a `<div>`, beside `<aside class="detail-rail">`).
+Before this the panels were direct children of `.detail-body`, so the two-column grid placed them in alternating
+columns and the facts panel rendered inside the 344 px rail. Inactive tabpanels stay mounted but `hidden`, so a
+tab switch neither refetches nor loses an in-flight upload. **Not implemented:** the record's Edit action —
+there is no `/properties/[id]/edit` route, so editing stays the in-page maintenance disclosure. No new route was added.
 
 ### 5.3 `/requests` — my requests (new)
 
@@ -249,7 +258,8 @@ page-intro · [New category] / [New unit]
 - Navigation renders one group: only `/properties` exists today. The ADR's other five groups ship with their routes.
 - The inventory results have **cards only**: the package's Cards/List/Table `.seg` switch and the ordering control are not implemented, and `.cell-plate` table thumbnails therefore have no consumer yet.
 - The card shows the record's existing fact set (code, mode, address, status). The prototype's card also prints area and price lines; adding them would be new data display beyond this restyle, so they were left out.
-- The record page has no sticky section nav, no separate asking-price timeline and no Edit action (no edit route exists; editing stays the in-page maintenance disclosure).
+- The record page has no Edit action (no edit route exists; editing stays the in-page maintenance disclosure).
+- The asking-price timeline (`.price-row`), the change timeline (`.timeline`/`.tl-item`) and the **Nhân sự & liên hệ** screen (employee accounts + contact book, `.directory-tabs`, `.cell-person`, `.sgn-avatar-sm`) are rendered in the design review route `/design/app-preview` from fictional fixtures: the app has no price-history feed and no directory endpoint, and the review route is where unused package vocabulary is inspectable. Their product routes (`/people/*`) and data contracts are separate, unauthorized work.
 - `/properties/[id]/edit`, `/requests`, `/reviews/*`, `/rentals*`, `/people/*`, `/reports/*`, `/admin/*` remain unbuilt and are only described above.
 - The auth surfaces keep their own layout sheet (`.sgn-auth` + `sgn-auth.css`); they share the token layer and the control vocabulary but they are shell-free by design (ADR 0001).
 - **Not in scope:** no geographic map, no physical-visit UI, no threads/reactions/mentions, no dashboards beyond §5.9, no design for any archived-property exception beyond the existing reviewer read boundary.
