@@ -175,21 +175,90 @@ function evaluate(expression, session = primary) {
   }
   return value;
 }
-function control(kind, name, session) {
-  const snapshot = browser(['snapshot', '--full'], session);
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const match = snapshot.match(new RegExp(`uid=([^ ]+) ${kind} "${escaped}"`));
-  assert.ok(match, `Missing ${kind}: ${name}`);
-  return '@' + match[1];
+// The pinned bridge cannot reliably reach the React form through its snapshot/fill/click
+// path on this host, so every interaction goes through the same real DOM handlers the user
+// drives: the input's native value setter plus an input event, the form's own requestSubmit
+// and the control's own activation. This is a harness behaviour, not a product change.
+const setInput = (selector, value) => `(() => {
+  const el = document.querySelector(${JSON.stringify(selector)});
+  if (!el) return false;
+  const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+  Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, ${JSON.stringify(value)});
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  return true;
+})()`;
+const submitForm = (selector) => `(() => {
+  const form = document.querySelector(${JSON.stringify(selector)});
+  if (!form) return false;
+  form.requestSubmit();
+  return true;
+})()`;
+const clickMatching = (pattern, scope = 'body') => `(() => {
+  const node = [...document.querySelectorAll(${JSON.stringify(scope)})].find((el) => new RegExp(${JSON.stringify(pattern)}).test(el.textContent.trim()));
+  if (!node) return false;
+  node.click();
+  return true;
+})()`;
+function act(expression, session, what) {
+  assert.equal(evaluate(expression, session), true, `Could not ${what}`);
 }
-function fill(name, value, session) {
-  browser(['fill', control('textbox', name, session), value], session);
+function filled(selector, value, session, what) {
+  act(setInput(selector, value), session, what);
 }
-function click(name, session) {
-  browser(['click', control('(?:button|link)', name, session)], session);
+function submitted(selector, session, what) {
+  act(submitForm(selector), session, what);
 }
-function wait(text, session) {
-  browser(['wait', text], session);
+// Pending requests of other employees carry the decision form; the caller's own request does not.
+const decisionFormFor = (name) =>
+  `[...document.querySelectorAll('article.reservation-request')].find((article) => article.querySelector('h3')?.textContent.trim() === ${JSON.stringify(name)})?.querySelector('form')`;
+function submittedDecision(name, value, session) {
+  act(
+    `(() => {
+      const article = [...document.querySelectorAll('article.reservation-request')].find((node) => node.querySelector('h3')?.textContent.trim() === ${JSON.stringify(name)});
+      const form = article?.querySelector('form');
+      if (!form) return false;
+      const button = [...form.querySelectorAll('button')].find((node) => node.value === ${JSON.stringify(value)});
+      if (!button) return false;
+      form.requestSubmit(button);
+      return true;
+    })()`,
+    session,
+    `decide the request from ${name}`,
+  );
+}
+function requestFormFilled(value, session) {
+  filled(
+    'section.reservation > form textarea[name=reason]',
+    value,
+    session,
+    'fill the reservation reason',
+  );
+  submitted(
+    'section.reservation > form',
+    session,
+    'submit the reservation request',
+  );
+}
+function decisionFormFilled(name, value, session) {
+  act(
+    `(() => {
+      const form = ${decisionFormFor(name)};
+      const el = form?.querySelector('textarea[name=reason]');
+      if (!el) return false;
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(el, ${JSON.stringify(value)});
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    })()`,
+    session,
+    `fill the decision reason for ${name}`,
+  );
+}
+function waitForText(text, session = primary, attempts = 60) {
+  return waitUntil(
+    `() => document.body.innerText.includes(${JSON.stringify(text)})`,
+    session,
+    attempts,
+  );
 }
 // Polling tolerates a transient command failure while a page navigates; the deadline decides.
 async function waitUntil(expression, session = primary, attempts = 60) {
@@ -323,14 +392,10 @@ async function browserLogin(name, session, preferredLocale) {
     );
   }
   const fixture = fixtures.identities[name];
-  fill('Email', fixture.email, session);
-  const locale = evaluate(
-    `() => document.querySelector('.sgn-auth')?.lang ?? document.documentElement.lang`,
-    session,
-  );
-  fill(locale === 'en' ? 'Password' : 'Mật khẩu', fixture.password, session);
-  click(locale === 'en' ? 'Sign in' : 'Đăng nhập', session);
-  wait('Kho bất động sản', session);
+  filled('#email', fixture.email, session, 'fill the fixture email');
+  filled('#password', fixture.password, session, 'fill the fixture password');
+  submitted('.sgn-auth form', session, 'submit the sign-in form');
+  await waitUntil(`() => location.pathname === '/properties'`, session);
 }
 
 const main = fixtures.properties.main;
@@ -391,8 +456,20 @@ const baselineTables = [
 ];
 const countOf = (table) =>
   Number(operatorSql(`select count(*)::int as n from public.${table}`)[0].n);
+const idSetOf = (table) =>
+  new Set(
+    operatorSql(`select id::text as id from public.${table} order by id`).map(
+      (row) => row.id,
+    ),
+  );
 const baseline = Object.fromEntries(
   baselineTables.map((table) => [table, countOf(table)]),
+);
+// The whole shared project is not quiet: the row identities recorded here prove that no
+// pre-run row disappears, and any addition this run did not write is listed rather than
+// silently accepted. Additions are only tolerated for activity events.
+const baselineIds = Object.fromEntries(
+  baselineTables.map((table) => [table, idSetOf(table)]),
 );
 // The browser journey records page views for these identities; they are fixture writes and
 // are removed by exact ID with the reservation rows this run creates.
@@ -403,17 +480,23 @@ const activityIds = (statement) => operatorSql(statement).map((row) => row.id);
 const fixtureActivity = `select id from public.activity_events where employee_id in (${fixtureIds})`;
 const activityBefore = new Set(activityIds(fixtureActivity));
 
-const createdLocks = [];
 function lockRows(property) {
   return operatorSql(
     `select id, requested_by, status, expires_at, decided_by from public.property_locks where property_id = '${property.id}' order by requested_at`,
   );
 }
+// Every reservation row this run can write belongs to a declared fixture identity, so cleanup
+// is exact even when the run stops before it records the row it just created.
+function myLockIds() {
+  return operatorSql(
+    `select id from public.property_locks where requested_by in (${fixtureIds}) order by id`,
+  ).map((row) => row.id);
+}
 function eventsFor(ids) {
   return operatorSql(
     ids.length
-      ? `select lock_id, action from public.lock_events where lock_id in ('${ids.join("','")}') order by id`
-      : `select lock_id, action from public.lock_events where false`,
+      ? `select id, lock_id, action from public.lock_events where lock_id in ('${ids.join("','")}') order by id`
+      : `select id, lock_id, action from public.lock_events where false`,
   );
 }
 function effectiveRows(property) {
@@ -423,9 +506,9 @@ function effectiveRows(property) {
 }
 // Exact-ID cleanup of the rows this run wrote. Existing inventory is never touched.
 function removeCreated() {
-  for (const lock of createdLocks)
+  for (const id of myLockIds())
     operatorSql(
-      `do $$ begin delete from public.lock_events where lock_id='${lock.id}'; delete from public.property_locks where id='${lock.id}'; end $$;`,
+      `do $$ begin delete from public.lock_events where lock_id='${id}'; delete from public.property_locks where id='${id}'; end $$;`,
     );
   for (const id of activityIds(fixtureActivity))
     if (!activityBefore.has(id))
@@ -444,8 +527,7 @@ function restoreAndExit(error) {
     removeCreated();
   } catch {
     console.error(
-      'FIXTURE RESTORE FAILED: remove ' +
-        createdLocks.map((row) => row.id).join(','),
+      'FIXTURE RESTORE FAILED: remove rows requested by the declared identities',
     );
   }
   for (const name of ['claimant', 'manager', 'admin']) {
@@ -504,10 +586,9 @@ await settle(primary);
   assert.equal(page.pending, null, 'No pending request exists yet');
   assert.equal(page.reasonField, true, 'The request form is offered');
   assert.equal(page.submit, true, 'The submit control is present');
-  fill('Lý do đặt chỗ', reason, primary);
-  click('Gửi yêu cầu đặt chỗ', primary);
+  requestFormFilled(reason, primary);
   await waitUntil(
-    "() => document.querySelector('section.reservation .reservation-pending')",
+    "() => Boolean(document.querySelector('section.reservation .reservation-pending'))",
     primary,
   );
   await settle(primary);
@@ -527,7 +608,6 @@ await settle(primary);
 }
 const firstLock = lockRows(main);
 assert.equal(firstLock.length, 1, 'The UI request committed one pending row');
-createdLocks.push({ id: firstLock[0].id });
 assert.equal(firstLock[0].status, 'pending');
 assert.equal(
   effectiveRows(main).length,
@@ -574,10 +654,17 @@ let managerLock;
   assert.equal((await session.login('manager')).status, 200);
   const response = await session.request(reservationRoute(main), { reason });
   assert.equal(response.status, 200);
-  assert.equal(response.body.pending.length, 1);
+  // A reviewer sees every open request on the property, including their own.
+  assert.equal(
+    response.body.pending.length,
+    2,
+    'The reviewer sees both open requests',
+  );
   assert.equal(response.body.canDecide, true);
-  managerLock = response.body.pending[0].id;
-  createdLocks.push({ id: managerLock });
+  managerLock = response.body.pending.find(
+    (request) => request.claimantId === fixtures.identities.manager.employeeId,
+  )?.id;
+  assert.ok(managerLock, 'The manager request is listed for the reviewer');
 }
 {
   const rows = lockRows(main);
@@ -725,7 +812,6 @@ let rejectedLock;
   });
   assert.equal(requested.status, 200);
   rejectedLock = requested.body.pending[0].id;
-  createdLocks.push({ id: rejectedLock });
   browser(['open', detail(reject)], secondary);
   await settle(secondary);
   const before = screen(secondary);
@@ -735,9 +821,13 @@ let rejectedLock;
     1,
     'The pending request is offered to the reviewer',
   );
-  fill('Lý do quyết định', rejectReason, secondary);
-  click('Từ chối yêu cầu', secondary);
-  wait('Đã từ chối yêu cầu.', secondary);
+  decisionFormFilled(
+    declaredBy('claimant').display_name,
+    rejectReason,
+    secondary,
+  );
+  submittedDecision(declaredBy('claimant').display_name, 'reject', secondary);
+  await waitForText('Đã từ chối yêu cầu.', secondary);
   await settle(secondary);
   const after = screen(secondary);
   assert.equal(after.effective, null, 'A rejected request reserves nothing');
@@ -809,7 +899,12 @@ let rejectedLock;
   const read = await fresh.request(reservationRoute(main));
   assert.equal(read.body.effective.id, winner.id);
   assert.equal(read.body.effective.claimantId, winner.requested_by);
-  assert.equal(read.body.effective.expiresAt, winner.expires_at);
+  // PostgREST serializes the instant as Z while the SQL client reports +00:00.
+  assert.equal(
+    Date.parse(read.body.effective.expiresAt),
+    Date.parse(winner.expires_at),
+    'The application expiry is the committed instant',
+  );
   assert.equal(
     read.body.pending.length,
     0,
@@ -858,7 +953,11 @@ let rejectedLock;
     "() => { document.documentElement.dataset.probe = 'reservation'; return true; }",
     primary,
   );
-  click('English', primary);
+  act(
+    clickMatching('^English$', 'header button'),
+    primary,
+    'switch to English',
+  );
   await waitUntil(
     `() => document.querySelector('main')?.lang === 'en'`,
     primary,
@@ -873,7 +972,11 @@ let rejectedLock;
       'Only an approved, unexpired reservation holds the property.',
     ),
   );
-  click('Tiếng Việt', primary);
+  act(
+    clickMatching('^Tiếng Việt$', 'header button'),
+    primary,
+    'switch to Vietnamese',
+  );
   await waitUntil(
     `() => document.querySelector('main')?.lang === 'vi'`,
     primary,
@@ -960,26 +1063,27 @@ let rejectedLock;
     screen(secondary).effective,
     'The signed-in reviewer still reads the reservation',
   );
-  click('Đăng xuất', secondary);
+  act(
+    clickMatching('^(Đăng xuất|Sign out)$', 'header button'),
+    secondary,
+    'sign out',
+  );
   browser(['back'], secondary);
   await waitUntil(
     `() => !document.body.innerText.includes(${JSON.stringify(winner.employee_name)})`,
     secondary,
   );
   browser(['open', detail(main)], secondary);
-  wait('Đăng nhập', secondary);
+  await waitUntil(`() => location.pathname === '/login'`, secondary);
   assert.equal(screen(secondary).path, '/login');
   observed('sign-out and Back navigation reveal no reservation detail');
 }
 
 // ------------------------------------------------------------------ restore and compare
-const createdEventIds = createdLocks.length
-  ? activityIds(
-      `select id from public.lock_events where lock_id in ('${createdLocks
-        .map((row) => row.id)
-        .join("','")}')`,
-    )
-  : [];
+// Read what actually exists before removing it, so the report lists the rows that were really
+// written even if a step failed before the flow recorded them.
+const createdLockIds = myLockIds();
+const createdEventIds = eventsFor(createdLockIds).map((row) => row.id);
 const createdActivityIds = activityIds(fixtureActivity).filter(
   (id) => !activityBefore.has(id),
 );
@@ -988,20 +1092,37 @@ for (const name of ['claimant', 'manager', 'admin']) setActive(name, true);
 const after = Object.fromEntries(
   baselineTables.map((table) => [table, countOf(table)]),
 );
-assert.deepEqual(
-  after,
-  baseline,
-  'Every table the run touched is back at its pre-run row count',
-);
+const foreignAdditions = {};
+for (const table of baselineTables) {
+  const now = idSetOf(table);
+  const missing = [...baselineIds[table]].filter((id) => !now.has(id));
+  assert.deepEqual(missing, [], `${table}: the run removed original rows`);
+  const added = [...now].filter((id) => !baselineIds[table].has(id));
+  if (table === 'activity_events') foreignAdditions[table] = added;
+  else
+    assert.deepEqual(
+      added,
+      [],
+      `${table}: rows appeared that this run did not remove`,
+    );
+}
 assert.equal(lockRows(main).length, 0);
 assert.equal(lockRows(reject).length, 0);
 assert.equal(effectiveRows(main).length, 0);
 assert.equal(effectiveRows(reject).length, 0);
-assert.equal(eventsFor(createdLocks.map((row) => row.id)).length, 0);
+assert.equal(myLockIds().length, 0);
+assert.equal(eventsFor(createdLockIds).length, 0);
 assert.deepEqual(
   activityIds(fixtureActivity).sort(),
   [...activityBefore].sort(),
 );
+// Another identity browsing the shared project is not this task's write: report it, do not
+// treat it as restored, and do not hide it behind an equality assertion.
+const unrelatedActivity = foreignAdditions.activity_events?.length
+  ? operatorSql(
+      `select a.id, a.recorded_at, a.kind, e.display_name, p.property_code from public.activity_events a left join public.employees e on e.id = a.employee_id left join public.properties p on p.id = a.property_id where a.id in ('${foreignAdditions.activity_events.join("','")}') order by a.recorded_at`,
+    )
+  : [];
 
 const report = {
   checkedAt: new Date().toISOString(),
@@ -1016,22 +1137,24 @@ const report = {
   ],
   fixtureRows: {
     created: {
-      locks: createdLocks.map((row) => row.id),
+      locks: createdLockIds,
       lockEvents: createdEventIds,
       activityEvents: createdActivityIds,
       employees: 0,
       properties: 0,
     },
     removed: {
-      locks: createdLocks.map((row) => row.id),
+      locks: createdLockIds,
       lockEvents: createdEventIds,
       activityEvents: createdActivityIds,
     },
     restored: { baseline, after },
+    unrelatedActivity,
   },
   limits: [
     'Fixture-only writes: the SGN-TEST-18 identities and their linked Auth users are created and removed by this task outside this script; the script itself writes only reservation rows and removes them by exact ID.',
     'Existing inventory is used read-only: no property, address, contact or activity row is written, archived, relinked or reactivated.',
+    'Every pre-run row identity for the tracked tables still exists afterwards; unrelated activity rows written by another identity during the window are listed under fixtureRows.unrelatedActivity instead of being treated as this task’s restoration.',
     'The competing approvals use two independent authenticated sessions; this is not a production contention gate.',
     'Real mailbox recovery, production import and deployment remain outside this run.',
   ],
