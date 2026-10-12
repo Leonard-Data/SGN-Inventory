@@ -162,6 +162,15 @@ const vi = {
   brandLede: 'Truy cập dành riêng cho nhân viên được cấp quyền.',
   brandMeta: 'Saigon New House · Truy cập nội bộ',
   footNote: 'Saigon New House · Hệ thống nội bộ',
+  // Application shell (ADR 0001): rail, topbar, account menu.
+  openMenu: 'Mở menu điều hướng',
+  breadcrumb: 'Đường dẫn',
+  close: 'Đóng',
+  navSearch: 'Tìm kiếm',
+  sales: 'Kinh doanh',
+  staff: 'Nhân viên',
+  manager: 'Quản lý',
+  admin: 'Quản trị viên',
   languageName: 'Ngôn ngữ / Language',
   switchToVi: 'Chuyển sang tiếng Việt',
   switchToEn: 'Switch to English',
@@ -199,6 +208,8 @@ const vi = {
   strengthStrong: 'Mạnh',
   stepBack: 'Quay lại',
 };
+export type MessageKey = keyof typeof vi;
+
 export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
   vi,
   en: {
@@ -349,6 +360,15 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     passwordUpdated: 'Password changed. Sign in again.',
     updated: 'Updated',
     sessionEnded: 'Your session has ended.',
+    // Application shell (ADR 0001): rail, topbar, account menu.
+    openMenu: 'Open navigation menu',
+    breadcrumb: 'Breadcrumb',
+    close: 'Close',
+    navSearch: 'Search',
+    sales: 'Sales',
+    staff: 'Staff',
+    manager: 'Manager',
+    admin: 'Administrator',
     signInHelp:
       'Access is limited to invited staff whose account has been activated.',
     north: 'North',

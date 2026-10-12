@@ -4,7 +4,6 @@ import type { Locale } from '@/i18n/messages';
 import { label, messages } from '@/i18n/messages';
 import type { PropertyPage } from './types';
 import { useProtectedData } from '@/features/employees/use-protected-data';
-import { SessionHeader } from '@/features/employees/session-header';
 import { CoverImage } from '@/features/property-files/cover-image';
 import { CreateProperty } from '@/features/property-maintenance/create';
 import { CorrectionQueue } from '@/features/corrections/queue';
@@ -23,17 +22,8 @@ export function Inventory({
   const endpoint =
     '/api/properties?' +
     new URLSearchParams({ query: initialQuery, ...(after ? { after } : {}) });
-  const {
-    employee,
-    data,
-    error,
-    busy,
-    surface,
-    logout,
-    applyLocale,
-    clear,
-    reload,
-  } = useProtectedData<PropertyPage>(endpoint);
+  const { employee, data, error, busy, surface, logout, clear, reload } =
+    useProtectedData<PropertyPage>(endpoint);
   const locale = employee?.locale ?? initialLocale;
   const text = messages[locale];
   const [searchError, setSearchError] = useState(false);
@@ -71,24 +61,11 @@ export function Inventory({
   }
   const resultLocation = href(after, cursors);
   return (
-    <main lang={locale}>
-      <a className="skip-link" href="#main-content">
-        {text.skipToContent}
-      </a>
-      <SessionHeader
-        employee={employee}
-        locale={locale}
-        busy={busy}
-        logout={logout}
-        applyLocale={applyLocale}
-        clear={clear}
-      />
+    <div lang={locale}>
       <section className="page-intro">
         <div>
           <p className="eyebrow">{text.title}</p>
-          <h1 id="main-content" tabIndex={-1}>
-            {text.inventory}
-          </h1>
+          <h1>{text.inventory}</h1>
         </div>
         <p className="intro-copy">{text.searchHint}</p>
       </section>
@@ -208,6 +185,6 @@ export function Inventory({
           </>
         ) : null}
       </div>
-    </main>
+    </div>
   );
 }

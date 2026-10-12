@@ -2,7 +2,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { label, messages, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
-import { SessionHeader } from '@/features/employees/session-header';
 import { RequestError } from '@/features/employees/api';
 import { Workspace } from '@/features/property-files/workspace';
 import {
@@ -53,17 +52,8 @@ export function Detail({
     },
     [id],
   );
-  const {
-    employee,
-    data,
-    error,
-    busy,
-    surface,
-    logout,
-    applyLocale,
-    clear,
-    reload,
-  } = useProtectedData(loadDetail);
+  const { employee, data, error, busy, surface, logout, clear, reload } =
+    useProtectedData(loadDetail);
   const locale = employee?.locale ?? initialLocale;
   const text = messages[locale];
   const [refreshTick, setRefreshTick] = useState(0);
@@ -206,18 +196,7 @@ export function Detail({
           ? formatDecimal(value, locale)
           : numberFormat.format(value)) + unit;
   return (
-    <main lang={locale}>
-      <a className="skip-link" href="#main-content">
-        {text.skipToContent}
-      </a>
-      <SessionHeader
-        employee={employee}
-        locale={locale}
-        busy={busy}
-        logout={logout}
-        applyLocale={applyLocale}
-        clear={clear}
-      />
+    <div lang={locale}>
       <nav className="detail-breadcrumb" aria-label={text.back}>
         <a href={returnTo}>{text.back}</a>
         <span aria-hidden="true">/</span>
@@ -226,9 +205,7 @@ export function Detail({
       <div className="detail-heading">
         <div>
           <p className="eyebrow">{text.details}</p>
-          <h1 id="main-content" tabIndex={-1}>
-            {property?.property_code ?? text.details}
-          </h1>
+          <h1>{property?.property_code ?? text.details}</h1>
         </div>
         {property ? (
           <span className="badge detail-status">
@@ -487,6 +464,6 @@ export function Detail({
           </>
         ) : null}
       </div>
-    </main>
+    </div>
   );
 }
