@@ -17,7 +17,7 @@ One Next.js App Router application, TypeScript, React, plain CSS, Supabase Postg
 
 `package.json` and `package-lock.json` are authoritative. Install with `npm ci`. Commit both when updating dependencies; never use an unpinned `npx ...@latest` in automation. ESLint 9 is intentional: the selected Next lint plugins do not all declare ESLint 10 support. Verify official documentation and peer requirements before upgrades.
 
-All three GitHub workflows install pinned npm `11.14.1` after `setup-node` and before `npm ci`; selecting Node `24.14.0` alone supplies npm `11.9.0`, which the strict package engine correctly rejects. Keep the bootstrap version aligned with the package toolchain.
+Every workflow job that installs dependencies bootstraps pinned npm `11.14.1` after `setup-node` and before `npm ci`; selecting Node `24.14.0` alone supplies npm `11.9.0`, which the strict package engine correctly rejects. Keep the bootstrap version aligned with the package toolchain.
 
 Maintenance caveat: npm marks ESLint `9.39.5` unsupported. It is retained for the selected Next plugins' declared compatibility, not treated as a long-term supported choice. Upgrade lint tooling when the complete plugin set supports a maintained major; do not hide peer conflicts with force/legacy-peer-deps. Python requirements also pin `et-xmlfile` and `tzdata` so Windows setup does not depend on a missing system IANA timezone database.
 
@@ -58,7 +58,7 @@ src/
   lib/environment.test.ts      # Configuration invariants
 scripts/
   check-environment.mjs         # Operator-facing configuration check
-  release-guard.mjs             # Branch/project isolation and release smoke
+  release-guard.mjs             # Branch/project isolation, pending migrations and release smoke
   release-guard.test.mjs        # Cross-stage regression risks
   validate-schema.mjs           # Existing embedded SQL assertions
   maintenance-contract.mjs      # Embedded maintenance/history regressions
