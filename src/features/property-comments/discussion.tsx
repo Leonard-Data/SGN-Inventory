@@ -49,7 +49,8 @@ export function Discussion({
   const [notice, setNotice] = useState<string | null>(null);
   const inFlight = useRef<AbortController | null>(null);
   const generation = useRef(0);
-  // One submission key per draft, so an ambiguous failure retries the same original comment.
+  // One submission key per draft: an ambiguous failure retries the original comment, a conflict
+  // proves that key can never succeed and retires it.
   const submissionKey = useRef('');
   const fetchPage = useCallback(
     async (cursor: CommentCursor | null) => {
@@ -163,11 +164,10 @@ export function Discussion({
         onDenied(problem.status);
         return;
       }
-      setPostError(
-        problem instanceof RequestError && problem.code === 'comment-conflict'
-          ? text.commentConflict
-          : text.commentPostFailed,
-      );
+      const conflicted =
+        problem instanceof RequestError && problem.code === 'comment-conflict';
+      if (conflicted) submissionKey.current = '';
+      setPostError(conflicted ? text.commentConflict : text.commentPostFailed);
       setPosting(false);
       return;
     }
