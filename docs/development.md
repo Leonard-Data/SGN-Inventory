@@ -75,7 +75,7 @@ supabase/
 .husky/pre-commit
 ```
 
-Create additional feature directories only for approved backlog work. Employee access, read-only inventory, private files and issue #7 maintenance/corrections are implemented; the shared Property discussion (#44) has its development-project acceptance executed, with staging/production and keyboard-only/360px mobile gates still unexecuted; reservation, rental and remaining UI work is tracked in [delivery-plan.md](delivery-plan.md). The real-mailbox recovery gate prevents claiming completed issue #1 acceptance.
+Create additional feature directories only for approved backlog work. Employee access, read-only inventory, private files and issue #7 maintenance/corrections are implemented; the shared Property discussion (#44) has its development-project acceptance executed, with staging/production and keyboard-only/360px mobile gates still unexecuted; issue #18's reservation request and independent decision is implemented on the property detail, with its acceptance evidence and remaining gates in [testing.md](testing.md#reservation-acceptance-ticket-18); rental and remaining UI work is tracked in [delivery-plan.md](delivery-plan.md). The real-mailbox recovery gate prevents claiming completed issue #1 acceptance.
 
 - `src/app/`: route composition, presentation, narrow validated Server Actions/Route Handlers. No direct inventory SQL/query orchestration in rendering.
 - `src/features/<feature>/`: validation, feature data access, domain results and workflow operations; keep feature-specific rendering beside the feature when useful. Export a small Interface, not every internal helper.
