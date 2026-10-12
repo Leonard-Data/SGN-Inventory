@@ -1,5 +1,6 @@
 'use client';
 import { useState, useCallback, type FormEvent } from 'react';
+import Link from 'next/link';
 import type { Locale } from '@/i18n/messages';
 import { messages } from '@/i18n/messages';
 import type { PropertyPage } from './types';
@@ -70,6 +71,17 @@ export function Inventory({
           <h1>{text.inventory}</h1>
           <p className="intro-copy">{text.searchHint}</p>
         </div>
+        {employee?.role === 'manager' || employee?.role === 'admin' ? (
+          <div className="page-actions">
+            <Link
+              className="btn btn-secondary"
+              href="/activity/company"
+              prefetch={false}
+            >
+              {text.companyActivityLink}
+            </Link>
+          </div>
+        ) : null}
       </div>
 
       <section className="panel page-section">
