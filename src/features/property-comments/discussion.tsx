@@ -109,6 +109,17 @@ export function Discussion({
     setEditError(null);
     setEditCurrent(null);
   }, []);
+  // One owner for replacing the list with the server's first page: a replace closes any open
+  // editor in the same commit that drops its row, so the form never strands a draft over a page
+  // it no longer belongs to. Only the stale-edit conflict merges rather than replaces.
+  const replacePage = useCallback(
+    (rows: Comment[], cursor: CommentCursor | null) => {
+      clearEdit();
+      setComments(rows);
+      setNext(cursor);
+    },
+    [clearEdit],
+  );
   // Every state update happens after an await, so mounting or refreshing never cascades a render.
   const load = useCallback(
     async (keepLoadedRows: boolean) => {
@@ -118,19 +129,18 @@ export function Discussion({
         return null;
       });
       if (version === generation.current && page) {
-        // A replace closes any open editor in the same commit that drops its row, so the form
-        // never strands a draft over a page it no longer belongs to.
-        if (!keepLoadedRows) clearEdit();
-        setComments((rows) =>
-          keepLoadedRows ? mergeComments(page.comments, rows) : page.comments,
-        );
-        setNext(page.nextCursor);
+        if (keepLoadedRows) {
+          setComments((rows) => mergeComments(page.comments, rows));
+          setNext(page.nextCursor);
+        } else {
+          replacePage(page.comments, page.nextCursor);
+        }
         setError(null);
       }
       // Released unconditionally: a superseding request owns the list, not the spinner.
       setBusy(false);
     },
-    [clearEdit, failure, fetchPage],
+    [failure, fetchPage, replacePage],
   );
   const stop = useCallback(() => {
     generation.current++;
@@ -232,14 +242,12 @@ export function Discussion({
       const page = await fetchPage(null);
       if (version !== generation.current) return;
       const merged = withPost(created, page.comments, !!page.nextCursor);
-      setComments(merged.rows);
-      setNext(merged.next);
+      replacePage(merged.rows, merged.next);
       setError(null);
     } catch {
       if (version !== generation.current) return;
       const merged = withPost(created, comments, !!next);
-      setComments(merged.rows);
-      setNext(merged.next);
+      replacePage(merged.rows, merged.next);
     }
   }
   const loadingMore = busy || more;

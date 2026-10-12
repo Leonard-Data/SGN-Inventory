@@ -85,7 +85,7 @@ The contract is `src/app/sgn-app.css` — the ported design package. Compose the
 | Rows / detail | `.detail-head`, `.detail-sub`, `.detail-body`, `.detail-rail`, `.chips.head-chips`, `.facts` > `.fact` (`dt`/`dd`, `.is-unknown`), `.record` > `.record-head`/`.record-title`/`.record-body`/`.record-meta` | facts print `Chưa rõ` for unknown values, never a dash |
 | Files | `.doc-row`, `.doc-icon`, `.doc-name`, `.doc-meta`, `.doc-actions`, `.dropzone` | replaces the legacy file list |
 | History / price | `.timeline` > `.tl-item` (`.tl-time`, `.tl-title`, `.tl-body`, `.tl-actor`), `.hist-row` (`.hist-when`, `.hist-change`, `.hist-field`), `.price-row` | the app has no asking-price history endpoint; `property_history` events render through the history rows |
-| Comments | `.comment` (`.sgn-avatar` cell + body) > `.comment-author`, `.comment-meta`, `.comment-body`, `.comment-actions`, `.composer` > `.composer-foot` | the author's own current comment carries the only edit control; the 1–2,000-character contract is unchanged |
+| Comments | `.comment` (`.sgn-avatar` cell + body) > `.comment-author`, `.comment-meta`, `.comment-body`, `.comment-actions`, `.composer` > `.composer-foot` | the author's own current comment carries the only edit control; the 1–2,000-character contract is unchanged; an unsent edit draft survives only a stale-edit conflict, while replacing the list (Refresh, posting, ordinary reload) closes the editor and discards it |
 | States | `.state-panel` (+ `data-tone="danger"`, `.state-mark`, `.state-title`), `.busy-bar`, `.busy-line` + `.spinner`, `.skeleton`/`.sk-card`, `.alert` (+ `data-tone`), `.toast` | loading, empty, error and denial stay distinct; empty ≠ zero ≠ denied |
 | Lists / tables | `.data-table.stackable` (`[data-num]`, `data-label`), `.pagination` > `.page-info` + `.page-buttons` > `.pager-btn` | tables stack to label/value cards under 640px |
 | Dialogs | `.sgn-dialog` > `.sgn-dialog-panel`/`.sgn-dialog-head`/`.sgn-dialog-body`/`.sgn-dialog-foot` | native `<dialog>`: focus trap and Escape come from the platform |
@@ -237,7 +237,7 @@ page-intro · [New category] / [New unit]
 
 - **Denied / inactive:** the shell is never rendered. `/access-denied` stays in the `(auth)` group and is shown shell-free; API responses return `403` and a localized access-denied message, never an empty inventory.
 - **Loading / empty / error:** the package's own states — `.busy-line` (+ `.spinner`) and `.busy-bar` for progress, `.skeleton`/`.sk-card` where the final geometry is known, `.state-panel` (with `.state-mark`, `.state-title`, optional `data-tone="danger"`) for empty and error, `.alert` for inline feedback and `.toast` for transient confirmation — each with localized text. Empty ≠ denied and empty ≠ zero: an event-free day is an explicit `0`, not a blank.
-- **Failed saves:** keep the draft, show a localized error, never a false success.
+- **Failed saves:** keep the draft, show a localized error, never a false success. The one exception is a deliberate list replacement — Refresh, the error-retry control, posting a new comment or an ordinary reload — which closes any open comment editor and discards its unsent draft with the rows it replaced; only a stale-edit conflict keeps the draft.
 - **Sign-out / denial after load:** clear displayed inventory, contact and discussion data; Back/refresh must not reveal it.
 
 ## 7. Localization, accessibility, responsive

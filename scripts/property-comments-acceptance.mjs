@@ -952,6 +952,55 @@ const editedBody = 'Chào anh,\nGiá 12 tỷ — đã chốt sau khi xem nhà.';
     'refresh while editing beyond the first page closes the editor and re-enables the rows',
     refreshed,
   );
+  // Restore the older page, then post a new comment while the editor is open on it: the post
+  // path replaces the list too, so the editor must close instead of stranding the draft.
+  click('Xem bình luận cũ hơn', primary);
+  await waitUntil(`() => Boolean(${commentNode(mine.body)})`, primary);
+  await settle(primary);
+  openEditor(mine.body, primary);
+  await waitUntil(editOpen, primary);
+  const postedBody = `Bình luận mới ${run}`;
+  fill('Bình luận', postedBody, primary);
+  click('Gửi bình luận', primary);
+  await waitUntil(`() => Boolean(${commentNode(postedBody)})`, primary);
+  await waitUntil(
+    `() => !document.querySelector('#record-panel-comments textarea[name=comment-edit]')`,
+    primary,
+  );
+  await settle(primary);
+  const afterPost = evaluate(
+    `() => {
+      const panel = document.querySelector('#record-panel-comments');
+      const edits = [...panel.querySelectorAll('button')].filter((node) => /Sửa bình luận|Edit comment/.test(node.textContent));
+      return {
+        editorOpen: Boolean(panel.querySelector('textarea[name=comment-edit]')),
+        olderRowGone: ![...panel.querySelectorAll('.comment-body')].some((node) => node.textContent === ${JSON.stringify(mine.body)}),
+        edits: edits.length,
+        enabled: edits.filter((node) => !node.disabled).length,
+      };
+    }`,
+    primary,
+  );
+  assert.equal(
+    afterPost.editorOpen,
+    false,
+    'Posting closes the off-page editor',
+  );
+  assert.equal(
+    afterPost.olderRowGone,
+    true,
+    'Posting shows the server first page instead of the dropped row',
+  );
+  assert.ok(afterPost.edits > 0, 'Posted page still offers edit controls');
+  assert.equal(
+    afterPost.enabled,
+    afterPost.edits,
+    'Posting re-enables every edit control',
+  );
+  observed(
+    'posting while editing beyond the first page closes the editor and re-enables the rows',
+    afterPost,
+  );
   // Restore the older page for the conflict journey below.
   click('Xem bình luận cũ hơn', primary);
   await waitUntil(`() => Boolean(${commentNode(mine.body)})`, primary);
