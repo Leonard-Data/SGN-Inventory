@@ -108,11 +108,11 @@ export function AuthScreen({
   return (
     <AuthShell locale={locale} onLocaleChange={setLocale}>
       {denied ? (
-        <section className="sgn-card" aria-labelledby="auth-title">
-          <p className="sgn-eyebrow">{text.brandMeta}</p>
+        <section className="auth-card" aria-labelledby="auth-title">
+          <p className="eyebrow">{text.brandMeta}</p>
           <h1 id="auth-title">{text.denied}</h1>
-          <p className="sgn-lead">{text.deniedHelp}</p>
-          <div className="sgn-form">
+          <p className="lead">{text.deniedHelp}</p>
+          <div className="auth-form">
             <button
               type="button"
               className={buttonClass('primary', { block: true, loading: busy })}
@@ -120,7 +120,7 @@ export function AuthScreen({
               aria-disabled={busy}
               onClick={logout}
             >
-              <span className="sgn-btn-label">{text.logout}</span>
+              <span className="btn-label">{text.logout}</span>
             </button>
             {formError ? (
               <StatusAlert tone="error" innerRef={errorSurface}>
@@ -130,12 +130,12 @@ export function AuthScreen({
           </div>
         </section>
       ) : (
-        <section className="sgn-card" aria-labelledby="auth-title">
-          <p className="sgn-eyebrow">{text.brandMeta}</p>
+        <section className="auth-card" aria-labelledby="auth-title">
+          <p className="eyebrow">{text.brandMeta}</p>
           <h1 id="auth-title">{text.login}</h1>
-          <p className="sgn-lead">{text.signInHelp}</p>
+          <p className="lead">{text.signInHelp}</p>
           <form
-            className="sgn-form"
+            className="auth-form"
             method="post"
             action="/api/auth/login"
             noValidate
@@ -180,8 +180,8 @@ export function AuthScreen({
               maxLength={1024}
               placeholder="••••••••"
             />
-            <div className="sgn-row">
-              <label className="sgn-check" htmlFor="remember">
+            <div className="row-between">
+              <label className="check" htmlFor="remember">
                 <input
                   type="checkbox"
                   id="remember"
@@ -192,7 +192,7 @@ export function AuthScreen({
                 />
                 <span>{text.remember}</span>
               </label>
-              <a className="sgn-link" href={'/recover?lang=' + locale}>
+              <a className="link" href={'/recover?lang=' + locale}>
                 {text.recovery}
               </a>
             </div>
@@ -202,7 +202,7 @@ export function AuthScreen({
               aria-busy={busy}
               aria-disabled={busy}
             >
-              <span className="sgn-btn-label">
+              <span className="btn-label">
                 {busy ? text.signingIn : text.login}
               </span>
             </button>
@@ -212,7 +212,7 @@ export function AuthScreen({
               </StatusAlert>
             ) : null}
           </form>
-          <p className="sgn-note">{text.accountNote}</p>
+          <p className="form-note">{text.accountNote}</p>
         </section>
       )}
     </AuthShell>

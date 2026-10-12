@@ -1,3 +1,4 @@
+import type { ReactElement } from 'react';
 import type { Locale } from '@/i18n/messages';
 import {
   SHEETS,
@@ -7,7 +8,7 @@ import {
   directionAngle,
   type Variant,
   type RecordFields,
-} from './plate';
+} from './plate-geometry';
 import { plateCopy } from './plate-copy';
 
 export interface PlateProps {
@@ -75,7 +76,7 @@ export function Plate({ variant, record, locale }: PlateProps) {
   }
 
   /* Grid lines */
-  const gridLines: JSX.Element[] = [];
+  const gridLines: ReactElement[] = [];
   if (text) {
     const step = 10 * sheet.ppm;
     for (
@@ -124,7 +125,7 @@ export function Plate({ variant, record, locale }: PlateProps) {
   ) : null;
 
   /* Built footprint */
-  let builtRect: JSX.Element | null = null;
+  let builtRect: ReactElement | null = null;
   if (g.built) {
     const bx =
       g.plot && g.built.w === g.frontage && g.frontage > 0
@@ -211,7 +212,7 @@ export function Plate({ variant, record, locale }: PlateProps) {
   ) : null;
 
   /* Data column */
-  const dataRows: JSX.Element[] = [];
+  const dataRows: ReactElement[] = [];
   if (text && sheet.col) {
     let cy = 56;
     const stepY = variant === 'hero' ? 44 : 38;
@@ -310,7 +311,7 @@ export function Plate({ variant, record, locale }: PlateProps) {
   }
 
   /* Title strip */
-  let titleStrip: JSX.Element | null = null;
+  let titleStrip: ReactElement | null = null;
   if (text && sheet.strip) {
     const sy = sheet.strip;
     const barW = 10 * sheet.ppm;

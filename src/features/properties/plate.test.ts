@@ -8,7 +8,7 @@ import {
   SHEETS,
   PPM,
   PPM_HERO,
-} from './plate.ts';
+} from './plate-geometry.ts';
 
 test('one scale shared by all records — card and bare use PPM, hero uses PPM_HERO', () => {
   assert.equal(PPM, 5.4);

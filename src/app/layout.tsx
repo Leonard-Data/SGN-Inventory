@@ -9,6 +9,7 @@ import { IBM_Plex_Mono, Inter, Oswald } from 'next/font/google';
 import './globals.css';
 import './app.css';
 import './sgn-app.css';
+import './sgn-surfaces.css';
 import './sgn-auth.css';
 
 // Canonical authentication typography (ticket #50). Families, weights and the

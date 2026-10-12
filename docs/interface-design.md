@@ -1,16 +1,16 @@
 # Interface system design — shell, components and page layouts
 
-Design record (2026-10-12). Status: **not implemented**. Companion to [ADR 0001](adr/0001-app-shell-and-navigation-ia.md) (navigation/IA) and [design-foundation.md](design-foundation.md) (auth tokens). Behavior contracts live in [database-contract.md](database-contract.md); this document only describes layout and components. Application implementation is separately authorized.
+Design record (2026-10-12). Status: **implemented** for the token layer, the application shell, the inventory screen and the record page; the routes marked *(planned)* below are not built. Companion to [ADR 0001](adr/0001-app-shell-and-navigation-ia.md) (navigation/IA) and [design-foundation.md](design-foundation.md) (auth tokens). Behavior contracts live in [database-contract.md](database-contract.md); this document only describes layout and components. Application implementation of the remaining routes is separately authorized.
 
 ## 1. Scope
 
 Covers the authenticated app shell, the shared component vocabulary, and the layout of every planned page: `/properties`, `/properties/[id]`, `/requests`, `/reviews/*`, `/rentals`, `/rentals/[id]`, `/people/employees`, `/people/contacts`, `/reports/activity`, `/reports/company`, `/admin/categories`, `/admin/units`. The auth pages (`/login`, `/recover`, `/reset-password`, `/access-denied`) already exist and are unchanged except that the shell never wraps them.
 
-Reuse rule: every new page is composed from the classes already in `src/app/globals.css` (`.panel`, `.property-card`, `.property-list`, `.badge`, `.pagination`, `.maintenance*`, `.history-event`, `.details`, `.page-intro`, `.search-panel`) plus the auth system in `src/app/sgn-auth.css`. New classes are introduced only where §3 lists them, and each is named to match the existing `sgn-`/flat convention.
+Reuse rule: the visual language is the *Saigon New House* design package, ported verbatim into `src/app/app.css` (tokens at `:root`) and `src/app/sgn-app.css` (the class vocabulary). **Those class names are the contract** — a screen composes them, it does not restyle them. Anything the package does not draw lives in `src/app/globals.css` (repo-only surfaces: maintenance disclosures, history comparison, owner contact, correction proposals) and `src/app/sgn-surfaces.css` (extensions to package components); both are valued on the same tokens, and neither introduces a colour, radius or spacing value the token layer does not define. The auth surfaces keep their own `.sgn-auth` layout sheet over the same tokens.
 
 ## 2. Token decision (D1)
 
-Two visual vocabularies exist today:
+Two visual vocabularies existed before this work:
 
 | Surface | Stylesheet | Type | Accent | Scope |
 | --- | --- | --- | --- | --- |
@@ -19,11 +19,11 @@ Two visual vocabularies exist today:
 
 Both define `--muted` and `--danger` with different values. The newer, deliberate baseline is the auth system (tokens, fonts, a visual-compare harness); the inventory sheet predates it and has no radii/spacing tokens.
 
-**Decision (recommended):** promote the auth tokens and controls into one shared app layer, `src/app/app.css`, scoped to `.sgn-app`. The shell and all authenticated pages consume it; `.sgn-auth` becomes a child of the same token scope. Inventory, detail, maintenance and files migrate off the ad-hoc `globals.css` values onto these tokens (type, `--accent`, radii, spacing) as part of the shell work. One type system, one accent, one set of radii.
+**Decision (shipped):** the *Saigon New House* design package is the visual baseline and is ported verbatim: `src/app/app.css` is its token layer (declared at `:root`, so every surface including `.sgn-auth` inherits one palette, one type ramp, one radius set, one spacing scale) and `src/app/sgn-app.css` is its app layer, which owns the shared class vocabulary. The package's `assets/sgn-app.css` is byte-identical to the port except for the one documented adaptation — its runtime Google Fonts request is replaced by the `next/font` variables this application already self-hosts. Inventory, detail, maintenance and files no longer carry their own values: the legacy blocks the package also defines were deleted from `globals.css`. Control vocabulary is single: the auth screens were renamed from their `sgn-`-prefixed mirror onto the reference names (`.btn*`, `.field`, `.input`, `.lang-switch`, `.logo-tile`, `.auth-panel`) with `scripts/auth-visual-compare.mjs` as the check.
 
-**Alternative:** leave `globals.css` in place for inventory and give the shell its own third token set. Cheaper now, but ships two greens, two body fonts and two badge colours in one product, and guarantees a migration later anyway.
+**Rejected:** leaving `globals.css` in place with a third token set for the shell — two greens, two body fonts and two badge colours in one product, and a guaranteed later migration.
 
-Consequence of the decision: the migration touches working pages, so it must be verified by the visual-compare harness (`scripts/auth-visual-compare.mjs`) extended to the inventory/detail pages, not eyeballed.
+Consequence, honoured: the migration was measured, not eyeballed — `scripts/auth-visual-compare.mjs` profiles the auth surfaces against the preserved auth reference, and its `PROFILE=applied` profile compares the shared surfaces (shell, cards, panels, controls, states) against the package's own applied reference at 375/1039/1040/1440px. The evidence for the last run of both profiles lives outside the repository (design review artifacts) and the harness prints the diff per surface.
 
 ## 3. App shell
 
@@ -31,12 +31,12 @@ The shell replaces the per-page `SessionHeader`. Locale switch and sign-out move
 
 ```
 ┌──────────────────────────────────────── .sgn-app / (app)/layout.tsx ────────────────────────────────────────┐
-│ ┌ sidebar (240px, sticky, full height) ─┐ ┌ topbar (56px, sticky) ───────────────────────────────────────┐ │
+│ ┌ sidebar (--sidebar-w: 248px, sticky, full height) ─┐ ┌ topbar (--topbar-h: 64px, sticky) ───────────────────────────────────────┐ │
 │ │ .sgn-lockup  logo tile + wordmark     │ │ breadcrumb / page title        LanguageSwitch  [user menu ▾] │ │
 │ │                                       │ ├─────────────────────────────────────────────────────────────┤ │
 │ │ NAV (role-filtered, §3.1)             │ │                                                             │ │
 │ │  Inventory                            │ │  <main> page content region                                 │ │
-│ │  Reservations & Reviews               │ │  padding 24px clamp(20px,4vw,56px) 72px; max-width 1280px   │ │
+│ │  Reservations & Reviews               │ │  --gutter-x, --content-max: 1280px, see below                │ │
 │ │  Rentals                              │ │                                                             │ │
 │ │  People                               │ │                                                             │ │
 │ │  Reports                              │ │                                                             │ │
@@ -47,9 +47,10 @@ The shell replaces the per-page `SessionHeader`. Locale switch and sign-out move
 └─────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Components:** `.sgn-app` (frame), `.sgn-sidebar`, `.sgn-navg .sgn-nav-group`, `.sgn-navg .sgn-nav-item` (`aria-current="page"`), `.sgn-topbar`, `.sgn-crumbs`, plus the reused `LanguageSwitch`/`PasswordField` family becoming shared controls.
+- **Components (shipped):** `.sgn-app` (grid frame), `.sgn-skip`, `.sgn-sidebar`, `.sgn-lockup` + `.logo-tile` + `.sgn-brand-name`, `.sgn-nav` > `.sgn-nav-group` (`.sgn-nav-label`, `.sgn-nav-item` with `aria-current="page"`), `.sgn-sidebar-foot`, `.sgn-main`, `.sgn-scrim`, `.sgn-topbar` (`.sgn-menu-btn`, `.sgn-crumbs`, `.sgn-topbar-right`), `.lang-switch`/`.lang-btn` (the reused bilingual switch), `.sgn-user`/`.sgn-user-btn`/`.sgn-avatar`/`.sgn-user-copy`/`.sgn-popover` (the account menu), `.sgn-content` (the content region). The shell lives in `src/features/navigation/app-shell.tsx` and is mounted by `src/app/(app)/layout.tsx`; `SessionHeader` no longer exists.
+- **Shipped values:** `--sidebar-w: 248px`, `--topbar-h: 64px`, `--content-max: 1280px`, content padding `var(--space-8) var(--gutter-x) var(--space-16)` with `--gutter-x: clamp(20px, 3.4vw, 56px)`; the rail is `--brand-deep` and the accent never fills it. The nav renders only destinations whose route exists today (`/properties`); the other five groups of ADR 0001 are added in the change that ships their routes, so the rail never links to a page that does not exist.
 - **Role filter:** items come from the `role × item → visible` table in `src/features/navigation/`; hidden items are not rendered, not merely disabled. Route guards reuse the same table.
-- **Responsive:** at `<1040px` the sidebar collapses to the compact horizontal header (reuse the auth rail breakpoint and `--logo-size:42px`), the nav becomes a drawer opened by a menu button with focus trap and `aria-expanded`; the drawer closes on route change and on `Escape`.
+- **Responsive (shipped):** under 1040px the rail becomes an off-canvas drawer (`--motion-base` slide, `.sgn-scrim` behind it, menu button with `aria-expanded`/`aria-controls`); the drawer closes on `Escape`, on the scrim and on navigation, traps Tab inside itself, and returns focus to the menu button. Above 1040px the rail is sticky at `--sidebar-w`. `--logo-size` and `--topbar-h` step down at 1039px.
 - **Access:** one skip link to `#main-content`; the shell never renders for a denied identity (§6).
 - **Session:** on window refocus the shell re-checks `/api/session`; on denial it clears page data and leaves the shell (§6).
 
@@ -68,59 +69,67 @@ The shell replaces the per-page `SessionHeader`. Locale switch and sign-out move
 
 ## 4. Shared component vocabulary
 
-| Component | Classes | Origin | Notes |
-| --- | --- | --- | --- |
-| Page container | `<main>` | reuse | 1280px cap, responsive padding |
-| Page header | `.page-intro` (`h1` + `.eyebrow` + `.intro-copy`) | reuse | title + one-line purpose per page |
-| Card / section | `.panel` | reuse | white, 16px radius, hairline border; `.panel` accent top-border reserved for the primary detail panel |
-| Property card | `.property-card` inside `.property-list` | reuse | grid `auto-fit minmax(320px,1fr)` |
-| Status pill | `.badge` + `[data-tone="neutral\|success\|warn\|danger\|accent"]` | extend | today `.badge` is gold-only; statuses need tones. Colour is never the only signal — the badge text is the localized label |
-| Button | `.sgn-btn`, `.sgn-btn-primary/-secondary/-block` | promote | reuse the auth variants app-wide; add `.sgn-btn-danger` |
-| Field | `.sgn-field`, `.sgn-input`, `.sgn-label-row`, `.sgn-field-error` | promote | one control set for every form |
-| Disclosure | `<details class="maintenance">` | reuse | creation, report, filters, invite |
-| Inline editor | `.maintenance-editor` | reuse | edit-in-place blocks |
-| Event/row card | `.history-event`, `.history-comparison`, `.history-field` | reuse | queue items and history entries |
-| List | `.property-list`, `.file-list > .file-row` | reuse | no generic table existed |
-| Data table | `.data-table` (`table/thead/tbody`, `[data-num]` right-align + `tabular-nums`) | new | first tables in the app: reports + employee/contact lists; stacks to label/value cards under 640px |
-| Pagination | `.pagination` | reuse | keyset cursors; UUID order today |
-| Section nav (detail) | `.section-nav` (sticky, `aria-label`) | new | detail page anchors only |
-| Empty / loading / error | `<p role="status">` / `<p role="alert">` | reuse | no new classes; messages localized |
+The contract is `src/app/sgn-app.css` — the ported design package. Compose these; do not introduce a second control vocabulary or a value the tokens do not define.
+
+| Component | Classes (package) | Notes |
+| --- | --- | --- |
+| Content region | `.sgn-content` (the shell's `<main id="main-content">`) | `--content-max` 1280px, `--gutter-x` padding; the page renders inside it and owns no `<main>` |
+| Page head | `.page-head` > `.page-intro` (`.example` eyebrow, `h1`, `.intro-copy`) + `.page-actions` | one accent action per viewport |
+| Toolbar / search | `.toolbar`, `.search` > `.input` + `.search-btn`, `.search-hint`, `.chips` > `.chip` | filters as chips; the package's `.seg` view switch is unused (the app renders cards only) |
+| Card / section | `.panel` > `.panel-head` (`.panel-title`, `.panel-note`) / `.panel-body` / `.panel-foot` | white, `--radius-lg`, hairline border |
+| Property card | `.property-card` inside `.property-list[data-view="cards"]` > `.cover` + `.card-body`/`.card-meta`/`.card-address`/`.card-foot`/`.card-actions` | the cover holds the plate, or a stored photograph |
+| Site plate | `.cover > svg.plate.plate-card`/`.plate-bare`/`.plate-hero`, `.plate-*` internals | one scale per record; repo-only placeholder text comes from the component |
+| Status pill | `.badge` + `data-tone="neutral\|muted\|success\|warn\|danger\|accent"` | the localized label carries the meaning; the tone dot never replaces it |
+| Buttons | `.btn`, `.btn-primary`, `.btn-secondary`, `.btn-ghost`, `.btn-danger`, `.btn-sm`, `.btn-block`, `.is-loading` | the auth screens use the same classes |
+| Fields | `.field` > `.field-label-row` (`.field-req`), `.input`/`.select`/`.textarea`, `.field-unit`, `.check`, `.field-hint`, `.field-error` | one control set for every form |
+| Rows / detail | `.detail-head`, `.detail-sub`, `.detail-body`, `.detail-rail`, `.chips.head-chips`, `.facts` > `.fact` (`dt`/`dd`, `.is-unknown`), `.record` > `.record-head`/`.record-title`/`.record-body`/`.record-meta` | facts print `Chưa rõ` for unknown values, never a dash |
+| Files | `.doc-row`, `.doc-icon`, `.doc-name`, `.doc-meta`, `.doc-actions`, `.dropzone` | replaces the legacy file list |
+| History / price | `.timeline` > `.tl-item` (`.tl-time`, `.tl-title`, `.tl-body`, `.tl-actor`), `.hist-row` (`.hist-when`, `.hist-change`, `.hist-field`), `.price-row` | the app has no asking-price history endpoint; `property_history` events render through the history rows |
+| Comments | `.comment` (`.sgn-avatar` cell + body) > `.comment-author`, `.comment-meta`, `.comment-body`, `.comment-actions`, `.composer` > `.composer-foot` | 500-character contract unchanged |
+| States | `.state-panel` (+ `data-tone="danger"`, `.state-mark`, `.state-title`), `.busy-bar`, `.busy-line` + `.spinner`, `.skeleton`/`.sk-card`, `.alert` (+ `data-tone`), `.toast` | loading, empty, error and denial stay distinct; empty ≠ zero ≠ denied |
+| Lists / tables | `.data-table.stackable` (`[data-num]`, `data-label`), `.pagination` > `.page-info` + `.page-buttons` > `.pager-btn` | tables stack to label/value cards under 640px |
+| Dialogs | `.sgn-dialog` > `.sgn-dialog-panel`/`.sgn-dialog-head`/`.sgn-dialog-body`/`.sgn-dialog-foot` | native `<dialog>`: focus trap and Escape come from the platform |
+| Repo-only surfaces | `.maintenance*` (disclosures, inline editors), `.history-event`, `.history-comparison`, `.history-field`, `.owner-disclosure`, `.owner-phone`, `.proposal-choices`, `.contact-choices`, `.eyebrow` (auth) | `globals.css` + `sgn-surfaces.css`; package tokens only |
 
 ## 5. Page layouts
 
 All page bodies render inside the shell `main` region; `SessionHeader` is gone from them.
 
-### 5.1 `/properties` — Inventory (exists; add ordering + new-property)
+### 5.1 `/properties` — Inventory *(shipped)*
 
 ```
-page-intro:  eyebrow "Inventory" · h1 · intro-copy
-[ New property ]  (opens the existing creation disclosure, staff/reviewer only)
-search-panel form: query · mode · type · status · [order: newest|oldest] · [Search]
-status / alert paragraphs
-property-list (grid):
-  property-card × N
-    CoverImage · h2>a (code + address) · meta line · address lines + .badge(mapping status)
-pagination  [First] [Prev] [Next]
+.sgn-content
+  .page-head:  .page-intro (.example · h1 · .intro-copy)   |  .page-actions [ New property ]
+  .toolbar > .search > .input + .search-btn, .search-hint
+  .chips > .chip (applied conditions) · .result-line in .row-between
+  .property-list[data-view="cards"] > .property-card × N
+      .cover > Plate(card)  |  stored cover photograph
+      .card-body: .card-meta (code · mode) · .card-address > a · .card-foot > .badge[data-tone]
+  .pagination > .page-info + .page-buttons > .pager-btn
+  states: .busy-line (loading) · .state-panel (empty) · .state-panel[data-tone="danger"] (error)
 ```
-Adds an ordering control (original inventory entry dates; unknown shown explicitly). New-property is an action, not a route (§3.1).
+Shipped: the card cover is the site plate drawn from the record's own fields; a stored cover photograph wins; a record with no areas keeps the plate's muted placeholder. The package's `.seg` Cards/List/Table switch is **not** implemented (the app renders cards only) and the ordering control is not implemented — both are open items, not silent omissions.
 
-### 5.2 `/properties/[id]` — Detail (exists; add section nav, discussion, price timeline)
+### 5.2 `/properties/[id]` — Detail *(shipped, minus the items noted)*
 
 ```
-detail-breadcrumb: Inventory / <code>
-detail-heading: eyebrow · h1 · .badge.detail-status ;  [+ archived badge]
-section-nav (sticky): Facts · Addresses · Contacts · Files · Discussion · Price history · History · Activity
-details (two-column grid):
-  panel Facts (dl)            | panel Addresses (articles + .badge)
-                              | panel Contacts (articles + relation/primary .badge)
-panel Files        → property-files Workspace
-panel Discussion   → comments (new): 30-item list newest-first, composer, edit/remove, moderator reason
-panel Price history→ asking-price timeline (new): date · actor · before → after, sale and rent separate
-panel History      → maintenance History (exists)
-panel Activity     → today's own counts (exists)
-panel Correction report / queue (exists, role-scoped)
+.sgn-content
+  quiet back link (.link-quiet) → returnTo (keeps the filtered result position)
+  detail-head: .example eyebrow · h1 (record code) · .chips.head-chips (status + review status badges)
+  archived notice: .alert[data-tone="neutral"] with the archive mark
+  detail-body (two-column grid, single column under 1040px):
+      panel .plate-hero (top of the grid)  → Plate(hero) | stored cover photograph
+      panel Facts      → dl.facts with .fact rows; unknown values print Chưa rõ
+      panel Addresses  → .record rows + mapping .badge, .addrNote policy line
+      panel Contacts   → .record rows + owner-contact disclosure (.owner-disclosure/.owner-phone)
+      panel Files      → property-files Workspace (.doc-row vocabulary)
+      panel Maintenance→ in-page maintenance workspace (revision-checked)
+      panel Discussion → 30-item list newest-first, .composer, edit/remove
+      panel History    → maintenance history rows (.hist-row)
+      panel Activity   → today's own counts
+      panel Corrections→ report + role-scoped queue
 ```
-Discussion and price history reuse `.panel` + `.history-event`/list patterns; no new route.
+Shipped as above. **Not implemented:** the sticky `.section-nav` (Facts · Addresses · …), the separate asking-price timeline (the app has no price-history endpoint; recorded price changes appear through the history rows), and the record's Edit action — there is no `/properties/[id]/edit` route, so editing stays the in-page maintenance disclosure. No new route was added.
 
 ### 5.3 `/requests` — my requests (new)
 
@@ -217,7 +226,7 @@ page-intro · [New category] / [New unit]
 ## 6. Cross-cutting states
 
 - **Denied / inactive:** the shell is never rendered. `/access-denied` stays in the `(auth)` group and is shown shell-free; API responses return `403` and a localized access-denied message, never an empty inventory.
-- **Loading / empty / error:** plain `<p role="status">` and `<p role="alert">` with localized text, matching the existing pages. Empty ≠ denied and empty ≠ zero: an event-free day is an explicit `0`, not a blank.
+- **Loading / empty / error:** the package's own states — `.busy-line` (+ `.spinner`) and `.busy-bar` for progress, `.skeleton`/`.sk-card` where the final geometry is known, `.state-panel` (with `.state-mark`, `.state-title`, optional `data-tone="danger"`) for empty and error, `.alert` for inline feedback and `.toast` for transient confirmation — each with localized text. Empty ≠ denied and empty ≠ zero: an event-free day is an explicit `0`, not a blank.
 - **Failed saves:** keep the draft, show a localized error, never a false success.
 - **Sign-out / denial after load:** clear displayed inventory, contact and discussion data; Back/refresh must not reveal it.
 
@@ -225,12 +234,22 @@ page-intro · [New category] / [New unit]
 
 - **i18n:** VI default + EN for every label, badge, control, empty/loading/error state and format. Shell/nav/global strings in `src/i18n/messages.ts`; page areas get feature-local files (e.g. `src/features/reviews/messages.ts`). Never translate source records; Vietnamese addresses, phone strings, VND and m² stay verbatim. Dates `dd/MM/yyyy`, times in `Asia/Ho_Chi_Minh`.
 - **Accessibility:** skip link; visible focus (`:focus-visible`); every input has a label; interactive hit areas ≥44px; status conveyed by text, not colour alone; `<details>` disclosure is keyboard-operable; drawer has a focus trap; tables use `<th scope>`.
-- **Responsive breakpoints:** reuse existing — 1040px (sidebar → drawer), 680px (`page-intro`/`search-panel` stack), 640px (`main` padding, `.details` → one column, `.data-table` → stacked cards), 480px (history comparison stacks).
+- **Responsive breakpoints (shipped):** 1039/1040px (rail → drawer; `--logo-size`, `--topbar-h` step down; `.detail-head`/`.detail-body` collapse), 720px (the language switch switches to its short form), 640px (content padding, `.property-list` to one column, `.facts`/`.price-row`/`.doc-row` stack, `.data-table` to stacked cards, dialogs widen to the viewport), 480px (history comparison stacks). Print hides the rail, topbar, scrim and toasts.
 
 ## 8. Open decisions and flags
 
-- **D1 (tokens):** §2 keeps the auth system as the app-wide baseline. If the cheaper alternative is chosen instead, only §2 and the class mapping in §4 change; page layouts do not.
-- **First tables:** §4 introduces `<table>` for the first time (reports, employee/contact lists). Reviewer/queue lists stay as `.history-event` article rows rather than tables, because each row expands to a decision form.
-- **Badge tones:** extending `.badge` changes the current gold-only badges on inventory/detail; the migration must keep the mapping-status badges readable in both languages.
-- **Shell refactor:** absorb `src/features/employees/session-header.tsx` into the top bar; inventory/detail drop their own header. Verified only when implementation is authorized.
+- **D1 (tokens): resolved** — see §2 for what shipped.
+- **Badge tones: resolved** — `.badge` is the package's outline pill with `data-tone`; the mapping-status and record-status labels keep their localized text and were checked at 375/1039/1040/1440px.
+- **Shell refactor: resolved** — `src/features/employees/session-header.tsx` is deleted; the shell owns the crumbs, the language switch (persisted through `set_my_locale`, cookie-backed, re-rendered by the root layout) and the account menu.
+- **First tables:** still pending — no `<table>` shipped yet. Reviewer/queue lists stay as `.history-event` rows because each row expands to a decision form.
+- **Locale propagation:** locale is a cookie + `set_my_locale` preference; the shell re-renders the route on change, so page components no longer own locale state (`applyLocale` was removed from `useProtectedData`).
+
+### Shipped-state gaps (deliberate, not silent)
+
+- Navigation renders one group: only `/properties` exists today. The ADR's other five groups ship with their routes.
+- The inventory results have **cards only**: the package's Cards/List/Table `.seg` switch and the ordering control are not implemented, and `.cell-plate` table thumbnails therefore have no consumer yet.
+- The card shows the record's existing fact set (code, mode, address, status). The prototype's card also prints area and price lines; adding them would be new data display beyond this restyle, so they were left out.
+- The record page has no sticky section nav, no separate asking-price timeline and no Edit action (no edit route exists; editing stays the in-page maintenance disclosure).
+- `/properties/[id]/edit`, `/requests`, `/reviews/*`, `/rentals*`, `/people/*`, `/reports/*`, `/admin/*` remain unbuilt and are only described above.
+- The auth surfaces keep their own layout sheet (`.sgn-auth` + `sgn-auth.css`); they share the token layer and the control vocabulary but they are shell-free by design (ADR 0001).
 - **Not in scope:** no geographic map, no physical-visit UI, no threads/reactions/mentions, no dashboards beyond §5.9, no design for any archived-property exception beyond the existing reviewer read boundary.

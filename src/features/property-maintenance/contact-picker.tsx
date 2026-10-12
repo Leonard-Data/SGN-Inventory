@@ -65,14 +65,19 @@ export function ContactPicker({
   return (
     <div>
       <form onSubmit={submit}>
-        <label htmlFor={id}>{text.contactSearch}</label>
-        <input
-          id={id}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          maxLength={120}
-        />
-        <button disabled={busy}>
+        <div className="field">
+          <label className="field-label" htmlFor={id}>
+            {text.contactSearch}
+          </label>
+          <input
+            id={id}
+            className="input"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            maxLength={120}
+          />
+        </div>
+        <button className="btn btn-sm" disabled={busy}>
           {busy ? text.loading : text.contactSearch}
         </button>
       </form>
@@ -83,6 +88,7 @@ export function ContactPicker({
             <li key={contact.id}>
               <button
                 type="button"
+                className="btn btn-ghost btn-sm"
                 aria-pressed={selected === contact.id}
                 onClick={() => onSelected(contact.id)}
                 translate="no"
@@ -103,6 +109,7 @@ export function ContactPicker({
       {page?.nextCursor ? (
         <button
           type="button"
+          className="btn btn-sm btn-ghost"
           disabled={busy}
           onClick={() => search(page.nextCursor!)}
         >

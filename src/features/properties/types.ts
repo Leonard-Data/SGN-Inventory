@@ -12,6 +12,16 @@ export type PropertySummary = {
   status: string;
   addresses: AddressSummary[];
   coverFileId: string | null;
+  // Plot and floor fields the site plate draws from, kept exactly as the
+  // database returns them. search_properties returns setof public.properties, so
+  // these need no schema change.
+  frontageM: string | null;
+  depthM: string | null;
+  landAreaM2: string | null;
+  floorAreaM2: string | null;
+  floors: number | null;
+  direction: string | null;
+  accessType: string | null;
 };
 export type PropertyPage = {
   properties: PropertySummary[];

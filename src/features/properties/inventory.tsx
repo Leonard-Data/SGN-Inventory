@@ -1,10 +1,10 @@
 'use client';
 import { useState, useCallback, type FormEvent } from 'react';
 import type { Locale } from '@/i18n/messages';
-import { label, messages } from '@/i18n/messages';
+import { messages } from '@/i18n/messages';
 import type { PropertyPage } from './types';
 import { useProtectedData } from '@/features/employees/use-protected-data';
-import { CoverImage } from '@/features/property-files/cover-image';
+import { PropertyCard } from './property-card';
 import { CreateProperty } from '@/features/property-maintenance/create';
 import { CorrectionQueue } from '@/features/corrections/queue';
 
@@ -61,130 +61,193 @@ export function Inventory({
   }
   const resultLocation = href(after, cursors);
   return (
-    <div lang={locale}>
-      <section className="page-intro">
-        <div>
-          <p className="eyebrow">{text.title}</p>
+    <>
+      <div className="page-head">
+        <div className="page-intro">
+          <p className="example">{text.title}</p>
           <h1>{text.inventory}</h1>
+          <p className="intro-copy">{text.searchHint}</p>
         </div>
-        <p className="intro-copy">{text.searchHint}</p>
+      </div>
+
+      <section className="panel page-section">
+        <div className="panel-body">
+          <form
+            className="toolbar"
+            action="/properties"
+            method="get"
+            onSubmit={search}
+            role="search"
+          >
+            <div className="search">
+              <label className="sr" htmlFor="query">
+                {text.search}
+              </label>
+              <input
+                className="input"
+                id="query"
+                name="query"
+                type="search"
+                autoComplete="off"
+                defaultValue={initialQuery}
+                aria-invalid={searchError}
+                placeholder={text.search}
+              />
+              <button
+                className="search-btn"
+                type="submit"
+                aria-label={text.search}
+              >
+                {text.search}
+              </button>
+            </div>
+          </form>
+          <p className="search-hint">{text.searchHint}</p>
+          {searchError ? (
+            <p className="search-hint" role="alert">
+              {text.queryTooLong}
+            </p>
+          ) : null}
+        </div>
       </section>
-      <form
-        className="search-panel"
-        action="/properties"
-        method="get"
-        onSubmit={search}
-      >
-        <label htmlFor="query">{text.search}</label>
-        <input
-          id="query"
-          name="query"
-          autoComplete="off"
-          defaultValue={initialQuery}
-          aria-describedby="search-help"
-          aria-invalid={searchError}
-        />
-        <p id="search-help" className="muted">
-          {text.searchHint}
-        </p>
-        <button>{text.search}</button>
-      </form>
-      {searchError ? <p role="alert">{text.queryTooLong}</p> : null}
-      {busy ? <p role="status">{text.loading}</p> : null}
-      {error ? (
-        <p role="alert">
-          {error === 'query-too-long'
-            ? text.queryTooLong
-            : error === 'sign-out-failed'
-              ? text.signOutFailed
-              : error === 'invalid-input'
-                ? text.invalidInput
-                : text.unavailable}{' '}
-          <button onClick={error === 'sign-out-failed' ? logout : reload}>
-            {text.retry}
-          </button>
-        </p>
+
+      {busy ? (
+        <div className="busy-head" role="status">
+          <div className="busy-bar" />
+          <div className="busy-line">
+            <span className="spinner" aria-hidden="true" />
+            <span>{text.loading}</span>
+          </div>
+        </div>
       ) : null}
-      <div ref={surface} hidden={!data || busy}>
-        {data ? (
-          <>
-            <p>{employee?.displayName}</p>
-            {data.properties.length === 0 ? (
-              <p>{text.empty}</p>
-            ) : (
-              <ul className="property-list">
-                {data.properties.map((property) => (
-                  <li className="property-card" key={property.id}>
-                    <CoverImage
-                      propertyId={property.id}
-                      fileId={property.coverFileId}
+
+      <section className="page-section">
+        {error ? (
+          <div className="panel">
+            <div className="state-panel" data-tone="danger">
+              <span className="state-mark" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="26"
+                  height="26"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 4 3 20h18L12 4z" />
+                  <path d="M12 10v4" />
+                  <path d="M12 17h.01" />
+                </svg>
+              </span>
+              <h3>
+                {error === 'query-too-long'
+                  ? text.queryTooLong
+                  : error === 'sign-out-failed'
+                    ? text.signOutFailed
+                    : error === 'invalid-input'
+                      ? text.invalidInput
+                      : text.unavailable}
+              </h3>
+              <button
+                className="btn btn-secondary btn-sm"
+                type="button"
+                onClick={error === 'sign-out-failed' ? logout : reload}
+              >
+                {text.retry}
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        <div ref={surface} hidden={!data || busy}>
+          {data ? (
+            <>
+              <div className="row-between">
+                <p className="result-line">
+                  <b>
+                    {data.properties.length} {text.inventory}
+                  </b>
+                </p>
+              </div>
+
+              {data.properties.length === 0 ? (
+                <div className="panel">
+                  <div className="state-panel">
+                    <span className="state-mark" aria-hidden="true">
+                      <svg
+                        viewBox="0 0 24 24"
+                        width="26"
+                        height="26"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.7"
+                        strokeLinecap="round"
+                      >
+                        <circle cx="11" cy="11" r="7" />
+                        <path d="M20.5 20.5 16.7 16.7" />
+                      </svg>
+                    </span>
+                    <h3>{text.empty}</h3>
+                  </div>
+                </div>
+              ) : (
+                <div className="property-list" data-view="cards">
+                  {data.properties.map((record) => (
+                    <PropertyCard
+                      key={record.id}
+                      record={record}
                       locale={locale}
+                      resultLocation={resultLocation}
                       onDenied={denyFiles}
                     />
-                    <h2>
-                      <a
-                        translate="no"
-                        href={
-                          '/properties/' +
-                          property.id +
-                          '?' +
-                          new URLSearchParams({ returnTo: resultLocation })
-                        }
-                      >
-                        {property.propertyCode}
-                      </a>
-                    </h2>
-                    <p>
-                      {text.listingMode}: {label(locale, property.listingMode)}{' '}
-                      · {text.status}: {label(locale, property.status)}
-                    </p>
-                    {property.addresses.length ? (
-                      property.addresses.map((address) => (
-                        <p key={address.id}>
-                          {label(locale, address.format)} ·{' '}
-                          <span className="badge">
-                            {label(locale, address.mappingStatus)}
-                          </span>
-                          <br />
-                          <span translate="no">{address.addressText}</span>
-                        </p>
-                      ))
-                    ) : (
-                      <p>
-                        {text.address}: {text.unknown}
-                      </p>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-            <nav className="pagination" aria-label={text.inventory}>
-              {previous ? (
-                <a href={href(previous, cursors.slice(0, -1))}>
-                  {text.previous}
-                </a>
-              ) : after ? (
-                <a href={href(null, [])}>{text.first}</a>
+                  ))}
+                </div>
+              )}
+
+              <nav className="pagination" aria-label={text.inventory}>
+                <span className="page-info">
+                  {after ? text.previous : text.first}
+                </span>
+                <span className="page-buttons">
+                  {previous ? (
+                    <a
+                      className="pager-btn"
+                      href={href(previous, cursors.slice(0, -1))}
+                    >
+                      {text.previous}
+                    </a>
+                  ) : after ? (
+                    <a className="pager-btn" href={href(null, [])}>
+                      {text.first}
+                    </a>
+                  ) : null}
+                  {data.nextCursor ? (
+                    <a
+                      className="pager-btn"
+                      href={href(data.nextCursor, [...cursors, after ?? '~'])}
+                    >
+                      {text.next}
+                    </a>
+                  ) : null}
+                </span>
+              </nav>
+
+              {employee ? (
+                <>
+                  <CreateProperty locale={locale} onDenied={denyFiles} />
+                  <CorrectionQueue
+                    employee={employee}
+                    locale={locale}
+                    onDenied={denyFiles}
+                  />
+                </>
               ) : null}
-              {data.nextCursor ? (
-                <a href={href(data.nextCursor, [...cursors, after ?? '~'])}>
-                  {text.next}
-                </a>
-              ) : null}
-            </nav>
-            {employee ? (
-              <>
-                <CreateProperty locale={locale} onDenied={denyFiles} />
-                <CorrectionQueue
-                  employee={employee}
-                  locale={locale}
-                  onDenied={denyFiles}
-                />
-              </>
-            ) : null}
-          </>
-        ) : null}
-      </div>
-    </div>
+            </>
+          ) : null}
+        </div>
+      </section>
+    </>
   );
 }

@@ -199,14 +199,18 @@ function UserMenu({
 
 export function AppShell({
   locale,
+  employee: given,
   children,
 }: {
   locale: Locale;
+  // Review routes render the shell without a session; product routes omit it and
+  // the shell reads /api/session itself.
+  employee?: Employee;
   children: ReactNode;
 }) {
   const text = messages[locale];
   const pathname = usePathname();
-  const [employee, setEmployee] = useState<Employee | null>(null);
+  const [employee, setEmployee] = useState<Employee | null>(given ?? null);
   const [drawer, setDrawer] = useState(false);
   const aside = useRef<HTMLElement>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
@@ -214,12 +218,13 @@ export function AppShell({
   // The proxy already rejects an unauthenticated request for these routes; this
   // read is only for the account menu and the role filter.
   useEffect(() => {
+    if (given) return undefined;
     const abort = new AbortController();
     void api<{ employee: Employee }>('/api/session', undefined, abort.signal)
       .then((session) => setEmployee(session.employee))
       .catch(() => {});
     return () => abort.abort();
-  }, []);
+  }, [given]);
 
   useEffect(() => {
     if (!drawer) return;

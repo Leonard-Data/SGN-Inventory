@@ -17,7 +17,9 @@ export async function browseProperties(
       p_limit: 30,
       ...(after ? { p_after: after } : {}),
     })
-    .select('id,property_code,listing_mode,status,cover_file_id');
+    .select(
+      'id,property_code,listing_mode,status,cover_file_id,frontage_m::text,depth_m::text,land_area_m2::text,floor_area_m2::text,floors,direction,access_type',
+    );
   if (error)
     throw new ApiError(
       error.code === '42501' ? 403 : 503,
@@ -72,6 +74,14 @@ export async function browseProperties(
       listingMode: row.listing_mode,
       status: row.status,
       coverFileId: row.cover_file_id ?? null,
+      // Kept as the database returned them; the plate coerces for the drawing.
+      frontageM: row.frontage_m ?? null,
+      depthM: row.depth_m ?? null,
+      landAreaM2: row.land_area_m2 ?? null,
+      floorAreaM2: row.floor_area_m2 ?? null,
+      floors: row.floors ?? null,
+      direction: row.direction ?? null,
+      accessType: row.access_type ?? null,
       addresses: matching.get(row.id) ?? byProperty.get(row.id) ?? [],
     })),
     nextCursor: rows.length === 30 ? rows[rows.length - 1]!.id : null,

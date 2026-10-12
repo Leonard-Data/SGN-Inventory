@@ -1,0 +1,14 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   Surfaces the design package does not draw, and two extensions to its own
+   components. Values come only from the token layer in app.css; the vocabulary
+   in sgn-app.css stays the contract. Anything the package already defines is
+   deleted from globals.css rather than restated here.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* A stored cover photograph fills the 16:10 cover box the plate also uses. */
+.cover > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}

@@ -31,9 +31,9 @@ export function AuthShell({
       <a className="sgn-skip" href="#main-content">
         {text.skipToContent}
       </a>
-      <aside className="sgn-rail">
-        <div className="sgn-lockup">
-          <span className="sgn-logo-tile">
+      <aside className="brand-rail">
+        <div className="brand-lockup">
+          <span className="logo-tile">
             <Image
               src="/brand/logo.png"
               alt=""
@@ -42,19 +42,19 @@ export function AuthShell({
               priority
             />
           </span>
-          <span className="sgn-wordmark" translate="no">
+          <span className="brand-name" translate="no">
             Saigon New House
             <span>{text.brandRole}</span>
           </span>
         </div>
-        <div className="sgn-rail-body">
+        <div className="rail-body">
           <h2>{text.brandTitle}</h2>
           <p>{text.brandLede}</p>
         </div>
-        <p className="sgn-rail-meta">{text.brandMeta}</p>
+        <p className="rail-meta">{text.brandMeta}</p>
       </aside>
-      <main className="sgn-panel" id="main-content">
-        <div className="sgn-panel-bar">
+      <main className="auth-panel" id="main-content">
+        <div className="panel-bar">
           <LanguageSwitch
             locale={locale}
             onChange={onLocaleChange}
@@ -62,8 +62,8 @@ export function AuthShell({
             label={text.languageName}
           />
         </div>
-        <div className="sgn-panel-main">{children}</div>
-        <p className="sgn-panel-foot">{text.footNote}</p>
+        <div className="panel-main">{children}</div>
+        <p className="panel-foot">{text.footNote}</p>
       </main>
     </div>
   );

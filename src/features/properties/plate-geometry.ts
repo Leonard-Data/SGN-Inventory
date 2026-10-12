@@ -11,11 +11,13 @@ export const PPM_HERO = 8.4;
 export type Variant = 'card' | 'bare' | 'hero';
 
 export interface RecordFields {
-  frontage_m?: number | null;
-  depth_m?: number | null;
-  land_area_m2?: number | null;
-  floor_area_m2?: number | null;
-  floors?: number | null;
+  // Numeric columns are read as strings to keep them exact (the same rule money
+  // follows); the geometry coerces them itself for the drawing.
+  frontage_m?: number | string | null;
+  depth_m?: number | string | null;
+  land_area_m2?: number | string | null;
+  floor_area_m2?: number | string | null;
+  floors?: number | string | null;
   direction?: string | null;
   access_type?: string | null;
 }
@@ -93,7 +95,7 @@ const DIR_ANGLE: Record<string, number> = {
   NW: 315,
 };
 
-function pos(v: number | null | undefined): number {
+function pos(v: number | string | null | undefined): number {
   const n = Number(v);
   return isFinite(n) && n > 0 ? n : 0;
 }
