@@ -8,7 +8,6 @@ import { Workspace } from '@/features/property-files/workspace';
 import {
   loadPropertyDetail,
   loadTodayActivity,
-  loadTodayReport,
   revealOwnerContact,
 } from './detail-loader';
 import type { PropertyDetail } from './detail-data';
@@ -68,6 +67,7 @@ export function Detail({
   const locale = employee?.locale ?? initialLocale;
   const text = messages[locale];
   const [refreshTick, setRefreshTick] = useState(0);
+  const [creditTick, setCreditTick] = useState(0);
   async function changed() {
     await reload();
     setRefreshTick((value) => value + 1);
@@ -102,20 +102,9 @@ export function Detail({
     try {
       const result = await revealOwnerContact(id, disclosureKey.current.key);
       setDisclosure({ propertyId: id, value: result });
-      if (result.credited) {
-        try {
-          const report = await loadTodayReport();
-          setActivity((current) =>
-            current
-              ? { ...current, today: report, todayError: false }
-              : current,
-          );
-        } catch {
-          setActivity((current) =>
-            current ? { ...current, todayError: true } : current,
-          );
-        }
-      }
+      // A committed credit re-reads today's report through the same abortable load, so the
+      // post-credit read always wins over an in-flight pre-credit one.
+      if (result.credited) setCreditTick((value) => value + 1);
     } catch (failure) {
       if (
         failure instanceof RequestError &&
@@ -166,7 +155,7 @@ export function Detail({
       current = false;
       abort.abort();
     };
-  }, [data, id, clear]);
+  }, [data, id, clear, creditTick]);
   const own = activity?.detail === data ? activity : null;
   const viewError = own?.viewError ?? false;
   const today = own?.today ?? null;

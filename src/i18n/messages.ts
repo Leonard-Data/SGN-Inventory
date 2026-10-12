@@ -312,7 +312,7 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     todayDay: 'Day (Vietnam time)',
     todayPageViews: 'Page views',
     todayProperties: 'Distinct properties viewed',
-    todayOwnerContacts: 'Owner contacts accessed',
+    todayOwnerContacts: 'Owner-contact properties',
     todayActivityFailed: "Today's activity could not be loaded.",
     discussion: 'Property discussion',
     addComment: 'Comment',

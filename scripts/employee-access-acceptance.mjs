@@ -702,7 +702,7 @@ try {
     'independent employee personal report uses the same database Vietnam day and exposes no other identity',
   );
   assert.ok(
-    (await activity(active)).every((event) => event.kind !== 'site_visit'),
+    (await activity(active)).every((event) => event.kind === 'page_view'),
     'Reading detail must never create a physical visit',
   );
   browserLogin('operator', primary);
