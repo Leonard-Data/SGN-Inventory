@@ -50,7 +50,7 @@ src/
   features/property-files/     # Private file read workspace, types, signed URLs
   features/property-maintenance/ # Create/edit maintenance, address/contact forms, history
   features/corrections/        # Correction submission, queue and amendment rendering
-  features/property-comments/  # Shared Property discussion, submission-key recovery and paging
+  features/property-comments/  # Shared Property discussion, submission-key recovery, paging and comment removal
   i18n/messages.ts             # Equivalent typed VI/EN journey dictionaries
   lib/supabase/route.ts         # User-scoped SSR cookies/cache/input boundary
   types/database.ts            # Generated from the live dev public schema
@@ -64,6 +64,7 @@ scripts/
   maintenance-contract.mjs      # Embedded maintenance/history regressions
   correction-contract.mjs       # Embedded correction-workflow regressions
   comments-contract.mjs         # Embedded discussion role/validation/retry/paging regressions
+  comment-removal-contract.mjs  # Embedded removal authority, retention and terminal-state regressions
   employee-access-acceptance.mjs # Real app/browser/Auth/RLS dev fixture acceptance
   auth-visual-compare.mjs        # Exact-viewport auth design comparison vs preserved prototype
   prepare_workbook.py           # Existing private, dry-run preparation
@@ -75,7 +76,7 @@ supabase/
 .husky/pre-commit
 ```
 
-Create additional feature directories only for approved backlog work. Employee access, read-only inventory, private files and issue #7 maintenance/corrections are implemented; the shared Property discussion (#44) has its development-project acceptance executed, with staging/production and keyboard-only/360px mobile gates still unexecuted; issue #18's reservation request and independent decision is implemented on the property detail, with its acceptance evidence and remaining gates in [testing.md](testing.md#reservation-acceptance-ticket-18); rental and remaining UI work is tracked in [delivery-plan.md](delivery-plan.md). The real-mailbox recovery gate prevents claiming completed issue #1 acceptance.
+Create additional feature directories only for approved backlog work. Employee access, read-only inventory, private files and issue #7 maintenance/corrections are implemented; the shared Property discussion (#44) has its development-project acceptance executed, with staging/production and keyboard-only/360px mobile gates still unexecuted; issue #45's comment removal and moderation is implemented on that discussion, with its hosted acceptance still to run ([testing.md](testing.md#ticket-45-removal-acceptance-not-yet-executed)); issue #18's reservation request and independent decision is implemented on the property detail, with its acceptance evidence and remaining gates in [testing.md](testing.md#reservation-acceptance-ticket-18); rental and remaining UI work is tracked in [delivery-plan.md](delivery-plan.md). The real-mailbox recovery gate prevents claiming completed issue #1 acceptance.
 
 - `src/app/`: route composition, presentation, narrow validated Server Actions/Route Handlers. No direct inventory SQL/query orchestration in rendering.
 - `src/features/<feature>/`: validation, feature data access, domain results and workflow operations; keep feature-specific rendering beside the feature when useful. Export a small Interface, not every internal helper.

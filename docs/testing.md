@@ -427,7 +427,7 @@ Measured over the original inventory before any fixture existed and again after 
 
 Scope: [ticket #45 accountable comment removal](database-contract.md#ticket-45--accountable-property-comment-removal) on top of the discussion acceptance above. Real development Supabase Auth/Data API/RLS, the actual VI/EN browser interface and independent connections for contention are required; embedded assertions and mocked responses are not acceptance.
 
-**This acceptance has not run and no executed evidence exists for ticket #45.** `scripts/property-comments-acceptance.mjs` carries the probes, but this lane is queued for the shared development project behind issues #18, #30 and #46 and no authorized environment has been handed over, so `docs/property-comments-acceptance.json` still records only the ticket #44 run above. The scenarios below remain unproven staging gates and are not replaced with mocks:
+**This acceptance has not run and no executed hosted acceptance evidence exists for ticket #45.** The embedded regressions (`scripts/comment-removal-contract.mjs`, counted in `docs/validation-results.json`) do run under `npm run test:schema`; they are a supplement, not this acceptance. `scripts/property-comments-acceptance.mjs` carries the probes, but this lane is queued for the shared development project behind issues #18, #30 and #46 and no authorized environment has been handed over, so `docs/property-comments-acceptance.json` still records only the ticket #44 run above. The scenarios below remain unproven staging gates and are not replaced with mocks:
 
 | Scenario | Required observation |
 | --- | --- |

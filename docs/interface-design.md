@@ -129,7 +129,7 @@ Shipped: the card cover is the site plate drawn from the record's own fields; a 
         panel Maintenance→ in-page maintenance workspace (revision-checked)
         panel Corrections→ report + role-scoped queue
       .tabpanel "Tài liệu": panel Files → property-files Workspace (.doc-row vocabulary, cover, dropzone)
-      .tabpanel "Thảo luận": Discussion → 30-item list newest-first, .composer, author withdrawal and reasoned manager/admin removal (.comment-actions, .comment-moderation); editing is not shipped
+      .tabpanel "Thảo luận": Discussion → 30-item list newest-first, .composer, author withdrawal and reasoned manager/admin removal (.comment-actions, .comment-removed marker, .comment-moderation); editing is not shipped
     aside.detail-rail (sticky):
       panel History    → maintenance history rows (.hist-row)
       page-view note, then panel Activity → today's own counts
