@@ -1,4 +1,5 @@
 {
+  "provenance": "Hand-written sanitized summary of the hosted development run, not machine output. scripts/reservation-acceptance.mjs writes its own report bytes only to the path given by its --report flag; a future run with --report docs/reservation-acceptance.json replaces this file with that machine report, whose own provenance field identifies it as harness output. Summarised application tree: head 7f161f7; the shipped head differs from it only by documentation commits, so the application source is the tested source.",
   "checkedAt": "2026-10-12T15:07:01.202Z",
   "head": "7f161f7",
   "environment": "authorized hosted development Supabase / local real Next.js application",
