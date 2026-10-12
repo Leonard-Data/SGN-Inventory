@@ -12,7 +12,12 @@ import { api, RequestError } from '@/features/employees/api';
 import { vietnamTimestamp } from '@/features/properties/format';
 import { COMMENT_MAX_LENGTH, COMMENT_PAGE_SIZE } from './types';
 import { mergeComments } from './merge';
-import type { Comment, CommentCursor, CommentPage } from './types';
+import {
+  toComment,
+  type Comment,
+  type CommentCursor,
+  type CommentPage,
+} from './types';
 
 const cursorOf = (row: Comment | undefined): CommentCursor | null =>
   row ? { before: row.createdAt, beforeId: row.id } : null;
@@ -56,6 +61,7 @@ export function Discussion({
   const [editDraft, setEditDraft] = useState('');
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [editCurrent, setEditCurrent] = useState<Comment | null>(null);
   const [editNotice, setEditNotice] = useState<string | null>(null);
   const inFlight = useRef<AbortController | null>(null);
   const generation = useRef(0);
@@ -217,12 +223,14 @@ export function Discussion({
     setEditingId(row.id);
     setEditDraft(row.body);
     setEditError(null);
+    setEditCurrent(null);
     setEditNotice(null);
   }
   function cancelEdit() {
     setEditingId(null);
     setEditDraft('');
     setEditError(null);
+    setEditCurrent(null);
   }
   async function saveEdit(row: Comment) {
     const value = editDraft.trim();
@@ -246,26 +254,39 @@ export function Discussion({
         )
       ).comment;
     } catch (problem) {
-      if (problem instanceof RequestError && problem.status === 401) {
-        onDenied(problem.status);
-        return;
-      }
       // A 403 covers an archived Property, a changed author and an inactive employee, and the
       // routine raises one code for all of them, so an edit refusal is a save failure that keeps
       // the draft; only a 401 clears the session. A dedicated state-change code is a later
       // slice's contract, not this ticket's.
-      const stale =
-        problem instanceof RequestError && problem.code === 'stale-edit';
+      if (problem instanceof RequestError && problem.status === 401) {
+        onDenied(problem.status);
+        return;
+      }
       setSaving(false);
-      // The draft stays in the open editor; refreshing exposes the current saved text so the
-      // author can reconcile instead of silently overwriting the newer edit.
-      setEditError(stale ? 'stale-edit' : 'failed');
-      if (stale) refresh();
+      if (problem instanceof RequestError && problem.code === 'stale-edit') {
+        // The conflict response carries the row's current text and revision, so reconciliation
+        // works for a comment outside the refreshed first page and the retry adopts the newer
+        // revision instead of conflicting again.
+        const current = toComment(problem.payload.comment);
+        if (current) {
+          setEditCurrent(current);
+          setComments((rows) =>
+            rows.map((entry) => (entry.id === current.id ? current : entry)),
+          );
+        }
+        // The draft stays in the open editor; the current saved text is shown for reconciliation
+        // instead of silently overwriting the newer edit.
+        setEditError('stale-edit');
+        refresh();
+        return;
+      }
+      setEditError('failed');
       return;
     }
     setSaving(false);
     setEditingId(null);
     setEditDraft('');
+    setEditCurrent(null);
     setEditNotice(text.commentEdited);
     setComments((rows) =>
       rows.map((entry) => (entry.id === updated.id ? updated : entry)),
@@ -370,7 +391,7 @@ export function Discussion({
                             {text.commentEditCurrent}
                           </p>
                           <p className="comment-body" translate="no">
-                            {row.body}
+                            {editCurrent?.body ?? row.body}
                           </p>
                         </>
                       ) : null}

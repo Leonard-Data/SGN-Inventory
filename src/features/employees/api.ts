@@ -2,6 +2,7 @@ export class RequestError extends Error {
   constructor(
     public readonly status: number,
     public readonly code: string,
+    public readonly payload: Record<string, unknown> = {},
   ) {
     super(code);
   }
@@ -25,8 +26,14 @@ export async function api<T>(
       : {}),
   });
   if (!response.ok) {
-    const data: { error?: string } = await response.json().catch(() => ({}));
-    throw new RequestError(response.status, data.error ?? 'unavailable');
+    const data: Record<string, unknown> = await response
+      .json()
+      .catch(() => ({}));
+    throw new RequestError(
+      response.status,
+      typeof data.error === 'string' ? data.error : 'unavailable',
+      data,
+    );
   }
   return response.status === 204 ? (undefined as T) : response.json();
 }

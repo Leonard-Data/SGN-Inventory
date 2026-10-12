@@ -11,6 +11,7 @@ export class ApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly code: string,
+    public readonly payload?: Record<string, unknown>,
   ) {
     super(code);
   }
@@ -109,7 +110,9 @@ export async function runRoute(
     return context.finish(await handler(context));
   } catch (error) {
     const response = NextResponse.json(
-      { error: error instanceof ApiError ? error.code : 'unavailable' },
+      error instanceof ApiError
+        ? { ...(error.payload ?? {}), error: error.code }
+        : { error: 'unavailable' },
       {
         status: error instanceof ApiError ? error.status : 503,
         headers: privateHeaders,

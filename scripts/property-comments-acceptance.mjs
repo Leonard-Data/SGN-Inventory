@@ -641,6 +641,22 @@ async function readComments(session, propertyId) {
   assert.equal(page.status, 200, 'Application discussion read succeeded');
   return page.body.comments;
 }
+// A targeted read of every page: the older-page conflict needs a row outside the first page.
+async function readAllComments(session, propertyId) {
+  const rows = [];
+  let route = '/api/properties/' + propertyId + '/comments';
+  for (;;) {
+    const page = await session.request(route);
+    assert.equal(page.status, 200, 'Application discussion read succeeded');
+    rows.push(...page.body.comments);
+    if (!page.body.nextCursor) return rows;
+    route =
+      '/api/properties/' +
+      propertyId +
+      '/comments?' +
+      new URLSearchParams(page.body.nextCursor);
+  }
+}
 // An expression locating the comment whose current text is `body` in the rendered discussion.
 function commentNode(body) {
   return `[...document.querySelectorAll('#record-panel-comments .comment')].find((node) => node.querySelector('.comment-body')?.textContent === ${JSON.stringify(body)})`;
@@ -783,6 +799,106 @@ const editedBody = 'Chào anh,\nGiá 12 tỷ — đã chốt sau khi xem nhà.';
     {
       draftRetained: conflict.draft === editedBody,
       currentShown: conflict.current?.includes(peerBody) ?? false,
+      reconciled: true,
+    },
+  );
+}
+{
+  // The same conflict on a comment outside the refreshed first page: without the conflict
+  // payload the reconciliation block could only show the row's pre-conflict text. Build a
+  // deterministic multi-page discussion, let a second real session advance the older target,
+  // then save stale from the browser.
+  const run = randomUUID().slice(0, 8);
+  const targetBody = `Mốc đối chiếu ${run}`;
+  const postComment = (body) =>
+    alpha.rpc('post_property_comment', {
+      p_property_id: paging.id,
+      p_body: body,
+      p_key: randomUUID(),
+    });
+  assert.equal(
+    (await postComment(targetBody)).error,
+    null,
+    'The older-page target commits',
+  );
+  for (let index = 1; index <= 30; index++)
+    assert.equal(
+      (await postComment(`Đệm đối chiếu ${run} ${index}`)).error,
+      null,
+      'The paging filler commits',
+    );
+  await openDiscussion(paging, primary);
+  click('Xem bình luận cũ hơn', primary);
+  await waitUntil(`() => Boolean(${commentNode(targetBody)})`, primary);
+  await settle(primary);
+  const loaded = screen(primary);
+  const mine = loaded.comments.find((comment) => comment.body === targetBody);
+  assert.ok(mine, 'The older-page target is rendered');
+  assert.ok(
+    loaded.comments.indexOf(mine) >= 30,
+    'The target sits beyond the first page',
+  );
+  const peer = await appSession('alpha');
+  const older = await readAllComments(peer, paging.id);
+  const target = older.find((row) => row.body === targetBody);
+  assert.ok(target, 'The peer session reads the older comment');
+  const newerBody = `Bản sửa mới hơn ${run}`;
+  const peerEdit = await peer.request(
+    '/api/properties/' + paging.id + '/comments/' + target.id,
+    { body: newerBody, revision: target.revision },
+  );
+  assert.equal(peerEdit.status, 200, 'The peer session saves the newer text');
+  openEditor(mine.body, primary);
+  await waitUntil(editOpen, primary);
+  fill('Sửa bình luận', editedBody, primary);
+  click('Lưu bình luận', primary);
+  await waitUntil(
+    `() => /đã được sửa ở nơi khác/.test(document.querySelector('#record-panel-comments')?.innerText ?? '')`,
+    primary,
+  );
+  const conflict = evaluate(
+    `() => {
+      const panel = document.querySelector('#record-panel-comments');
+      const area = panel.querySelector('textarea[name=comment-edit]');
+      const article = area?.closest('article') ?? null;
+      return {
+        draft: area?.value ?? null,
+        current: article ? [...article.querySelectorAll('.comment-body')].map((node) => node.textContent).join(' | ') : null,
+        alert: [...panel.querySelectorAll('[role=alert]')].map((node) => node.textContent).join(' '),
+        count: panel.querySelectorAll('.comment').length,
+      };
+    }`,
+    primary,
+  );
+  assert.equal(conflict.draft, editedBody, 'The unsent draft is retained');
+  assert.ok(
+    conflict.current?.includes(newerBody),
+    'The current saved text shown for reconciliation is the newer text',
+  );
+  assert.ok(
+    /đã được sửa ở nơi khác/.test(conflict.alert ?? ''),
+    'A localized stale error is shown',
+  );
+  // The editor adopted the revision from the conflict response, so the retry converges.
+  click('Lưu bình luận', primary);
+  await waitUntil(`() => Boolean(${commentNode(editedBody)})`, primary);
+  await settle(primary);
+  const reconciled = screen(primary);
+  assert.ok(
+    reconciled.comments.some((comment) => comment.body === editedBody),
+    'The reconciled draft saves on the older page',
+  );
+  assert.equal(
+    reconciled.comments.length,
+    conflict.count,
+    'The older row stays present after the conflict refresh',
+  );
+  observed(
+    'an older-page stale save keeps the draft, shows the newer text and converges',
+    {
+      page: 2,
+      draftRetained: conflict.draft === editedBody,
+      currentShown: conflict.current?.includes(newerBody) ?? false,
       reconciled: true,
     },
   );
@@ -1664,6 +1780,21 @@ await openDiscussion(discussion, secondary);
   assert.equal(staleEdit.status, 409, 'A stale revision is a conflict');
   assert.equal(staleEdit.body.error, 'stale-edit');
   assert.equal(
+    staleEdit.body.comment?.body,
+    target.body,
+    'The conflict response carries the current text for reconciliation',
+  );
+  assert.equal(
+    staleEdit.body.comment?.revision,
+    target.revision,
+    'The conflict response carries the current revision so a retry converges',
+  );
+  assert.equal(
+    staleEdit.body.comment?.editedAt,
+    target.editedAt,
+    'The conflict response carries the current edited marker',
+  );
+  assert.equal(
     staleEdit.cache,
     'private, no-store, max-age=0',
     'Edit responses are never publicly cached',
@@ -1677,6 +1808,7 @@ await openDiscussion(discussion, secondary);
       conflict: conflict.body.error,
       editedMarker: target.editedAt !== null,
       staleEdit: staleEdit.body.error,
+      staleCurrent: staleEdit.body.comment?.revision === target.revision,
     },
   );
 }

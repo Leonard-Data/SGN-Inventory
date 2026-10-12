@@ -3,6 +3,7 @@ import { ApiError, uuid, type RouteContext } from '@/lib/supabase/route';
 import {
   COMMENT_MAX_LENGTH,
   COMMENT_PAGE_SIZE,
+  toComment,
   type Comment,
   type CommentPage,
 } from './types';
@@ -19,31 +20,9 @@ function databaseError(error: { code?: string }) {
 }
 // Rows arrive from the guarded RPC or a live read; never trust their shape.
 function comment(row: unknown): Comment {
-  const value: Record<string, unknown> =
-    row && typeof row === 'object' && !Array.isArray(row)
-      ? (row as Record<string, unknown>)
-      : {};
-  if (
-    !uuid(value.id) ||
-    !uuid(value.property_id) ||
-    !uuid(value.author_id) ||
-    typeof value.author_name !== 'string' ||
-    typeof value.body !== 'string' ||
-    typeof value.created_at !== 'string' ||
-    !uuid(value.revision) ||
-    (value.edited_at !== null && typeof value.edited_at !== 'string')
-  )
-    throw new ApiError(503, 'unavailable');
-  return {
-    id: value.id,
-    propertyId: value.property_id,
-    authorId: value.author_id,
-    authorName: value.author_name,
-    body: value.body,
-    createdAt: value.created_at,
-    revision: value.revision,
-    editedAt: value.edited_at,
-  };
+  const value = toComment(row);
+  if (!value) throw new ApiError(503, 'unavailable');
+  return value;
 }
 
 export async function commentPage(
@@ -142,7 +121,21 @@ export async function editComment(
   if (error) {
     // The RPC returns JSON, so a denied author or a stale save is a database error, not data.
     if (error.code === '42501') throw new ApiError(403, 'access-denied');
-    if (error.code === 'PT409') throw new ApiError(409, 'stale-edit');
+    if (error.code === 'PT409') {
+      // A stale save returns the row's current text and revision as response data so the editor
+      // can reconcile and retry; the conflict text never enters an error message or a log.
+      const current = await context.client
+        .from('property_comments')
+        .select(
+          'id,property_id,author_id,author_name,body,created_at,revision,edited_at',
+        )
+        .eq('id', commentId)
+        .eq('property_id', id)
+        .maybeSingle();
+      if (current.error || !current.data)
+        throw new ApiError(503, 'unavailable');
+      throw new ApiError(409, 'stale-edit', { comment: comment(current.data) });
+    }
     if (error.code === '23514') throw new ApiError(400, 'invalid-input');
     throw new ApiError(503, 'unavailable');
   }
