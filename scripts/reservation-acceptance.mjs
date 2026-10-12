@@ -895,7 +895,14 @@ let rejectedLock;
 
 // ------------------------------------------------------------------ inherited live deactivation
 {
-  const retired = fixtures.identities.claimant.employeeId;
+  browser(['open', detail(main)], primary);
+  await settle(primary);
+  const open = screen(primary);
+  assert.ok(
+    open.effective || open.pending,
+    'The claimant browser holds displayed reservation state',
+  );
+  const shownName = effectiveRows(main)[0].employee_name;
   setActive('claimant', false);
   const denied = new ApplicationSession();
   assert.equal((await denied.login('claimant')).status, 403);
@@ -921,9 +928,21 @@ let rejectedLock;
     'A deactivated employee reads no reservations',
   );
   assert.equal(
-    effectiveRows(main)[0].requested_by,
-    retired,
-    'The committed reservation survives deactivation',
+    effectiveRows(main).length,
+    1,
+    'The committed effective reservation survives a claimant deactivation',
+  );
+  evaluate(
+    "() => { window.dispatchEvent(new Event('focus')); return {requested:true}; }",
+    primary,
+  );
+  await waitUntil(`() => location.pathname === '/access-denied'`, primary);
+  assert.ok(
+    evaluate(
+      `() => !document.querySelector('section.reservation .reservation-effective') && !document.querySelector('section.reservation .reservation-pending') && !document.body.innerText.includes(${JSON.stringify(shownName)})`,
+      primary,
+    ),
+    'The reservation surface is not left displayed after deactivation',
   );
   setActive('claimant', true);
   observed(
