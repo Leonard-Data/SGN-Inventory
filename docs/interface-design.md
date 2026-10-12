@@ -6,7 +6,7 @@ Design record (2026-10-12). Status: **implemented** for the token layer, the app
 
 Covers the authenticated app shell, the shared component vocabulary, and the layout of every planned page: `/properties`, `/properties/[id]`, `/requests`, `/reviews/*`, `/rentals`, `/rentals/[id]`, `/people/employees`, `/people/contacts`, `/reports/activity`, `/reports/company`, `/admin/categories`, `/admin/units`. The auth pages (`/login`, `/recover`, `/reset-password`, `/access-denied`) already exist and are unchanged except that the shell never wraps them.
 
-Reuse rule: the visual language is the *Saigon New House* design package, ported verbatim into `src/app/app.css` (tokens at `:root`) and `src/app/sgn-app.css` (the class vocabulary). **Those class names are the contract** — a screen composes them, it does not restyle them. Anything the package does not draw lives in `src/app/globals.css` (repo-only surfaces: maintenance disclosures, history comparison, owner contact, correction proposals) and `src/app/sgn-surfaces.css` (extensions to package components); both are valued on the same tokens, and neither introduces a colour, radius or spacing value the token layer does not define. The auth surfaces keep their own `.sgn-auth` layout sheet over the same tokens.
+Reuse rule: the visual language is the *Saigon New House* design package, ported verbatim into `src/app/app.css` (tokens at `:root`) and `src/app/sgn-app.css` (the class vocabulary). **Those class names are the contract** — a screen composes them, it does not restyle them. Anything the package does not draw lives in `src/app/globals.css` (repo-only surfaces: maintenance disclosures, history comparison, owner contact, correction proposals, reservation states) and `src/app/sgn-surfaces.css` (extensions to package components); both are valued on the same tokens, and neither introduces a colour, radius or spacing value the token layer does not define. The auth surfaces keep their own `.sgn-auth` layout sheet over the same tokens.
 
 ## 2. Token decision (D1)
 
@@ -89,7 +89,7 @@ The contract is `src/app/sgn-app.css` — the ported design package. Compose the
 | States | `.state-panel` (+ `data-tone="danger"`, `.state-mark`, `.state-title`), `.busy-bar`, `.busy-line` + `.spinner`, `.skeleton`/`.sk-card`, `.alert` (+ `data-tone`), `.toast` | loading, empty, error and denial stay distinct; empty ≠ zero ≠ denied |
 | Lists / tables | `.data-table.stackable` (`[data-num]`, `data-label`), `.pagination` > `.page-info` + `.page-buttons` > `.pager-btn` | tables stack to label/value cards under 640px |
 | Dialogs | `.sgn-dialog` > `.sgn-dialog-panel`/`.sgn-dialog-head`/`.sgn-dialog-body`/`.sgn-dialog-foot` | native `<dialog>`: focus trap and Escape come from the platform |
-| Repo-only surfaces | `.maintenance*` (disclosures, inline editors), `.history-event`, `.history-comparison`, `.history-field`, `.owner-disclosure`, `.owner-phone`, `.proposal-choices`, `.contact-choices`, `.eyebrow` (auth) | `globals.css` + `sgn-surfaces.css`; package tokens only |
+| Repo-only surfaces | `.maintenance*` (disclosures, inline editors), `.history-event`, `.history-comparison`, `.history-field`, `.owner-disclosure`, `.owner-phone`, `.reservation*` (`.reservation-effective`, `.reservation-pending`, `.reservation-request`), `.proposal-choices`, `.contact-choices`, `.eyebrow` (auth) | `globals.css` + `sgn-surfaces.css`; package tokens only |
 
 ## 5. Page layouts
 
@@ -125,6 +125,7 @@ Shipped: the card cover is the site plate drawn from the record's own fields; a 
         panel Facts      → dl.facts with .fact rows; unknown values print Chưa rõ
         panel Addresses  → .record rows + mapping .badge, .addrNote policy line
         panel Contacts   → .record rows + owner-contact disclosure (.owner-disclosure/.owner-phone)
+        panel Reservation→ effective/pending states (.reservation-effective/.reservation-pending) + request and decision forms
         panel Maintenance→ in-page maintenance workspace (revision-checked)
         panel Corrections→ report + role-scoped queue
       .tabpanel "Tài liệu": panel Files → property-files Workspace (.doc-row vocabulary, cover, dropzone)
