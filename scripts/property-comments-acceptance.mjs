@@ -84,7 +84,6 @@ assert.ok(
   ),
   'Only declared synthetic properties are allowed',
 );
-const WORKTREE = '/home/sam/.treehouse/SGN-Inventory-40c2f8/2/SGN-Inventory';
 const origin = environment.appUrl;
 const observations = [];
 
@@ -101,7 +100,7 @@ function operatorSql(statement) {
       'json',
       statement,
     ],
-    { encoding: 'utf8', timeout: 180000, cwd: WORKTREE },
+    { encoding: 'utf8', timeout: 180000 },
   );
   if (result.status !== 0)
     throw new Error(
@@ -117,20 +116,16 @@ function operatorSql(statement) {
 // meant to observe.
 function operatorSqlAsync(statement) {
   return new Promise((resolve) => {
-    const child = spawn(
-      'npx',
-      [
-        'supabase',
-        'db',
-        'query',
-        '--db-url',
-        operator.dbUrl,
-        '--output-format',
-        'json',
-        statement,
-      ],
-      { cwd: WORKTREE },
-    );
+    const child = spawn('npx', [
+      'supabase',
+      'db',
+      'query',
+      '--db-url',
+      operator.dbUrl,
+      '--output-format',
+      'json',
+      statement,
+    ]);
     let output = '';
     child.stdout.on('data', (chunk) => (output += chunk));
     child.on('exit', () => {
@@ -1141,7 +1136,7 @@ function holdPropertyLock(propertyId, seconds, markerKey) {
          select '${alphaEmployee}'::uuid,'${propertyId}'::uuid,'page_view','${markerKey}'::uuid from locked returning id)
        select pg_sleep(${seconds}) from marker`,
     ],
-    { encoding: 'utf8', cwd: WORKTREE, stdio: 'ignore' },
+    { encoding: 'utf8', stdio: 'ignore' },
   );
 }
 async function commentCount(propertyId) {
