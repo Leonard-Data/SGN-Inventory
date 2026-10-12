@@ -163,6 +163,8 @@ const vi = {
   removalStale:
     'Bình luận đã thay đổi hoặc đã bị gỡ. Hãy làm mới để xem trạng thái hiện tại.',
   removalFailed: 'Chưa gỡ được bình luận. Nội dung đã nhập được giữ lại.',
+  removalDenied:
+    'Chưa gỡ được bình luận. Quyền truy cập hoặc trạng thái lưu trữ của bất động sản đã thay đổi; hãy làm mới để xem trạng thái hiện tại.',
   refresh: 'Làm mới',
   vietnamTime: 'giờ Việt Nam',
   savedLocaleFailed:
@@ -451,6 +453,8 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     removalStale:
       'This comment changed or was already removed. Refresh to see the current state.',
     removalFailed: 'Comment not removed. What you entered is kept.',
+    removalDenied:
+      'Comment not removed. Access or the Property archived state changed; refresh to see the current state.',
     refresh: 'Refresh',
     vietnamTime: 'Vietnam time',
     savedLocaleFailed:

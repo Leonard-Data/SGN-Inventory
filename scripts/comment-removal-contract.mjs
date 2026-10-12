@@ -361,6 +361,20 @@ export async function commentRemovalContract({
         'Nội dung nhạy cảm — gỡ theo yêu cầu',
       );
       assert.equal(evidence.original_revision, revision);
+      await asAdmin();
+      const directInsert =
+        "insert into public.property_comment_removals(comment_id,property_id,author_id,author_name,body,original_created_at,original_revision,removed_by,removed_actor_name,removal_kind,removal_reason) values($1,$2,$3,'Fixture 0','Bình luận của đồng nghiệp',now(),gen_random_uuid(),$4,'Fixture 2','moderation',null)";
+      await fails(
+        directInsert,
+        [colleagueComment, first, employees[0], employees[2]],
+        '23514',
+      );
+      await fails(
+        "insert into public.property_comment_removals(comment_id,property_id,author_id,author_name,body,original_created_at,original_revision,removed_by,removed_actor_name,removal_kind,removal_reason) values($1,$2,$3,'Fixture 0','Bình luận của đồng nghiệp',now(),gen_random_uuid(),$4,'Fixture 2','author','Lý do thừa')",
+        [colleagueComment, first, employees[0], employees[2]],
+        '23514',
+      );
+      assert.equal(await removalRow(colleagueComment), undefined);
     },
   );
   await check(

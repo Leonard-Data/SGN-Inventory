@@ -29,6 +29,7 @@ create table public.property_comment_removals (
   check (body = private.trim_unicode(body) and length(body) between 1 and 2000),
   check (removal_kind = 'author' and removal_reason is null
       or removal_kind = 'moderation'
+         and removal_reason is not null
          and removal_reason = private.trim_unicode(removal_reason)
          and length(removal_reason) between 1 and 2000)
 );

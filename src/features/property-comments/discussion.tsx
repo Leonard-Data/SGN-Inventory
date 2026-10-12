@@ -244,13 +244,6 @@ export function Discussion({
         )
       ).comment;
     } catch (problem) {
-      if (
-        problem instanceof RequestError &&
-        (problem.status === 401 || problem.status === 403)
-      ) {
-        onDenied(problem.status);
-        return;
-      }
       const code =
         problem instanceof RequestError ? problem.code : 'unavailable';
       // The typed reason is kept and no success is claimed; the alert offers the refresh that
@@ -272,7 +265,9 @@ export function Discussion({
       ? text.removalReasonRequired
       : code === 'stale-comment'
         ? text.removalStale
-        : text.removalFailed;
+        : code === 'access-denied' || code === 'unauthenticated'
+          ? text.removalDenied
+          : text.removalFailed;
   const loadingMore = busy || more;
   return (
     <section className="panel discussion" aria-labelledby={headingId}>
