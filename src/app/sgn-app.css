@@ -730,6 +730,9 @@ dialog.sgn-dialog::backdrop { background: color-mix(in oklab, var(--fg) 46%, tra
 .comment-meta { margin-top: 2px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .comment-body { margin-top: var(--space-3); font-size: var(--text-sm); line-height: 1.6; color: var(--fg-2); }
 .comment-actions { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-2); }
+.comment-removed { font-style: italic; color: var(--muted); }
+.comment-moderation { display: flex; flex-direction: column; gap: var(--space-3); margin-top: var(--space-3); padding: var(--space-4); background: var(--surface-warm); border: 1px solid var(--border-soft); border-radius: var(--radius-md); }
+.comment-moderation .composer-foot { justify-content: flex-start; }
 .composer { display: flex; flex-direction: column; gap: var(--space-3); padding-bottom: var(--space-5); border-bottom: 1px solid var(--border-soft); }
 .composer-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
 

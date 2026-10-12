@@ -148,6 +148,19 @@ const vi = {
     'Khóa gửi này đã được ghi với nội dung khác. Hãy làm mới để xem bình luận đã ghi.',
   noComments: 'Chưa có bình luận nào.',
   moreComments: 'Xem bình luận cũ hơn',
+  removeComment: 'Xoá bình luận',
+  moderateComment: 'Xoá kèm lý do',
+  confirmRemove: 'Xác nhận xoá',
+  removing: 'Đang xoá…',
+  cancel: 'Huỷ',
+  commentRemoved: 'Bình luận đã được xoá.',
+  removalReason: 'Lý do kiểm duyệt',
+  removalReasonHint:
+    'Bắt buộc. Lý do được lưu lại cho quản lý và quản trị viên.',
+  removalReasonRequired: 'Vui lòng nhập lý do kiểm duyệt.',
+  removalStale:
+    'Bình luận đã thay đổi hoặc đã bị xoá. Hãy làm mới để xem trạng thái hiện tại.',
+  removalFailed: 'Chưa xoá được bình luận. Nội dung đã nhập được giữ lại.',
   refresh: 'Làm mới',
   vietnamTime: 'giờ Việt Nam',
   savedLocaleFailed:
@@ -421,6 +434,19 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
       'This submission key already recorded different text. Refresh to see the recorded comment.',
     noComments: 'No comments yet.',
     moreComments: 'More comments',
+    removeComment: 'Remove',
+    moderateComment: 'Remove with reason',
+    confirmRemove: 'Confirm removal',
+    removing: 'Removing…',
+    cancel: 'Cancel',
+    commentRemoved: 'Comment removed.',
+    removalReason: 'Moderation reason',
+    removalReasonHint:
+      'Required. The reason is retained for managers and admins.',
+    removalReasonRequired: 'Enter a moderation reason.',
+    removalStale:
+      'This comment changed or was already removed. Refresh to see the current state.',
+    removalFailed: 'Comment not removed. What you entered is kept.',
     refresh: 'Refresh',
     vietnamTime: 'Vietnam time',
     savedLocaleFailed:
