@@ -103,6 +103,12 @@ export function Discussion({
     },
     [onDenied],
   );
+  const clearEdit = useCallback(() => {
+    setEditingId(null);
+    setEditDraft('');
+    setEditError(null);
+    setEditCurrent(null);
+  }, []);
   // Every state update happens after an await, so mounting or refreshing never cascades a render.
   const load = useCallback(
     async (keepLoadedRows: boolean) => {
@@ -112,6 +118,9 @@ export function Discussion({
         return null;
       });
       if (version === generation.current && page) {
+        // A replace closes any open editor in the same commit that drops its row, so the form
+        // never strands a draft over a page it no longer belongs to.
+        if (!keepLoadedRows) clearEdit();
         setComments((rows) =>
           keepLoadedRows ? mergeComments(page.comments, rows) : page.comments,
         );
@@ -121,7 +130,7 @@ export function Discussion({
       // Released unconditionally: a superseding request owns the list, not the spinner.
       setBusy(false);
     },
-    [failure, fetchPage],
+    [clearEdit, failure, fetchPage],
   );
   const stop = useCallback(() => {
     generation.current++;
@@ -132,13 +141,15 @@ export function Discussion({
     return stop;
   }, [load, stop]);
   // The inline editor replaces the row's edit control, so keyboard focus moves into the
-  // textarea when it opens and back to that row's control when it closes.
+  // textarea when it opens and back to that row's control when it closes. A save disables
+  // the focused controls, so focus is restored once the attempt settles.
   useEffect(() => {
     const closed = lastEditingId.current;
     lastEditingId.current = editingId;
+    if (saving) return;
     if (editingId) editArea.current?.focus();
     else if (closed) editButtons.current.get(closed)?.focus();
-  }, [editingId]);
+  }, [editingId, saving]);
   function refresh() {
     setBusy(true);
     setEditNotice(null);
@@ -250,10 +261,7 @@ export function Discussion({
     setEditNotice(null);
   }
   function cancelEdit() {
-    setEditingId(null);
-    setEditDraft('');
-    setEditError(null);
-    setEditCurrent(null);
+    clearEdit();
   }
   async function saveEdit(row: Comment) {
     const value = editDraft.trim();

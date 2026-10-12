@@ -803,6 +803,11 @@ const editedBody = 'Chào anh,\nGiá 12 tỷ — đã chốt sau khi xem nhà.';
     `() => (document.querySelector('#record-panel-comments')?.innerText ?? '').includes(${JSON.stringify(peerBody)})`,
     primary,
   );
+  assert.equal(
+    evaluate(editAreaFocused, primary),
+    true,
+    'Focus returns into the textarea after a save conflicts',
+  );
   const conflict = evaluate(
     `() => {
       const panel = document.querySelector('#record-panel-comments');
@@ -900,6 +905,57 @@ const editedBody = 'Chào anh,\nGiá 12 tỷ — đã chốt sau khi xem nhà.';
     true,
     'Cancel returns focus to the older-page row edit control',
   );
+  // An explicit Refresh replaces the first page while an older-page editor is open: the
+  // editor closes with its row and the remaining controls stay usable without a reload.
+  openEditor(mine.body, primary);
+  await waitUntil(editOpen, primary);
+  click('Làm mới', primary);
+  await waitUntil(
+    `() => !document.querySelector('#record-panel-comments textarea[name=comment-edit]')`,
+    primary,
+  );
+  await waitUntil(
+    `() => document.querySelectorAll('#record-panel-comments .comment').length > 0`,
+    primary,
+  );
+  await settle(primary);
+  const refreshed = evaluate(
+    `() => {
+      const panel = document.querySelector('#record-panel-comments');
+      const edits = [...panel.querySelectorAll('button')].filter((node) => /Sửa bình luận|Edit comment/.test(node.textContent));
+      return {
+        editorOpen: Boolean(panel.querySelector('textarea[name=comment-edit]')),
+        olderRowGone: ![...panel.querySelectorAll('.comment-body')].some((node) => node.textContent === ${JSON.stringify(mine.body)}),
+        edits: edits.length,
+        enabled: edits.filter((node) => !node.disabled).length,
+      };
+    }`,
+    primary,
+  );
+  assert.equal(
+    refreshed.editorOpen,
+    false,
+    'Refresh closes the off-page editor',
+  );
+  assert.equal(
+    refreshed.olderRowGone,
+    true,
+    'Refresh shows the server first page instead of the dropped row',
+  );
+  assert.ok(refreshed.edits > 0, 'Refreshed rows still offer edit controls');
+  assert.equal(
+    refreshed.enabled,
+    refreshed.edits,
+    'Refresh re-enables every edit control',
+  );
+  observed(
+    'refresh while editing beyond the first page closes the editor and re-enables the rows',
+    refreshed,
+  );
+  // Restore the older page for the conflict journey below.
+  click('Xem bình luận cũ hơn', primary);
+  await waitUntil(`() => Boolean(${commentNode(mine.body)})`, primary);
+  await settle(primary);
   const peer = await appSession('alpha');
   const older = await readAllComments(peer, paging.id);
   const target = older.find((row) => row.body === targetBody);
@@ -922,6 +978,11 @@ const editedBody = 'Chào anh,\nGiá 12 tỷ — đã chốt sau khi xem nhà.';
   await waitUntil(
     `() => /đã được sửa ở nơi khác/.test(document.querySelector('#record-panel-comments')?.innerText ?? '')`,
     primary,
+  );
+  assert.equal(
+    evaluate(editAreaFocused, primary),
+    true,
+    'Focus returns into the textarea after the off-page save conflicts',
   );
   const conflict = evaluate(
     `() => {
