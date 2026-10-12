@@ -20,8 +20,8 @@ export interface CommentPage {
 }
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-// One validator for every comment row the app returns, whether read on the server or received
-// in a conflict payload; an untrusted shape maps to null instead of a partial object.
+// The database-row validator: PostgREST returns snake_case columns. An untrusted shape maps to
+// null instead of a partial object.
 export function toComment(row: unknown): Comment | null {
   const value: Record<string, unknown> =
     row && typeof row === 'object' && !Array.isArray(row)
@@ -51,5 +51,38 @@ export function toComment(row: unknown): Comment | null {
     createdAt: value.created_at,
     revision: value.revision,
     editedAt: value.edited_at as string | null,
+  };
+}
+// The application wire shape: the JSON API serializes `Comment` with camelCase fields, so a
+// serialized comment must not be validated as a database row.
+export function toWireComment(value: unknown): Comment | null {
+  const row: Record<string, unknown> =
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+  if (
+    typeof row.id !== 'string' ||
+    !uuidPattern.test(row.id) ||
+    typeof row.propertyId !== 'string' ||
+    !uuidPattern.test(row.propertyId) ||
+    typeof row.authorId !== 'string' ||
+    !uuidPattern.test(row.authorId) ||
+    typeof row.authorName !== 'string' ||
+    typeof row.body !== 'string' ||
+    typeof row.createdAt !== 'string' ||
+    typeof row.revision !== 'string' ||
+    !uuidPattern.test(row.revision) ||
+    (row.editedAt !== null && typeof row.editedAt !== 'string')
+  )
+    return null;
+  return {
+    id: row.id,
+    propertyId: row.propertyId,
+    authorId: row.authorId,
+    authorName: row.authorName,
+    body: row.body,
+    createdAt: row.createdAt,
+    revision: row.revision,
+    editedAt: row.editedAt as string | null,
   };
 }

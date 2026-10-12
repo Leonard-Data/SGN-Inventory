@@ -13,7 +13,7 @@ import { vietnamTimestamp } from '@/features/properties/format';
 import { COMMENT_MAX_LENGTH, COMMENT_PAGE_SIZE } from './types';
 import { mergeComments } from './merge';
 import {
-  toComment,
+  toWireComment,
   type Comment,
   type CommentCursor,
   type CommentPage,
@@ -267,7 +267,7 @@ export function Discussion({
         // The conflict response carries the row's current text and revision, so reconciliation
         // works for a comment outside the refreshed first page and the retry adopts the newer
         // revision instead of conflicting again.
-        const current = toComment(problem.payload.comment);
+        const current = toWireComment(problem.payload.comment);
         if (current) {
           setEditCurrent(current);
           setComments((rows) =>
