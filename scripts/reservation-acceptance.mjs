@@ -281,9 +281,11 @@ function screen(session) {
       const requests = [...(panel?.querySelectorAll('.reservation-request') ?? [])];
       return {
         path: location.pathname,
-        locale: document.querySelector('main')?.lang,
+        locale: document.documentElement.lang,
         code: document.querySelector('h1')?.textContent?.trim(),
-        status: document.querySelector('.detail-status')?.textContent?.trim() ?? null,
+        status:
+          document.querySelector('.head-chips .badge')?.textContent?.trim() ??
+          null,
         heading: panel?.querySelector('h2')?.textContent ?? null,
         effective: effective ? (effective.innerText ?? null) : null,
         pending: pending ? (pending.innerText ?? null) : null,
@@ -379,7 +381,7 @@ async function browserLogin(name, session, preferredLocale) {
   if (preferredLocale) {
     evaluate(
       `() => {
-        const button = document.querySelector('.sgn-lang-btn[lang="${preferredLocale}"]');
+        const button = document.querySelector('.lang-btn[lang="${preferredLocale}"]');
         if (button) button.click();
         return Boolean(button);
       }`,
@@ -970,15 +972,8 @@ let rejectedLock;
     "() => { document.documentElement.dataset.probe = 'reservation'; return true; }",
     primary,
   );
-  act(
-    clickMatching('^English$', 'header button'),
-    primary,
-    'switch to English',
-  );
-  await waitUntil(
-    `() => document.querySelector('main')?.lang === 'en'`,
-    primary,
-  );
+  act(clickMatching('English', 'header button'), primary, 'switch to English');
+  await waitUntil(`() => document.documentElement.lang === 'en'`, primary);
   await settle(primary);
   const english = screen(primary);
   assert.equal(english.heading, 'Reservations');
@@ -990,14 +985,11 @@ let rejectedLock;
     ),
   );
   act(
-    clickMatching('^Tiếng Việt$', 'header button'),
+    clickMatching('Tiếng Việt', 'header button'),
     primary,
     'switch to Vietnamese',
   );
-  await waitUntil(
-    `() => document.querySelector('main')?.lang === 'vi'`,
-    primary,
-  );
+  await waitUntil(`() => document.documentElement.lang === 'vi'`, primary);
   await settle(primary);
   const vietnamese = screen(primary);
   assert.equal(vietnamese.heading, 'Đặt chỗ');
@@ -1081,7 +1073,17 @@ let rejectedLock;
     'The signed-in reviewer still reads the reservation',
   );
   act(
-    clickMatching('^(Đăng xuất|Sign out)$', 'header button'),
+    "(() => { const button = document.querySelector('.sgn-user-btn'); if (!button) return false; button.click(); return true; })()",
+    secondary,
+    'open the account menu',
+  );
+  await waitUntil(
+    "() => Boolean(document.querySelector('.sgn-popover button'))",
+    secondary,
+    20,
+  );
+  act(
+    clickMatching('^(Đăng xuất|Sign out)$', '.sgn-popover button'),
     secondary,
     'sign out',
   );
