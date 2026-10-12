@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   Surfaces the design package does not draw, and two extensions to its own
+   Surfaces the design package does not draw, and extensions to its own
    components. Values come only from the token layer in app.css; the vocabulary
    in sgn-app.css stays the contract. Anything the package already defines is
    deleted from globals.css rather than restated here.
@@ -48,4 +48,26 @@
    without changing a digit. */
 .facts dd {
   overflow-wrap: anywhere;
+}
+
+/* The package draws the discussion comment row and its composer, but not the removal
+   marker or the moderator reason form this application adds inside a comment. Both stay
+   on package tokens: the marker reuses the muted secondary-text treatment, the form the
+   warm panel surface, and the moderation composer foot leads with its controls. */
+.comment-removed {
+  font-style: italic;
+  color: var(--muted);
+}
+.comment-moderation {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding: var(--space-4);
+  background: var(--surface-warm);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+}
+.comment-moderation .composer-foot {
+  justify-content: flex-start;
 }
