@@ -32,6 +32,16 @@ function withPost(created: Comment, page: Comment[], more: boolean) {
   );
   return { rows, next: more ? cursorOf(rows.at(-1)) : null };
 }
+// A removal is terminal, so a response that predates it must never restore withdrawn text.
+function mergePage(current: Comment[], page: Comment[]): Comment[] {
+  const local = new Map(current.map((row) => [row.id, row]));
+  return page.map((row) => {
+    const existing = local.get(row.id);
+    return existing && existing.removedAt !== null && row.removedAt === null
+      ? existing
+      : row;
+  });
+}
 export function Discussion({
   propertyId,
   locale,
@@ -115,7 +125,7 @@ export function Discussion({
       return null;
     });
     if (version === generation.current && page) {
-      setComments(page.comments);
+      setComments((rows) => mergePage(rows, page.comments));
       setNext(page.nextCursor);
       setError(null);
     }
@@ -142,11 +152,13 @@ export function Discussion({
     try {
       const page = await fetchPage(next);
       if (version !== generation.current) return;
-      const seen = new Set(comments.map((row) => row.id));
-      setComments([
-        ...comments,
-        ...page.comments.filter((row) => !seen.has(row.id)),
-      ]);
+      setComments((rows) => {
+        const seen = new Set(rows.map((row) => row.id));
+        return [
+          ...rows,
+          ...mergePage(rows, page.comments).filter((row) => !seen.has(row.id)),
+        ];
+      });
       setNext(page.nextCursor);
     } catch (problem) {
       if (version === generation.current) failure(problem);
@@ -212,13 +224,17 @@ export function Discussion({
       const page = await fetchPage(null);
       if (version !== generation.current) return;
       const merged = withPost(created, page.comments, !!page.nextCursor);
-      setComments(merged.rows);
+      setComments(
+        (rows) =>
+          withPost(created, mergePage(rows, page.comments), !!page.nextCursor)
+            .rows,
+      );
       setNext(merged.next);
       setError(null);
     } catch {
       if (version !== generation.current) return;
       const merged = withPost(created, comments, !!next);
-      setComments(merged.rows);
+      setComments((rows) => withPost(created, rows, !!next).rows);
       setNext(merged.next);
     }
   }
