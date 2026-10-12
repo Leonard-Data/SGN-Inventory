@@ -65,6 +65,9 @@ export function Discussion({
   const [editNotice, setEditNotice] = useState<string | null>(null);
   const inFlight = useRef<AbortController | null>(null);
   const generation = useRef(0);
+  const editArea = useRef<HTMLTextAreaElement | null>(null);
+  const editButtons = useRef(new Map<string, HTMLButtonElement>());
+  const lastEditingId = useRef<string | null>(null);
   // One submission key per draft: an ambiguous failure retries the original comment, a conflict
   // proves that key can never succeed and retires it.
   const submissionKey = useRef('');
@@ -128,6 +131,14 @@ export function Discussion({
     void load(false);
     return stop;
   }, [load, stop]);
+  // The inline editor replaces the row's edit control, so keyboard focus moves into the
+  // textarea when it opens and back to that row's control when it closes.
+  useEffect(() => {
+    const closed = lastEditingId.current;
+    lastEditingId.current = editingId;
+    if (editingId) editArea.current?.focus();
+    else if (closed) editButtons.current.get(closed)?.focus();
+  }, [editingId]);
   function refresh() {
     setBusy(true);
     setEditNotice(null);
@@ -382,6 +393,7 @@ export function Discussion({
                           rows={4}
                           maxLength={COMMENT_MAX_LENGTH}
                           value={editDraft}
+                          ref={editArea}
                           onChange={(event) => setEditDraft(event.target.value)}
                           aria-describedby={`${editBaseId}-${row.id}-help`}
                           disabled={saving}
@@ -435,6 +447,10 @@ export function Discussion({
                           <button
                             type="button"
                             className="btn btn-sm btn-ghost"
+                            ref={(node) => {
+                              if (node) editButtons.current.set(row.id, node);
+                              else editButtons.current.delete(row.id);
+                            }}
                             onClick={() => beginEdit(row)}
                             disabled={editingId !== null}
                           >

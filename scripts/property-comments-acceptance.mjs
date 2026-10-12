@@ -673,6 +673,19 @@ function openEditor(body, session = primary) {
   );
 }
 const editOpen = `() => Boolean(document.querySelector('#record-panel-comments textarea[name=comment-edit]'))`;
+const editAreaFocused = `() => document.activeElement === document.querySelector('#record-panel-comments textarea[name=comment-edit]')`;
+// Keyboard focus after the editor closes: the active element must be the edit control inside
+// that comment's row, never the top of the shell or a removed node.
+function editFocus(body) {
+  return evaluate(
+    `() => {
+      const node = ${commentNode(body)};
+      const button = node ? [...node.querySelectorAll('button')].find((candidate) => /Sửa bình luận|Edit comment/.test(candidate.textContent)) : null;
+      return { focused: Boolean(button) && document.activeElement === button, tag: document.activeElement?.tagName ?? null };
+    }`,
+    primary,
+  );
+}
 const editedBody = 'Chào anh,\nGiá 12 tỷ — đã chốt sau khi xem nhà.';
 {
   const original = viBody.trim();
@@ -694,10 +707,20 @@ const editedBody = 'Chào anh,\nGiá 12 tỷ — đã chốt sau khi xem nhà.';
   );
   openEditor(original, primary);
   await waitUntil(editOpen, primary);
+  assert.equal(
+    evaluate(editAreaFocused, primary),
+    true,
+    'Opening the editor moves focus into the textarea',
+  );
   fill('Sửa bình luận', editedBody, primary);
   click('Lưu bình luận', primary);
   await waitUntil(`() => Boolean(${commentNode(editedBody)})`, primary);
   await settle(primary);
+  assert.equal(
+    editFocus(editedBody).focused,
+    true,
+    'A successful save returns focus to the comment edit control',
+  );
   const after = screen(primary);
   const updated = after.comments.find((comment) => comment.body === editedBody);
   assert.ok(updated, 'The corrected text is shown in the discussion');
@@ -732,6 +755,28 @@ const editedBody = 'Chào anh,\nGiá 12 tỷ — đã chốt sau khi xem nhà.';
       postedAt: updated.time,
     },
   );
+}
+{
+  // Cancel must return focus to the row's edit control rather than leaving it on a removed node.
+  openEditor(editedBody, primary);
+  await waitUntil(editOpen, primary);
+  assert.equal(
+    evaluate(editAreaFocused, primary),
+    true,
+    'Reopening the editor moves focus into the textarea',
+  );
+  click('Hủy', primary);
+  await waitUntil(
+    `() => !document.querySelector('#record-panel-comments textarea[name=comment-edit]')`,
+    primary,
+  );
+  const cancelled = editFocus(editedBody);
+  assert.equal(
+    cancelled.focused,
+    true,
+    'Cancel returns focus to the comment edit control',
+  );
+  observed('keyboard focus enters the editor and returns on cancel', cancelled);
 }
 {
   // A second real author session advances the revision while this editor still holds the old
@@ -838,6 +883,23 @@ const editedBody = 'Chào anh,\nGiá 12 tỷ — đã chốt sau khi xem nhà.';
     loaded.comments.indexOf(mine) >= 30,
     'The target sits beyond the first page',
   );
+  openEditor(mine.body, primary);
+  await waitUntil(editOpen, primary);
+  assert.equal(
+    evaluate(editAreaFocused, primary),
+    true,
+    'Focus enters the editor on an older-page row',
+  );
+  click('Hủy', primary);
+  await waitUntil(
+    `() => !document.querySelector('#record-panel-comments textarea[name=comment-edit]')`,
+    primary,
+  );
+  assert.equal(
+    editFocus(mine.body).focused,
+    true,
+    'Cancel returns focus to the older-page row edit control',
+  );
   const peer = await appSession('alpha');
   const older = await readAllComments(peer, paging.id);
   const target = older.find((row) => row.body === targetBody);
@@ -850,6 +912,11 @@ const editedBody = 'Chào anh,\nGiá 12 tỷ — đã chốt sau khi xem nhà.';
   assert.equal(peerEdit.status, 200, 'The peer session saves the newer text');
   openEditor(mine.body, primary);
   await waitUntil(editOpen, primary);
+  assert.equal(
+    evaluate(editAreaFocused, primary),
+    true,
+    'Focus enters the editor on the older-page conflict row',
+  );
   fill('Sửa bình luận', editedBody, primary);
   click('Lưu bình luận', primary);
   await waitUntil(
@@ -883,6 +950,11 @@ const editedBody = 'Chào anh,\nGiá 12 tỷ — đã chốt sau khi xem nhà.';
   click('Lưu bình luận', primary);
   await waitUntil(`() => Boolean(${commentNode(editedBody)})`, primary);
   await settle(primary);
+  assert.equal(
+    editFocus(editedBody).focused,
+    true,
+    'The older-page save returns focus to its edit control',
+  );
   const reconciled = screen(primary);
   assert.ok(
     reconciled.comments.some((comment) => comment.body === editedBody),
