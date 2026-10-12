@@ -56,7 +56,7 @@ Keep Server Actions narrow and input-validated. Reuse user-scoped data clients i
 | 8 | Reviewed import ETL | Parameterized staging loader and promotion; identity reconciliation; correct contacts/files; same-snapshot retry |
 | 9 | Acceptance and release | Real RLS/Storage, competing-session test, browser flow, reconciliation and recovery rehearsal pass |
 
-Build auth + inventory first, then reservations/visits, then analytics and complete import. Use sanitized representative fixtures during UI development, not the raw customer workbook in previews.
+Build auth + inventory first, then reservations and activity, then analytics and complete import. Use sanitized representative fixtures during UI development, not the raw customer workbook in previews.
 
 ## Confirmed property, contact and address maintenance plan
 
@@ -92,7 +92,7 @@ History reads must project allowlisted property business fields, obey live acces
 - Official address catalogs are not seeded. Unverified raw current entry is allowed without guessing units; optional verification requires reviewed catalog data and evidence. Catalog ingestion/provisioning is a separate prerequisite, not a reason to reject a known-address save.
 - Literal `%`, `_` and backslash search is implemented by the applied forward migration and verified against distinct hosted matching/nonmatching controls. Address summaries remain bounded to the current result page.
 - Existing record-review fields must not become a maintenance gate or misleading certification of changed facts. Preserve unrelated legal/sold/rented authority and active-rental protections.
-- Exclude legal-status review, new uploads, external notifications, contact merging, hard deletes, separate deal records, commission/payment calculations, maps, AI enrichment and multi-tenancy. Existing reservation/visit/rental approval requirements are unchanged.
+- Exclude legal-status review, new uploads, external notifications, contact merging, hard deletes, separate deal records, commission/payment calculations, maps, AI enrichment and multi-tenancy. Existing reservation and rental approval requirements are unchanged.
 
 
 ## Confirmed first employee-access slice

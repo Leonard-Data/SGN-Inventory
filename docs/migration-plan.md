@@ -79,7 +79,7 @@ Acceptance: no pending migration dispositions, zero unexplained count difference
 
 ## Phase 7 — Rollback and stabilization
 
-Before production user writes, rollback can restore the preimport backup or remove the imported batch by reviewed entity map in dependency order. Do not use destructive resets in production. After production writes, do not restore an old snapshot and lose new records: freeze writes, export postcutover property/visit/lock/file changes, assess the incident, and reconcile them into the recovery system before reopening.
+Before production user writes, rollback can restore the preimport backup or remove the imported batch by reviewed entity map in dependency order. Do not use destructive resets in production. After production writes, do not restore an old snapshot and lose new records: freeze writes, export postcutover property/lock/file changes, assess the incident, and reconcile them into the recovery system before reopening.
 
 Use a forward migration to fix schema defects where possible. A UI rollback can keep the current schema if compatible; assess contract differences first. Keep the source read-only until reconciliation and ownership transfer are signed off.
 

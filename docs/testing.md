@@ -54,7 +54,7 @@ These checks use inert fixtures and do not establish Supabase connectivity, real
 | Read/view reservation after expiry without a sweeper | No effective lock; open state history may still show approved with past expiry |
 | Retry a detail-open request with the same key | Same event ID, no duplicate page-view KPI |
 | Repeated owner-contact reveals for one property/Vietnam day | One owner-contact property; no duplicate credit; a reused key for another property is rejected |
-| Visit around UTC 17:00 | Assigned to correct Vietnam calendar day |
+| Detail open or owner-contact reveal around UTC 17:00 | Assigned to correct Vietnam calendar day |
 | Legacy/current address search | Both match; result shows the matching format and verification state |
 | Current address with district or wrong unit hierarchy/date | Rejected |
 | Partial ward transition | Remains candidate until reviewed evidence; no automatic verified unit |

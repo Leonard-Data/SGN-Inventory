@@ -2,7 +2,7 @@
 
 ## Business outcome
 
-Sales can quickly find a property, identify a valid contact, inspect its characteristics and documents, and request a reservation when a deal is agreed. Independent review prevents incorrect commission-attribution claims. Management can inspect inventory by area, confirmed visits by day reservations by employee, rental occupancy per month and confirmed rent balances.
+Sales can quickly find a property, identify a valid contact, inspect its characteristics and documents, and request a reservation when a deal is agreed. Independent review prevents incorrect commission-attribution claims. Management can inspect inventory by area, employee activity by Vietnam day, rental occupancy per month and confirmed rent balances.
 
 ## Components
 
