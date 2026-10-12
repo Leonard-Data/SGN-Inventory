@@ -337,15 +337,33 @@ function initializeBrowser(session) {
   assert.ok(firstPage, 'Dedicated browser profile has no initial page');
   browser(['selectpage', firstPage[1]], session);
 }
-function browserLogin(name, session, preferredLocale) {
+// The auth shell names its language buttons by aria-label, so the switch is selected by the
+// button's lang attribute and the active locale is read from the shell element.
+async function browserLogin(name, session, preferredLocale) {
   browser(['open', origin + '/login'], session);
-  if (preferredLocale)
-    click(preferredLocale === 'en' ? 'English' : 'Tiếng Việt', session);
+  if (preferredLocale) {
+    evaluate(
+      `() => {
+        const button = document.querySelector('.sgn-lang-btn[lang="${preferredLocale}"]');
+        if (button) button.click();
+        return Boolean(button);
+      }`,
+      session,
+    );
+    await waitUntil(
+      `() => document.querySelector('.sgn-auth')?.lang === '${preferredLocale}'`,
+      session,
+      20,
+    );
+  }
   const fixture = fixtures.identities[name];
   fill('Email', fixture.email, session);
-  const isEnglish = screen(session).locale === 'en';
-  fill(isEnglish ? 'Password' : 'Mật khẩu', fixture.password, session);
-  click(isEnglish ? 'Sign in' : 'Đăng nhập', session);
+  const locale = evaluate(
+    `() => document.querySelector('.sgn-auth')?.lang ?? document.documentElement.lang`,
+    session,
+  );
+  fill(locale === 'en' ? 'Password' : 'Mật khẩu', fixture.password, session);
+  click(locale === 'en' ? 'Sign in' : 'Đăng nhập', session);
   wait('Kho bất động sản', session);
 }
 
@@ -382,7 +400,7 @@ process.on('unhandledRejection', restoreAndExit);
 // ------------------------------------------------------------------ browser journey
 initializeBrowser(primary);
 initializeBrowser(secondary);
-browserLogin('alpha', primary, 'vi');
+await browserLogin('alpha', primary, 'vi');
 browser(['open', detail(discussion)], primary);
 await settle(primary);
 {
@@ -565,7 +583,7 @@ await settle(primary);
     comments: back.comments.length,
   });
 }
-browserLogin('beta', secondary, 'vi');
+await browserLogin('beta', secondary, 'vi');
 browser(['open', detail(discussion)], secondary);
 await settle(secondary);
 {
@@ -615,7 +633,7 @@ browser(['open', detail(discussion)], secondary);
     path: page.path,
   });
 }
-browserLogin('beta', secondary, 'vi');
+await browserLogin('beta', secondary, 'vi');
 browser(['open', detail(discussion)], secondary);
 await settle(secondary);
 {
