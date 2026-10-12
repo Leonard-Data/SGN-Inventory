@@ -1,0 +1,106 @@
+{
+  "checkedAt": "2026-10-12T05:19:10.891Z",
+  "environment": "authorized hosted development Supabase / local real Next.js application",
+  "projectRef": "tneucwzcrzteeixvttpu",
+  "namespace": "SGN-TEST-44",
+  "observations": [
+    {
+      "name": "discussion loads on a real protected detail with a visible empty state",
+      "locale": "vi",
+      "heading": "Thảo luận bất động sản",
+      "empty": true
+    },
+    {
+      "name": "VI comment with accents and line breaks posts and appears immediately",
+      "author": "SGN44 Alpha",
+      "postedAt": "2026-10-12T05:15:27.885169+00:00",
+      "length": 62
+    },
+    {
+      "name": "HTML-like input renders as plain text without script execution",
+      "retained": true,
+      "executed": false
+    },
+    {
+      "name": "explicit refresh retrieves the committed list without duplication",
+      "comments": 2
+    },
+    {
+      "name": "tied-time paging is newest-first without duplication or omission",
+      "page": 30,
+      "total": 35,
+      "tiedTimes": true
+    },
+    {
+      "name": "VI to EN to VI keeps labels, source text and the open property",
+      "property": "SGN-TEST-44-DISC",
+      "comments": 2
+    },
+    {
+      "name": "colleague posts on another employee property without edit authority",
+      "comments": 3,
+      "editControls": false
+    },
+    {
+      "name": "sign-out and back-navigation expose no cached discussion",
+      "path": "/login"
+    },
+    {
+      "name": "live deactivation clears the displayed discussion on refocus",
+      "path": "/access-denied",
+      "pathBefore": "/properties/44000000-0000-4000-8000-000000000e01",
+      "commentsBefore": 3,
+      "cachedText": false
+    },
+    {
+      "name": "anonymous and unlinked identities reach no discussion through the API",
+      "anonymousRows": 0,
+      "anonymousError": "42501",
+      "unlinkedError": "42501"
+    },
+    {
+      "name": "inactive identity and an existing deactivated session are denied",
+      "inactiveSelectRows": 0,
+      "deactivatedPost": "42501"
+    },
+    {
+      "name": "direct client writes are denied and originals stay immutable",
+      "insertError": "42501",
+      "comments": 3
+    },
+    {
+      "name": "validation boundaries reject blank and 2001 characters and accept 2000",
+      "blanks": "23514",
+      "overLimit": "23514",
+      "accepted": true
+    },
+    {
+      "name": "submission key converges, conflicts are rejected and actor cannot be forged",
+      "recovered": true,
+      "conflicting": "23505",
+      "distinct": true
+    },
+    {
+      "name": "archived discussion is reviewer-only and posting is denied for every role",
+      "reviewerRows": 1,
+      "ordinaryRows": 0
+    },
+    {
+      "name": "application routes enforce session, validation and conflict contract",
+      "readStatus": 200,
+      "cacheControl": "private, no-store, max-age=0",
+      "recovered": 200,
+      "conflict": "comment-conflict"
+    },
+    {
+      "name": "held parent lock: competing post and archive serialize with the state rechecked",
+      "rounds": 4,
+      "posted": 2,
+      "denied": 2
+    }
+  ],
+  "limits": [
+    "Fixture-only writes: the SGN-TEST-44 namespace is created and removed by this task.",
+    "The held-lock race uses the operator connection to hold the parent property row; it does not replace a staging gate for production contention."
+  ]
+}
