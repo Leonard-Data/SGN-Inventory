@@ -101,32 +101,44 @@ export function Discussion({
     [onDenied],
   );
   // Every state update happens after an await, so mounting or refreshing never cascades a render.
-  const load = useCallback(async () => {
-    const version = ++generation.current;
-    const page = await fetchPage(null).catch((problem: unknown) => {
-      if (version === generation.current) failure(problem);
-      return null;
-    });
-    if (version === generation.current && page) {
-      setComments((rows) => mergeComments(page.comments, rows));
-      setNext(page.nextCursor);
-      setError(null);
-    }
-    // Released unconditionally: a superseding request owns the list, not the spinner.
-    setBusy(false);
-  }, [failure, fetchPage]);
+  const load = useCallback(
+    async (keepLoadedRows: boolean) => {
+      const version = ++generation.current;
+      const page = await fetchPage(null).catch((problem: unknown) => {
+        if (version === generation.current) failure(problem);
+        return null;
+      });
+      if (version === generation.current && page) {
+        setComments((rows) =>
+          keepLoadedRows ? mergeComments(page.comments, rows) : page.comments,
+        );
+        setNext(page.nextCursor);
+        setError(null);
+      }
+      // Released unconditionally: a superseding request owns the list, not the spinner.
+      setBusy(false);
+    },
+    [failure, fetchPage],
+  );
   const stop = useCallback(() => {
     generation.current++;
     inFlight.current?.abort();
   }, []);
   useEffect(() => {
-    void load();
+    void load(false);
     return stop;
   }, [load, stop]);
   function refresh() {
     setBusy(true);
     setEditNotice(null);
-    void load();
+    void load(false);
+  }
+  // Only the stale-edit conflict keeps rows the server's first page does not carry, so the
+  // edited row stays on screen alongside the current comment from the 409 payload.
+  function reconcile() {
+    setBusy(true);
+    setEditNotice(null);
+    void load(true);
   }
   async function loadMore() {
     if (!next) return;
@@ -277,7 +289,7 @@ export function Discussion({
         // The draft stays in the open editor; the current saved text is shown for reconciliation
         // instead of silently overwriting the newer edit.
         setEditError('stale-edit');
-        refresh();
+        reconcile();
         return;
       }
       setEditError('failed');

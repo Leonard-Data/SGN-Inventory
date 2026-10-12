@@ -20,69 +20,71 @@ export interface CommentPage {
 }
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-// The database-row validator: PostgREST returns snake_case columns. An untrusted shape maps to
-// null instead of a partial object.
-export function toComment(row: unknown): Comment | null {
+interface CommentKeys {
+  propertyId: string;
+  authorId: string;
+  authorName: string;
+  createdAt: string;
+  editedAt: string;
+}
+// The single owner of what a valid Comment is; only the key naming differs between the
+// PostgREST database row (snake_case) and the application wire shape (camelCase).
+function commentFrom(row: unknown, keys: CommentKeys): Comment | null {
   const value: Record<string, unknown> =
     row && typeof row === 'object' && !Array.isArray(row)
       ? (row as Record<string, unknown>)
       : {};
+  const id = value.id,
+    propertyId = value[keys.propertyId],
+    authorId = value[keys.authorId],
+    authorName = value[keys.authorName],
+    body = value.body,
+    createdAt = value[keys.createdAt],
+    revision = value.revision,
+    editedAt = value[keys.editedAt];
   if (
-    typeof value.id !== 'string' ||
-    !uuidPattern.test(value.id) ||
-    typeof value.property_id !== 'string' ||
-    !uuidPattern.test(value.property_id) ||
-    typeof value.author_id !== 'string' ||
-    !uuidPattern.test(value.author_id) ||
-    typeof value.author_name !== 'string' ||
-    typeof value.body !== 'string' ||
-    typeof value.created_at !== 'string' ||
-    typeof value.revision !== 'string' ||
-    !uuidPattern.test(value.revision) ||
-    (value.edited_at !== null && typeof value.edited_at !== 'string')
+    typeof id !== 'string' ||
+    !uuidPattern.test(id) ||
+    typeof propertyId !== 'string' ||
+    !uuidPattern.test(propertyId) ||
+    typeof authorId !== 'string' ||
+    !uuidPattern.test(authorId) ||
+    typeof authorName !== 'string' ||
+    typeof body !== 'string' ||
+    typeof createdAt !== 'string' ||
+    typeof revision !== 'string' ||
+    !uuidPattern.test(revision) ||
+    (editedAt !== null && typeof editedAt !== 'string')
   )
     return null;
   return {
-    id: value.id,
-    propertyId: value.property_id,
-    authorId: value.author_id,
-    authorName: value.author_name,
-    body: value.body,
-    createdAt: value.created_at,
-    revision: value.revision,
-    editedAt: value.edited_at as string | null,
+    id,
+    propertyId,
+    authorId,
+    authorName,
+    body,
+    createdAt,
+    revision,
+    editedAt: editedAt as string | null,
   };
 }
-// The application wire shape: the JSON API serializes `Comment` with camelCase fields, so a
-// serialized comment must not be validated as a database row.
+// The database-row validator: PostgREST returns snake_case columns.
+export function toComment(row: unknown): Comment | null {
+  return commentFrom(row, {
+    propertyId: 'property_id',
+    authorId: 'author_id',
+    authorName: 'author_name',
+    createdAt: 'created_at',
+    editedAt: 'edited_at',
+  });
+}
+// The application wire shape: the JSON API serializes `Comment` with camelCase fields.
 export function toWireComment(value: unknown): Comment | null {
-  const row: Record<string, unknown> =
-    value && typeof value === 'object' && !Array.isArray(value)
-      ? (value as Record<string, unknown>)
-      : {};
-  if (
-    typeof row.id !== 'string' ||
-    !uuidPattern.test(row.id) ||
-    typeof row.propertyId !== 'string' ||
-    !uuidPattern.test(row.propertyId) ||
-    typeof row.authorId !== 'string' ||
-    !uuidPattern.test(row.authorId) ||
-    typeof row.authorName !== 'string' ||
-    typeof row.body !== 'string' ||
-    typeof row.createdAt !== 'string' ||
-    typeof row.revision !== 'string' ||
-    !uuidPattern.test(row.revision) ||
-    (row.editedAt !== null && typeof row.editedAt !== 'string')
-  )
-    return null;
-  return {
-    id: row.id,
-    propertyId: row.propertyId,
-    authorId: row.authorId,
-    authorName: row.authorName,
-    body: row.body,
-    createdAt: row.createdAt,
-    revision: row.revision,
-    editedAt: row.editedAt as string | null,
-  };
+  return commentFrom(value, {
+    propertyId: 'propertyId',
+    authorId: 'authorId',
+    authorName: 'authorName',
+    createdAt: 'createdAt',
+    editedAt: 'editedAt',
+  });
 }

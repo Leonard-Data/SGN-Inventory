@@ -903,6 +903,44 @@ const editedBody = 'Chào anh,\nGiá 12 tỷ — đã chốt sau khi xem nhà.';
     },
   );
 }
+{
+  // A user-initiated Refresh must reflect the server: after the Property is archived the
+  // ordinary reader's page is empty, so the shown discussion clears instead of being kept by
+  // the conflict-path merge.
+  const revision = await archiveRevision(reviewer, paging.id);
+  const archivedResult = await archive(
+    reviewer,
+    paging.id,
+    revision,
+    'SGN46 refresh after archive',
+  );
+  assert.equal(
+    archivedResult.error,
+    null,
+    'The property archives for the refresh check',
+  );
+  click('Làm mới', primary);
+  await waitUntil(
+    `() => document.querySelectorAll('#record-panel-comments .comment').length === 0`,
+    primary,
+  );
+  await settle(primary);
+  const cleared = screen(primary);
+  assert.equal(
+    cleared.comments.length,
+    0,
+    'Refresh drops rows the archived boundary no longer returns',
+  );
+  assert.equal(
+    cleared.empty,
+    true,
+    'The cleared discussion shows its empty state',
+  );
+  observed(
+    'refresh clears the discussion when the archived boundary no longer returns it',
+    { comments: cleared.comments.length, empty: cleared.empty },
+  );
+}
 await browserLogin('beta', secondary, 'vi');
 await openDiscussion(discussion, secondary);
 {
