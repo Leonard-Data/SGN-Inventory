@@ -102,6 +102,49 @@ header {
 .search-panel .muted {
   margin: -4px 0 0;
 }
+.report-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 18px;
+  margin-bottom: 28px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.report-filter label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.report-table-wrap {
+  overflow-x: auto;
+}
+.report-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.report-table caption {
+  padding-bottom: 12px;
+  text-align: left;
+  color: var(--muted);
+}
+.report-table th,
+.report-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+}
+.report-table thead th:nth-child(n + 3),
+.report-table td:nth-child(n + 3) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.report-table tbody th {
+  font-weight: 700;
+}
 .property-hero {
   display: flex;
   justify-content: space-between;

@@ -414,6 +414,28 @@ Actual browser/API regression checks reproduced the failures before editing and 
 - Native logout during a held successful signing response navigated to `/login`, cleared all file rows and destroyed the pending request's browser context. No bearer response was printed or retained outside the private test process.
 
 
+## Company employee-by-day activity acceptance (ticket #31)
+
+Scope: the company employee-by-day report of [issue #31](https://github.com/Leonard-Data/SGN-Inventory/issues/31). Real individual-session Auth, Data API and RLS checks, the live role-change denial, exact personal/company reconciliation and the rendered VI/default and EN journey are required; embedded PGlite assertions and mocked responses are not acceptance.
+
+| Gate | Required observation |
+| --- | --- |
+| Manager/admin report | A live manager and a live admin can open `/activity/company` and read today's summary plus history covering today and the preceding 29 Vietnam calendar days, then select another valid inclusive range |
+| Complete scope | Every authorized employee/date combination appears, including an employee with no events and a completely empty day, with explicit zeros rather than omitted rows |
+| Metric definition | Page view events, distinct properties viewed and Daily owner-contact access count stay separate; for one employee/day the values equal that employee's personal today report and the eligible committed events |
+| Daily property counting | One distinct property per employee/Vietnam day; two employees disclosing the same property each count their own; separate properties sharing an owner stay separate |
+| Eligibility and retention | Missing-owner/phone, broker-only, denied and newly archived disclosures add no credit; earlier valid credit survives later archival and contact correction; no old page view or physical visit is converted |
+| Authorization | Anonymous `401`; sales, staff, inactive and unlinked identities `403/access-denied` by direct navigation, direct report request and filter tampering; a manager→sales downgrade removes authority on the next request with the previously issued JWT; deactivation does the same |
+| Session and cache boundary | Ordinary requests use the validated publishable-key session and RLS with no service-role fallback; responses stay private/no-store; sign-out, denial and refocus clear the protected report so Back or cached navigation cannot show it to another browser user |
+| Dates | The period and calendar rows follow `Asia/Ho_Chi_Minh`; changing the browser timezone or the interface language does not move a fact between periods or create activity |
+| Range validation | Malformed, partial, reversed and over-long ranges are rejected with `400/invalid-input` or `400/invalid-range`, never executed or shown as a zero report |
+| States and localization | Loading, failure, access denied and genuine zero activity remain distinguishable in both Vietnamese/default and English; changing language preserves filters and counts and rewrites no source record |
+| Accessibility | Filters and the report table are keyboard reachable with accessible labels on a mobile viewport, and the metric is labelled Owner-contact access rather than attendance, hours, completed calls or physical visits |
+
+Embedded coverage: `scripts/company-activity-contract.mjs` (invoked by `npm run test:schema`) asserts the live manager/admin boundary, the complete employee/date matrix with empty days, per-employee/day metric separation, shared-property and shared-owner counting, personal/company agreement, invalid-range rejection, denied-disclosure exclusion, deactivation retention and post-archive/post-correction credit retention. `src/features/employees/report-range.test.ts` covers the Vietnam-day default and range validation.
+
+**Hosted and browser execution is pending.** The shared development project was serialized and held by another lane when this slice was built, so no real Auth/Data API/RLS or browser observation for ticket #31 is recorded yet. The planned run creates a disjoint synthetic namespace (two manager/admin readers plus sales, staff, inactive and unlinked identities; employees with no events; a completely empty day; shared properties across employees; separate properties sharing one owner; broker-only and missing-phone properties) and asserts exact counts, the live downgrade/deactivation denial with an existing JWT, invalid ranges, midnight boundaries and the VI/EN journey, then removes exactly that namespace and re-reads the pre-acceptance baseline.
+
 ## Honest completion limits
 
 Issue #1 has real development Supabase and scoped app/Auth/Data API/browser evidence, plus separately completed active/inactive/unlinked delivered recovery with fixture restoration; historical foundation-only evidence above remains separate. Spec #33 has the complete six-ticket private-files journey and real isolated-development browser/API/RLS/Storage acceptance documented above. Embedded Auth/Storage shims alone do not prove email delivery, signed URLs, HTTP deployment protections or cloud release correctness. Production rollout still requires the separate staging/release gates and authorization; imports, broader workflows and deployment are not part of this delivery. Independent Spec #33 review workers were quota-blocked; inline review and all resulting corrections were completed, but independent human PR review remains required.
