@@ -48,7 +48,7 @@ Local engineering setup was exercised separately from business acceptance:
 - `npm run build`: the production Next.js build compiled `/` and `/api/health`.
 - Python 3.11 virtual-environment setup with pinned requirements: seven preparation tests passed; the preparation CLI help ran. Windows requires the pinned `tzdata` package for `Asia/Ho_Chi_Minh`.
 - The installed Husky pre-commit entry point ran lint/types/tests successfully with no staged files. The same lint-staged configuration formatted and restaged a deliberately unformatted TypeScript file in an isolated disposable Git repository, without touching the user's index.
-- Actionlint `1.7.12` accepted all three workflows. Supabase/Vercel pinned CLI help confirmed the workflow flags; no cloud mutation was performed.
+- Actionlint `1.7.12` accepted the three workflows present at that time. Supabase/Vercel pinned CLI help confirmed the workflow flags; no cloud mutation was performed.
 - Actual Edge browser smoke on the local dev server: VI → EN → VI navigation, 360px mobile rendering without horizontal overflow, no page errors; readiness screenshot inspected.
 - Actual `next start` production build: valid fixture configuration returned `200`, `status=ok`, `stage=prod`; missing configuration returned `503`, `status=configuration-error`. Both health paths returned `Cache-Control: no-store`.
 - Environment CLI accepted a valid fixture and rejected a different expected Supabase project. Release CLI accepted target/configuration/pulled fixtures and rejected cross-stage hosting selection without printing key values.
@@ -56,6 +56,18 @@ Local engineering setup was exercised separately from business acceptance:
 - Commit-time recheck: `npm run check` and production build passed; all seven preparation tests passed using `.venv/Scripts/python.exe`. The unactivated system Python failed import tests because `openpyxl` was absent. Production-server health with inert dev configuration returned `200`, `status=ok`, `stage=dev`; without configuration it returned `503`, `status=configuration-error`. Both responses were `no-store`.
 
 These checks use inert fixtures and do not establish Supabase connectivity, real key validity, auth/inventory browser acceptance or a deployed GitHub Actions run. Cloud environment setup and release instructions are in [setup.md](setup.md).
+
+### Executed release-pipeline and analytics verification (issue #54)
+
+Repository-side delivery preparation only: no cloud operation was performed and no workflow was dispatched.
+
+- `actionlint 1.7.12` accepted the three workflow files present at that revision, including the `migrate` job and `migration` input added to `.github/workflows/deploy.yml`. Shellcheck integration is genuinely engaged rather than assumed: actionlint reports `SC2086` for a deliberately unquoted variable in a throwaway copy, and reports nothing for the repository's workflows, so every `run:` script was shellchecked. The review revision that followed moves that sequence into `.github/workflows/migration.yml` and reduces both `migrate` jobs to calls of it; a later `actionlint 1.7.12` run of that revision reports nothing for all four workflow files, and shellcheck is on that PATH, so every `run:` script there is shellchecked too.
+- The review revision's pending-migration release guard ran alone with `node --test scripts/release-guard.test.mjs` (4 tests passed), covering the pinned CLI's `--output-format json` dry-run payload for both the up-to-date and pending outcomes, and the command form was exercised directly for both a passing and a failing payload. The local runtime was Node `26.8.1` rather than the pinned `24.14.0`, so the repository's `--experimental-transform-types` flag was omitted; CI still runs the pinned toolchain.
+- `npm run check` passed with the pinned Node `24.14.0` / npm `11.14.1` toolchain: formatting, ESLint, strict TypeScript, unit and environment/release regressions, and 201 embedded schema assertions.
+- `npm run build` compiled the production Next.js build with the inert dev fixture configuration. The analytics integration reaches the output: the built client chunks contain the `_vercel/insights` beacon path (observed in `.next/static/chunks/0852uv9sl-7b1.js`), so enabling the dashboard toggle is the only remaining step for collection.
+- `@vercel/analytics` is pinned to `2.0.1` in `package.json` and `package-lock.json`; adding it changed no other dependency.
+
+Not executed, and therefore unverified external prerequisites: no workflow was dispatched, no migration was applied, no Vercel project, project ID or domain is established by this evidence, neither Web Analytics toggle was enabled, no deployed request was measured, and the GitHub environments `dev`/`prod` with a required reviewer are unconfirmed — read-only repository checks observed no environments and no protection on `main` or `develop` at the time of writing. Until those exist, production delivery stays blocked. The dispatched behaviour of the pipeline, real migration application and the analytics view all remain unexecuted.
 
 ## Required staging gates
 

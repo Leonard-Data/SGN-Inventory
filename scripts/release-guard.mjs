@@ -78,6 +78,27 @@ export function verifyPulledConfiguration(values, project, pulled) {
   readEnvironment(pulled, values.SUPABASE_PROJECT_REF);
 }
 
+// A verify-only run must never pass while the database is behind the commit it
+// is releasing, so the dry run has to prove it is up to date before the release
+// proceeds. The payload is the pinned CLI's `--output-format json` dry-run result.
+export function releasePendingMigrations(dryRun) {
+  assert.equal(
+    dryRun?.dryRun,
+    true,
+    'Pending migrations must come from a migration dry run',
+  );
+  assert.ok(
+    Array.isArray(dryRun.migrations),
+    'Migration dry run must list its pending migrations',
+  );
+  assert.equal(
+    dryRun.migrations.length,
+    0,
+    'Pending migrations must be applied before the application release',
+  );
+  return { pending: dryRun.migrations };
+}
+
 if (
   process.argv[1] &&
   import.meta.url === pathToFileURL(process.argv[1]).href
@@ -118,14 +139,18 @@ if (
         { status: 'ok', stage },
         'Deployment stage mismatch',
       );
+    } else if (command === 'pending') {
+      releasePendingMigrations(
+        JSON.parse(await readFile(process.argv[3], 'utf8')),
+      );
     } else {
-      throw new Error('Use target, configuration, pulled, or smoke');
+      throw new Error('Use target, configuration, pending, pulled, or smoke');
     }
     console.log(`Release ${command} check passed`);
   } catch {
     // Assertions may contain compared key values; never print their payloads.
     console.error(
-      'Release check failed: verify branch, stage, project IDs, configuration and deployment health.',
+      'Release check failed: verify branch, stage, project IDs, configuration, pending migrations and deployment health.',
     );
     process.exitCode = 1;
   }

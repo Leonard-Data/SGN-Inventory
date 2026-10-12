@@ -1,4 +1,4 @@
-name: Deploy application
+name: Release application and database
 on:
   workflow_dispatch:
     inputs:
@@ -8,6 +8,14 @@ on:
         default: dev
         type: choice
         options: [dev, prod]
+      migration:
+        description: >-
+          apply = apply the reviewed pending migrations before this release
+          (default); verify = never write, and fail while migrations are pending
+        required: true
+        default: apply
+        type: choice
+        options: [apply, verify]
 
 permissions:
   contents: read
@@ -19,8 +27,19 @@ concurrency:
 jobs:
   quality:
     uses: ./.github/workflows/ci.yml
-  deploy:
+  # Database changes land before the application that depends on them. The
+  # guard-and-push sequence is defined once in migration.yml; a failed migration
+  # fails the run and the deploy job below is skipped, never continued. The
+  # stage environment gate therefore covers the migrations and the upload together.
+  migrate:
     needs: quality
+    uses: ./.github/workflows/migration.yml
+    with:
+      stage: ${{ inputs.stage }}
+      apply: ${{ inputs.migration == 'apply' }}
+    secrets: inherit
+  deploy:
+    needs: migrate
     if: (inputs.stage == 'dev' && github.ref == 'refs/heads/develop') || (inputs.stage == 'prod' && github.ref == 'refs/heads/main')
     environment: ${{ inputs.stage }}
     runs-on: ubuntu-latest
