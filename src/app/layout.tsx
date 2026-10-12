@@ -2,6 +2,9 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { cookies } from 'next/headers';
 import { IBM_Plex_Mono, Inter, Oswald } from 'next/font/google';
+// Reports to the Vercel project that served the request; the project's
+// dashboard Analytics view must also be enabled, or nothing is collected.
+import { Analytics } from '@vercel/analytics/next';
 // Import order is the cascade: legacy global rules first, then the design-system
 // token layer, then the app layer that owns the shared vocabulary, then the
 // scoped auth sheet. globals.css shrinks to the classes the app layer does not
@@ -54,7 +57,10 @@ export default async function RootLayout({
       className={`${display.variable} ${body.variable} ${mono.variable}`}
       suppressHydrationWarning
     >
-      <body>{children}</body>
+      <body>
+        {children}
+        <Analytics />
+      </body>
     </html>
   );
 }

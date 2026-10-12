@@ -57,6 +57,17 @@ Local engineering setup was exercised separately from business acceptance:
 
 These checks use inert fixtures and do not establish Supabase connectivity, real key validity, auth/inventory browser acceptance or a deployed GitHub Actions run. Cloud environment setup and release instructions are in [setup.md](setup.md).
 
+### Executed release-pipeline and analytics verification (issue #54)
+
+Repository-side delivery preparation only: no cloud operation was performed and no workflow was dispatched.
+
+- `actionlint 1.7.12` accepted all three workflow files, including the `migrate` job and `migration` input added to `.github/workflows/deploy.yml`. Shellcheck integration is genuinely engaged rather than assumed: actionlint reports `SC2086` for a deliberately unquoted variable in a throwaway copy, and reports nothing for the repository's workflows, so every `run:` script was shellchecked.
+- `npm run check` passed with the pinned Node `24.14.0` / npm `11.14.1` toolchain: formatting, ESLint, strict TypeScript, unit and environment/release regressions, and 201 embedded schema assertions.
+- `npm run build` compiled the production Next.js build with the inert dev fixture configuration. The analytics integration reaches the output: the built client chunks contain the `_vercel/insights` beacon path (observed in `.next/static/chunks/0852uv9sl-7b1.js`), so enabling the dashboard toggle is the only remaining step for collection.
+- `@vercel/analytics` is pinned to `2.0.1` in `package.json` and `package-lock.json`; adding it changed no other dependency.
+
+Not executed, and therefore unverified external prerequisites: no workflow was dispatched, no migration was applied, no Vercel project, project ID or domain is established by this evidence, neither Web Analytics toggle was enabled, no deployed request was measured, and the GitHub environments `dev`/`prod` with a required reviewer are unconfirmed — read-only repository checks observed no environments and no protection on `main` or `develop` at the time of writing. Until those exist, production delivery stays blocked. The dispatched behaviour of the pipeline, real migration application and the analytics view all remain unexecuted.
+
 ## Required staging gates
 
 | Test | Expected result |
