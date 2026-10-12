@@ -7,6 +7,9 @@ begin;
 create function private.company_employee_daily_activity(p_from date,p_to date)
 returns table(employee_id uuid,employee_name text,business_day date,page_view_events bigint,distinct_properties_viewed bigint,owner_contact_properties bigint)
 language plpgsql stable security definer set search_path = '' as $$
+declare
+  v_employees integer;
+  v_days integer;
 begin
   -- Live role check on every call: an existing JWT does not preserve a changed role.
   if not private.is_reviewer() then
@@ -18,17 +21,20 @@ begin
   if p_to - p_from > 365 then
     raise exception 'date range too large' using errcode = '22023';
   end if;
+  -- The Data API returns at most supabase/config.toml max_rows (1000) rows, ordered by day
+  -- descending, so a wider employee-by-day scope would silently drop its oldest days.
+  select count(*) into v_employees from public.employees e where e.is_active;
+  v_days := p_to - p_from + 1;
+  if v_employees * v_days > 1000 then
+    raise exception 'company report scope of % active employees over % days exceeds the 1000 row limit',
+      v_employees, v_days using errcode = '54000';
+  end if;
   return query
   with scope as (
-    -- Every active employee appears on every requested day, including days with no events,
-    -- so a missing grouped event row never omits a row. A deactivated employee keeps only
-    -- the days that carry activity already committed in the range, so deactivation never
-    -- erases historical attribution.
+    -- The scope is every currently active employee on every requested day, including days
+    -- with no events, so a missing grouped row never omits a row. A deactivated employee's
+    -- historical events are not listed in this slice.
     select e.id,e.display_name from public.employees e where e.is_active
-    union
-    select e.id,e.display_name from public.employees e
-      where exists (select 1 from public.activity_events a
-        where a.employee_id = e.id and a.business_day between p_from and p_to)
   ), days as (
     select gs::date as day from generate_series(p_from,p_to,interval '1 day') as gs
   )

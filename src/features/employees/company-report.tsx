@@ -95,9 +95,13 @@ export function CompanyReport({
             ? text.invalidRange
             : error === 'invalid-input'
               ? text.invalidInput
-              : error === 'sign-out-failed'
-                ? text.signOutFailed
-                : text.unavailable}{' '}
+              : error === 'range-too-large'
+                ? text.rangeTooLarge
+                    .replace('{from}', initialFrom)
+                    .replace('{to}', initialTo)
+                : error === 'sign-out-failed'
+                  ? text.signOutFailed
+                  : text.unavailable}{' '}
           <button onClick={error === 'sign-out-failed' ? logout : reload}>
             {text.retry}
           </button>

@@ -75,11 +75,11 @@ async function reportRows(
     'company_employee_daily_activity',
     { p_from: from, p_to: to },
   );
-  if (error)
-    throw new ApiError(
-      error.code === '42501' ? 403 : 503,
-      error.code === '42501' ? 'access-denied' : 'unavailable',
-    );
+  if (error) {
+    if (error.code === '42501') throw new ApiError(403, 'access-denied');
+    if (error.code === '54000') throw new ApiError(400, 'range-too-large');
+    throw new ApiError(503, 'unavailable');
+  }
   return (data ?? []).map((row) => ({
     employeeId: row.employee_id,
     employeeName: row.employee_name,

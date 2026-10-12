@@ -732,7 +732,6 @@ try {
   const managerReport = await report(manager, from, to);
   assert.equal(managerReport.error, null, 'manager report failed');
   const rows = managerReport.data;
-  const inRange = (value) => value >= from && value <= to;
   const days = [];
   for (let cursor = from; cursor <= to;) {
     days.push(cursor);
@@ -744,25 +743,11 @@ try {
     () => admin.from('employees').select('id,is_active'),
   );
   assert.equal(employeeError, null, 'read employees');
-  const { data: events } = await retryResult('read range events', () =>
-    admin
-      .from('activity_events')
-      .select('employee_id,business_day')
-      .gte('business_day', from)
-      .lte('business_day', to),
-  );
   const subjects = new Set(
     employees.filter((employee) => employee.is_active).map((e) => e.id),
   );
-  const withEvents = new Set(
-    events
-      .filter((event) => inRange(event.business_day))
-      .map((e) => e.employee_id),
-  );
   const expected = new Set(
-    [...subjects, ...withEvents].flatMap((id) =>
-      days.map((value) => `${id}|${value}`),
-    ),
+    [...subjects].flatMap((id) => days.map((value) => `${id}|${value}`)),
   );
   const actual = new Set(
     rows.map((row) => `${row.employee_id}|${row.business_day}`),
@@ -1016,6 +1001,21 @@ try {
   );
   observed(
     'the application endpoint returns exact company counts, the default 30-day period and explicit zeros',
+  );
+  const capDays = 366;
+  const capApp = await appGet(
+    managerCookies,
+    `/api/activity/company?from=${await today(-365)}&to=${day}`,
+  );
+  if (subjects.size * capDays > 1000) {
+    assert.equal(capApp.status, 400);
+    assert.equal(capApp.body?.error, 'range-too-large');
+  } else {
+    assert.equal(capApp.status, 200);
+    assert.equal(capApp.body.rows.length, subjects.size * capDays);
+  }
+  observed(
+    'a scope above the Data API row cap is rejected, never returned as short history',
   );
 
   // Browser journey.

@@ -207,6 +207,15 @@ export async function companyActivityContract({
       );
     },
   );
+  await check(
+    'a scope above the Data API row cap is rejected instead of truncated',
+    () =>
+      fails(
+        'select * from public.company_employee_daily_activity($1,$2)',
+        ['2025-01-01', '2026-01-01'],
+        '54000',
+      ),
+  );
 
   await asUser(null);
   await check('anonymous company reporting denied', () =>
@@ -301,16 +310,12 @@ export async function companyActivityContract({
   ]);
   await asUser(2);
   await check(
-    'a deactivated employee keeps the days carrying already-committed activity',
+    'a deactivated employee leaves the matrix even with committed activity',
     async () => {
       const retained = await read(first, empty);
-      assert.deepEqual(cell(retained, employees[0], first), {
-        pageViewEvents: 2,
-        distinctPropertiesViewed: 2,
-        ownerContactProperties: 2,
-      });
-      // The inactive employee with no events stays out of the matrix.
-      assert.ok(!retained.some((row) => row.employee_id === employees[4]));
+      assert.ok(!retained.some((row) => row.employee_id === employees[0]));
+      const remaining = active.filter((id) => id !== employees[0]);
+      assert.equal(retained.length, remaining.length * days.length);
     },
   );
   await asOwner();

@@ -95,7 +95,7 @@ An employee's own Page-view event count, distinct properties viewed and Owner-co
 _Avoid_: Company report, visit KPI
 
 **Company employee-by-day activity**:
-A manager/admin-only report of every authorized employee's Page-view event count, distinct properties viewed and Owner-contact access count for one Vietnam business day, including employees and dates with no activity. It uses the same metric definitions as Personal daily activity and persists nothing.
+A manager/admin-only report of every currently active employee's Page-view event count, distinct properties viewed and Owner-contact access count for one Vietnam business day, including employees and dates with no activity. It uses the same metric definitions as Personal daily activity and persists nothing.
 _Avoid_: Attendance report, visit report, performance ranking
 
 **Owner-contact access disclosure**:
