@@ -49,7 +49,7 @@ Recovery: `POST /api/auth/recover` `{email,locale}` invokes `resetPasswordForEma
 | My requests / reviewer queue | `property_locks`, `lock_events` | Active employees can read company reservations; decision capability is separate |
 | My daily activity | `v_employee_daily_activity` | Own events for employees, all for manager/admin; Page views, distinct properties viewed and owner-contact properties per Vietnam day |
 | My today activity (application) | `my_today_activity` RPC | Own Page views, distinct properties viewed and owner-contact properties for the caller's current Vietnam day, every role |
-| Company employee-by-day activity | `company_employee_daily_activity` RPC | Live manager/admin only; every authorized employee and requested Vietnam day, including explicit zeros, with Page views, distinct properties viewed and owner-contact properties per day |
+| Company employee-by-day activity | `company_employee_daily_activity` RPC | Live manager/admin only; every currently active employee and requested Vietnam day, including explicit zeros, with Page views, distinct properties viewed and owner-contact properties per day |
 | Area inventory | `v_admin_inventory_by_area` | Manager/admin only; zero rows for other roles |
 | Employee lock count | `v_admin_locks_by_employee` | Manager/admin only |
 | Employee directory | `employees` | Active internal employees; admin-only writes |
