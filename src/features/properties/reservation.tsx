@@ -257,7 +257,11 @@ export function Reservation({
     return fallback;
   }
   return (
-    <section className="panel" aria-labelledby={headingId}>
+    <section
+      className="panel reservation"
+      data-loaded={state ? 'yes' : 'no'}
+      aria-labelledby={headingId}
+    >
       <h2 id={headingId}>{text.reservations}</h2>
       {loading && !state ? <p role="status">{text.loading}</p> : null}
       {loadFailed ? (

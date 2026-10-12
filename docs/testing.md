@@ -376,6 +376,29 @@ The recorded run was repeated at the reconciled head after the default branch mo
 
 **Remaining limits.** This is scoped development evidence on the authorized dev project. It does not establish production acceptance, a full VI/EN accessibility audit, keyboard-only and 360px mobile operation of the new controls (the rows above remain the staging gates for those), sustained multi-session contention at production load, or any part of the parent specification's moderation slice. The operator connection holds the parent row for the race window, so the race is real-session evidence rather than a production-load contention benchmark.
 
+## Reservation acceptance (ticket #18)
+
+Scope: [ticket #18 reservation request and decision](database-contract.md#ticket-18--reservation-request-and-independent-decision). Use the authorized development project with real Supabase Auth, Data API/RLS, the actual VI/EN browser interface and genuinely independent sessions for the approval race. Mocked authorization, embedded database checks, source-text assertions and readiness pages cannot substitute for this evidence. The embedded reservation regressions in `npm run test:schema` remain a supplement, not the acceptance.
+
+Prepare two active sales employees, one active manager and one active admin with distinct linked Auth identities, and at least two synthetic unarchived properties in `available`/`negotiating` with no reservation rows. Record the pre-run row counts before starting and return every created reservation to a closed state afterwards.
+
+| Scenario | Required observation |
+| --- | --- |
+| Sales employee submits a reservation request from the property detail in VI | The pending state appears with its request and expiry times; the property is not presented as reserved and its recorded status is unchanged |
+| Read reservation state as another employee | Only the effective reservation and the caller's own pending request are visible; `canDecide` is false for sales |
+| Sales employee calls the decision endpoint and `decide_property_lock` directly | `403 access-denied` from the application and `42501` from the RPC; no state change |
+| Manager attempts to approve their own pending request through the UI, the endpoint and the RPC | No decision control is rendered for their own request; the endpoint returns `409 self-approval-forbidden`; the RPC returns `42501`; the request stays pending |
+| Manager and admin approve two different pending requests for one property from two independent authenticated sessions | Exactly one approval commits, the other returns `409 reservation-conflict`; one approved row, one effective reservation and one approval event remain |
+| Fresh property detail after the decision | The effective reservation shows the claimant name and the Vietnam-time expiry; the losing pending request is no longer shown as effective or pending |
+| Re-read the committed reservation through the application | The returned reservation identity, claimant and expiry match the database row exactly |
+| Switch VI → EN → VI on the open property | The same effective reservation, claimant and expiry remain; labels and the note are localized; the open property is preserved |
+| Attempt a direct lock or lock-event write from an employee browser client | `42501`; the stored rows and events are unchanged |
+| Anonymous request to the reservation endpoints and the direct Data API | `401`, no rows, no `anon` access |
+| Live deactivation of a claimant with an existing JWT and open detail | The reservation endpoints deny with `403`, direct reads return no rows and guarded RPCs return `42501`; refocus clears displayed data; already committed reservations are not erased |
+| Sign out and use Back, then reopen the detail | No reservation claimant, expiry or reason is revealed |
+
+Add embedded database regressions only for consumer-visible invariants and run `npm run test:schema` for schema/workflow changes. Record sanitized observations without tokens, credentials, private source payloads or customer records; the browser/hosted rows above remain open until the run recorded below exists.
+
 ## Contention test procedure
 
 Prepare two pending requests from different employees. In session A use an authenticated reviewer JWT context, call `decide_property_lock(A, true, reason)` within a transaction and hold the transaction open. In session B use a different connection and reviewer context to approve B. B must wait on the same parent property row. Commit A; B must fail with reservation conflict. Query effective locks and audit/events to confirm one approval. Repeat with A rolling back: B may then succeed. Do not treat parallel calls in a single embedded DB connection as a proof of real multi-session locking.
