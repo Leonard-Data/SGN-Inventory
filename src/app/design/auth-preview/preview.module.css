@@ -1,0 +1,68 @@
+/* Review-only chrome for the isolated authentication design preview (ticket
+   #50). Component styling comes from sgn-auth.css; only the gallery layout
+   lives here. Tokens are available because the page root carries .sgn-auth. */
+:global(.sgn-auth).root {
+  display: block;
+  padding: 24px clamp(16px, 4vw, 48px) 64px;
+}
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px dashed var(--field-border);
+  border-radius: var(--radius-md);
+  background: var(--surface-warm);
+  color: var(--fg-2);
+  font-size: var(--text-sm);
+}
+.badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 24px 0 8px;
+  flex-wrap: wrap;
+}
+.heading {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 22px;
+  letter-spacing: var(--tracking-display);
+  margin: 32px 0 12px;
+}
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 20px;
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+}
+.cardTitle {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: var(--space-4);
+}
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.full {
+  grid-column: 1 / -1;
+}

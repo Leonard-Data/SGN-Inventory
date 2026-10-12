@@ -26,6 +26,7 @@ export interface RouteContext {
   environment: Environment;
   finish: (response: NextResponse) => NextResponse;
   setLocale: (locale: 'vi' | 'en') => void;
+  setSessionPersistence: (persist: boolean) => void;
 }
 export function createRouteContext(request: NextRequest): RouteContext {
   const environment = readEnvironment(
@@ -83,7 +84,20 @@ export function createRouteContext(request: NextRequest): RouteContext {
       },
     });
   }
-  return { client, environment, finish, setLocale };
+  // Remembered-session control (ticket #52): unchecked sign-in keeps Supabase
+  // auth cookies for this browser session only. The presentation-only locale
+  // cookie is not affected, and the default (checked) behavior is unchanged.
+  function setSessionPersistence(persist: boolean) {
+    if (persist) return;
+    for (const [name, cookie] of pending) {
+      if (!name.startsWith('sb-')) continue;
+      const options: CookieOptions = { ...cookie.options };
+      delete options.maxAge;
+      delete options.expires;
+      pending.set(name, { ...cookie, options });
+    }
+  }
+  return { client, environment, finish, setLocale, setSessionPersistence };
 }
 export async function runRoute(
   request: NextRequest,
@@ -169,6 +183,7 @@ export function credentials(body: Record<string, unknown>): {
   email: string;
   password: string;
   locale: 'vi' | 'en';
+  remember: boolean;
 } {
   if (
     typeof body.email !== 'string' ||
@@ -178,8 +193,9 @@ export function credentials(body: Record<string, unknown>): {
     body.password.length < 1 ||
     body.password.length > 1024 ||
     (body.locale !== 'vi' && body.locale !== 'en') ||
+    (body.remember !== undefined && typeof body.remember !== 'boolean') ||
     Object.keys(body).some(
-      (key) => !['email', 'password', 'locale'].includes(key),
+      (key) => !['email', 'password', 'locale', 'remember'].includes(key),
     )
   )
     throw new ApiError(400, 'invalid-input');
@@ -187,5 +203,6 @@ export function credentials(body: Record<string, unknown>): {
     email: body.email.trim(),
     password: body.password,
     locale: body.locale,
+    remember: body.remember !== false,
   };
 }
