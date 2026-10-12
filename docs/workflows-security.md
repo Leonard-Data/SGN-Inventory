@@ -51,7 +51,7 @@ Deactivation is immediate for subsequent RLS/RPC requests. Review the departing 
 
 Legacy `clicks` is imported as `page_view`/`legacy_click`. It never becomes `site_visit` merely because the sheet contains “Ngày xem”. New events use the server time of submission, with an employee-scoped UUID retry key. Physical-visit submission and confirmation are retired; retained `site_visit` rows keep their original attribution, day and status, and the MVP still supports no backdated visits.
 
-The daily view has rows only for days with recorded events. Company admin reporting crosses a Vietnam date calendar with every currently active employee, so employees and days with no events appear as explicit zeros; a deactivated employee's historical events are not listed there. “Active employee” on a day means at least one tracked view or owner-contact access according to the displayed metric; it is not proof of attendance, employment hours or GPS presence.
+The daily view has rows only for days with recorded events. Reporting over a selected range crosses a Vietnam date calendar — the caller's own personal report and company admin reporting for every currently active employee — so requested days with no events appear as explicit zeros; a deactivated employee's historical events are not listed there. “Active employee” on a day means at least one tracked view or owner-contact access according to the displayed metric; it is not proof of attendance, employment hours or GPS presence.
 
 ## Rental and localization extension
 

@@ -1659,6 +1659,15 @@ export type Database = {
           page_view_events: number;
         }[];
       };
+      my_daily_activity: {
+        Args: { p_from: string; p_to: string };
+        Returns: {
+          business_day: string;
+          distinct_properties_viewed: number;
+          owner_contact_properties: number;
+          page_view_events: number;
+        }[];
+      };
       my_today_activity: {
         Args: never;
         Returns: {

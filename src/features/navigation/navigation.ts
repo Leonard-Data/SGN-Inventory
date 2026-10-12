@@ -39,6 +39,13 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'reports',
     items: [
       {
+        id: 'my-activity',
+        label: 'myActivityLink',
+        href: '/activity/me',
+        icon: 'chart',
+        roles: ALL_ROLES,
+      },
+      {
         id: 'company-activity',
         label: 'companyActivityLink',
         href: '/activity/company',
