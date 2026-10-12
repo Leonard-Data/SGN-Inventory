@@ -484,7 +484,7 @@ const activityBefore = new Set(activityIds(fixtureActivity));
 
 function lockRows(property) {
   return operatorSql(
-    `select id, requested_by, status, expires_at, decided_by from public.property_locks where property_id = '${property.id}' order by requested_at`,
+    `select id, requested_by, status, expires_at, decided_at, decision_reason, decided_by from public.property_locks where property_id = '${property.id}' order by requested_at`,
   );
 }
 // Every reservation row this run can write belongs to a declared fixture identity, so cleanup
@@ -497,8 +497,8 @@ function myLockIds() {
 function eventsFor(ids) {
   return operatorSql(
     ids.length
-      ? `select id, lock_id, action from public.lock_events where lock_id in ('${ids.join("','")}') order by id`
-      : `select id, lock_id, action from public.lock_events where false`,
+      ? `select id, lock_id, action, reason from public.lock_events where lock_id in ('${ids.join("','")}') order by id`
+      : `select id, lock_id, action, reason from public.lock_events where false`,
   );
 }
 function effectiveRows(property) {
@@ -841,8 +841,21 @@ let rejectedLock;
   const row = lockRows(reject).find((lock) => lock.id === rejectedLock);
   assert.equal(row.status, 'rejected');
   assert.equal(row.decided_by, fixtures.identities.manager.employeeId);
-  const events = eventsFor([rejectedLock]).map((event) => event.action);
-  assert.deepEqual(events, ['requested', 'rejected']);
+  assert.equal(
+    row.decision_reason,
+    rejectReason,
+    'The rejected row stored the reason submitted through the surface',
+  );
+  const eventRows = eventsFor([rejectedLock]);
+  assert.deepEqual(
+    eventRows.map((event) => event.action),
+    ['requested', 'rejected'],
+  );
+  assert.equal(
+    eventRows.find((event) => event.action === 'rejected').reason,
+    rejectReason,
+    'The rejected event carries the reason submitted through the surface',
+  );
   assert.equal(effectiveRows(reject).length, 0);
   observed(
     'a manager rejects another employee request with a reason and no reservation is created',
@@ -880,10 +893,19 @@ let rejectedLock;
   const conflict = managerResult.status === 409 ? managerResult : adminResult;
   assert.equal(conflict.body.error, 'reservation-conflict');
   const rows = lockRows(main);
+  const approvedRows = rows.filter((row) => row.status === 'approved');
+  assert.equal(approvedRows.length, 1, 'One approved reservation remains');
   assert.equal(
-    rows.filter((row) => row.status === 'approved').length,
-    1,
-    'One approved reservation remains',
+    approvedRows[0].decision_reason,
+    decisionReason,
+    'The winning approval stored the reason it submitted',
+  );
+  assert.equal(
+    (Date.parse(approvedRows[0].expires_at) -
+      Date.parse(approvedRows[0].decided_at)) /
+      86400000,
+    managerResult.status === 200 ? 14 : 21,
+    'The approved reservation expires after the day count its session submitted',
   );
   const effective = effectiveRows(main);
   assert.equal(effective.length, 1, 'One effective reservation remains');
@@ -891,6 +913,11 @@ let rejectedLock;
     (event) => event.action === 'approved',
   );
   assert.equal(approvals.length, 1, 'One approval event was recorded');
+  assert.equal(
+    approvals[0].reason,
+    decisionReason,
+    'The approval event carries the reason its session submitted',
+  );
   observed(
     'independent-session competing approvals leave exactly one effective reservation',
     { statuses: outcomes, effective: effective.length },
@@ -1015,7 +1042,12 @@ let rejectedLock;
     'The claimant browser holds displayed reservation state',
   );
   const shownName = effectiveRows(main)[0].employee_name;
+  const staleSession = new ApplicationSession();
+  assert.equal((await staleSession.login('claimant')).status, 200);
   setActive('claimant', false);
+  const stale = await staleSession.request(reservationRoute(reject));
+  assert.equal(stale.status, 403);
+  assert.equal(stale.body.error, 'access-denied');
   const denied = new ApplicationSession();
   assert.equal((await denied.login('claimant')).status, 403);
   assert.equal(
