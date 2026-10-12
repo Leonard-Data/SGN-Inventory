@@ -33,6 +33,7 @@ import {
   dialableNumber,
 } from './format';
 import { Discussion } from '@/features/property-comments/discussion';
+import { Reservation } from './reservation';
 import { detailMessages } from './messages';
 // The record screen groups its content the way the design package does: the record's own
 // facts, its documents and its discussion.
@@ -785,6 +786,15 @@ export function Detail({
 
                   {employee ? (
                     <>
+                      <Reservation
+                        key={property.id}
+                        propertyId={property.id}
+                        locale={locale}
+                        status={property.status}
+                        archived={!!property.archived_at}
+                        employeeId={employee.id}
+                        onDenied={denyFiles}
+                      />
                       <Maintenance
                         key={'maintenance' + property.id}
                         detail={data}

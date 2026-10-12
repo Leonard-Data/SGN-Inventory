@@ -230,6 +230,39 @@ const vi = {
   strengthGood: 'Tốt',
   strengthStrong: 'Mạnh',
   stepBack: 'Quay lại',
+  reservations: 'Đặt chỗ',
+  reservationEffective: 'Đã có đặt chỗ hiệu lực',
+  reservationClaimant: 'Người đặt chỗ',
+  reservationExpires: 'Hết hạn',
+  reservationPending: 'Yêu cầu của bạn đang chờ duyệt',
+  reservationRequestedAt: 'Gửi lúc',
+  reservationPendingExpires: 'Yêu cầu hết hạn',
+  reservationPendingNote:
+    'Yêu cầu đang chờ không giữ bất động sản cho đến khi được duyệt.',
+  reservationArchived: 'Hồ sơ lưu trữ không nhận yêu cầu đặt chỗ mới.',
+  reservationReason: 'Lý do đặt chỗ',
+  reservationReasonHint: 'Từ 10 đến 2.000 ký tự.',
+  reservationReasonRequired: 'Vui lòng nhập lý do từ 10 đến 2.000 ký tự.',
+  submitReservation: 'Gửi yêu cầu đặt chỗ',
+  reservationRequested:
+    'Đã gửi yêu cầu. Bất động sản chưa được đặt chỗ cho đến khi quản lý hoặc quản trị viên duyệt.',
+  reservationRequestFailed: 'Chưa gửi được yêu cầu đặt chỗ. Vui lòng thử lại.',
+  reservationRequests: 'Yêu cầu đang chờ duyệt',
+  reservationNoRequests: 'Không có yêu cầu nào đang chờ.',
+  reservationDecisionReason: 'Lý do quyết định',
+  reservationDays: 'Số ngày hiệu lực (1–30)',
+  reservationApprove: 'Duyệt đặt chỗ',
+  reservationReject: 'Từ chối yêu cầu',
+  reservationApproved: 'Đã duyệt đặt chỗ.',
+  reservationRejected: 'Đã từ chối yêu cầu.',
+  reservationDecisionFailed: 'Chưa ghi được quyết định. Vui lòng thử lại.',
+  reservationConflict:
+    'Đã có xung đột đặt chỗ. Trạng thái mới nhất đang được hiển thị.',
+  reservationUnavailable: 'Bất động sản này không còn khả dụng để đặt chỗ.',
+  reservationSelfApproval: 'Bạn không thể tự duyệt yêu cầu của mình.',
+  reservationLoadFailed: 'Không tải được tình trạng đặt chỗ.',
+  reservationNote:
+    'Chỉ đặt chỗ đã được duyệt và còn hiệu lực mới giữ bất động sản.',
 };
 export type MessageKey = keyof typeof vi;
 
@@ -469,6 +502,42 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     strengthGood: 'Good',
     strengthStrong: 'Strong',
     stepBack: 'Back',
+    reservations: 'Reservations',
+    reservationEffective: 'Effective reservation',
+    reservationClaimant: 'Claimant',
+    reservationExpires: 'Expires',
+    reservationPending: 'Your request is pending review',
+    reservationRequestedAt: 'Requested',
+    reservationPendingExpires: 'Request expires',
+    reservationPendingNote:
+      'A pending request does not hold the property until it is approved.',
+    reservationArchived: 'Archived records accept no new reservation request.',
+    reservationReason: 'Reservation reason',
+    reservationReasonHint: 'Between 10 and 2,000 characters.',
+    reservationReasonRequired:
+      'Enter a reason between 10 and 2,000 characters.',
+    submitReservation: 'Submit reservation request',
+    reservationRequested:
+      'Request submitted. The property is not reserved until a manager or admin approves it.',
+    reservationRequestFailed:
+      'The reservation request was not submitted. Try again.',
+    reservationRequests: 'Pending requests',
+    reservationNoRequests: 'No pending requests.',
+    reservationDecisionReason: 'Decision reason',
+    reservationDays: 'Effective days (1–30)',
+    reservationApprove: 'Approve reservation',
+    reservationReject: 'Reject request',
+    reservationApproved: 'Reservation approved.',
+    reservationRejected: 'Request rejected.',
+    reservationDecisionFailed: 'The decision was not recorded. Try again.',
+    reservationConflict:
+      'A reservation conflict occurred. The latest state is shown.',
+    reservationUnavailable:
+      'This property is no longer available for reservation.',
+    reservationSelfApproval: 'You cannot decide your own request.',
+    reservationLoadFailed: 'Reservation state did not load.',
+    reservationNote:
+      'Only an approved, unexpired reservation holds the property.',
   },
 };
 export function label(
