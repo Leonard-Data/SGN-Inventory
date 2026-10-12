@@ -5,6 +5,7 @@ export type TodayActivity = {
   businessDay: string;
   pageViewEvents: number;
   distinctPropertiesViewed: number;
+  ownerContactProperties: number;
 };
 
 // Own Page views for the database's Asia/Ho_Chi_Minh day; reviewers read no colleagues here.
@@ -23,5 +24,6 @@ export async function todayActivity(
     businessDay: row.business_day,
     pageViewEvents: row.page_view_events,
     distinctPropertiesViewed: row.distinct_properties_viewed,
+    ownerContactProperties: row.owner_contact_properties,
   };
 }

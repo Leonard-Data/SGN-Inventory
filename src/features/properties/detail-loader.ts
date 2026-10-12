@@ -1,9 +1,18 @@
 import { api, RequestError } from '../employees/api.ts';
 import type { TodayActivity } from '../employees/activity';
 import type { PropertyDetail } from './detail-data';
+import type { OwnerContactDisclosure } from './types';
 
 export function loadPropertyDetail(id: string, signal: AbortSignal) {
   return api<PropertyDetail>('/api/properties/' + id, undefined, signal);
+}
+
+// A deliberate disclosure: the database commits the access record and returns the phone together.
+export function revealOwnerContact(id: string, key: string) {
+  return api<OwnerContactDisclosure>(
+    '/api/properties/' + id + '/owner-contact',
+    { key },
+  );
 }
 
 export async function loadTodayActivity(

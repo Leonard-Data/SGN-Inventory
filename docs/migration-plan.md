@@ -65,7 +65,7 @@ Acceptance: representative sample reconciles, contacts/files match confirmed pro
 | Authorization | Anonymous/inactive denied; self approval denied; direct lock/activity writes denied; manager/admin analytics restricted |
 | Contention | Two independent database sessions approve competing requests; exactly one succeeds |
 
-Sales users test actual address searches, owner contact lookup, document access, visit submission and reservation request. Reviewers test independent decisions, expiry, release and dashboard reconciliation. Admins test invitations and deactivation. Confirm clear Vietnamese labels for draft, legacy, unresolved and reserved states.
+Sales users test actual address searches, owner contact lookup, owner-contact disclosure, document access and reservation request. Reviewers test independent decisions, expiry, release and dashboard reconciliation. Admins test invitations and deactivation. Confirm clear Vietnamese labels for draft, legacy, unresolved and reserved states.
 
 ## Phase 6 — Final snapshot and cutover
 
@@ -79,7 +79,7 @@ Acceptance: no pending migration dispositions, zero unexplained count difference
 
 ## Phase 7 — Rollback and stabilization
 
-Before production user writes, rollback can restore the preimport backup or remove the imported batch by reviewed entity map in dependency order. Do not use destructive resets in production. After production writes, do not restore an old snapshot and lose new records: freeze writes, export postcutover property/visit/lock/file changes, assess the incident, and reconcile them into the recovery system before reopening.
+Before production user writes, rollback can restore the preimport backup or remove the imported batch by reviewed entity map in dependency order. Do not use destructive resets in production. After production writes, do not restore an old snapshot and lose new records: freeze writes, export postcutover property/lock/file changes, assess the incident, and reconcile them into the recovery system before reopening.
 
 Use a forward migration to fix schema defects where possible. A UI rollback can keep the current schema if compatible; assess contract differences first. Keep the source read-only until reconciliation and ownership transfer are signed off.
 

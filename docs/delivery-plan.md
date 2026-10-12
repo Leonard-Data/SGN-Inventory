@@ -17,11 +17,11 @@ The database and engineering foundation plus issue #1 employee-access routes are
 | `src/app/(auth)/login/page.tsx` | Login and invitation/recovery flow |
 | `src/app/(app)/properties/page.tsx` | Inventory search/filter/page |
 | `src/app/(app)/properties/[id]/page.tsx` | Property details, contacts, files, reservation banner |
-| `src/app/(app)/activity/page.tsx` | Own daily activity and visit submission |
+| `src/app/(app)/activity/page.tsx` | Own daily activity: page views, distinct properties viewed and owner-contact access |
 | `src/app/(app)/reservations/page.tsx` | Own requests and effective locks |
 | `src/app/(app)/rentals/page.tsx` | Tenancy/occupancy inventory with VI/EN labels |
 | `src/app/(app)/rentals/[id]/page.tsx` | Agreement details; staff/reviewer monthly dues and payment review |
-| `src/app/(app)/reviews/page.tsx` | Independent reservation/visit/file review queue |
+| `src/app/(app)/reviews/page.tsx` | Independent reservation/file review queue |
 | `src/app/(app)/admin/employees/page.tsx` | Guarded user management |
 | `src/app/(app)/admin/analytics/page.tsx` | Area and employee dashboards |
 | `src/lib/supabase/client.ts` | Browser publishable-key client |
@@ -30,7 +30,7 @@ The database and engineering foundation plus issue #1 employee-access routes are
 | `src/features/properties/` | Search, form validation, detail queries and mutations |
 | `src/features/addresses/` | Versioned unit selectors and mapping review |
 | `src/features/reservations/` | RPC calls, state badges and decision forms |
-| `src/features/activity/` | Idempotent event capture and confirmed-visit report |
+| `src/features/activity/` | Idempotent event capture and own daily activity report (page views, distinct properties, owner-contact access) |
 | `src/features/files/` | Metadata registration, upload, completion and signed download |
 | `src/features/employees/` | Invite/link/deactivate with reviewed roles |
 | `src/features/rentals/` | Agreement lifecycle, monthly occupancy/dues and reviewed manual receipts/refunds |
@@ -49,14 +49,14 @@ Keep Server Actions narrow and input-validated. Reuse user-scoped data clients i
 | 3 | Property/contact/address maintenance and correction requests | Role-scoped immediate saves; property history; preserved legacy input; optional address verification; stale-edit rejection; no maintenance approval |
 | 4 | Private file protocol | Register → upload → confirm → signed read; interrupted upload recovery; no public legal links |
 | 5 | Approval-based reservations | Independent approval; duplicate/competing requests handled clearly; expiry and release reflected immediately |
-| 6 | Activity and review | Detail opens are page views; visits submitted/confirmed separately; unique confirmed-property daily KPI |
+| 6 | Activity and review | Detail opens are page views; a deliberate owner-contact disclosure counts one property per employee/Vietnam day; physical-visit submission is retired |
 | 7 | Employee management and analytics | Last-admin protected invitation/role/deactivation action; zero-day reports; verified/unresolved area split |
 | 7a | Bilingual interface and language preference | Full VI/EN dictionary parity and switching; VND, Vietnamese addresses and Vietnam calendar retained |
 | 7b | Rental management | Draft/independent activation/end/cancel; active months; confirmed partial/full receipts, overdue and refund balances |
 | 8 | Reviewed import ETL | Parameterized staging loader and promotion; identity reconciliation; correct contacts/files; same-snapshot retry |
 | 9 | Acceptance and release | Real RLS/Storage, competing-session test, browser flow, reconciliation and recovery rehearsal pass |
 
-Build auth + inventory first, then reservations/visits, then analytics and complete import. Use sanitized representative fixtures during UI development, not the raw customer workbook in previews.
+Build auth + inventory first, then reservations and activity, then analytics and complete import. Use sanitized representative fixtures during UI development, not the raw customer workbook in previews.
 
 ## Confirmed property, contact and address maintenance plan
 
@@ -92,7 +92,7 @@ History reads must project allowlisted property business fields, obey live acces
 - Official address catalogs are not seeded. Unverified raw current entry is allowed without guessing units; optional verification requires reviewed catalog data and evidence. Catalog ingestion/provisioning is a separate prerequisite, not a reason to reject a known-address save.
 - Literal `%`, `_` and backslash search is implemented by the applied forward migration and verified against distinct hosted matching/nonmatching controls. Address summaries remain bounded to the current result page.
 - Existing record-review fields must not become a maintenance gate or misleading certification of changed facts. Preserve unrelated legal/sold/rented authority and active-rental protections.
-- Exclude legal-status review, new uploads, external notifications, contact merging, hard deletes, separate deal records, commission/payment calculations, maps, AI enrichment and multi-tenancy. Existing reservation/visit/rental approval requirements are unchanged.
+- Exclude legal-status review, new uploads, external notifications, contact merging, hard deletes, separate deal records, commission/payment calculations, maps, AI enrichment and multi-tenancy. Existing reservation and rental approval requirements are unchanged.
 
 
 ## Confirmed first employee-access slice
@@ -111,7 +111,7 @@ The confirmed journey is: an invited, active employee signs in → searches a le
 - Retain the contracted 30-row default page, UUID cursor and 120-character query validation. Bound address-summary queries to the current page.
 - Show property code, listing mode, physical type, access type, inventory/review/legal statuses, prices, dimensions, original legacy address and current address when present, with verification labels. Missing data remains visibly unknown.
 - Show all linked owner/broker contacts, their relationship, primary marker and names. Do not present owner phone numbers automatically on the ordinary detail; owner contact and phone disclosure arrives only through the deliberate disclosure flow owned by issue #29. Do not fabricate missing contact relationships.
-- Detail opens record idempotent page views through the documented activity RPC, never physical visits. UI retries or language switches must not create duplicate opens.
+- Detail opens record idempotent page views through the documented activity RPC, never physical visits. UI retries or language switches must not create duplicate opens. A deliberate owner-contact disclosure commits one `owner_contact_access` event and reports one property per employee/Vietnam day; the Call link and language switching never add credit.
 
 ### Language, denial and sign-out
 
@@ -136,7 +136,7 @@ The authorized development project received two forward fixes without rewriting 
 - Use m² for area and metres for dimensions. Preserve alley/house strings and Vietnamese accents.
 - Separate “Loại giao dịch” (sale/rent), “Loại bất động sản” (house/land/etc.) and “Đặc điểm lối vào” (street/alley).
 - Address badges: “Địa chỉ cũ”, “Địa chỉ mới”, “Chưa xác minh”. Reservation labels: “Chờ duyệt”, “Đã khóa”, “Từ chối”, “Đã giải phóng”, “Hết hạn”.
-- “Lượt xem” is page interaction; “Bất động sản đã thăm” is independently confirmed physical visits.
+- “Lượt xem” is page interaction; “Bất động sản đã xem liên hệ chủ nhà” is a deliberate owner-contact disclosure count. New physical-visit submission is retired; retained confirmed rows are historical only.
 - Show claimant/expiry on reserved properties. A pending request shows its review state, not an effective reservation.
 - Unknown legal/area/category information stays visibly unknown; upload and internal review do not establish legal ownership.
 

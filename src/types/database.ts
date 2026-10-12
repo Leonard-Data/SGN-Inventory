@@ -1315,11 +1315,10 @@ export type Database = {
       v_employee_daily_activity: {
         Row: {
           business_day: string | null;
-          confirmed_properties_visited: number | null;
           distinct_properties_viewed: number | null;
           employee_id: string | null;
+          owner_contact_properties: number | null;
           page_view_events: number | null;
-          pending_visits: number | null;
         };
         Relationships: [
           {
@@ -1654,6 +1653,7 @@ export type Database = {
         Returns: {
           business_day: string;
           distinct_properties_viewed: number;
+          owner_contact_properties: number;
           page_view_events: number;
         }[];
       };
@@ -1709,9 +1709,9 @@ export type Database = {
         };
         Returns: string;
       };
-      review_property_visit: {
-        Args: { p_confirm: boolean; p_event_id: string };
-        Returns: undefined;
+      reveal_owner_contact: {
+        Args: { p_key: string; p_property_id: string };
+        Returns: Json;
       };
       search_properties: {
         Args: {

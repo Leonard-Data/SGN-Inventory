@@ -371,6 +371,24 @@ dd {
 .muted {
   color: var(--muted);
 }
+.owner-disclosure {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--line);
+}
+.owner-disclosure h3 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+}
+.owner-phone {
+  margin: 4px 0 10px;
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  /* Discourages ordinary copy-paste; it never claimed to stop transcription. */
+  user-select: none;
+  -webkit-user-select: none;
+}
 @media (max-width: 640px) {
   main {
     padding: 18px 14px 48px;

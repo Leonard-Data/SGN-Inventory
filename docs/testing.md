@@ -52,9 +52,9 @@ These checks use inert fixtures and do not establish Supabase connectivity, real
 | Two live DB sessions approve different pending requests for one property | One commits; the other receives conflict; exactly one effective reservation and matching events |
 | Approve after previous approved expiry | Stale row expires under parent lock; new approval can succeed |
 | Read/view reservation after expiry without a sweeper | No effective lock; open state history may still show approved with past expiry |
-| Retry a detail-open/visit request with the same key | Same event ID, no duplicate KPI |
-| Multiple confirmed visits to same property/day | One distinct visited property in KPI |
-| Visit around UTC 17:00 | Assigned to correct Vietnam calendar day |
+| Retry a detail-open request with the same key | Same event ID, no duplicate page-view KPI |
+| Repeated owner-contact reveals for one property/Vietnam day | One owner-contact property; no duplicate credit; a reused key for another property is rejected |
+| Detail open or owner-contact reveal around UTC 17:00 | Assigned to correct Vietnam calendar day |
 | Legacy/current address search | Both match; result shows the matching format and verification state |
 | Current address with district or wrong unit hierarchy/date | Rejected |
 | Partial ward transition | Remains candidate until reviewed evidence; no automatic verified unit |
@@ -178,6 +178,56 @@ Real individual-session results over hosted Auth/Data API/RLS (task-local runner
 **Executed browser journey at the pre-review revision `65d1ad1` (11 October 2026); not re-run at the revised head.** Run with the repository-pinned `chrome-devtools-axi` 0.1.39 in task-private tooling, attached to a task-private headless Chromium through the documented `BROWSER_URL` mode with a private HOME, profile, session and ports (the installed 0.1.33 could not launch a browser on this host, and the pinned driver's own launch path failed the same way; a direct headless Chromium worked, which is what the documented attach mode uses). Observed: the direct link renders recorded facts, preserved legacy/current addresses, owner and broker names, relations and the primary marker **with no owner phone anywhere in the DOM and no disclosure control**; today's own panel matches the live report (Vietnam day, 1 event/1 property, then 2/2 on a genuinely new open); retry and VI→EN→VI keep the same open property with no duplicate event; an event-free employee sees explicit zeros; anonymous `401` and inactive/unlinked `403`; archived detail `404` for the ordinary employee and readable by the reviewer; deactivation clears the panel on refocus; sign-out clears state and Back/direct navigation expose no protected data; at the emulated 390×844 viewport `document.scrollWidth` equals the viewport with no overflowing element, and the skip link moves focus to the main region with the labelled activity panel present.
 
 **Fixture cleanup.** The disjoint `SGN28` namespace was created for this run and has been fully removed through the approved operator boundary after verifying each exact manifest ID by a read first: 5 activity events, 2 contact links, 3 addresses, 3 properties, 2 contacts and 4 employees deleted (HTTP 200 with the expected row counts), the synthetic Auth users removed through the Auth-admin API, and the project restored to its prior baseline (39 properties, 5 employees, 2 contacts, 82 activity events, 39 addresses, 32 files, 1 lock, 11 categories). An earlier blanket `404` during cleanup was a local request-builder bug — a missing leading slash before the resource path — not a permission boundary; no grant, policy, trigger or protection was changed. The supplied development login and all pre-existing fixtures were untouched throughout.
+
+## Owner-contact disclosure acceptance (ticket #29)
+
+Scope: the disclosure-to-today's-report path of [issue #29](https://github.com/Leonard-Data/SGN-Inventory/issues/29). This supersedes the #28 statement that the ordinary detail carries no disclosure control. Real individual-session Auth, Data API and RLS checks, the rendered VI/default and EN journey, and genuinely separate-session races are required; embedded PGlite assertions and the embedded Auth/Storage shims do not establish them.
+
+| Gate | Required observation |
+| --- | --- |
+| Deliberate disclosure | Owner phone appears only after Show owner contact; page load, render, prefetch, language switch and Call disclose nothing and add no credit |
+| Owner eligibility | The property's recorded `relation='owner'` link decides, so a shared contact is an owner on one property and only a broker on another; a broker-only property and a recorded owner without a phone are explicit and add no credit |
+| Atomic outcome | A failed disclosure returns no phone payload and leaves no committed activity; the localized error offers a retry |
+| Retry identity | A same-key retry after a lost response returns the original activity reference and day without a duplicate or rewrite; reusing the key for another property is rejected; no caller can choose the actor or day |
+| Daily counting | Repeated reveals, concurrent tabs and several owners/phones give one property per employee per Vietnam day; another property or another employee counts independently |
+| Archived boundary | Manager/admin keep authorized archived contact access without new credit; ordinary employees stay denied; archiving or correcting after a valid disclosure keeps the earlier credit |
+| Report | Today's personal report shows page views, distinct properties viewed and the owner-contact count separately with explicit zeros, and never calls it attendance, a visit or a connected call |
+| Call action | The Call link opens the device dialer for dialable recorded data; clicking it is not independent credit |
+| Denial and boundaries | Anonymous, unlinked and inactive identities are denied; direct client activity writes stay denied; no phone value is stored in the activity row |
+| Midnight | A new next-day disclosure counts for that day and a pre-midnight disclosure retried after midnight keeps its day (embedded deterministic boundary; no production backdating API) |
+
+**Executed on 12 October 2026** against the authorized development project `tneucwzcrzteeixvttpu`, with the repository's forward migrations applied through the reviewed dry-run/push path (each dry-run reported exactly its own file with no seeds or roles, each push exited `0`, the follow-up dry-run reported up to date, `reveal_owner_contact` moved from `404 PGRST202` to `403/42501` for an unauthenticated caller, and every read-only row baseline was unchanged). The evidence below was re-run after the review follow-up `20261012075323_owner_contact_retry_identity.sql` at head `7dd0987`, and then fully re-run at head `d9cd021`, the review-fix commit that changes the client reveal/refresh behaviour and the English metric label, after both forward migrations were applied through the reviewed dry-run/push gate; all 15 recorded observation groups passed, and the embedded suite covers that follow-up's post-archive and phone-removed retry cases. The committed source is unchanged by this docs-only edit. A disjoint `SGN29` namespace was created through the operator plane and removed after the run.
+
+Real individual-session Auth/Data API/RLS matrix (15 recorded observations, module `acceptance-29.py`):
+
+- Event-free report returns an explicit zero owner-contact count.
+- The recorded `relation='owner'` link and an available phone decide disclosure and credit one property, even though the shared contact's global `contact_type` is `broker`.
+- A same-key retry recovers the original event reference and Vietnam day with exactly one row.
+- Two genuinely independent app sessions revealing with one shared key concurrently converge on one event and one property.
+- Reusing that key for another property is rejected, including on the archived review path; the same recorded owner through another property counts another property.
+- A broker-only relation and a recorded owner without a phone are explicit (`owner-contact-missing`, `owner-phone-missing`) and add no credit.
+- Direct client `activity_events` INSERT remains denied.
+- Archived review keeps contact access with `credited=false` and no new credit, while the ordinary employee receives `404`.
+- Anonymous, unlinked and inactive identities are denied on both the app route and the direct RPC.
+
+Rendered VI/default and EN browser journey on the local application against the hosted project:
+
+- Opening the detail shows no owner phone, records no owner-contact credit, and leaves the panel at an explicit zero.
+- A deliberate Show owner contact reveals the recorded phone with an accessible `tel:` Call link, no button afterwards (no copy control), `user-select: none`, and one credited property matching the live session report.
+- After a deliberate reveal on an uncredited property, and with the initial today report already landed, the rendered today panel reaches the credited owner-contact count of `1` and keeps page views, distinct properties viewed and the owner-contact count as separate rows with explicit zeros. The ordering where the reveal settles before the initial today-report read is not reproduced by this harness and is therefore not proven by this run; the abort semantics the credited re-read relies on are covered by `src/features/properties/detail-loader.test.ts` ("an invalidated activity load cannot replace the next load").
+- The rendered English metric label is `Owner-contact properties` and the Vietnamese label is `Bất động sản đã xem liên hệ chủ nhà`; both were asserted from the rendered today panel in the VI and EN passes.
+- The Call click and VI→EN→VI switching keep the source phone string and create no extra credit event.
+- A broker-only property shows the localized Vietnamese missing-data message and, after switching to English, the English message.
+- The reviewer's archived disclosure shows the phone and adds no owner-contact credit.
+- At the emulated 390×844 viewport the disclosure control is a focusable, labelled native `button`, activation reveals the phone, and `document.scrollWidth` stays within the viewport.
+
+**Assertion restored.** The review round restored the strict acceptance assertion in `scripts/employee-access-acceptance.mjs`, which now asserts every recorded activity kind is `page_view`; the proof that opening, refocusing and re-rendering a detail records page views and nothing else is intact.
+
+**Automation caveats (disclosed, not smoothed over).** The pinned `chrome-devtools-axi` 0.1.39 attached to a task-private headless Chromium over `BROWSER_URL`. On this host its `fill`/`click`/`press` did not reliably reach the refactored React auth form or controls below the fold, so the run drove the same real handlers through the input's native value setter plus an `input` event, the form's own `requestSubmit()`, and the control's own activation; the reveal click, language switching and mobile reveal used those paths. The Call assertion is the link's real `tel:` href plus an unchanged activity count, because following `tel:` in headless Chrome leaves the protected page. These are harness behaviours, not observed product failures; the underlying app handlers and endpoints are the real ones.
+
+**Fixture cleanup.** The disjoint `SGN29` namespace (5 Auth users, 4 employees, 5 properties, 1 address, 3 contacts, 6 contact links) was created through the operator plane and fully removed through it after verifying each declared id by a read first; the synthetic Auth users were removed through the Auth-admin API. The measured baseline is identical before creation and after removal — 19 employees, 50 properties, 9 contacts, 7 property-contacts, 54 addresses and 127 activity events — with zero drift and no `SGN29` row or Auth user remaining. An earlier failed fixture attempt left four synthetic employee rows that the same tooling purged before the recorded run, which is why an intermediate snapshot showed 23 employees. The discussion slice recorded 125 activity events at its own restoration while this run measured 127 both before and after, so the two-event difference predates this task and is not attributable to it. The supplied development login and every pre-existing fixture were untouched, and the task's server, Chromium and bridge were stopped with ports 3103/9333/9953 free.
+
+The Vietnam-midnight and next-day credit rules (a new next-day disclosure counts for that day, a pre-midnight disclosure retried after midnight keeps its day, device timezone changes do not affect credit) are proven by the embedded schema suite; no production backdating API was added.
 
 ## Property, contact and address maintenance acceptance (not yet executed)
 

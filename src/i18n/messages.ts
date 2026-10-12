@@ -88,6 +88,18 @@ const vi = {
   broker: 'Môi giới',
   representative: 'Đại diện',
   primary: 'Liên hệ chính',
+  showOwnerContact: 'Hiện liên hệ chủ nhà',
+  ownerContactMissing: 'Chưa ghi nhận liên hệ chủ nhà cho bất động sản này.',
+  ownerPhoneMissing: 'Liên hệ chủ nhà được ghi nhận chưa có số điện thoại.',
+  ownerContactFailed:
+    'Chưa hiện được liên hệ chủ nhà. Thử lại dùng lại lượt ghi nhận này, không tạo thêm.',
+  ownerContactKeyConflict: 'Lượt ghi nhận này đã dùng cho bất động sản khác.',
+  ownerContactUnavailable:
+    'Đã ghi nhận lượt mở liên hệ chủ nhà; hiện chưa có số để hiển thị.',
+  call: 'Gọi',
+  callUnavailable: 'Số đã ghi không đủ để quay số.',
+  ownerContactNote:
+    'Chỉ hiện sau khi bạn chọn. Mở liên hệ chủ nhà không phải cuộc gọi đã kết nối và không phải lượt thăm bất động sản.',
   noCurrent: 'Chưa có địa chỉ mới được ghi nhận.',
   pageViewFailed:
     'Chưa ghi nhận được lượt xem. Thử lại không tạo lượt xem trùng.',
@@ -97,6 +109,7 @@ const vi = {
   todayDay: 'Ngày (giờ Việt Nam)',
   todayPageViews: 'Lượt xem trang',
   todayProperties: 'Bất động sản đã xem',
+  todayOwnerContacts: 'Bất động sản đã xem liên hệ chủ nhà',
   todayActivityFailed: 'Chưa tải được hoạt động hôm nay.',
   discussion: 'Thảo luận bất động sản',
   addComment: 'Bình luận',
@@ -277,6 +290,19 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     broker: 'Broker',
     representative: 'Representative',
     primary: 'Primary contact',
+    showOwnerContact: 'Show owner contact',
+    ownerContactMissing: 'No owner contact is recorded for this property.',
+    ownerPhoneMissing: 'The recorded owner contact has no phone number.',
+    ownerContactFailed:
+      'Owner contact could not be revealed. Retrying reuses this recorded access without adding another.',
+    ownerContactKeyConflict:
+      'This access reference was already used for another property.',
+    ownerContactUnavailable:
+      'Owner-contact access was recorded; no owner phone is currently recorded.',
+    call: 'Call',
+    callUnavailable: 'The recorded number is not dialable.',
+    ownerContactNote:
+      'Shown only after you choose. Revealing an owner contact is not a connected call and not a physical visit.',
     noCurrent: 'No current address recorded.',
     pageViewFailed:
       'Page view not recorded. Retrying will not create a duplicate.',
@@ -286,6 +312,7 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     todayDay: 'Day (Vietnam time)',
     todayPageViews: 'Page views',
     todayProperties: 'Distinct properties viewed',
+    todayOwnerContacts: 'Owner-contact properties',
     todayActivityFailed: "Today's activity could not be loaded.",
     discussion: 'Property discussion',
     addComment: 'Comment',
