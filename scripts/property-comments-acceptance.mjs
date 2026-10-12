@@ -2,10 +2,11 @@
 //
 // Real development Supabase Auth/Data API/RLS plus the local real Next.js application and
 // real Chrome sessions. Mock, shim and readiness-page results are not acceptance. Mutates
-// only the declared SGN-TEST-44 synthetic namespace and restores the declared fixture
+// only the lane's declared synthetic namespace and restores the declared fixture
 // activation on every exit path.
 //
 // Usage:
+//   SGN_ACCEPTANCE_NAMESPACE=SGN-TEST-46 \
 //   SGN_ACCEPTANCE_FIXTURES=<private manifest> \
 //   SGN_ACCEPTANCE_OPERATOR=<private operator config> \
 //   [SGN_ACCEPTANCE_BROWSER_CLI=<chrome-devtools-axi.js>] \
@@ -13,7 +14,7 @@
 //   node --env-file-if-exists=.env.local scripts/property-comments-acceptance.mjs \
 //     --allow-deactivation [--report <sanitized json path>]
 //
-// The manifest supplies the SGN-TEST-44 identities, properties and passwords; the operator
+// The manifest supplies the lane's synthetic identities, properties and passwords; the operator
 // config supplies the owner connection string and Auth admin key for fixture-only reads and
 // resets. Neither file is ever printed.
 import assert from 'node:assert/strict';
@@ -26,7 +27,7 @@ import { readEnvironment } from '../src/lib/environment.ts';
 
 if (process.argv.includes('--help')) {
   console.log(
-    'Real development acceptance for the shared Property discussion. Requires SGN_ACCEPTANCE_FIXTURES, SGN_ACCEPTANCE_OPERATOR, a running authenticated build at the configured app URL and --allow-deactivation. Writes a sanitized report with --report.',
+    'Real development acceptance for the shared Property discussion and the author edit. Requires SGN_ACCEPTANCE_NAMESPACE, SGN_ACCEPTANCE_FIXTURES, SGN_ACCEPTANCE_OPERATOR, a running authenticated build at the configured app URL and --allow-deactivation. Writes a sanitized report with --report.',
   );
   process.exit(0);
 }
@@ -62,10 +63,19 @@ const fixtures = JSON.parse(
 const operator = JSON.parse(
   await fs.readFile(process.env.SGN_ACCEPTANCE_OPERATOR, 'utf8'),
 );
+// The lane declares its own synthetic namespace explicitly, so this journey can never be
+// pointed at real rows: the declared value must be a synthetic namespace, must match the
+// manifest it runs with, and every fixture property must live inside it.
+const namespace = process.env.SGN_ACCEPTANCE_NAMESPACE ?? '';
+assert.match(
+  namespace,
+  /^SGN-TEST-\d+$/,
+  'Provide SGN_ACCEPTANCE_NAMESPACE as the declared synthetic namespace',
+);
 assert.equal(
   fixtures.namespace,
-  'SGN-TEST-44',
-  'Only the declared synthetic namespace is allowed',
+  namespace,
+  'The manifest namespace must match SGN_ACCEPTANCE_NAMESPACE',
 );
 for (const name of ['alpha', 'beta', 'reviewer', 'inactive'])
   assert.equal(
@@ -80,10 +90,15 @@ assert.equal(
 );
 assert.ok(
   Object.values(fixtures.properties).every((property) =>
-    property.code.startsWith('SGN-TEST-44-'),
+    property.code.startsWith(namespace + '-'),
   ),
   'Only declared synthetic properties are allowed',
 );
+// Display names are manifest-supplied so one harness serves any lane namespace.
+const authorNames = {
+  alpha: fixtures.displayNames?.alpha ?? 'SGN44 Alpha',
+  beta: fixtures.displayNames?.beta ?? 'SGN44 Beta',
+};
 const origin = environment.appUrl;
 const observations = [];
 
@@ -451,7 +466,7 @@ await waitUntil(
     viBody.trim(),
     'Trimming preserves accents and line breaks',
   );
-  assert.equal(comment.author, 'SGN44 Alpha', 'Author is shown');
+  assert.equal(comment.author, authorNames.alpha, 'Author is shown');
   assert.ok(
     comment.time && Math.abs(Date.parse(comment.time) - Date.now()) < 300000,
     'Original Vietnam posting time is a real recent instant',
@@ -656,7 +671,7 @@ const editedBody = 'Chào anh,\nGiá 12 tỷ — đã chốt sau khi xem nhà.';
   assert.equal(mine.edited, false, 'A new comment carries no edited marker');
   assert.equal(
     before.comments.every(
-      (comment) => !comment.canEdit || comment.author === 'SGN44 Alpha',
+      (comment) => !comment.canEdit || comment.author === authorNames.alpha,
     ),
     true,
     'No edit control appears on another author comment',
@@ -670,7 +685,7 @@ const editedBody = 'Chào anh,\nGiá 12 tỷ — đã chốt sau khi xem nhà.';
   const after = screen(primary);
   const updated = after.comments.find((comment) => comment.body === editedBody);
   assert.ok(updated, 'The corrected text is shown in the discussion');
-  assert.equal(updated.author, 'SGN44 Alpha', 'The author is unchanged');
+  assert.equal(updated.author, authorNames.alpha, 'The author is unchanged');
   assert.equal(
     updated.time,
     mine.time,
@@ -794,21 +809,22 @@ await openDiscussion(discussion, secondary);
   );
   const after = screen(secondary);
   assert.equal(
-    after.comments.filter((comment) => comment.author === 'SGN44 Beta').length,
+    after.comments.filter((comment) => comment.author === authorNames.beta)
+      .length,
     1,
     'Colleague comment is attributed to the colleague',
   );
   assert.equal(after.editControls, false, 'Still no property-edit authority');
   assert.equal(
     after.comments
-      .filter((comment) => comment.author === 'SGN44 Alpha')
+      .filter((comment) => comment.author === authorNames.alpha)
       .every((comment) => comment.canEdit === false),
     true,
     'No edit control is offered on another author comment',
   );
   assert.equal(
     after.comments
-      .filter((comment) => comment.author === 'SGN44 Beta')
+      .filter((comment) => comment.author === authorNames.beta)
       .every((comment) => comment.canEdit === true),
     true,
     'The colleague may edit only their own comment',
@@ -886,7 +902,7 @@ await openDiscussion(discussion, secondary);
     'No discussion text survives the denial',
   );
   const leaked = evaluate(
-    `() => ['SGN44 Alpha', 'SGN44 Beta', 'Beta xem nhà'].some((text) => document.body.innerText.includes(text))`,
+    `() => [${JSON.stringify(authorNames.alpha)}, ${JSON.stringify(authorNames.beta)}, 'Beta xem nhà'].some((text) => document.body.innerText.includes(text))`,
     secondary,
   );
   assert.equal(leaked, false, 'No cached discussion text remains after denial');
@@ -1041,7 +1057,7 @@ await openDiscussion(discussion, secondary);
   );
   assert.equal(
     original.data[0].author_name,
-    'SGN44 Alpha',
+    authorNames.alpha,
     'Original attribution is retained',
   );
   assert.ok(
@@ -1222,7 +1238,7 @@ await openDiscussion(discussion, secondary);
     reviewer,
     archived.id,
     revision,
-    'SGN-TEST-44 archived fixture',
+    `${namespace} archived fixture`,
   );
   assert.equal(
     archivedNow.error,
@@ -2010,7 +2026,7 @@ const report = {
   namespace: fixtures.namespace,
   observations,
   limits: [
-    'Fixture-only writes: the SGN-TEST-44 namespace is created and removed by this task; retained revisions reference their comment and are removed first.',
+    `Fixture-only writes: the ${namespace} namespace is created and removed by this task; retained revisions reference their comment and are removed first.`,
     'The held-lock races use the operator connection to hold the parent property row; they do not replace a staging gate for production contention.',
     'The harness was reconciled for the design-system record page (tabbed record, shell language switch and account menu) and extended for the ticket #46 edit journey at this head.',
   ],
