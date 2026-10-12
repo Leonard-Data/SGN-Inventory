@@ -15,7 +15,7 @@ export function revealOwnerContact(id: string, key: string) {
   );
 }
 
-export function loadTodayReport(signal: AbortSignal) {
+export function loadTodayReport(signal?: AbortSignal) {
   return api<TodayActivity>('/api/activity/today', undefined, signal);
 }
 

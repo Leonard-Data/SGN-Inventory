@@ -104,7 +104,7 @@ export function Detail({
       setDisclosure({ propertyId: id, value: result });
       if (result.credited) {
         try {
-          const report = await loadTodayReport(new AbortController().signal);
+          const report = await loadTodayReport();
           setActivity((current) =>
             current
               ? { ...current, today: report, todayError: false }
