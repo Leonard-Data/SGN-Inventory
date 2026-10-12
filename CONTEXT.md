@@ -91,7 +91,7 @@ A view of property details by an active employee, including authorized review of
 _Avoid_: Visit, attendance
 
 **Personal daily activity**:
-An employee's own Page-view event count, distinct properties viewed and Owner-contact access count for the current Vietnam business day. It never includes a colleague's activity, and the owner-contact count is not a physical-visit or connected-call count.
+An employee's own Page-view event count, distinct properties viewed and Owner-contact access count for one Vietnam business day. It never includes a colleague's activity, and the owner-contact count is not a physical-visit or connected-call count. The same three metrics are reported over an explicitly selected Vietnam date range, where every requested day appears including days with no recorded event, so a period with no activity is explicit zeros rather than a shorter table.
 _Avoid_: Company report, visit KPI
 
 **Company employee-by-day activity**:

@@ -128,6 +128,12 @@ const vi = {
   companyActivityNote:
     'Lượt truy cập liên hệ chủ nhà là số bất động sản mà mỗi nhân viên đã mở liên hệ chủ nhà trong ngày (giờ Việt Nam): không phải điểm danh, giờ làm việc, cuộc gọi đã kết nối hay lượt thăm bất động sản.',
   noEmployees: 'Chưa có nhân viên đang hoạt động.',
+  myActivity: 'Hoạt động của tôi',
+  myActivityLink: 'Hoạt động của tôi',
+  myActivityNote:
+    'Các số liệu này chỉ tính hoạt động của chính bạn: lượt xem trang, số bất động sản đã xem và số bất động sản bạn đã mở liên hệ chủ nhà trong ngày (giờ Việt Nam). Không phải điểm danh, giờ làm việc, cuộc gọi đã kết nối hay lượt thăm bất động sản.',
+  myActivityEmpty:
+    'Không có hoạt động nào được ghi nhận trong khoảng đã chọn. Mỗi ngày vẫn hiển thị với giá trị 0.',
   discussion: 'Thảo luận bất động sản',
   addComment: 'Bình luận',
   commentHint: 'Viết bình luận chung cho bất động sản này. Tối đa 2.000 ký tự.',
@@ -359,6 +365,12 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     companyActivityNote:
       'Owner-contact access is the number of properties whose owner contact each employee opened that Vietnam day: not attendance, work hours, connected calls or physical visits.',
     noEmployees: 'No active employees.',
+    myActivity: 'My activity',
+    myActivityLink: 'My activity',
+    myActivityNote:
+      'These figures cover your own activity only: page views, distinct properties viewed and the number of properties whose owner contact you opened that Vietnam day. Not attendance, work hours, connected calls or physical visits.',
+    myActivityEmpty:
+      'No activity was recorded in the selected period. Every day still appears with zero values.',
     discussion: 'Property discussion',
     addComment: 'Comment',
     commentHint:
