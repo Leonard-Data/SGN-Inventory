@@ -1,5 +1,6 @@
-// Company report period selection. Vietnam calendar dates are plain YYYY-MM-DD strings, so a
-// browser timezone never changes the period and no Date object crosses the wire.
+// Report period selection shared by the personal and company activity reports. Vietnam calendar
+// dates are plain YYYY-MM-DD strings, so a browser timezone never changes the period and no Date
+// object crosses the wire.
 export type ReportRange = { from: string; to: string };
 
 export class ReportRangeError extends Error {

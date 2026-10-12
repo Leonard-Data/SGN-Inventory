@@ -1385,9 +1385,7 @@ try {
     assert.equal(failure.hasTable, false);
     assert.equal(failure.empty, null);
     assert.ok(
-      failure.alerts.some((text) =>
-        text.includes(connectionFailure[language]),
-      ),
+      failure.alerts.some((text) => text.includes(connectionFailure[language])),
     );
     browser('sgn30-vi', 9334, ['emulate', '--network', 'Fast 4G']);
     evaluate(
