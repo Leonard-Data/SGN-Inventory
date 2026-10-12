@@ -26,18 +26,18 @@
 /* Pending requests and effective reservations are different states, not two labels on one. */
 .reservation-effective {
   padding: 12px 14px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border);
   border-left: 4px solid var(--accent);
   border-radius: 12px;
 }
 .reservation-pending {
   padding: 12px 14px;
-  border: 1px dashed var(--line);
+  border: 1px dashed var(--border);
   border-radius: 12px;
 }
 .reservation-request {
   padding: 14px 0;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--border);
 }
 .reservation-request textarea,
 .reservation-request select {

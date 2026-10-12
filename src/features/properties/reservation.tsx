@@ -41,7 +41,7 @@ function DecisionForm({
   return (
     <article className="reservation-request">
       <h3 translate="no">{claimantName}</h3>
-      <p className="muted">
+      <p className="field-hint">
         {text.reservationRequestedAt}: {vietnamTimestamp(requestedAt, locale)}
       </p>
       <p>{reason}</p>
@@ -64,7 +64,7 @@ function DecisionForm({
           aria-describedby={helpId}
           disabled={busy}
         />
-        <p className="muted" id={helpId}>
+        <p className="field-hint" id={helpId}>
           {text.reservationReasonHint}
         </p>
         <label htmlFor={daysId}>{text.reservationDays}</label>
@@ -294,7 +294,7 @@ export function Reservation({
                 <dt>{text.reservationExpires}</dt>
                 <dd>
                   {vietnamTimestamp(state.effective.expiresAt, locale)}{' '}
-                  <span className="muted">{text.vietnamTime}</span>
+                  <span className="field-hint">{text.vietnamTime}</span>
                 </dd>
               </dl>
             </div>
@@ -308,20 +308,20 @@ export function Reservation({
                 <dt>{text.reservationRequestedAt}</dt>
                 <dd>
                   {vietnamTimestamp(own.requestedAt, locale)}{' '}
-                  <span className="muted">{text.vietnamTime}</span>
+                  <span className="field-hint">{text.vietnamTime}</span>
                 </dd>
                 <dt>{text.reservationPendingExpires}</dt>
                 <dd>
                   {vietnamTimestamp(own.expiresAt, locale)}{' '}
-                  <span className="muted">{text.vietnamTime}</span>
+                  <span className="field-hint">{text.vietnamTime}</span>
                 </dd>
               </dl>
-              <p className="muted">{text.reservationPendingNote}</p>
+              <p className="field-hint">{text.reservationPendingNote}</p>
             </div>
           ) : null}
           {!state.effective && !own ? (
             archived ? (
-              <p className="muted">{text.reservationArchived}</p>
+              <p className="field-hint">{text.reservationArchived}</p>
             ) : requestable.includes(status) ? (
               <form onSubmit={submitRequest}>
                 <label htmlFor={requestReasonId}>
@@ -339,7 +339,7 @@ export function Reservation({
                   onChange={(event) => setDraft(event.target.value)}
                   disabled={posting}
                 />
-                <p className="muted" id={requestHelpId}>
+                <p className="field-hint" id={requestHelpId}>
                   {text.reservationReasonHint}
                 </p>
                 {postError ? (
@@ -352,7 +352,7 @@ export function Reservation({
                 </button>
               </form>
             ) : (
-              <p className="muted">{text.reservationUnavailable}</p>
+              <p className="field-hint">{text.reservationUnavailable}</p>
             )
           ) : null}
           {state.canDecide ? (
@@ -363,12 +363,14 @@ export function Reservation({
                   request.claimantId === employeeId ? (
                     <article className="reservation-request" key={request.id}>
                       <h4 translate="no">{request.claimantName}</h4>
-                      <p className="muted">
+                      <p className="field-hint">
                         {text.reservationRequestedAt}:{' '}
                         {vietnamTimestamp(request.requestedAt, locale)}
                       </p>
                       <p>{request.reason}</p>
-                      <p className="muted">{text.reservationSelfApproval}</p>
+                      <p className="field-hint">
+                        {text.reservationSelfApproval}
+                      </p>
                     </article>
                   ) : (
                     <DecisionForm
@@ -393,7 +395,7 @@ export function Reservation({
                   ),
                 )
               ) : (
-                <p className="muted">{text.reservationNoRequests}</p>
+                <p className="field-hint">{text.reservationNoRequests}</p>
               )}
             </>
           ) : null}
@@ -402,7 +404,7 @@ export function Reservation({
       <p role="status" aria-live="polite">
         {notice}
       </p>
-      <p className="muted">{text.reservationNote}</p>
+      <p className="field-hint">{text.reservationNote}</p>
     </section>
   );
 }
