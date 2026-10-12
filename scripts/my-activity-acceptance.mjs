@@ -619,6 +619,9 @@ function screenExpression(dates) {
     path: location.pathname,
     lang: document.documentElement.lang,
     heading: document.querySelector('h1')?.textContent?.trim() ?? null,
+    hasTable: Boolean(table),
+    empty:
+      document.querySelector('.state-panel h3')?.textContent?.trim() ?? null,
     summaryDate: summary?.querySelector('.panel-head .panel-note')?.textContent?.trim() ?? null,
     summaryLabels: summary ? [...summary.querySelectorAll('dl.facts dt')].map((node) => node.textContent.trim()) : [],
     summaryValues: summary ? [...summary.querySelectorAll('dl.facts dd')].map((node) => node.textContent.trim()) : [],
@@ -1288,6 +1291,152 @@ try {
   );
   observed('the selected date range changes the reported period');
 
+  // The required states must stay distinguishable as rendered, localized output: a real zero
+  // period, the invalid-range validation, a genuine query failure and the in-flight loading
+  // state, each in Vietnamese/default and English.
+  const zeroTo = await today(-4);
+  const zeroScreenDate = zeroTo.split('-').reverse().join('/');
+  const rangeValidation = {
+    vi: 'Khoảng ngày không hợp lệ. Ngày bắt đầu không được sau ngày kết thúc và tối đa 366 ngày.',
+    en: 'That date range is not valid. The start date must not be after the end date, and the range may cover at most 366 days.',
+  };
+  const emptyReport = {
+    vi: 'Không có hoạt động nào được ghi nhận trong khoảng đã chọn. Mỗi ngày vẫn hiển thị với giá trị 0.',
+    en: 'No activity was recorded in the selected period. Every day still appears with zero values.',
+  };
+  const connectionFailure = {
+    vi: 'Không thể kết nối. Vui lòng thử lại.',
+    en: 'Unable to connect. Please try again.',
+  };
+  const loadingLabel = { vi: 'Đang tải…', en: 'Loading…' };
+  // The observer records every rendered [role=status] label, so the loading state is captured
+  // during the real read instead of racing a fixed sleep.
+  const observeStatus = `(() => {
+    window.__sgnStatusSeen = [];
+    const record = () => {
+      const node = document.querySelector('[role=status]');
+      if (!node) return;
+      const text = node.textContent.trim();
+      if (!window.__sgnStatusSeen.includes(text)) window.__sgnStatusSeen.push(text);
+    };
+    new MutationObserver(record).observe(document.body, { childList: true, subtree: true, characterData: true });
+    record();
+    return true;
+  })()`;
+  const assertReportStates = async (language) => {
+    const label = language === 'vi' ? 'Vietnamese/default' : 'English';
+    // A real zero period: every row an explicit zero with the localized empty state, no alert.
+    browser('sgn30-vi', 9334, [
+      'open',
+      `${appUrl}/activity/me?from=${from}&to=${zeroTo}`,
+    ]);
+    await waitForReport('sgn30-vi', 9334);
+    const zero = screen('sgn30-vi', 9334, [zeroScreenDate]);
+    assert.equal(zero.lang, language);
+    assert.deepEqual(zero.alerts, []);
+    assert.equal(zero.empty, emptyReport[language]);
+    assert.deepEqual(
+      zero.rows.find((row) => row[0] === zeroScreenDate).slice(1),
+      ['0', '0', '0'],
+    );
+    assert.deepEqual(zero.summaryValues, ['2', '2', '1']);
+    observed(
+      `a real zero period renders explicit zeros and the localized empty state in ${label}`,
+    );
+
+    // An invalid range renders the localized validation alert, never a zero report.
+    browser('sgn30-vi', 9334, [
+      'open',
+      `${appUrl}/activity/me?from=${day}&to=${from}`,
+    ]);
+    await waitFor(
+      'sgn30-vi',
+      9334,
+      `() => (document.querySelector('[role=alert]')?.textContent ?? '').includes(${JSON.stringify(rangeValidation[language])})`,
+    );
+    const invalid = screen('sgn30-vi', 9334, [screenDate]);
+    assert.equal(invalid.hasTable, false);
+    assert.equal(invalid.empty, null);
+    assert.ok(
+      invalid.alerts.some((text) => text.includes(rangeValidation[language])),
+    );
+    observed(`an invalid range renders the localized validation in ${label}`);
+
+    // A genuine transport failure (browser offline) is distinguishable from zero and loading;
+    // restoring the network and the Retry control recover the table.
+    browser('sgn30-vi', 9334, [
+      'open',
+      `${appUrl}/activity/me?from=${from}&to=${to}`,
+    ]);
+    await waitForReport('sgn30-vi', 9334);
+    browser('sgn30-vi', 9334, ['emulate', '--network', 'Offline']);
+    evaluate('sgn30-vi', 9334, observeStatus);
+    evaluate(
+      'sgn30-vi',
+      9334,
+      `(() => { window.dispatchEvent(new Event('focus')); return true; })()`,
+    );
+    await waitFor(
+      'sgn30-vi',
+      9334,
+      `() => (document.querySelector('[role=alert]')?.textContent ?? '').includes(${JSON.stringify(connectionFailure[language])})`,
+    );
+    const failure = screen('sgn30-vi', 9334, [screenDate]);
+    assert.equal(failure.hasTable, false);
+    assert.equal(failure.empty, null);
+    assert.ok(
+      failure.alerts.some((text) =>
+        text.includes(connectionFailure[language]),
+      ),
+    );
+    browser('sgn30-vi', 9334, ['emulate', '--network', 'Fast 4G']);
+    evaluate(
+      'sgn30-vi',
+      9334,
+      `(() => { const button = document.querySelector('[role=alert] button'); if (!button) return false; button.click(); return true; })()`,
+    );
+    await waitForReport('sgn30-vi', 9334);
+    const recovered = screen('sgn30-vi', 9334, [screenDate]);
+    assert.deepEqual(
+      recovered.rows.find((row) => row[0] === screenDate).slice(1),
+      ['2', '2', '1'],
+    );
+    const seen = evaluate(
+      'sgn30-vi',
+      9334,
+      `() => window.__sgnStatusSeen ?? []`,
+    );
+    assert.ok(
+      seen.includes(loadingLabel[language]),
+      `loading state not observed in ${label}: ${JSON.stringify(seen)}`,
+    );
+    observed(
+      `a query failure renders the localized failure and loading states, and Retry recovers the table in ${label}`,
+    );
+  };
+  evaluate(
+    'sgn30-vi',
+    9334,
+    `(() => { document.querySelector('.lang-switch button[lang=vi]').click(); return true; })()`,
+  );
+  await waitFor(
+    'sgn30-vi',
+    9334,
+    `() => document.documentElement.lang === 'vi'`,
+  );
+  await assertReportStates('vi');
+  evaluate(
+    'sgn30-vi',
+    9334,
+    `(() => { document.querySelector('.lang-switch button[lang=en]').click(); return true; })()`,
+  );
+  await waitFor(
+    'sgn30-vi',
+    9334,
+    `() => document.documentElement.lang === 'en'`,
+  );
+  await assertReportStates('en');
+
   await browserSignIn(
     'sgn30-tz',
     9335,
@@ -1337,6 +1486,40 @@ try {
   );
   assert.equal(afterBack.report, false);
   observed('sign-out clears the protected report and Back exposes none of it');
+
+  // Access denial renders the localized message, not only the API status.
+  for (const locale of ['vi', 'en']) {
+    browser('sgn30-tz', 9335, ['open', `${appUrl}/login?lang=${locale}`]);
+    evaluate('sgn30-tz', 9335, setInput('#email', fixtures.inactive.email));
+    evaluate(
+      'sgn30-tz',
+      9335,
+      setInput('#password', fixtures.inactive.password),
+    );
+    evaluate(
+      'sgn30-tz',
+      9335,
+      `(() => { document.querySelector('form').requestSubmit(); return true; })()`,
+    );
+    await waitFor(
+      'sgn30-tz',
+      9335,
+      `() => location.pathname === '/access-denied'`,
+    );
+    const denied = evaluate(
+      'sgn30-tz',
+      9335,
+      `() => ({ lang: document.documentElement.lang, heading: document.querySelector('h1')?.textContent?.trim() ?? null, report: Boolean(document.querySelector('main table.data-table')) })`,
+    );
+    assert.equal(
+      denied.heading,
+      locale === 'vi' ? 'Không có quyền truy cập' : 'Access denied',
+    );
+    assert.equal(denied.report, false);
+  }
+  observed(
+    'access denial renders the localized message in Vietnamese/default and English',
+  );
 
   await updateEmployee(fixtures.salesA.employeeId, { is_active: false });
   const deactivated = await report(salesA, from, to);

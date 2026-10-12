@@ -180,7 +180,7 @@ export function MyReport({
                 </dl>
               </div>
               <div className="panel-foot">
-                <span>{text.todayDay}</span>
+                <span>{text.myActivityNote}</span>
               </div>
             </section>
 

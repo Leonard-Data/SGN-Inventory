@@ -62,7 +62,7 @@ The shell replaces the per-page `SessionHeader`. Locale switch and sign-out move
 | Reservations & Reviews | My requests (`/requests`); Reviews hub (`/reviews/…`) | all; queues per role |
 | Rentals | Agreements (`/rentals`) | staff, manager, admin |
 | People | Employees (`/people/employees`); Contacts (`/people/contacts`) | admin; staff/manager/admin |
-| Reports | My activity (`/reports/activity`); Company (`/activity/company`, shipped) | all; manager/admin |
+| Reports | My activity (`/activity/me`, shipped); Company (`/activity/company`, shipped) | all; manager/admin |
 | Admin | Categories (`/admin/categories`); Units (`/admin/units`) | admin |
 
 `/reviews` redirects to the first queue the role can see. Detail is reached from inventory, never from the menu.
@@ -200,7 +200,7 @@ search input (name / phone, accent-insensitive)
 ```
 Reuses the maintenance edit-in-place pattern.
 
-### 5.8 `/reports/activity` (new, all)
+### 5.8 `/activity/me` (shipped, all)
 
 ```
 page-intro: Vietnam business day
@@ -255,11 +255,11 @@ page-intro · [New category] / [New unit]
 
 ### Shipped-state gaps (deliberate, not silent)
 
-- Navigation renders two groups: Inventory (`/properties`, every role) and Reports (`/activity/company`, manager/admin). The ADR's other four groups ship with their routes.
+- Navigation renders two groups: Inventory (`/properties`, every role) and Reports (`/activity/me`, every role; `/activity/company`, manager/admin). The ADR's other four groups ship with their routes.
 - The inventory results have **cards only**: the package's Cards/List/Table `.seg` switch and the ordering control are not implemented, and `.cell-plate` table thumbnails therefore have no consumer yet.
 - The card shows the record's existing fact set (code, mode, address, status). The prototype's card also prints area and price lines; adding them would be new data display beyond this restyle, so they were left out.
 - The record page has no Edit action (no edit route exists; editing stays the in-page maintenance disclosure).
 - The asking-price timeline (`.price-row`), the change timeline (`.timeline`/`.tl-item`) and the **Nhân sự & liên hệ** screen (employee accounts + contact book, `.directory-tabs`, `.cell-person`, `.sgn-avatar-sm`) are rendered in the design review route `/design/app-preview` from fictional fixtures: the app has no price-history feed and no directory endpoint, and the review route is where unused package vocabulary is inspectable. Their product routes (`/people/*`) and data contracts are separate, unauthorized work.
-- The company employee-by-day report (#57) shipped at **`/activity/company`** rather than this document's planned `/reports/company`, with its own acceptance evidence and API path (`/api/activity/company`); the route was left where the feature shipped and the rail's Reports group points at it. `/reports/activity`, `/requests`, `/reviews/*`, `/rentals*`, `/people/*`, `/admin/*` remain unbuilt and are only described above.
+- The personal activity report (#30) shipped at **`/activity/me`** rather than this document's planned `/reports/activity`, with its own acceptance evidence and API path (`/api/activity/me`), and the company employee-by-day report (#57) shipped at **`/activity/company`** rather than the planned `/reports/company` with API path (`/api/activity/company`); both routes were left where the features shipped and the rail's Reports group points at them. `/requests`, `/reviews/*`, `/rentals*`, `/people/*`, `/admin/*` remain unbuilt and are only described above.
 - The auth surfaces keep their own layout sheet (`.sgn-auth` + `sgn-auth.css`); they share the token layer and the control vocabulary but they are shell-free by design (ADR 0001).
 - **Not in scope:** no geographic map, no physical-visit UI, no threads/reactions/mentions, no dashboards beyond §5.9, no design for any archived-property exception beyond the existing reviewer read boundary.
