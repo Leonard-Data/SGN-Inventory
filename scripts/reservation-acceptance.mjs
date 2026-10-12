@@ -175,10 +175,12 @@ function evaluate(expression, session = primary) {
   }
   return value;
 }
-// The pinned bridge cannot reliably reach the React form through its snapshot/fill/click
-// path on this host, so every interaction goes through the same real DOM handlers the user
-// drives: the input's native value setter plus an input event, the form's own requestSubmit
-// and the control's own activation. This is a harness behaviour, not a product change.
+// The reservation request and decision forms are driven through the browser CLI's own
+// snapshot/fill/click path, by accessible name, so the run exercises the controls the user
+// sees; a control the bridge cannot reach fails by name instead of falling back. The auth
+// form, language switch and account menu keep the same real handlers (the input's native
+// value setter plus an input event, the form's own requestSubmit and the control's own
+// activation) the earlier harnesses use.
 const setInput = (selector, value) => `(() => {
   const el = document.querySelector(${JSON.stringify(selector)});
   if (!el) return false;
@@ -208,50 +210,25 @@ function filled(selector, value, session, what) {
 function submitted(selector, session, what) {
   act(submitForm(selector), session, what);
 }
-// Pending requests of other employees carry the decision form; the caller's own request does not.
-const decisionFormFor = (name) =>
-  `[...document.querySelectorAll('article.reservation-request')].find((article) => article.querySelector('h3')?.textContent.trim() === ${JSON.stringify(name)})?.querySelector('form')`;
-function submittedDecision(name, value, session) {
-  act(
-    `(() => {
-      const article = [...document.querySelectorAll('article.reservation-request')].find((node) => node.querySelector('h3')?.textContent.trim() === ${JSON.stringify(name)});
-      const form = article?.querySelector('form');
-      if (!form) return false;
-      const button = [...form.querySelectorAll('button')].find((node) => node.value === ${JSON.stringify(value)});
-      if (!button) return false;
-      form.requestSubmit(button);
-      return true;
-    })()`,
-    session,
-    `decide the request from ${name}`,
-  );
+function control(kind, name, session) {
+  const snapshot = browser(['snapshot', '--full'], session);
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = snapshot.match(new RegExp(`uid=([^ ]+) ${kind} "${escaped}"`));
+  assert.ok(match, `Missing ${kind}: ${name}`);
+  return '@' + match[1];
+}
+function fill(name, value, session) {
+  browser(['fill', control('textbox', name, session), value], session);
+}
+function click(name, session) {
+  browser(['click', control('(?:button|link)', name, session)], session);
 }
 function requestFormFilled(value, session) {
-  filled(
-    'section.reservation > form textarea[name=reason]',
-    value,
-    session,
-    'fill the reservation reason',
-  );
-  submitted(
-    'section.reservation > form',
-    session,
-    'submit the reservation request',
-  );
+  fill('Lý do đặt chỗ', value, session);
+  click('Gửi yêu cầu đặt chỗ', session);
 }
-function decisionFormFilled(name, value, session) {
-  act(
-    `(() => {
-      const form = ${decisionFormFor(name)};
-      const el = form?.querySelector('textarea[name=reason]');
-      if (!el) return false;
-      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(el, ${JSON.stringify(value)});
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      return true;
-    })()`,
-    session,
-    `fill the decision reason for ${name}`,
-  );
+function decisionFormFilled(value, session) {
+  fill('Lý do quyết định', value, session);
 }
 function waitForText(text, session = primary, attempts = 60) {
   return waitUntil(
@@ -297,12 +274,48 @@ function screen(session) {
         })),
         reasonField: Boolean([...document.querySelectorAll('label')].find((label) => /^(Lý do đặt chỗ|Reservation reason)$/.test(label.textContent.trim()))),
         submit: Boolean([...document.querySelectorAll('button')].find((button) => /Gửi yêu cầu đặt chỗ|Submit reservation request/.test(button.textContent))),
+        forms: [...(panel?.querySelectorAll('form') ?? [])].map((form) => ({
+          fields: [...form.querySelectorAll('.field')].map((field) => {
+            const label = field.querySelector('label');
+            const control = field.querySelector('input, select, textarea');
+            const labelBox = label?.getBoundingClientRect();
+            const controlBox = control?.getBoundingClientRect();
+            return {
+              label: label?.textContent?.trim() ?? null,
+              tag: control?.tagName.toLowerCase() ?? null,
+              className: control?.getAttribute('class') ?? null,
+              labelAboveControl: Boolean(labelBox && controlBox) && labelBox.bottom <= controlBox.top,
+            };
+          }),
+          buttons: [...form.querySelectorAll('button')].map((button) => button.getAttribute('class') ?? ''),
+        })),
         text: panel?.innerText ?? null,
       };
     }`,
     session,
   );
 }
+// The rendered control vocabulary is observed, not assumed: each field's label must sit above
+// its control and the control must carry the design-system class for its own element.
+function designSystemForm(form, tags) {
+  const classes = (value) => (value ?? '').split(/\s+/);
+  return (
+    Boolean(form) &&
+    form.fields.length === tags.length &&
+    form.fields.every(
+      (field, index) =>
+        field.labelAboveControl &&
+        field.tag === tags[index] &&
+        classes(field.className).includes(tags[index]),
+    ) &&
+    form.buttons.length > 0 &&
+    form.buttons.every((button) => classes(button).includes('btn'))
+  );
+}
+const formWithLabel = (page, label) =>
+  page.forms.find((form) =>
+    form.fields.some((field) => field.label === label),
+  );
 function observed(name, details = {}) {
   observations.push({ name, ...details });
   console.log('PASS', name);
@@ -588,6 +601,11 @@ await settle(primary);
   assert.equal(page.pending, null, 'No pending request exists yet');
   assert.equal(page.reasonField, true, 'The request form is offered');
   assert.equal(page.submit, true, 'The submit control is present');
+  const requestForm = formWithLabel(page, 'Lý do đặt chỗ');
+  assert.ok(
+    designSystemForm(requestForm, ['textarea']),
+    'The request form renders each field label above its control with the design-system classes',
+  );
   requestFormFilled(reason, primary);
   await waitUntil(
     "() => Boolean(document.querySelector('section.reservation .reservation-pending'))",
@@ -606,7 +624,9 @@ await settle(primary);
     'The pending state states that the property is not held',
   );
   assert.equal(pending.status, 'Đang chào', 'Property status is unchanged');
-  observed('VI detail action submits a request and shows only a pending state');
+  observed('VI detail action submits a request and shows only a pending state', {
+    requestForm,
+  });
 }
 const firstLock = lockRows(main);
 assert.equal(firstLock.length, 1, 'The UI request committed one pending row');
@@ -823,12 +843,13 @@ let rejectedLock;
     1,
     'The pending request is offered to the reviewer',
   );
-  decisionFormFilled(
-    declaredBy('claimant').display_name,
-    rejectReason,
-    secondary,
+  const decisionForm = formWithLabel(before, 'Lý do quyết định');
+  assert.ok(
+    designSystemForm(decisionForm, ['textarea', 'select']),
+    'The decision form renders each field label above its control with the design-system classes',
   );
-  submittedDecision(declaredBy('claimant').display_name, 'reject', secondary);
+  decisionFormFilled(rejectReason, secondary);
+  click('Từ chối yêu cầu', secondary);
   await waitForText('Đã từ chối yêu cầu.', secondary);
   await settle(secondary);
   const after = screen(secondary);
@@ -859,6 +880,7 @@ let rejectedLock;
   assert.equal(effectiveRows(reject).length, 0);
   observed(
     'a manager rejects another employee request with a reason and no reservation is created',
+    { decisionForm },
   );
 }
 

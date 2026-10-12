@@ -39,10 +39,6 @@
   padding: 14px 0;
   border-top: 1px solid var(--border);
 }
-.reservation-request textarea,
-.reservation-request select {
-  margin-bottom: 8px;
-}
 .owner-phone {
   margin: var(--space-1) 0 var(--space-3);
   font-family: var(--font-mono);

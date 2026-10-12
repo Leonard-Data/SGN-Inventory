@@ -53,38 +53,58 @@ function DecisionForm({
             onDecide(submitter.value === 'approve', event.currentTarget);
         }}
       >
-        <label htmlFor={reasonId}>{text.reservationDecisionReason}</label>
-        <textarea
-          id={reasonId}
-          name="reason"
-          rows={3}
-          required
-          minLength={10}
-          maxLength={2000}
-          aria-describedby={helpId}
-          disabled={busy}
-        />
+        <div className="field">
+          <label className="field-label" htmlFor={reasonId}>
+            {text.reservationDecisionReason}
+          </label>
+          <textarea
+            id={reasonId}
+            className="textarea"
+            name="reason"
+            rows={3}
+            required
+            minLength={10}
+            maxLength={2000}
+            aria-describedby={helpId}
+            disabled={busy}
+          />
+        </div>
         <p className="field-hint" id={helpId}>
           {text.reservationReasonHint}
         </p>
-        <label htmlFor={daysId}>{text.reservationDays}</label>
-        <select
-          id={daysId}
-          name="days"
-          defaultValue={defaultDays}
+        <div className="field">
+          <label className="field-label" htmlFor={daysId}>
+            {text.reservationDays}
+          </label>
+          <select
+            id={daysId}
+            className="select"
+            name="days"
+            defaultValue={defaultDays}
+            disabled={busy}
+          >
+            {days.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </div>
+        {error ? <p role="alert">{error}</p> : null}
+        <button
+          className="btn btn-sm btn-primary"
+          type="submit"
+          value="approve"
           disabled={busy}
         >
-          {days.map((value) => (
-            <option key={value} value={value}>
-              {value}
-            </option>
-          ))}
-        </select>
-        {error ? <p role="alert">{error}</p> : null}
-        <button type="submit" value="approve" disabled={busy}>
           {text.reservationApprove}
         </button>
-        <button type="submit" value="reject" disabled={busy}>
+        <button
+          className="btn btn-sm btn-ghost"
+          type="submit"
+          value="reject"
+          disabled={busy}
+        >
           {text.reservationReject}
         </button>
       </form>
@@ -271,6 +291,7 @@ export function Reservation({
         <p role="alert">
           {text.reservationLoadFailed}{' '}
           <button
+            className="btn btn-sm btn-ghost"
             type="button"
             onClick={() => {
               setLoading(true);
@@ -324,21 +345,24 @@ export function Reservation({
               <p className="field-hint">{text.reservationArchived}</p>
             ) : requestable.includes(status) ? (
               <form onSubmit={submitRequest}>
-                <label htmlFor={requestReasonId}>
-                  {text.reservationReason}
-                </label>
-                <textarea
-                  id={requestReasonId}
-                  name="reason"
-                  rows={3}
-                  required
-                  minLength={10}
-                  maxLength={2000}
-                  aria-describedby={requestHelpId}
-                  value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
-                  disabled={posting}
-                />
+                <div className="field">
+                  <label className="field-label" htmlFor={requestReasonId}>
+                    {text.reservationReason}
+                  </label>
+                  <textarea
+                    id={requestReasonId}
+                    className="textarea"
+                    name="reason"
+                    rows={3}
+                    required
+                    minLength={10}
+                    maxLength={2000}
+                    aria-describedby={requestHelpId}
+                    value={draft}
+                    onChange={(event) => setDraft(event.target.value)}
+                    disabled={posting}
+                  />
+                </div>
                 <p className="field-hint" id={requestHelpId}>
                   {text.reservationReasonHint}
                 </p>
@@ -347,7 +371,12 @@ export function Reservation({
                     {message(postError, text.reservationRequestFailed)}
                   </p>
                 ) : null}
-                <button type="submit" disabled={posting} aria-busy={posting}>
+                <button
+                  className="btn btn-sm btn-primary"
+                  type="submit"
+                  disabled={posting}
+                  aria-busy={posting}
+                >
                   {posting ? text.loading : text.submitReservation}
                 </button>
               </form>

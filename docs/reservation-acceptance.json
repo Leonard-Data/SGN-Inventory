@@ -129,7 +129,7 @@
     "kind": "page_view"
   },
   "limits": [
-    "The pinned browser bridge cannot reliably reach the React form through its snapshot/fill/click path on this host, so the harness drives the same real DOM handlers with the input native value setter plus an input event, the form own requestSubmit and the control own activation; the application handlers and endpoints are the real ones.",
+    "The recorded run drove the reservation request and decision forms through the same real DOM handlers the user drives (the input native value setter plus an input event, the form own requestSubmit and the control own activation) because the pinned browser bridge's snapshot/fill/click path did not reliably reach them on that host; the application handlers and endpoints are the real ones. The harness has since been changed to drive those two forms through the bridge's snapshot/fill/click by accessible name and to observe each field label sitting above its control with the design-system classes on the controls and the btn class on the buttons. The recorded run predates that change, which is therefore not exercised evidence; the hosted re-run at the final head is the recorded follow-up.",
     "The competing approvals use two independent authenticated sessions; this is not a production contention gate.",
     "Fixture-only writes: the SGN-TEST-18 identities and their linked Auth users are created and removed by this task outside the harness; the harness writes only reservation and page-view rows and removes them by exact ID.",
     "Existing inventory (SGN-TEST-002 and SGN-TEST-003) is used read-only: no property, address, contact, file or history row was written, archived, relinked or reactivated.",
