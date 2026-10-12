@@ -2,9 +2,10 @@
 //
 // Real development Supabase Auth/Data API/RLS plus the local real Next.js application and
 // real Chrome sessions. Mock, shim, source-text and readiness-page results are not
-// acceptance. The run creates no fixture rows: it uses the identities and properties
-// declared in the private manifest, releases every reservation it creates, and re-reads the
-// row counts it recorded before the journey.
+// acceptance. The run creates no property fixture: it uses existing unarchived available or
+// negotiating inventory read-only, plus the synthetic SGN-TEST-18 identities declared in the
+// private manifest. It removes exactly the lock and lock-event rows it creates, by exact ID,
+// and re-reads the row counts it recorded before the journey.
 //
 // Usage:
 //   SGN_ACCEPTANCE_FIXTURES=<private manifest> \
@@ -14,9 +15,10 @@
 //   node --env-file-if-exists=.env.local scripts/reservation-acceptance.mjs \
 //     --allow-deactivation [--report <sanitized json path>]
 //
-// The manifest supplies the SGN-TEST-18 identities, properties and passwords; the operator
-// config supplies the owner connection string for fixture-only reads and resets. Neither
-// file is ever printed or committed.
+// The manifest supplies the SGN-TEST-18 identities (a sales claimant, a manager and an
+// admin), the two existing inventory properties the run reserves, and passwords; the
+// operator config supplies the owner connection string for fixture-only reads and resets.
+// Neither file is ever printed or committed.
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -68,23 +70,24 @@ assert.equal(
   'SGN-TEST-18',
   'Only the declared synthetic namespace is allowed',
 );
-for (const name of ['claimant', 'rival', 'manager', 'admin'])
+for (const name of ['claimant', 'manager', 'admin'])
   assert.equal(
     typeof fixtures.identities[name]?.employeeId,
     'string',
     'Missing declared fixture identity',
   );
-assert.ok(
-  Object.values(fixtures.properties).every((property) =>
-    property.code.startsWith('SGN-TEST-18-'),
-  ),
-  'Only declared synthetic properties are allowed',
-);
+for (const name of ['main', 'reject'])
+  assert.equal(
+    typeof fixtures.properties[name]?.id,
+    'string',
+    'Missing declared inventory property',
+  );
 const origin = environment.appUrl;
 const observations = [];
 const reason = 'Khách đã đồng ý điều kiện, chờ quản lý duyệt đặt chỗ';
 const decisionReason =
   'Đã kiểm tra thông tin và xác nhận độc lập cho đặt chỗ này';
+const rejectReason = 'Thông tin chưa đủ để giữ bất động sản cho khách này';
 
 function operatorSql(statement) {
   const result = spawnSync(
@@ -216,7 +219,7 @@ function screen(session) {
         effective: effective ? (effective.innerText ?? null) : null,
         pending: pending ? (pending.innerText ?? null) : null,
         requests: requests.map((node) => ({
-          heading: node.querySelector('h3,h4')?.textContent ?? null,
+          heading: node.querySelector('h3,h4')?.textContent?.trim() ?? null,
           text: node.innerText ?? null,
           approve: Boolean([...node.querySelectorAll('button')].find((button) => /Duyệt đặt chỗ|Approve reservation/.test(button.textContent))),
           reject: Boolean([...node.querySelectorAll('button')].find((button) => /Từ chối yêu cầu|Reject request/.test(button.textContent))),
@@ -331,37 +334,53 @@ async function browserLogin(name, session, preferredLocale) {
 }
 
 const main = fixtures.properties.main;
-const self = fixtures.properties.self;
+const reject = fixtures.properties.reject;
 const detail = (property) => origin + '/properties/' + property.id;
 const reservationRoute = (property) =>
   '/api/properties/' + property.id + '/reservations';
 const decisionRoute = (property) => reservationRoute(property) + '/decision';
 
-// The declared fixture roles and display names are asserted before the journey so a sales
-// decision denial and an independent manager/admin decision mean what the ticket says.
+// The declared identities, roles and inventory are asserted before the journey. Existing
+// inventory stays read-only: no property, address or contact row is written by this run.
 const declared = operatorSql(
-  `select id, role, display_name, is_active from public.employees where id in ('${fixtures.identities.claimant.employeeId}','${fixtures.identities.rival.employeeId}','${fixtures.identities.manager.employeeId}','${fixtures.identities.admin.employeeId}')`,
+  `select id, role, display_name, is_active from public.employees where id in ('${fixtures.identities.claimant.employeeId}','${fixtures.identities.manager.employeeId}','${fixtures.identities.admin.employeeId}')`,
 );
 const declaredBy = (name) =>
   declared.find((row) => row.id === fixtures.identities[name].employeeId);
+assert.ok(declaredBy('claimant'), 'Missing declared claimant employee');
 assert.equal(declaredBy('claimant').role, 'sales');
-assert.equal(declaredBy('rival').role, 'sales');
 assert.equal(declaredBy('manager').role, 'manager');
 assert.equal(declaredBy('admin').role, 'admin');
 assert.ok(
   declared.every((row) => row.is_active),
   'Declared fixtures must start active',
 );
-const mainRow = operatorSql(
-  `select id, status, archived_at from public.properties where id = '${main.id}'`,
-)[0];
-const selfRow = operatorSql(
-  `select id, status, archived_at from public.properties where id = '${self.id}'`,
-)[0];
-assert.equal(mainRow.status, 'available');
-assert.equal(mainRow.archived_at, null);
-assert.equal(selfRow.status, 'negotiating');
-assert.equal(selfRow.archived_at, null);
+function eligibleInventory(property) {
+  const row = operatorSql(
+    `select p.id, p.property_code, p.status, p.archived_at, (select count(*)::int from public.property_locks l where l.property_id = p.id) as locks from public.properties p where p.id = '${property.id}'`,
+  )[0];
+  assert.ok(
+    row,
+    `Declared inventory property ${property.code} does not exist: stop and report instead of creating a property fixture.`,
+  );
+  assert.equal(
+    row.archived_at,
+    null,
+    `Declared inventory property ${row.property_code} is archived: stop and report instead of creating a property fixture.`,
+  );
+  assert.ok(
+    row.status === 'available' || row.status === 'negotiating',
+    `Declared inventory property ${row.property_code} is ${row.status}, not available/negotiating: stop and report instead of creating a property fixture.`,
+  );
+  assert.equal(
+    Number(row.locks),
+    0,
+    `Declared inventory property ${row.property_code} already carries a reservation row: stop and report instead of clearing it.`,
+  );
+  return row;
+}
+const mainRow = eligibleInventory(main);
+const rejectRow = eligibleInventory(reject);
 
 const baselineTables = [
   'properties',
@@ -375,31 +394,26 @@ const countOf = (table) =>
 const baseline = Object.fromEntries(
   baselineTables.map((table) => [table, countOf(table)]),
 );
-assert.equal(
-  Number(
-    operatorSql(
-      `select count(*)::int as n from public.property_locks where property_id in ('${main.id}','${self.id}')`,
-    )[0].n,
-  ),
-  0,
-  'The declared namespace must carry no reservation rows before the run',
-);
+// The browser journey records page views for these identities; they are fixture writes and
+// are removed by exact ID with the reservation rows this run creates.
+const fixtureIds = ['claimant', 'manager', 'admin']
+  .map((name) => `'${fixtures.identities[name].employeeId}'`)
+  .join(',');
+const activityIds = (statement) => operatorSql(statement).map((row) => row.id);
+const fixtureActivity = `select id from public.activity_events where employee_id in (${fixtureIds})`;
+const activityBefore = new Set(activityIds(fixtureActivity));
 
 const createdLocks = [];
-function releaseCreated() {
-  for (const lock of createdLocks)
-    operatorSql(
-      `do $$ begin update public.property_locks set status='released', released_at=now() where id='${lock.id}' and status in ('pending','approved'); end $$;`,
-    );
-}
-function setActive(name, active) {
-  operatorSql(
-    `do $$ begin update public.employees set is_active=${active} where id='${fixtures.identities[name].employeeId}'; end $$;`,
-  );
-}
 function lockRows(property) {
   return operatorSql(
     `select id, requested_by, status, expires_at, decided_by from public.property_locks where property_id = '${property.id}' order by requested_at`,
+  );
+}
+function eventsFor(ids) {
+  return operatorSql(
+    ids.length
+      ? `select lock_id, action from public.lock_events where lock_id in ('${ids.join("','")}') order by id`
+      : `select lock_id, action from public.lock_events where false`,
   );
 }
 function effectiveRows(property) {
@@ -407,17 +421,34 @@ function effectiveRows(property) {
     `select id, requested_by, employee_name, expires_at from public.v_effective_property_locks where property_id = '${property.id}'`,
   );
 }
-// Any failure must still return the fixture identities and release the created reservations.
+// Exact-ID cleanup of the rows this run wrote. Existing inventory is never touched.
+function removeCreated() {
+  for (const lock of createdLocks)
+    operatorSql(
+      `do $$ begin delete from public.lock_events where lock_id='${lock.id}'; delete from public.property_locks where id='${lock.id}'; end $$;`,
+    );
+  for (const id of activityIds(fixtureActivity))
+    if (!activityBefore.has(id))
+      operatorSql(
+        `do $$ begin delete from public.activity_events where id='${id}'; end $$;`,
+      );
+}
+function setActive(name, active) {
+  operatorSql(
+    `do $$ begin update public.employees set is_active=${active} where id='${fixtures.identities[name].employeeId}'; end $$;`,
+  );
+}
+// Any failure must still remove the created rows and return the fixture identities to active.
 function restoreAndExit(error) {
   try {
-    releaseCreated();
+    removeCreated();
   } catch {
     console.error(
-      'FIXTURE RESTORE FAILED: release ' +
+      'FIXTURE RESTORE FAILED: remove ' +
         createdLocks.map((row) => row.id).join(','),
     );
   }
-  for (const name of ['claimant', 'rival', 'manager', 'admin']) {
+  for (const name of ['claimant', 'manager', 'admin']) {
     try {
       setActive(name, true);
     } catch {
@@ -434,7 +465,6 @@ process.on('uncaughtException', restoreAndExit);
 process.on('unhandledRejection', restoreAndExit);
 
 const claimant = await userClient('claimant');
-const rival = await userClient('rival');
 const manager = await userClient('manager');
 
 // ------------------------------------------------------------------ anonymous boundary
@@ -524,14 +554,14 @@ assert.equal(
   observed('pending request is visible to its own claimant, who cannot decide');
 }
 
-// ------------------------------------------------------------------ the rival's independent request
-let rivalLock;
+// ------------------------------------------------------------------ a second pending request
+let managerLock;
 {
-  const direct = await rival
+  const direct = await claimant
     .from('property_locks')
     .insert({
       property_id: main.id,
-      requested_by: fixtures.identities.rival.employeeId,
+      requested_by: fixtures.identities.claimant.employeeId,
       reason,
     })
     .select('id');
@@ -541,13 +571,13 @@ let rivalLock;
     'Direct lock writes stay unavailable to the browser client',
   );
   const session = new ApplicationSession();
-  assert.equal((await session.login('rival')).status, 200);
+  assert.equal((await session.login('manager')).status, 200);
   const response = await session.request(reservationRoute(main), { reason });
   assert.equal(response.status, 200);
   assert.equal(response.body.pending.length, 1);
-  assert.equal(response.body.canDecide, false);
-  rivalLock = response.body.pending[0].id;
-  createdLocks.push({ id: rivalLock });
+  assert.equal(response.body.canDecide, true);
+  managerLock = response.body.pending[0].id;
+  createdLocks.push({ id: managerLock });
 }
 {
   const rows = lockRows(main);
@@ -561,6 +591,19 @@ let rivalLock;
     0,
     'Two pending requests still reserve nothing',
   );
+  const mine = new ApplicationSession();
+  assert.equal((await mine.login('claimant')).status, 200);
+  const state = await mine.request(reservationRoute(main));
+  assert.equal(
+    state.body.pending.length,
+    1,
+    'A sales employee sees only their own pending request',
+  );
+  assert.equal(
+    state.body.pending[0].claimantId,
+    fixtures.identities.claimant.employeeId,
+  );
+  assert.equal(state.body.canDecide, false);
 }
 
 // ------------------------------------------------------------------ sales cannot decide
@@ -568,7 +611,7 @@ let rivalLock;
   const session = new ApplicationSession();
   assert.equal((await session.login('claimant')).status, 200);
   const denied = await session.request(decisionRoute(main), {
-    lockId: rivalLock,
+    lockId: managerLock,
     approve: true,
     reason: decisionReason,
     days: 7,
@@ -578,7 +621,7 @@ let rivalLock;
   assert.equal(
     (
       await claimant.rpc('decide_property_lock', {
-        p_lock_id: rivalLock,
+        p_lock_id: managerLock,
         p_approve: true,
         p_reason: decisionReason,
         p_days: 7,
@@ -589,13 +632,13 @@ let rivalLock;
   const directUpdate = await claimant
     .from('property_locks')
     .update({ status: 'approved' })
-    .eq('id', rivalLock)
+    .eq('id', managerLock)
     .select('id');
   assert.equal(directUpdate.error?.code, '42501');
   const directInsert = await claimant
     .from('property_locks')
     .insert({
-      property_id: self.id,
+      property_id: reject.id,
       requested_by: fixtures.identities.claimant.employeeId,
       reason,
     })
@@ -604,7 +647,7 @@ let rivalLock;
   const directEvent = await claimant
     .from('lock_events')
     .insert({
-      lock_id: rivalLock,
+      lock_id: managerLock,
       action: 'approved',
       reason: decisionReason,
     })
@@ -614,16 +657,11 @@ let rivalLock;
 }
 
 // ------------------------------------------------------------------ self approval is refused
-let managerOwnLock;
 {
   const session = new ApplicationSession();
   assert.equal((await session.login('manager')).status, 200);
-  const requested = await session.request(reservationRoute(self), { reason });
-  assert.equal(requested.status, 200);
-  managerOwnLock = requested.body.pending[0].id;
-  createdLocks.push({ id: managerOwnLock });
-  const denied = await session.request(decisionRoute(self), {
-    lockId: managerOwnLock,
+  const denied = await session.request(decisionRoute(main), {
+    lockId: managerLock,
     approve: true,
     reason: decisionReason,
     days: 7,
@@ -633,7 +671,7 @@ let managerOwnLock;
   assert.equal(
     (
       await manager.rpc('decide_property_lock', {
-        p_lock_id: managerOwnLock,
+        p_lock_id: managerLock,
         p_approve: true,
         p_reason: decisionReason,
         p_days: 7,
@@ -642,28 +680,80 @@ let managerOwnLock;
     '42501',
   );
   assert.equal(
-    lockRows(self)[0].status,
+    lockRows(main).find((row) => row.id === managerLock).status,
     'pending',
     'The refused self approval changed no committed state',
   );
   await browserLogin('manager', secondary, 'vi');
-  browser(['open', detail(self)], secondary);
+  browser(['open', detail(main)], secondary);
   await settle(secondary);
   const page = screen(secondary);
   assert.equal(page.effective, null);
-  assert.ok(page.pending.includes('Yêu cầu của bạn đang chờ duyệt'));
-  assert.equal(page.requests.length, 1);
+  assert.ok(
+    page.pending?.includes('Yêu cầu của bạn đang chờ duyệt'),
+    'The manager sees their own request as pending',
+  );
+  assert.equal(page.requests.length, 2, 'Both pending requests are listed');
+  const own = page.requests.find(
+    (request) => request.heading === declaredBy('manager').display_name,
+  );
+  const other = page.requests.find(
+    (request) => request.heading === declaredBy('claimant').display_name,
+  );
+  assert.ok(own && other, 'Both claimants are named');
   assert.equal(
-    page.requests[0].approve,
+    own.approve,
     false,
     'A reviewer sees no decision control on their own request',
   );
-  assert.equal(page.requests[0].reject, false);
-  assert.ok(
-    page.requests[0].text.includes('Bạn không thể tự duyệt yêu cầu của mình'),
-  );
+  assert.equal(own.reject, false);
+  assert.ok(own.text.includes('Bạn không thể tự duyệt yêu cầu của mình'));
+  assert.equal(other.approve, true, 'Another employee request is decidable');
+  assert.equal(other.reject, true);
   observed(
     'manager cannot approve their own request through the UI, the application or the RPC',
+  );
+}
+
+// ------------------------------------------------------------------ reject through the surface
+let rejectedLock;
+{
+  const session = new ApplicationSession();
+  assert.equal((await session.login('claimant')).status, 200);
+  const requested = await session.request(reservationRoute(reject), {
+    reason,
+  });
+  assert.equal(requested.status, 200);
+  rejectedLock = requested.body.pending[0].id;
+  createdLocks.push({ id: rejectedLock });
+  browser(['open', detail(reject)], secondary);
+  await settle(secondary);
+  const before = screen(secondary);
+  assert.equal(before.effective, null);
+  assert.equal(
+    before.requests.length,
+    1,
+    'The pending request is offered to the reviewer',
+  );
+  fill('Lý do quyết định', rejectReason, secondary);
+  click('Từ chối yêu cầu', secondary);
+  wait('Đã từ chối yêu cầu.', secondary);
+  await settle(secondary);
+  const after = screen(secondary);
+  assert.equal(after.effective, null, 'A rejected request reserves nothing');
+  assert.equal(after.requests.length, 0);
+  assert.ok(
+    after.reasonField,
+    'The property is offered again after the rejection',
+  );
+  const row = lockRows(reject).find((lock) => lock.id === rejectedLock);
+  assert.equal(row.status, 'rejected');
+  assert.equal(row.decided_by, fixtures.identities.manager.employeeId);
+  const events = eventsFor([rejectedLock]).map((event) => event.action);
+  assert.deepEqual(events, ['requested', 'rejected']);
+  assert.equal(effectiveRows(reject).length, 0);
+  observed(
+    'a manager rejects another employee request with a reason and no reservation is created',
   );
 }
 
@@ -673,8 +763,8 @@ let managerOwnLock;
   const adminSession = new ApplicationSession();
   assert.equal((await managerSession.login('manager')).status, 200);
   assert.equal((await adminSession.login('admin')).status, 200);
-  // Genuinely independent sessions: a manager and an admin approve the two pending requests
-  // for the same property without either waiting for the other to finish.
+  // Genuinely independent sessions: the manager approves the sales request while the admin
+  // approves the manager's own request for the same property, neither waiting for the other.
   const [managerResult, adminResult] = await Promise.all([
     managerSession.request(decisionRoute(main), {
       lockId: firstLock[0].id,
@@ -683,7 +773,7 @@ let managerOwnLock;
       days: 14,
     }),
     adminSession.request(decisionRoute(main), {
-      lockId: rivalLock,
+      lockId: managerLock,
       approve: true,
       reason: decisionReason,
       days: 21,
@@ -705,9 +795,9 @@ let managerOwnLock;
   );
   const effective = effectiveRows(main);
   assert.equal(effective.length, 1, 'One effective reservation remains');
-  const approvals = operatorSql(
-    `select action from public.lock_events where lock_id in ('${firstLock[0].id}','${rivalLock}') order by id`,
-  ).filter((row) => row.action === 'approved');
+  const approvals = eventsFor([firstLock[0].id, managerLock]).filter(
+    (event) => event.action === 'approved',
+  );
   assert.equal(approvals.length, 1, 'One approval event was recorded');
   observed(
     'independent-session competing approvals leave exactly one effective reservation',
@@ -715,26 +805,17 @@ let managerOwnLock;
   );
   const winner = effective[0];
   const fresh = new ApplicationSession();
-  assert.equal((await fresh.login('rival')).status, 200);
+  assert.equal((await fresh.login('claimant')).status, 200);
   const read = await fresh.request(reservationRoute(main));
-  assert.deepEqual(
-    {
-      id: read.body.effective.id,
-      claimantId: read.body.effective.claimantId,
-      expiresAt: read.body.effective.expiresAt,
-    },
-    {
-      id: winner.id,
-      claimantId: winner.requested_by,
-      expiresAt: winner.expires_at,
-    },
-    'The application read agrees with the committed reservation',
-  );
+  assert.equal(read.body.effective.id, winner.id);
+  assert.equal(read.body.effective.claimantId, winner.requested_by);
+  assert.equal(read.body.effective.expiresAt, winner.expires_at);
   assert.equal(
     read.body.pending.length,
     0,
     'No pending request remains visible as effective',
   );
+  observed('the application read agrees with the committed reservation row');
 }
 
 // ------------------------------------------------------------------ fresh detail and language journey
@@ -756,15 +837,23 @@ let managerOwnLock;
     'The effective reservation shows the expiry date',
   );
   assert.equal(
-    page.pending,
-    null,
-    'The approved claimant no longer sees a pending state',
-  );
-  assert.equal(
     page.reasonField,
     false,
     'No new request is offered while a reservation is effective',
   );
+  if (winner.requested_by === fixtures.identities.claimant.employeeId) {
+    assert.equal(
+      page.pending,
+      null,
+      'The winning claimant has nothing pending',
+    );
+  } else {
+    assert.ok(
+      page.pending?.includes('Yêu cầu của bạn đang chờ duyệt'),
+      'A losing claimant still sees only a pending state, never an effective one',
+    );
+  }
+  assert.equal(page.status, 'Đang chào', 'Property status is still unchanged');
   evaluate(
     "() => { document.documentElement.dataset.probe = 'reservation'; return true; }",
     primary,
@@ -806,13 +895,14 @@ let managerOwnLock;
 
 // ------------------------------------------------------------------ inherited live deactivation
 {
+  const retired = fixtures.identities.claimant.employeeId;
   setActive('claimant', false);
   const denied = new ApplicationSession();
   assert.equal((await denied.login('claimant')).status, 403);
   assert.equal(
     (
       await claimant.rpc('request_property_lock', {
-        p_property_id: self.id,
+        p_property_id: reject.id,
         p_reason: reason,
       })
     ).error?.code,
@@ -830,54 +920,68 @@ let managerOwnLock;
     [],
     'A deactivated employee reads no reservations',
   );
+  assert.equal(
+    effectiveRows(main)[0].requested_by,
+    retired,
+    'The committed reservation survives deactivation',
+  );
+  setActive('claimant', true);
   observed(
     'live deactivation denies the reservation surface without erasing committed reservations',
     { directRows: 0 },
   );
-  setActive('claimant', true);
 }
 
 // ------------------------------------------------------------------ sign-out clears the surface
 {
   const winner = effectiveRows(main)[0];
-  browser(['open', detail(main)], primary);
-  await settle(primary);
+  browser(['open', detail(main)], secondary);
+  await settle(secondary);
   assert.ok(
-    screen(primary).effective,
-    'The restored identity still reads the reservation',
+    screen(secondary).effective,
+    'The signed-in reviewer still reads the reservation',
   );
-  click('Đăng xuất', primary);
-  browser(['back'], primary);
+  click('Đăng xuất', secondary);
+  browser(['back'], secondary);
   await waitUntil(
     `() => !document.body.innerText.includes(${JSON.stringify(winner.employee_name)})`,
-    primary,
+    secondary,
   );
-  browser(['open', detail(main)], primary);
-  wait('Đăng nhập', primary);
-  assert.equal(screen(primary).path, '/login');
+  browser(['open', detail(main)], secondary);
+  wait('Đăng nhập', secondary);
+  assert.equal(screen(secondary).path, '/login');
   observed('sign-out and Back navigation reveal no reservation detail');
 }
 
 // ------------------------------------------------------------------ restore and compare
-releaseCreated();
-for (const name of ['claimant', 'rival', 'manager', 'admin'])
-  setActive(name, true);
+const createdEventIds = createdLocks.length
+  ? activityIds(
+      `select id from public.lock_events where lock_id in ('${createdLocks
+        .map((row) => row.id)
+        .join("','")}')`,
+    )
+  : [];
+const createdActivityIds = activityIds(fixtureActivity).filter(
+  (id) => !activityBefore.has(id),
+);
+removeCreated();
+for (const name of ['claimant', 'manager', 'admin']) setActive(name, true);
 const after = Object.fromEntries(
   baselineTables.map((table) => [table, countOf(table)]),
 );
-assert.equal(
-  after.property_locks,
-  baseline.property_locks + createdLocks.length,
-  'The run created exactly the reservation rows it reports',
-);
-assert.equal(after.properties, baseline.properties);
-assert.equal(after.employees, baseline.employees);
-assert.equal(after.activity_events, baseline.activity_events);
-const restored = lockRows(main).concat(lockRows(self));
 assert.deepEqual(
-  restored.map((row) => row.status),
-  restored.map(() => 'released'),
-  'No reservation created by this run stays approved or pending',
+  after,
+  baseline,
+  'Every table the run touched is back at its pre-run row count',
+);
+assert.equal(lockRows(main).length, 0);
+assert.equal(lockRows(reject).length, 0);
+assert.equal(effectiveRows(main).length, 0);
+assert.equal(effectiveRows(reject).length, 0);
+assert.equal(eventsFor(createdLocks.map((row) => row.id)).length, 0);
+assert.deepEqual(
+  activityIds(fixtureActivity).sort(),
+  [...activityBefore].sort(),
 );
 
 const report = {
@@ -887,14 +991,28 @@ const report = {
   projectRef: process.env.EXPECTED_SUPABASE_PROJECT_REF,
   namespace: fixtures.namespace,
   observations,
+  inventory: [
+    { code: mainRow.property_code, status: mainRow.status },
+    { code: rejectRow.property_code, status: rejectRow.status },
+  ],
   fixtureRows: {
-    created: createdLocks.map((row) => row.id),
-    released: restored.map((row) => ({ id: row.id, status: row.status })),
-    baseline,
-    after,
+    created: {
+      locks: createdLocks.map((row) => row.id),
+      lockEvents: createdEventIds,
+      activityEvents: createdActivityIds,
+      employees: 0,
+      properties: 0,
+    },
+    removed: {
+      locks: createdLocks.map((row) => row.id),
+      lockEvents: createdEventIds,
+      activityEvents: createdActivityIds,
+    },
+    restored: { baseline, after },
   },
   limits: [
-    'Fixture-only writes: the declared SGN-TEST-18 identities and properties exist before the run and are returned to active; the created reservations are released and remain as fixture history, not as effective reservations.',
+    'Fixture-only writes: the SGN-TEST-18 identities and their linked Auth users are created and removed by this task outside this script; the script itself writes only reservation rows and removes them by exact ID.',
+    'Existing inventory is used read-only: no property, address, contact or activity row is written, archived, relinked or reactivated.',
     'The competing approvals use two independent authenticated sessions; this is not a production contention gate.',
     'Real mailbox recovery, production import and deployment remain outside this run.',
   ],

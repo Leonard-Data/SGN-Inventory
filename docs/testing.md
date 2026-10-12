@@ -380,13 +380,14 @@ The recorded run was repeated at the reconciled head after the default branch mo
 
 Scope: [ticket #18 reservation request and decision](database-contract.md#ticket-18--reservation-request-and-independent-decision). Use the authorized development project with real Supabase Auth, Data API/RLS, the actual VI/EN browser interface and genuinely independent sessions for the approval race. Mocked authorization, embedded database checks, source-text assertions and readiness pages cannot substitute for this evidence. The embedded reservation regressions in `npm run test:schema` remain a supplement, not the acceptance.
 
-Prepare two active sales employees, one active manager and one active admin with distinct linked Auth identities, and at least two synthetic unarchived properties in `available`/`negotiating` with no reservation rows. Record the pre-run row counts before starting and return every created reservation to a closed state afterwards.
+Prepare one active sales employee, one active manager and one active admin with linked Auth identities under a private, task-owned namespace, and select two existing unarchived `available`/`negotiating` inventory properties that carry no reservation row. Use that inventory read-only: never create, archive, relink or reactivate a property fixture, and if no eligible property exists, stop and report instead of creating one. Record the pre-run row counts before starting and remove every lock, lock-event and activity row the run writes, by exact ID, afterwards.
 
 | Scenario | Required observation |
 | --- | --- |
 | Sales employee submits a reservation request from the property detail in VI | The pending state appears with its request and expiry times; the property is not presented as reserved and its recorded status is unchanged |
 | Read reservation state as another employee | Only the effective reservation and the caller's own pending request are visible; `canDecide` is false for sales |
 | Sales employee calls the decision endpoint and `decide_property_lock` directly | `403 access-denied` from the application and `42501` from the RPC; no state change |
+| Manager rejects another employee's pending request through the decision surface with a reason | The request closes as rejected with its reason and event; no effective reservation appears and the property is offered again |
 | Manager attempts to approve their own pending request through the UI, the endpoint and the RPC | No decision control is rendered for their own request; the endpoint returns `409 self-approval-forbidden`; the RPC returns `42501`; the request stays pending |
 | Manager and admin approve two different pending requests for one property from two independent authenticated sessions | Exactly one approval commits, the other returns `409 reservation-conflict`; one approved row, one effective reservation and one approval event remain |
 | Fresh property detail after the decision | The effective reservation shows the claimant name and the Vietnam-time expiry; the losing pending request is no longer shown as effective or pending |
