@@ -5,15 +5,26 @@ import { useProtectedData } from '@/features/employees/use-protected-data';
 import { SessionHeader } from '@/features/employees/session-header';
 import { RequestError } from '@/features/employees/api';
 import { Workspace } from '@/features/property-files/workspace';
-import { loadPropertyDetail, loadTodayActivity } from './detail-loader';
+import {
+  loadPropertyDetail,
+  loadTodayActivity,
+  loadTodayReport,
+  revealOwnerContact,
+} from './detail-loader';
 import type { PropertyDetail } from './detail-data';
+import type { OwnerContactDisclosure } from './types';
 import { Maintenance } from '@/features/property-maintenance/workspace';
 import { History } from '@/features/property-maintenance/history';
 import {
   CorrectionQueue,
   CorrectionReport,
 } from '@/features/corrections/queue';
-import { formatVnd, formatDecimal, vietnamDate } from './format';
+import {
+  formatVnd,
+  formatDecimal,
+  vietnamDate,
+  dialableNumber,
+} from './format';
 import { Discussion } from '@/features/property-comments/discussion';
 
 const directionKeys: Record<string, string> = {
@@ -67,6 +78,63 @@ export function Detail({
     today: Awaited<ReturnType<typeof loadTodayActivity>>['today'];
     todayError: boolean;
   } | null>(null);
+  const [disclosure, setDisclosure] = useState<{
+    propertyId: string;
+    value: OwnerContactDisclosure;
+  } | null>(null);
+  const [disclosureFailure, setDisclosureFailure] = useState<{
+    propertyId: string;
+    code: string;
+  } | null>(null);
+  const [disclosureBusy, setDisclosureBusy] = useState<string | null>(null);
+  // One retry reference per property mount: a lost response recovers the original access,
+  // and a new property never reuses the previous key.
+  const disclosureKey = useRef<{ propertyId: string; key: string } | null>(
+    null,
+  );
+  // Disclosure is a deliberate action: no request runs on load, render or language switch.
+  async function showOwnerContact() {
+    if (disclosureBusy === id) return;
+    if (!disclosureKey.current || disclosureKey.current.propertyId !== id)
+      disclosureKey.current = { propertyId: id, key: crypto.randomUUID() };
+    setDisclosureBusy(id);
+    setDisclosureFailure(null);
+    try {
+      const result = await revealOwnerContact(id, disclosureKey.current.key);
+      setDisclosure({ propertyId: id, value: result });
+      if (result.credited) {
+        try {
+          const report = await loadTodayReport(new AbortController().signal);
+          setActivity((current) =>
+            current
+              ? { ...current, today: report, todayError: false }
+              : current,
+          );
+        } catch {
+          setActivity((current) =>
+            current ? { ...current, todayError: true } : current,
+          );
+        }
+      }
+    } catch (failure) {
+      if (
+        failure instanceof RequestError &&
+        (failure.status === 401 || failure.status === 403)
+      ) {
+        clear();
+        window.location.replace(
+          failure.status === 403 ? '/access-denied' : '/login',
+        );
+        return;
+      }
+      setDisclosureFailure({
+        propertyId: id,
+        code: failure instanceof RequestError ? failure.code : 'unavailable',
+      });
+    } finally {
+      setDisclosureBusy((current) => (current === id ? null : current));
+    }
+  }
   useEffect(() => {
     if (!data) return;
     const abort = new AbortController();
@@ -103,6 +171,23 @@ export function Detail({
   const viewError = own?.viewError ?? false;
   const today = own?.today ?? null;
   const todayError = own?.todayError ?? false;
+  const ownerContact = disclosure?.propertyId === id ? disclosure.value : null;
+  const ownerBusy = disclosureBusy === id;
+  const disclosureError =
+    disclosureFailure?.propertyId === id ? disclosureFailure.code : null;
+  const disclosureMessage =
+    disclosureError === 'owner-contact-missing'
+      ? text.ownerContactMissing
+      : disclosureError === 'owner-phone-missing'
+        ? text.ownerPhoneMissing
+        : disclosureError === 'disclosure-key-conflict'
+          ? text.ownerContactKeyConflict
+          : disclosureError === 'invalid-input'
+            ? text.invalidInput
+            : disclosureError === 'not-found'
+              ? text.notFound
+              : text.ownerContactFailed;
+  const dial = ownerContact ? dialableNumber(ownerContact.contact.phone) : null;
   const employeeId = employee?.id;
   const denyFiles = useCallback(
     (status: number) => {
@@ -277,6 +362,49 @@ export function Detail({
                 ) : (
                   <p>{text.noContacts}</p>
                 )}
+                <div className="owner-disclosure">
+                  <h3>{text.owner}</h3>
+                  {ownerContact ? (
+                    <>
+                      <p translate="no">
+                        {ownerContact.contact.displayName}{' '}
+                        <span className="badge">
+                          {label(locale, ownerContact.contact.relation)}
+                        </span>
+                        {ownerContact.contact.isPrimary ? (
+                          <span className="badge">{text.primary}</span>
+                        ) : null}
+                      </p>
+                      <p className="owner-phone" translate="no">
+                        {ownerContact.contact.phone}
+                      </p>
+                      {dial ? (
+                        <a href={'tel:' + dial}>{text.call}</a>
+                      ) : (
+                        <p className="muted">{text.callUnavailable}</p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {disclosureError ? (
+                        <p role="alert">{disclosureMessage}</p>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={showOwnerContact}
+                        disabled={busy || ownerBusy}
+                        aria-busy={ownerBusy}
+                      >
+                        {ownerBusy
+                          ? text.loading
+                          : disclosureError
+                            ? text.retry
+                            : text.showOwnerContact}
+                      </button>
+                    </>
+                  )}
+                  <p className="muted">{text.ownerContactNote}</p>
+                </div>
               </section>
               <Workspace
                 key={`${id}:${employeeId}`}
@@ -354,6 +482,8 @@ export function Detail({
                   <dd>{numberFormat.format(today.pageViewEvents)}</dd>
                   <dt>{text.todayProperties}</dt>
                   <dd>{numberFormat.format(today.distinctPropertiesViewed)}</dd>
+                  <dt>{text.todayOwnerContacts}</dt>
+                  <dd>{numberFormat.format(today.ownerContactProperties)}</dd>
                 </dl>
               ) : (
                 <p role="status">{text.loading}</p>

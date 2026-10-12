@@ -91,8 +91,12 @@ A view of property details by an active employee, including authorized review of
 _Avoid_: Visit, attendance
 
 **Personal daily activity**:
-An employee's own Page-view event count and distinct properties viewed for the current Vietnam business day. It never includes a colleague's activity and is not a physical-visit count.
+An employee's own Page-view event count, distinct properties viewed and Owner-contact access count for the current Vietnam business day. It never includes a colleague's activity, and the owner-contact count is not a physical-visit or connected-call count.
 _Avoid_: Company report, visit KPI
+
+**Owner-contact access disclosure**:
+A deliberate reveal of a property's recorded owner phone, committed as an Owner-contact access event before the phone is shown. Eligibility comes from the property's recorded owner relationship, and it counts one property per employee per Vietnam day rather than owners, phones or clicks.
+_Avoid_: Automatic phone display, call log, attendance
 
 **Confirmed physical visit**:
 A reported visit to a property confirmed by an independent reviewer.

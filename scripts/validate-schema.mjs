@@ -5,7 +5,7 @@ import { pgcrypto } from '@electric-sql/pglite/contrib/pgcrypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
-import { createHmac } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { maintenanceContract } from './maintenance-contract.mjs';
 import { correctionContract } from './correction-contract.mjs';
 import { commentsContract } from './comments-contract.mjs';
@@ -69,10 +69,12 @@ await check('pending request does not reserve property',async()=>assert.equal((a
 await check('direct approval update denied',()=>fails("update public.property_locks set status='approved' where id=$1",[lock],'42501'));
 await check('salesperson approval RPC denied',()=>fails('select public.decide_property_lock($1,true,$2)',[lock,'Evidence reviewed and approved'],'42501'));
 const key='30000000-0000-4000-8000-000000000001';
-const event=(await db.query("select public.record_property_activity($1,'site_visit',$2) as id",[property,key])).rows[0].id;
-await check('activity retry is idempotent',async()=>assert.equal((await db.query("select public.record_property_activity($1,'site_visit',$2) as id",[property,key])).rows[0].id,event));
-await check('key cannot be reused for another property',()=>fails("select public.record_property_activity($1,'site_visit',$2)",[other,key]));
-await check('unconfirmed visit is excluded from KPI',async()=>assert.equal(Number((await db.query('select * from public.v_employee_daily_activity')).rows[0].confirmed_properties_visited),0));
+await check('physical-visit submission is retired',()=>fails("select public.record_property_activity($1,'site_visit',$2)",[property,key],'P0001'));
+await check('physical-visit confirmation entrypoint is removed',()=>fails('select public.review_property_visit($1,true)',[property],'42883'));
+await check('daily activity view exposes owner-contact counts without visit metrics',async()=>{
+  const cols=(await db.query("select column_name from information_schema.columns where table_name='v_employee_daily_activity'")).rows.map(r=>r.column_name).sort();
+  assert.deepEqual(cols,['business_day','distinct_properties_viewed','employee_id','owner_contact_properties','page_view_events']);
+});
 await asUser(1);
 await check('colleague cannot read private employee activity',async()=>assert.equal((await db.query('select * from public.activity_events')).rows.length,0));
 const competing=(await db.query('select public.request_property_lock($1,$2) as id',[property,'Another pending employee claim for same property'])).rows[0].id;
@@ -80,12 +82,8 @@ await asUser(2);
 await db.query('select public.decide_property_lock($1,true,$2)',[lock,'Agreement verified independently by manager']);
 await check('manager approval creates one effective reservation',async()=>assert.equal((await db.query('select * from public.v_effective_property_locks')).rows.length,1));
 await check('second approval fails exclusivity constraint',()=>fails('select public.decide_property_lock($1,true,$2)',[competing,'Another agreement reviewed by manager'],'23505'));
-await db.query('select public.review_property_visit($1,true)',[event]);
-await check('confirmed visits count distinct property per VN day',async()=>assert.equal(Number((await db.query('select * from public.v_employee_daily_activity')).rows[0].confirmed_properties_visited),1));
 const own=(await db.query('select public.request_property_lock($1,$2) as id',[other,'Manager own customer agreement pending review'])).rows[0].id;
 await check('manager self approval forbidden',()=>fails('select public.decide_property_lock($1,true,$2)',[own,'Attempting self approval is forbidden'],'42501'));
-const ownVisit=(await db.query("select public.record_property_activity($1,'site_visit',$2) as id",[other,'30000000-0000-4000-8000-000000000002'])).rows[0].id;
-await check('manager self visit confirmation forbidden',()=>fails('select public.review_property_visit($1,true)',[ownVisit],'42501'));
 const maintainSql='select public.maintain_property($1,$2,$3,$4,$5,(select revision from public.properties where id=$1)) as id';
 async function maintainFacts(id,changes){const rev=(await db.query('select revision from public.properties where id=$1',[id])).rows[0].revision;return db.query(maintainSql,[id,'property',id,rev,changes]);}
 async function addAddress(id,changes){const rev=(await db.query('select revision from public.properties where id=$1',[id])).rows[0].revision;return (await db.query(maintainSql,[id,'address',null,rev,changes])).rows[0].id;}
@@ -405,7 +403,7 @@ await check('reviewer archived detail records one retry-safe page view without a
   assert.equal((await db.query("select public.record_property_activity($1,'page_view',$2) as id",[archivedProperty,archivedViewKey])).rows[0].id,first);
   assert.deepEqual((await db.query("select property_id,employee_id,kind,visit_status from public.activity_events where id=$1",[first])).rows,[{property_id:archivedProperty,employee_id:employees[2],kind:'page_view',visit_status:null}]);
 });
-await check('reviewer cannot submit an archived physical visit',()=>fails("select public.record_property_activity($1,'site_visit',$2)",[archivedProperty,'80000000-0000-4000-8000-000000000002'],'P0001'));
+await check('reviewer cannot submit a retired physical visit',()=>fails("select public.record_property_activity($1,'site_visit',$2)",[archivedProperty,'80000000-0000-4000-8000-000000000002'],'P0001'));
 await check('sales and staff cannot read or record an archived property',async()=>{
   for(const index of [0,5]) {
     await asUser(index);
@@ -494,8 +492,67 @@ await db.exec('reset role');await db.query("select set_config('request.jwt.claim
 assert.deepEqual((await db.query(`select ${coverSourceColumns} from public.property_files where property_id=$1 order by id`,[coverProperty])).rows,coverBefore);
 const maintainedProperty=await maintenanceContract({db,asUser,check,fails,employees,property,other});
 await correctionContract({db,asUser,check,fails,employees,property:maintainedProperty});
+// Ticket #29: a deliberate disclosure commits one property per employee/Vietnam day.
+const ownerProperty='20000000-0000-4000-8000-00000000000b';
+const ownerProperty2='20000000-0000-4000-8000-00000000000c';
+const brokerProperty='20000000-0000-4000-8000-00000000000d';
+const phoneGapProperty='20000000-0000-4000-8000-00000000000e';
+const sharedOwner='60000000-0000-4000-8000-0000000000b1';
+const brokerLink='60000000-0000-4000-8000-0000000000b2';
+const ownerNoPhone='60000000-0000-4000-8000-0000000000b3';
+await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
+await db.query("insert into public.properties(id,property_code,listing_mode,status,created_by) values($1,'SGN-OWNER-1','sale','available',$5),($2,'SGN-OWNER-2','sale','available',$5),($3,'SGN-BROKER-1','sale','available',$5),($4,'SGN-PHONEGAP-1','sale','available',$5)",[ownerProperty,ownerProperty2,brokerProperty,phoneGapProperty,employees[0]]);
+await db.query("insert into public.contacts(id,display_name,phones,raw_phone_text,contact_type) values($1,'Synthetic Shared Owner','{0901234567}','090 123 4567','broker'),($2,'Synthetic Broker Link','{0911111111}','091 111 1111','owner'),($3,'Synthetic Owner No Phone','{}',null,'owner')",[sharedOwner,brokerLink,ownerNoPhone]);
+await db.query("insert into public.property_contacts(property_id,contact_id,relation,is_primary) values($1,$4,'owner',true),($2,$4,'owner',false),($3,$4,'broker',true),($3,$5,'broker',false),($6,$7,'owner',true)",[ownerProperty,ownerProperty2,brokerProperty,sharedOwner,brokerLink,phoneGapProperty,ownerNoPhone]);
+await asUser(0);
+const ownerKey='30000000-0000-4000-8000-000000000031';
+const disclosure=(await db.query('select public.reveal_owner_contact($1,$2) as result',[ownerProperty,ownerKey])).rows[0].result;
+await check('owner disclosure returns the property recorded owner phone and credits one property',async()=>{
+  assert.equal(disclosure.credited,true);assert.notEqual(disclosure.eventId,null);
+  assert.deepEqual(disclosure.contact,{id:sharedOwner,displayName:'Synthetic Shared Owner',relation:'owner',isPrimary:true,phone:'0901234567'});
+  assert.equal(Number((await db.query('select owner_contact_properties from public.my_today_activity()')).rows[0].owner_contact_properties),1);
+});
+await check('owner disclosure retry returns the original event and day without duplicating credit',async()=>{
+  const retry=(await db.query('select public.reveal_owner_contact($1,$2) as result',[ownerProperty,ownerKey])).rows[0].result;
+  assert.equal(retry.eventId,disclosure.eventId);assert.equal(retry.businessDay,disclosure.businessDay);
+  assert.equal(Number((await db.query('select owner_contact_properties from public.my_today_activity()')).rows[0].owner_contact_properties),1);
+});
+await check('independent reveals keep distinct event identities without inflating the property count',async()=>{
+  const second=(await db.query('select public.reveal_owner_contact($1,$2) as result',[ownerProperty,randomUUID()])).rows[0].result;
+  assert.notEqual(second.eventId,disclosure.eventId);
+  assert.equal(Number((await db.query('select owner_contact_properties from public.my_today_activity()')).rows[0].owner_contact_properties),1);
+});
+await check('owner-contact retry key cannot be reused for another property',()=>fails('select public.reveal_owner_contact($1,$2)',[ownerProperty2,ownerKey],'P0005'));
+await check('a shared owner through another property counts another property',async()=>{
+  await db.query('select public.reveal_owner_contact($1,$2)',[ownerProperty2,randomUUID()]);
+  assert.equal(Number((await db.query('select owner_contact_properties from public.my_today_activity()')).rows[0].owner_contact_properties),2);
+});
+await check('broker-only relationship is not owner eligibility',()=>fails('select public.reveal_owner_contact($1,$2)',[brokerProperty,randomUUID()],'P0003'));
+await check('recorded owner without a phone is explicit and adds no credit',()=>fails('select public.reveal_owner_contact($1,$2)',[phoneGapProperty,randomUUID()],'P0004'));
+await check('denied disclosures added no owner-contact credit',async()=>assert.equal(Number((await db.query('select owner_contact_properties from public.my_today_activity()')).rows[0].owner_contact_properties),2));
+await check('direct activity mutation remains denied',()=>fails("insert into public.activity_events(employee_id,property_id,kind,idempotency_key) values($1,$2,'owner_contact_access',$3)",[employees[0],ownerProperty,randomUUID()],'42501'));
+await asUser(1);
+await check('different employees have independent owner-contact counts',async()=>{
+  await db.query('select public.reveal_owner_contact($1,$2)',[ownerProperty,randomUUID()]);
+  assert.equal(Number((await db.query('select owner_contact_properties from public.my_today_activity()')).rows[0].owner_contact_properties),1);
+});
+await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
+await db.query('update public.properties set archived_at=now() where id=$1',[ownerProperty2]);
+await asUser(2);
+await check('manager archived review keeps contact access without new credit',async()=>{
+  const archived=(await db.query('select public.reveal_owner_contact($1,$2) as result',[ownerProperty2,randomUUID()])).rows[0].result;
+  assert.equal(archived.credited,false);assert.equal(archived.eventId,null);assert.equal(archived.contact.phone,'0901234567');
+  assert.equal(Number((await db.query('select owner_contact_properties from public.my_today_activity()')).rows[0].owner_contact_properties),0);
+});
+await asUser(0);
+await check('ordinary employee stays denied archived contact access',()=>fails('select public.reveal_owner_contact($1,$2)',[ownerProperty2,randomUUID()],'P0002'));
+await check('archiving a property does not erase earlier owner-contact credit',async()=>assert.equal(Number((await db.query('select owner_contact_properties from public.my_today_activity()')).rows[0].owner_contact_properties),2));
+await asUser(null);
+await check('anonymous today activity denied',()=>fails('select * from public.my_today_activity()',[],'42501'));
+await check('anonymous owner disclosure denied',()=>fails('select public.reveal_owner_contact($1,$2)',[ownerProperty,randomUUID()],'42501'));
 await asUser(4);
 await check('unlinked and inactive today activity denied',()=>fails('select * from public.my_today_activity()',[],'42501'));
+await check('inactive owner disclosure denied',()=>fails('select public.reveal_owner_contact($1,$2)',[ownerProperty,randomUUID()],'42501'));
 await commentsContract({db,asUser,check,fails,employees,property});
 const report={checked_at:new Date().toISOString(),engine:'PGlite embedded PostgreSQL; mocked auth/storage schemas',passed,
  limitations:['Not a live Supabase integration test','HTTP Auth, signed URLs, Vercel and browser flows not exercised','True multi-session concurrent transaction test remains a staging acceptance gate']};

@@ -179,6 +179,25 @@ Real individual-session results over hosted Auth/Data API/RLS (task-local runner
 
 **Fixture cleanup.** The disjoint `SGN28` namespace was created for this run and has been fully removed through the approved operator boundary after verifying each exact manifest ID by a read first: 5 activity events, 2 contact links, 3 addresses, 3 properties, 2 contacts and 4 employees deleted (HTTP 200 with the expected row counts), the synthetic Auth users removed through the Auth-admin API, and the project restored to its prior baseline (39 properties, 5 employees, 2 contacts, 82 activity events, 39 addresses, 32 files, 1 lock, 11 categories). An earlier blanket `404` during cleanup was a local request-builder bug — a missing leading slash before the resource path — not a permission boundary; no grant, policy, trigger or protection was changed. The supplied development login and all pre-existing fixtures were untouched throughout.
 
+## Owner-contact disclosure acceptance (ticket #29)
+
+Scope: the disclosure-to-today's-report path of [issue #29](https://github.com/Leonard-Data/SGN-Inventory/issues/29). This supersedes the #28 statement that the ordinary detail carries no disclosure control. Real individual-session Auth, Data API and RLS checks, the rendered VI/default and EN journey, and genuinely separate-session races are required; embedded PGlite assertions and the embedded Auth/Storage shims do not establish them.
+
+| Gate | Required observation |
+| --- | --- |
+| Deliberate disclosure | Owner phone appears only after Show owner contact; page load, render, prefetch, language switch and Call disclose nothing and add no credit |
+| Owner eligibility | The property's recorded `relation='owner'` link decides, so a shared contact is an owner on one property and only a broker on another; a broker-only property and a recorded owner without a phone are explicit and add no credit |
+| Atomic outcome | A failed disclosure returns no phone payload and leaves no committed activity; the localized error offers a retry |
+| Retry identity | A same-key retry after a lost response returns the original activity reference and day without a duplicate or rewrite; reusing the key for another property is rejected; no caller can choose the actor or day |
+| Daily counting | Repeated reveals, concurrent tabs and several owners/phones give one property per employee per Vietnam day; another property or another employee counts independently |
+| Archived boundary | Manager/admin keep authorized archived contact access without new credit; ordinary employees stay denied; archiving or correcting after a valid disclosure keeps the earlier credit |
+| Report | Today's personal report shows page views, distinct properties viewed and the owner-contact count separately with explicit zeros, and never calls it attendance, a visit or a connected call |
+| Call action | The Call link opens the device dialer for dialable recorded data; clicking it is not independent credit |
+| Denial and boundaries | Anonymous, unlinked and inactive identities are denied; direct client activity writes stay denied; no phone value is stored in the activity row |
+| Midnight | A new next-day disclosure counts for that day and a pre-midnight disclosure retried after midnight keeps its day (embedded deterministic boundary; no production backdating API) |
+
+Executed results for this ticket are recorded below once the hosted run completes.
+
 ## Property, contact and address maintenance acceptance (not yet executed)
 
 Scope: [confirmed maintenance plan](delivery-plan.md#confirmed-property-contact-and-address-maintenance-plan) and [confirmed planned contract](database-contract.md#confirmed-property-contact-and-address-maintenance-decisions). These are planned acceptance gates for the confirmed scope, not executed results or authorization to provision staging. Use sanitized fixtures, real Supabase Auth/Data API/RLS, the actual VI/EN browser interface and independent connections for contention.

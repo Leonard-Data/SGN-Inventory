@@ -33,9 +33,9 @@ The Postgres → Storage line represents authorization through registered file m
 1. Login/invitation and account recovery.
 2. Inventory: search both addresses, mode, type, access, price, area, status; 30 rows/page, maximum 50.
 3. Property detail: old/current address badges, characteristics, owner/broker contacts, private documents, effective reservation and request action.
-4. My activity: unique properties viewed, pending visits and confirmed visits per Vietnam day.
+4. My activity: page views, unique properties viewed and owner-contact properties per Vietnam day.
 5. My reservations: pending, approved, rejected, released and expired requests.
-6. Review queue (manager/admin): requests and submitted visits, evidence, claimant, dates and decision reasons.
+6. Review queue (manager/admin): requests, evidence, claimant, dates and decision reasons.
 7. Administration: employees and roles, inventory by verified current area/legacy district, effective locks by employee, unresolved address records.
 
 ## Architecture decisions

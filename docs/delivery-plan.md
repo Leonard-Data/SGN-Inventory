@@ -111,7 +111,7 @@ The confirmed journey is: an invited, active employee signs in → searches a le
 - Retain the contracted 30-row default page, UUID cursor and 120-character query validation. Bound address-summary queries to the current page.
 - Show property code, listing mode, physical type, access type, inventory/review/legal statuses, prices, dimensions, original legacy address and current address when present, with verification labels. Missing data remains visibly unknown.
 - Show all linked owner/broker contacts, their relationship, primary marker and names. Do not present owner phone numbers automatically on the ordinary detail; owner contact and phone disclosure arrives only through the deliberate disclosure flow owned by issue #29. Do not fabricate missing contact relationships.
-- Detail opens record idempotent page views through the documented activity RPC, never physical visits. UI retries or language switches must not create duplicate opens.
+- Detail opens record idempotent page views through the documented activity RPC, never physical visits. UI retries or language switches must not create duplicate opens. A deliberate owner-contact disclosure commits one `owner_contact_access` event and reports one property per employee/Vietnam day; the Call link and language switching never add credit.
 
 ### Language, denial and sign-out
 
@@ -136,7 +136,7 @@ The authorized development project received two forward fixes without rewriting 
 - Use m² for area and metres for dimensions. Preserve alley/house strings and Vietnamese accents.
 - Separate “Loại giao dịch” (sale/rent), “Loại bất động sản” (house/land/etc.) and “Đặc điểm lối vào” (street/alley).
 - Address badges: “Địa chỉ cũ”, “Địa chỉ mới”, “Chưa xác minh”. Reservation labels: “Chờ duyệt”, “Đã khóa”, “Từ chối”, “Đã giải phóng”, “Hết hạn”.
-- “Lượt xem” is page interaction; “Bất động sản đã thăm” is independently confirmed physical visits.
+- “Lượt xem” is page interaction; “Bất động sản đã xem liên hệ chủ nhà” is a deliberate owner-contact disclosure count. New physical-visit submission is retired; retained confirmed rows are historical only.
 - Show claimant/expiry on reserved properties. A pending request shows its review state, not an effective reservation.
 - Unknown legal/area/category information stays visibly unknown; upload and internal review do not establish legal ownership.
 

@@ -5,6 +5,7 @@ import {
   formatDecimal,
   vietnamDate,
   vietnamTimestamp,
+  dialableNumber,
 } from './format.ts';
 
 test('whole VND remains exact beyond JavaScript safe integer precision', () => {
@@ -37,4 +38,10 @@ test('money rejects noncanonical decimal and scientific notation', () => {
 test('Vietnam dates cross midnight at UTC 17:00 regardless of the device zone', () => {
   assert.equal(vietnamDate('2026-10-09T16:59:59Z'), '09/10/2026');
   assert.equal(vietnamDate('2026-10-09T17:00:00Z'), '10/10/2026');
+});
+test('only a dialable recorded number becomes a Call link', () => {
+  assert.equal(dialableNumber('+84 90 123 4567'), '+84901234567');
+  assert.equal(dialableNumber('(028) 3822 1234'), '02838221234');
+  assert.equal(dialableNumber('12'), null);
+  assert.equal(dialableNumber('chưa có số'), null);
 });
