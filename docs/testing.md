@@ -10,6 +10,14 @@ Python preparation tests validate source-sensitive unit conversions, datetime as
 
 Rental/locale tests also cover preferred language, activation, month generation, one-active-rental exclusivity, role/payment privacy, integer VND, payment idempotency, independent review, overpayment/refund guards and termination.
 
+### Executed canonical authentication design comparison (tickets #50–#52)
+
+- `npm run test:unit` now also runs `src/i18n/messages.test.ts` (VI/EN key parity, non-blank strings, canonical copy) and `src/features/employees/password-policy.test.ts` (four rules and their independent evaluation, the level↔verdict mapping, and the deliberately stricter nine-character case). Both pass.
+- `scripts/auth-visual-compare.mjs` rendered the preserved prototype (`docs/design/sgn-auth.reference.html`) and the running application (`next start`) in headless Chrome at 375, 1039, 1040 and 1440 px with a fixed 900 px viewport, after `document.fonts.ready`, for the sign-in, recovery-request and recovery-password surfaces. Computed geometry, typography sizes/weights/line-heights, colour, borders, radii, control heights, the 452 px form cap and the 1040 px breakpoint match the reference exactly.
+- Residual, understood differences: `next/font` appends a `<family> Fallback` entry to the computed `font-family` list (the rendered glyphs are the same self-hosted families), the `#f3f5f4` canvas is painted on the `.sgn-auth` shell instead of `<body>`, and the application adds a skip link the prototype does not have.
+- The prototype's simulated sign-in success and reset timers are not reproduced. The recovery step-two lead uses the application's generic localised copy and never echoes an entered email, because the verified identity comes from the real callback rather than the typed address.
+- Not executed here: real authorized Auth/email/callback acceptance and the production `next build` smoke against a configured Supabase project, which remain staging gates.
+
 ### Engineering foundation verification
 
 Local engineering setup was exercised separately from business acceptance:

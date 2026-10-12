@@ -42,8 +42,10 @@ src/
     auth/                      # PKCE/token-hash recovery callbacks
     api/                       # Validated auth/session/inventory/locale + health
     globals.css                # Shared responsive presentation
+    sgn-auth.css               # Canonical authentication tokens + components (#50)
+    design/auth-preview/       # Isolated review-only design preview (#50)
   proxy.ts                     # Session refresh, live membership and saved locale
-  features/employees/          # Membership guard, auth screens, protected state
+  features/employees/          # Membership guard, auth screens/shell/controls, protected state
   features/properties/         # Bounded queries, details, page views and formatting
   features/property-files/     # Private file read workspace, types, signed URLs
   features/property-maintenance/ # Create/edit maintenance, address/contact forms, history
@@ -61,6 +63,7 @@ scripts/
   maintenance-contract.mjs      # Embedded maintenance/history regressions
   correction-contract.mjs       # Embedded correction-workflow regressions
   employee-access-acceptance.mjs # Real app/browser/Auth/RLS dev fixture acceptance
+  auth-visual-compare.mjs        # Exact-viewport auth design comparison vs preserved prototype
   prepare_workbook.py           # Existing private, dry-run preparation
   test_preparation.py
 supabase/

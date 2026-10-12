@@ -20,6 +20,7 @@ export function POST(request: NextRequest) {
       );
     }
     const employee = await activeEmployee(context);
+    context.setSessionPersistence(input.remember);
     context.setLocale(employee.locale);
     return NextResponse.json({ employee });
   });

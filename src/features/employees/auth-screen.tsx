@@ -2,6 +2,23 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { messages, type Locale } from '@/i18n/messages';
 import { api, RequestError } from './api';
+import { AuthShell } from './auth-shell';
+import { PasswordField, StatusAlert, TextField, buttonClass } from './auth-ui';
+
+// Contiguous, no-space address-shaped email guard (mirrors the API boundary).
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+type EmailError = '' | 'emailRequired' | 'emailInvalid';
+type PasswordError = '' | 'passwordRequired';
+type FormError =
+  '' | 'invalidCredentials' | 'invalidInput' | 'unavailable' | 'signOutFailed';
+
+const formErrorKey: Record<string, keyof (typeof messages)['vi']> = {
+  'invalid-credentials': 'invalidCredentials',
+  'invalid-input': 'invalidInput',
+  'sign-out-failed': 'signOutFailed',
+};
+
 export function AuthScreen({
   initialLocale,
   denied = false,
@@ -10,127 +27,194 @@ export function AuthScreen({
   denied?: boolean;
 }) {
   const [locale, setLocale] = useState(initialLocale);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const text = messages[locale];
+  const [emailError, setEmailError] = useState<EmailError>('');
+  const [passwordError, setPasswordError] = useState<PasswordError>('');
+  const [formError, setFormError] = useState<FormError>('');
+  const emailRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
   const errorSurface = useRef<HTMLParagraphElement>(null);
+  const text = messages[locale];
+
   useEffect(() => {
-    if (error) errorSurface.current?.focus();
-  }, [error]);
+    if (formError) errorSurface.current?.focus({ preventScroll: true });
+  }, [formError]);
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy) return;
+    const trimmed = email.trim();
+    const nextEmailError: EmailError = !trimmed
+      ? 'emailRequired'
+      : EMAIL.test(trimmed)
+        ? ''
+        : 'emailInvalid';
+    const nextPasswordError: PasswordError = password ? '' : 'passwordRequired';
+    setEmailError(nextEmailError);
+    setPasswordError(nextPasswordError);
+    setFormError('');
+    if (nextEmailError) {
+      emailRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    if (nextPasswordError) {
+      passwordRef.current?.focus({ preventScroll: true });
+      return;
+    }
     setBusy(true);
-    setError('');
-    const values = new FormData(event.currentTarget);
     try {
       await api('/api/auth/login', {
-        email: values.get('email'),
-        password: values.get('password'),
+        email: trimmed,
+        password,
         locale,
+        remember,
       });
       window.location.replace('/properties');
+      return;
     } catch (failure) {
       if (
         failure instanceof RequestError &&
         failure.status === 403 &&
         failure.code === 'access-denied'
-      )
+      ) {
         window.location.replace('/access-denied');
-      else
-        setError(
-          failure instanceof RequestError ? failure.code : 'unavailable',
-        );
+        return;
+      }
+      const code =
+        failure instanceof RequestError ? failure.code : 'unavailable';
+      setFormError((formErrorKey[code] ?? 'unavailable') as FormError);
     } finally {
       setBusy(false);
     }
   }
+
   async function logout() {
+    if (busy) return;
     setBusy(true);
+    setFormError('');
     try {
       await api('/api/auth/logout', {});
       window.location.replace('/login?lang=' + locale);
+      return;
     } catch {
-      setError('sign-out-failed');
+      setFormError('signOutFailed');
       setBusy(false);
     }
   }
+
   return (
-    <main className="auth-shell" lang={locale}>
-      <a className="skip-link" href="#main-content">
-        {text.skipToContent}
-      </a>
-      <p className="brand" translate="no">
-        {text.title}
-      </p>
-      <nav aria-label={text.language}>
-        <button
-          type="button"
-          onClick={() => setLocale('vi')}
-          aria-pressed={locale === 'vi'}
-        >
-          {text.viLanguage}
-        </button>
-        <button
-          type="button"
-          onClick={() => setLocale('en')}
-          aria-pressed={locale === 'en'}
-        >
-          {text.enLanguage}
-        </button>
-      </nav>
-      <h1 id="main-content" tabIndex={-1}>
-        {denied ? text.denied : text.login}
-      </h1>
-      <p>{denied ? text.deniedHelp : text.signInHelp}</p>
+    <AuthShell locale={locale} onLocaleChange={setLocale}>
       {denied ? (
-        <button onClick={logout} disabled={busy}>
-          {text.logout}
-        </button>
+        <section className="sgn-card" aria-labelledby="auth-title">
+          <p className="sgn-eyebrow">{text.brandMeta}</p>
+          <h1 id="auth-title">{text.denied}</h1>
+          <p className="sgn-lead">{text.deniedHelp}</p>
+          <div className="sgn-form">
+            <button
+              type="button"
+              className={buttonClass('primary', { block: true, loading: busy })}
+              aria-busy={busy}
+              aria-disabled={busy}
+              onClick={logout}
+            >
+              <span className="sgn-btn-label">{text.logout}</span>
+            </button>
+            {formError ? (
+              <StatusAlert tone="error" innerRef={errorSurface}>
+                {text[formError]}
+              </StatusAlert>
+            ) : null}
+          </div>
+        </section>
       ) : (
-        <>
+        <section className="sgn-card" aria-labelledby="auth-title">
+          <p className="sgn-eyebrow">{text.brandMeta}</p>
+          <h1 id="auth-title">{text.login}</h1>
+          <p className="sgn-lead">{text.signInHelp}</p>
           <form
+            className="sgn-form"
             method="post"
             action="/api/auth/login"
-            onSubmit={submit}
             noValidate
+            onSubmit={submit}
           >
-            <label htmlFor="email">{text.email}</label>
-            <input
+            <TextField
               id="email"
               name="email"
-              type="email"
+              label={text.email}
+              value={email}
+              onChange={(value) => {
+                setEmail(value);
+                if (emailError) setEmailError('');
+              }}
+              onBlur={() => {
+                if (email && !EMAIL.test(email.trim()))
+                  setEmailError('emailInvalid');
+              }}
+              inputRef={emailRef}
+              error={emailError ? text[emailError] : ''}
+              errorId="email-error"
+              invalid={Boolean(emailError)}
               autoComplete="username"
-              spellCheck={false}
               maxLength={254}
-              required
+              placeholder={text.emailPlaceholder}
             />
-            <label htmlFor="password">{text.password}</label>
-            <input
+            <PasswordField
               id="password"
               name="password"
-              type="password"
+              label={text.password}
+              locale={locale}
+              value={password}
+              onChange={(value) => {
+                setPassword(value);
+                if (passwordError) setPasswordError('');
+              }}
+              inputRef={passwordRef}
+              error={passwordError ? text[passwordError] : ''}
+              errorId="password-error"
+              invalid={Boolean(passwordError)}
               autoComplete="current-password"
               maxLength={1024}
-              required
+              placeholder="••••••••"
             />
-            <button disabled={busy}>{busy ? text.loading : text.login}</button>
+            <div className="sgn-row">
+              <label className="sgn-check" htmlFor="remember">
+                <input
+                  type="checkbox"
+                  id="remember"
+                  name="remember"
+                  checked={remember}
+                  disabled={busy}
+                  onChange={(event) => setRemember(event.target.checked)}
+                />
+                <span>{text.remember}</span>
+              </label>
+              <a className="sgn-link" href={'/recover?lang=' + locale}>
+                {text.recovery}
+              </a>
+            </div>
+            <button
+              type="submit"
+              className={buttonClass('primary', { block: true, loading: busy })}
+              aria-busy={busy}
+              aria-disabled={busy}
+            >
+              <span className="sgn-btn-label">
+                {busy ? text.signingIn : text.login}
+              </span>
+            </button>
+            {formError ? (
+              <StatusAlert tone="error" innerRef={errorSurface}>
+                {text[formError]}
+              </StatusAlert>
+            ) : null}
           </form>
-          <p>
-            <a href={'/recover?lang=' + locale}>{text.recovery}</a>
-          </p>
-        </>
+          <p className="sgn-note">{text.accountNote}</p>
+        </section>
       )}
-      {error ? (
-        <p role="alert" ref={errorSurface} tabIndex={-1}>
-          {error === 'invalid-credentials'
-            ? text.invalidCredentials
-            : error === 'invalid-input'
-              ? text.invalidInput
-              : error === 'sign-out-failed'
-                ? text.signOutFailed
-                : text.unavailable}
-        </p>
-      ) : null}
-    </main>
+    </AuthShell>
   );
 }
