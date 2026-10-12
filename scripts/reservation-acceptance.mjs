@@ -313,9 +313,7 @@ function designSystemForm(form, tags) {
   );
 }
 const formWithLabel = (page, label) =>
-  page.forms.find((form) =>
-    form.fields.some((field) => field.label === label),
-  );
+  page.forms.find((form) => form.fields.some((field) => field.label === label));
 function observed(name, details = {}) {
   observations.push({ name, ...details });
   console.log('PASS', name);
@@ -624,9 +622,12 @@ await settle(primary);
     'The pending state states that the property is not held',
   );
   assert.equal(pending.status, 'Đang chào', 'Property status is unchanged');
-  observed('VI detail action submits a request and shows only a pending state', {
-    requestForm,
-  });
+  observed(
+    'VI detail action submits a request and shows only a pending state',
+    {
+      requestForm,
+    },
+  );
 }
 const firstLock = lockRows(main);
 assert.equal(firstLock.length, 1, 'The UI request committed one pending row');
