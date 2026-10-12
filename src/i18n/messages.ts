@@ -259,6 +259,8 @@ const vi = {
   reservationConflict:
     'Đã có xung đột đặt chỗ. Trạng thái mới nhất đang được hiển thị.',
   reservationUnavailable: 'Bất động sản này không còn khả dụng để đặt chỗ.',
+  reservationNotProceeding:
+    'Yêu cầu đặt chỗ này không thể tiếp tục hoặc được quyết định.',
   reservationSelfApproval: 'Bạn không thể tự duyệt yêu cầu của mình.',
   reservationLoadFailed: 'Không tải được tình trạng đặt chỗ.',
   reservationNote:
@@ -534,6 +536,8 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
       'A reservation conflict occurred. The latest state is shown.',
     reservationUnavailable:
       'This property is no longer available for reservation.',
+    reservationNotProceeding:
+      'This reservation request can no longer proceed or be decided.',
     reservationSelfApproval: 'You cannot decide your own request.',
     reservationLoadFailed: 'Reservation state did not load.',
     reservationNote:

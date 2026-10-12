@@ -253,7 +253,8 @@ export function Reservation({
   function message(code: string | null, fallback: string) {
     if (code === 'invalid-input') return text.reservationReasonRequired;
     if (code === 'reservation-conflict') return text.reservationConflict;
-    if (code === 'reservation-unavailable') return text.reservationUnavailable;
+    if (code === 'reservation-unavailable')
+      return text.reservationNotProceeding;
     if (code === 'self-approval-forbidden') return text.reservationSelfApproval;
     if (code === 'not-found') return text.notFound;
     return fallback;
