@@ -40,7 +40,7 @@ const today = {
 };
 
 test('detail load resolves without waiting for the page view or today activity', async (t) => {
-  t.mock.method(globalThis, 'fetch', async (path) => {
+  t.mock.method(globalThis, 'fetch', async (path: string) => {
     if (path === `/api/properties/${id}`) return Response.json(detail);
     return new Promise<Response>(() => {});
   });
@@ -51,21 +51,25 @@ test('detail load resolves without waiting for the page view or today activity',
 test('revalidation refreshes the Vietnam day without adding another logical open', async (t) => {
   let businessDay = '2026-10-10';
   const recorded = new Set<string>();
-  t.mock.method(globalThis, 'fetch', async (path, options) => {
-    assert.ok(options?.signal);
-    if (path === `/api/properties/${id}/page-view`) {
-      const body = JSON.parse(String(options.body));
-      assert.equal(body.key, key);
-      recorded.add(body.key);
-      return new Response(null, { status: 204 });
-    }
-    assert.equal(path, '/api/activity/today');
-    return Response.json({
-      businessDay,
-      pageViewEvents: businessDay === '2026-10-10' ? recorded.size : 0,
-      distinctPropertiesViewed: businessDay === '2026-10-10' ? 1 : 0,
-    });
-  });
+  t.mock.method(
+    globalThis,
+    'fetch',
+    async (path: string, options: RequestInit) => {
+      assert.ok(options?.signal);
+      if (path === `/api/properties/${id}/page-view`) {
+        const body = JSON.parse(String(options.body));
+        assert.equal(body.key, key);
+        recorded.add(body.key);
+        return new Response(null, { status: 204 });
+      }
+      assert.equal(path, '/api/activity/today');
+      return Response.json({
+        businessDay,
+        pageViewEvents: businessDay === '2026-10-10' ? recorded.size : 0,
+        distinctPropertiesViewed: businessDay === '2026-10-10' ? 1 : 0,
+      });
+    },
+  );
   const first = await loadTodayActivity(id, key, new AbortController().signal);
   assert.deepEqual(first.today, {
     businessDay: '2026-10-10',
@@ -86,7 +90,7 @@ test('an invalidated activity load cannot replace the next load', async (t) => {
   const pending = Promise.withResolvers<Response>();
   const started = Promise.withResolvers<void>();
   let reports = 0;
-  t.mock.method(globalThis, 'fetch', async (path) => {
+  t.mock.method(globalThis, 'fetch', async (path: string) => {
     if (path === `/api/properties/${id}/page-view`)
       return new Response(null, { status: 204 });
     assert.equal(path, '/api/activity/today');
@@ -114,7 +118,7 @@ test('activity denial rejects the load', async (t) => {
     '/api/activity/today',
   ]) {
     for (const status of [401, 403]) {
-      const fetch = t.mock.method(globalThis, 'fetch', async (path) => {
+      const fetch = t.mock.method(globalThis, 'fetch', async (path: string) => {
         if (path === deniedPath)
           return Response.json({ error: 'access-denied' }, { status });
         return new Response(null, { status: 204 });
@@ -130,7 +134,7 @@ test('activity denial rejects the load', async (t) => {
 });
 
 test('ordinary activity failure preserves detail and exposes retry state', async (t) => {
-  t.mock.method(globalThis, 'fetch', async (path) => {
+  t.mock.method(globalThis, 'fetch', async (path: string) => {
     if (path === `/api/properties/${id}`) return Response.json(detail);
     return Response.json({ error: 'unavailable' }, { status: 503 });
   });

@@ -70,7 +70,6 @@ export function Detail({
     if (!data) return;
     const abort = new AbortController();
     let current = true;
-    setActivity(null);
     void loadTodayActivity(id, viewKey.current ?? '', abort.signal)
       .then((result) => {
         if (current) setActivity({ detail: data, ...result });

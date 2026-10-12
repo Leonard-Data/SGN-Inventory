@@ -1,4 +1,4 @@
-import { api } from './api';
+import { api } from './api.ts';
 import type { Employee } from './types';
 
 export async function loadProtected<T>(options: {

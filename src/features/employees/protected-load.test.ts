@@ -21,7 +21,7 @@ const archived = { property: { id: 'archived-1' } };
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 test('same-identity reload keeps the rendered snapshot without concealing', async (t) => {
-  t.mock.method(globalThis, 'fetch', async (path) => {
+  t.mock.method(globalThis, 'fetch', async (path: string) => {
     assert.equal(path, '/api/session');
     return Response.json({ employee: reviewer });
   });
