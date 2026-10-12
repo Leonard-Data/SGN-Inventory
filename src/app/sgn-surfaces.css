@@ -36,3 +36,11 @@
   white-space: normal;
   overflow-wrap: anywhere;
 }
+
+/* An exact recorded figure is preserved verbatim, and a long one (a 20-digit VND value
+   in the narrow facts rail) is wider than its cell. The package's row does not wrap it,
+   so it painted across the neighbouring column; wrapping keeps it inside its own cell
+   without changing a digit. */
+.facts dd {
+  overflow-wrap: anywhere;
+}
