@@ -18,6 +18,8 @@ Rental/locale tests also cover preferred language, activation, month generation,
 - The prototype's simulated sign-in success and reset timers are not reproduced. The recovery step-two lead uses the application's generic localised copy and never echoes an entered email, because the verified identity comes from the real callback rather than the typed address.
 - Not executed here: real authorized Auth/email/callback acceptance and the production `next build` smoke against a configured Supabase project, which remain staging gates.
 
+Property-discussion tests (#44) also cover anonymous/inactive/deactivated denial on both the table and the RPC, cross-owner posting without property-edit authority, blank and over-limit validation, retained attribution with immutable property/author/time, employee-scoped submission-key convergence and conflicting reuse, the archived read/post boundary, no side effects on property facts, and tied-time keyset paging without omission or duplication.
+
 ### Engineering foundation verification
 
 Local engineering setup was exercised separately from business acceptance:
@@ -67,6 +69,10 @@ These checks use inert fixtures and do not establish Supabase connectivity, real
 | Independent activation and payment confirmation | Self decisions and unauthorized direct writes denied |
 | Concurrent rent receipts or refunds | Serialized month decisions; cannot exceed dues or confirmed receipt balance |
 | Early termination of a prepaid agreement | Future dues voided; receipts retained; refund due visible; actual refund separately recorded |
+| Direct Data API/RPC access to another property's discussion as anonymous, inactive, unlinked or deactivated identity | No rows and `42501` on guarded RPCs, including with a JWT issued before deactivation |
+| Retry one comment submission with the same employee submission key | One original comment identity; no duplicate; conflicting property or text reuse rejected |
+| Read and post archived-property discussion by role | Reviewer reads; ordinary employees do not; posting denied for every role |
+| Two live sessions post and archive the same property | Serialized on the parent property; no comment commits after the archive commits |
 | Production recovery rehearsal | New user writes preserved; backup/import map available |
 
 Use Supabase CLI advisors and the real local/staging database when available. Inspect the current command's `--help` rather than assuming old flags. Run the SQL pgTAP structural checks in `supabase/tests/` on the local stack.
@@ -251,6 +257,43 @@ Add embedded database regressions only for consumer-visible invariants and run `
 ### Executed property-files evidence
 
 See the scoped development observations below. They distinguish actual browser/API/Storage and independent-session checks from embedded assertions and unexecuted production gates.
+
+## Property discussion staging acceptance
+
+Scope: [ticket #44 shared Property discussion](database-contract.md#ticket-44--shared-property-discussion). Use isolated development/staging with real Supabase Auth, Data API/RLS, the actual VI/EN browser interface and independent connections for contention. Mocked authorization, embedded database checks and readiness pages cannot substitute for this evidence. The development-project run recorded below is scoped development evidence, not production acceptance.
+
+Prepare two active sales employees with distinct properties, an active staff identity, a manager or admin reviewer, an inactive linked identity, an unlinked authenticated identity, and archived/unarchived properties carrying 35+ comments with deliberately tied posting times.
+
+| Scenario | Required observation |
+| --- | --- |
+| Active employee opens another employee's protected property detail | Real protected detail loads its discussion; author name and Vietnam posting time show newest-first; posting succeeds without granting property-edit authority |
+| Post Vietnamese text with accents and internal line breaks, then reload | Stored and displayed text is byte-identical to the trimmed input; `body` renders as plain text and HTML-like input cannot execute script |
+| Submit blank, whitespace-only and 2001-character text through the browser and direct API/RPC | Localized validation on both boundaries; no comment row is created |
+| Ambiguous or failed post (network dropped after commit, and before commit) with the draft retained; retry with the same submission key | Commit visible immediately; the failure is never reported as success; retry converges on one original comment identity and creates no duplicate; conflicting reuse of that key is rejected |
+| Anonymous, inactive, unlinked and live-deactivated identities call the endpoint and the direct Data API/RPC with an existing JWT | Discussion rows are invisible, guarded RPCs answer `42501`/`403`, and refocus clears displayed discussion without cached protected navigation exposure |
+| Manager/admin and an ordinary employee open an archived property detail | Reviewer reads archived discussion; ordinary employees do not; posting is denied for every role |
+| Two real sessions: one posts while another archives the same property | The two serialize on the parent property row; the post either commits before the archive or is denied after it, never after the archive commits |
+| Page a 35+ comment discussion with many identical posting times | Pages of 30 are newest-first, cursor-based and complete: no comment is omitted or duplicated across pages |
+| Switch VI → EN → VI while the discussion is open | Labels, validation, empty and error states switch; source comment text, author names and the open property are unchanged |
+| Keyboard-only and 360px mobile use of the comment form, refresh and paging controls | All controls are reachable and operable; focus and announcements work; no horizontal overflow |
+
+Add embedded database regressions only for consumer-visible invariants and run `npm run test:schema` for schema/workflow changes. Browser, real Data API/RLS and separate-session contention remain distinct proof. Record sanitized observations without tokens, credentials, private source payloads or customer records.
+
+### Executed ticket #44 development evidence
+
+`docs/property-comments-acceptance.json` records the real hosted-development/local-build run (`checkedAt` in that file) produced by `scripts/property-comments-acceptance.mjs`. It exercises the actual Next.js application in real Chrome profiles at the configured origin, real Supabase Auth sessions and the direct Data API/RPC boundary against the authorized development project `tneucwzcrzteeixvttpu`, with `20261012001931_property_comments.sql` applied on that project. All 17 observation groups passed; the sanitized report holds the observed values.
+
+The recorded run was repeated at the reconciled head after the default branch moved to the `#53` authentication-interface refactor, because that refactor changes the sign-in surface this journey starts from. The evidence in the report is that reconciled-head run, not a pre-refactor measurement carried forward. **Disclosure:** the refactor gave the sign-in language switch an `aria-label`, which changed its accessible name; the harness now selects the switch by its `lang` attribute and reads the active locale from the shell element. The control itself is still present on the sign-in page and the VI/EN journey it drives is unchanged, so this is a harness adaptation, not a product change or a missing control.
+
+- The reviewed forward migration `20261012001931_property_comments.sql` was the only pending migration in the CLI dry-run and was applied through that path with no seeds or roles; the table, policy, immutability trigger and both public invoker wrappers exist afterwards.
+- Browser journey: VI default detail with a visible empty discussion; a Vietnamese multi-line comment with accents posted and displayed immediately with its author and Vietnam posting time; HTML-like input retained literally with no element injected and no script executed; explicit refresh without duplication; 30-entry newest-first page plus a following page over 35 comments that all share one posting time, with no omission or duplication; VI → EN → VI switching that keeps source text, labels and the open property; a colleague reading and posting on another employee's property with no property-edit controls; sign-out followed by protected navigation showing no cached discussion; live deactivation clearing the displayed discussion on refocus and landing on the localized denial page with no comment text left in the document.
+- Direct user-session boundary: anonymous and unlinked identities read no rows and are rejected by both RPCs; an inactive identity and a session established before deactivation read no rows and receive `42501` when posting; direct client insert/update/delete on the table are denied and the retained attribution, text and revision are unchanged; blank, whitespace-only, 2001-character and missing-key submissions are rejected at the database boundary while 2000 characters are accepted; the same employee submission key converges on one original comment identity, conflicting text or property reuse returns `23505`, a new key deliberately creates another comment, and unknown parameters cannot forge actor or time; the archived property's discussion is reviewer-readable and ordinary-employee invisible, posting is denied for every role, and recovery of the original key rechecks the archive state and is refused.
+- Application routes: the discussion read returns `200` with `Cache-Control: private, no-store, max-age=0`, unknown fields and malformed cursors are `400`, an identical retry recovers the original comment, and conflicting reuse is `409 comment-conflict`.
+- Post/archive race with competing real sessions: the parent property row was held while four rounds ran a real posting session against a real archiving session. In the recorded reconciled-head run the archive won all four rounds — each post was denied as archived and committed no comment — while the earlier pre-refactor run recorded two rounds each way. Both distributions are legal serializations; the assertion that holds in every round is the invariant: a denied post leaves no comment, a winning post leaves exactly one comment whose server posting time precedes the archive's own server-timestamped history marker, no round produces a duplicate, and a same-key retry after the archive is refused. The sanitized report carries the per-round outcome counts.
+
+**Fixture handling and restoration.** The task created a disjoint `SGN-TEST-44` namespace only — four synthetic employees with linked Auth identities, one unlinked Auth identity, five synthetic properties with legacy addresses, and 35 synthetic paging comments — recorded in a private manifest outside Git. It removed exactly that namespace through the operator plane (comments first, then dependent rows, properties, employees and the Auth users) and re-read the full baseline: every original table's row count and id-hash matches the pre-acceptance baseline exactly (50 properties, 19 employees, 125 activity events, 39 property-history rows and all other original rows unchanged). The migration itself remains applied; it is the deliverable schema, not fixture data.
+
+**Remaining limits.** This is scoped development evidence on the authorized dev project. It does not establish production acceptance, a full VI/EN accessibility audit, keyboard-only and 360px mobile operation of the new controls (the rows above remain the staging gates for those), sustained multi-session contention at production load, or any part of the parent specification's moderation slice. The operator connection holds the parent row for the race window, so the race is real-session evidence rather than a production-load contention benchmark.
 
 ## Contention test procedure
 

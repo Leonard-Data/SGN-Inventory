@@ -106,6 +106,20 @@ _Avoid_: Effective reservation
 An approved, unexpired property reservation identifying the claimant for commission attribution, not a commission amount or payout.
 _Avoid_: Pending lock, permanent property lock
 
+### Discussion
+
+**Property comment**:
+A plain-text message an active employee posts to a property's shared flat discussion. Its author identity, text and posting time are retained from creation and are not edited or removed in this slice.
+_Avoid_: Note, activity entry, private message
+
+**Property discussion**:
+The newest-first shared list of a property's Property comments, readable and postable by any active employee who can read the property without holding property-edit authority. Posting to an archived property is denied for every role, and only manager/admin read archived discussion.
+_Avoid_: Chat, live feed, moderation queue
+
+**Submission key**:
+An employee-scoped key identifying one comment submission, so an interrupted or ambiguous post retries the same original comment instead of creating another. Reusing it with different property or text is rejected.
+_Avoid_: Draft identity, temporary ID
+
 
 ### Property files
 

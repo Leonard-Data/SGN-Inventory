@@ -98,6 +98,22 @@ const vi = {
   todayPageViews: 'Lượt xem trang',
   todayProperties: 'Bất động sản đã xem',
   todayActivityFailed: 'Chưa tải được hoạt động hôm nay.',
+  discussion: 'Thảo luận bất động sản',
+  addComment: 'Bình luận',
+  commentHint: 'Viết bình luận chung cho bất động sản này. Tối đa 2.000 ký tự.',
+  postComment: 'Gửi bình luận',
+  posting: 'Đang gửi…',
+  commentRequired: 'Vui lòng nhập từ 1 đến 2.000 ký tự.',
+  commentTooLong: 'Bình luận tối đa 2.000 ký tự.',
+  commentPosted: 'Đã gửi bình luận.',
+  commentPostFailed:
+    'Chưa gửi được bình luận. Bản nháp được giữ lại; gửi lại sẽ không tạo bình luận trùng.',
+  commentConflict:
+    'Khóa gửi này đã được ghi với nội dung khác. Hãy làm mới để xem bình luận đã ghi.',
+  noComments: 'Chưa có bình luận nào.',
+  moreComments: 'Xem bình luận cũ hơn',
+  refresh: 'Làm mới',
+  vietnamTime: 'giờ Việt Nam',
   savedLocaleFailed:
     'Không lưu được ngôn ngữ. Ngôn ngữ hiện tại được giữ nguyên.',
   recovery: 'Quên mật khẩu?',
@@ -271,6 +287,23 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     todayPageViews: 'Page views',
     todayProperties: 'Distinct properties viewed',
     todayActivityFailed: "Today's activity could not be loaded.",
+    discussion: 'Property discussion',
+    addComment: 'Comment',
+    commentHint:
+      'Write a shared comment about this property. Up to 2,000 characters.',
+    postComment: 'Post comment',
+    posting: 'Posting…',
+    commentRequired: 'Enter 1 to 2,000 characters.',
+    commentTooLong: 'Comments are limited to 2,000 characters.',
+    commentPosted: 'Comment posted.',
+    commentPostFailed:
+      'Comment not posted. Your draft is kept; retrying does not create a duplicate.',
+    commentConflict:
+      'This submission key already recorded different text. Refresh to see the recorded comment.',
+    noComments: 'No comments yet.',
+    moreComments: 'More comments',
+    refresh: 'Refresh',
+    vietnamTime: 'Vietnam time',
     savedLocaleFailed:
       'Unable to save language. The current language is unchanged.',
     recovery: 'Forgot password?',
