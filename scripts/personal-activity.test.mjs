@@ -256,18 +256,48 @@ test('personal today activity enforces own scope, Vietnam day, retry identity an
       employees[0],
     ]);
     // Archived review: managers keep authorized contact access without new credit, while
-    // ordinary employees stay denied; earlier credit survives the archive.
+    // ordinary employees stay denied; earlier credit survives the archive, and a manager's
+    // retry after the archive still returns the original committed reference and day.
+    await asUser(2);
+    const managerKey = randomUUID();
+    const managerFirst = await disclose(properties[3], managerKey);
+    assert.equal(managerFirst.credited, true);
+    await db.exec('reset role');
     await db.query("select set_config('request.jwt.claim.sub','',false)");
     await db.query(
       'update public.properties set archived_at=now() where id=$1',
       [properties[3]],
     );
     await asUser(2);
+    const recoveredManager = await disclose(properties[3], managerKey);
+    assert.equal(recoveredManager.eventId, managerFirst.eventId);
+    assert.equal(recoveredManager.businessDay, managerFirst.businessDay);
+    assert.equal(recoveredManager.credited, true);
     const archived = await disclose(properties[3], randomUUID());
     assert.equal(archived.credited, false);
     assert.equal(archived.eventId, null);
     assert.equal(archived.contact.phone, '0901234567');
-    await report(1, 1, 0);
+    // A key committed for one property is rejected on another, archived path included.
+    await assert.rejects(disclose(properties[0], managerKey), {
+      code: 'P0005',
+    });
+    await report(1, 1, 1);
+    // A committed reference survives the recorded owner phone being removed.
+    await db.exec('reset role');
+    await db.query("select set_config('request.jwt.claim.sub','',false)");
+    await db.query("update public.contacts set phones='{}' where id=$1", [
+      sharedOwner,
+    ]);
+    await asUser(2);
+    const phoneRemoved = await disclose(properties[3], managerKey);
+    assert.equal(phoneRemoved.eventId, managerFirst.eventId);
+    assert.equal(phoneRemoved.contact.phone, '');
+    await db.exec('reset role');
+    await db.query("select set_config('request.jwt.claim.sub','',false)");
+    await db.query(
+      "update public.contacts set phones='{0901234567}' where id=$1",
+      [sharedOwner],
+    );
     await asUser(0);
     await assert.rejects(disclose(properties[3], randomUUID()), {
       code: 'P0002',

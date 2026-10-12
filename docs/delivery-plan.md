@@ -17,11 +17,11 @@ The database and engineering foundation plus issue #1 employee-access routes are
 | `src/app/(auth)/login/page.tsx` | Login and invitation/recovery flow |
 | `src/app/(app)/properties/page.tsx` | Inventory search/filter/page |
 | `src/app/(app)/properties/[id]/page.tsx` | Property details, contacts, files, reservation banner |
-| `src/app/(app)/activity/page.tsx` | Own daily activity and visit submission |
+| `src/app/(app)/activity/page.tsx` | Own daily activity: page views, distinct properties viewed and owner-contact access |
 | `src/app/(app)/reservations/page.tsx` | Own requests and effective locks |
 | `src/app/(app)/rentals/page.tsx` | Tenancy/occupancy inventory with VI/EN labels |
 | `src/app/(app)/rentals/[id]/page.tsx` | Agreement details; staff/reviewer monthly dues and payment review |
-| `src/app/(app)/reviews/page.tsx` | Independent reservation/visit/file review queue |
+| `src/app/(app)/reviews/page.tsx` | Independent reservation/file review queue |
 | `src/app/(app)/admin/employees/page.tsx` | Guarded user management |
 | `src/app/(app)/admin/analytics/page.tsx` | Area and employee dashboards |
 | `src/lib/supabase/client.ts` | Browser publishable-key client |
@@ -30,7 +30,7 @@ The database and engineering foundation plus issue #1 employee-access routes are
 | `src/features/properties/` | Search, form validation, detail queries and mutations |
 | `src/features/addresses/` | Versioned unit selectors and mapping review |
 | `src/features/reservations/` | RPC calls, state badges and decision forms |
-| `src/features/activity/` | Idempotent event capture and confirmed-visit report |
+| `src/features/activity/` | Idempotent event capture and own daily activity report (page views, distinct properties, owner-contact access) |
 | `src/features/files/` | Metadata registration, upload, completion and signed download |
 | `src/features/employees/` | Invite/link/deactivate with reviewed roles |
 | `src/features/rentals/` | Agreement lifecycle, monthly occupancy/dues and reviewed manual receipts/refunds |
@@ -49,7 +49,7 @@ Keep Server Actions narrow and input-validated. Reuse user-scoped data clients i
 | 3 | Property/contact/address maintenance and correction requests | Role-scoped immediate saves; property history; preserved legacy input; optional address verification; stale-edit rejection; no maintenance approval |
 | 4 | Private file protocol | Register → upload → confirm → signed read; interrupted upload recovery; no public legal links |
 | 5 | Approval-based reservations | Independent approval; duplicate/competing requests handled clearly; expiry and release reflected immediately |
-| 6 | Activity and review | Detail opens are page views; visits submitted/confirmed separately; unique confirmed-property daily KPI |
+| 6 | Activity and review | Detail opens are page views; a deliberate owner-contact disclosure counts one property per employee/Vietnam day; physical-visit submission is retired |
 | 7 | Employee management and analytics | Last-admin protected invitation/role/deactivation action; zero-day reports; verified/unresolved area split |
 | 7a | Bilingual interface and language preference | Full VI/EN dictionary parity and switching; VND, Vietnamese addresses and Vietnam calendar retained |
 | 7b | Rental management | Draft/independent activation/end/cancel; active months; confirmed partial/full receipts, overdue and refund balances |

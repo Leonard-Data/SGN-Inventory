@@ -187,7 +187,9 @@ export function Detail({
             : disclosureError === 'not-found'
               ? text.notFound
               : text.ownerContactFailed;
-  const dial = ownerContact ? dialableNumber(ownerContact.contact.phone) : null;
+  const dial = ownerContact?.contact
+    ? dialableNumber(ownerContact.contact.phone)
+    : null;
   const employeeId = employee?.id;
   const denyFiles = useCallback(
     (status: number) => {
@@ -365,25 +367,29 @@ export function Detail({
                 <div className="owner-disclosure">
                   <h3>{text.owner}</h3>
                   {ownerContact ? (
-                    <>
-                      <p translate="no">
-                        {ownerContact.contact.displayName}{' '}
-                        <span className="badge">
-                          {label(locale, ownerContact.contact.relation)}
-                        </span>
-                        {ownerContact.contact.isPrimary ? (
-                          <span className="badge">{text.primary}</span>
-                        ) : null}
-                      </p>
-                      <p className="owner-phone" translate="no">
-                        {ownerContact.contact.phone}
-                      </p>
-                      {dial ? (
-                        <a href={'tel:' + dial}>{text.call}</a>
-                      ) : (
-                        <p className="muted">{text.callUnavailable}</p>
-                      )}
-                    </>
+                    ownerContact.contact ? (
+                      <>
+                        <p translate="no">
+                          {ownerContact.contact.displayName}{' '}
+                          <span className="badge">
+                            {label(locale, ownerContact.contact.relation)}
+                          </span>
+                          {ownerContact.contact.isPrimary ? (
+                            <span className="badge">{text.primary}</span>
+                          ) : null}
+                        </p>
+                        <p className="owner-phone" translate="no">
+                          {ownerContact.contact.phone}
+                        </p>
+                        {dial ? (
+                          <a href={'tel:' + dial}>{text.call}</a>
+                        ) : (
+                          <p className="muted">{text.callUnavailable}</p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="muted">{text.ownerContactUnavailable}</p>
+                    )
                   ) : (
                     <>
                       {disclosureError ? (

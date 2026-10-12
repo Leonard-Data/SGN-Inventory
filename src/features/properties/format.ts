@@ -41,8 +41,12 @@ export function vietnamDate(value: string): string {
     .map((type) => parts.find((part) => part.type === type)!.value)
     .join('/');
 }
-// Only a number with enough digits becomes a dialer link; the recorded string is never rewritten.
+// Only a recorded entry that looks like one plausible number becomes a dialer link; two
+// numbers or masked text must not be concatenated into a fabricated dial target.
 export function dialableNumber(phone: string): string | null {
-  const dialable = phone.replace(/[^\d+]/g, '');
-  return (dialable.match(/\d/g) ?? []).length >= 3 ? dialable : null;
+  const trimmed = phone.trim();
+  if (!/^\+?[0-9\s().-]+$/.test(trimmed)) return null;
+  const dialable = trimmed.replace(/[^\d+]/g, '');
+  const digits = (dialable.match(/\d/g) ?? []).length;
+  return digits >= 8 && digits <= 15 ? dialable : null;
 }

@@ -65,7 +65,7 @@ Acceptance: representative sample reconciles, contacts/files match confirmed pro
 | Authorization | Anonymous/inactive denied; self approval denied; direct lock/activity writes denied; manager/admin analytics restricted |
 | Contention | Two independent database sessions approve competing requests; exactly one succeeds |
 
-Sales users test actual address searches, owner contact lookup, document access, visit submission and reservation request. Reviewers test independent decisions, expiry, release and dashboard reconciliation. Admins test invitations and deactivation. Confirm clear Vietnamese labels for draft, legacy, unresolved and reserved states.
+Sales users test actual address searches, owner contact lookup, owner-contact disclosure, document access and reservation request. Reviewers test independent decisions, expiry, release and dashboard reconciliation. Admins test invitations and deactivation. Confirm clear Vietnamese labels for draft, legacy, unresolved and reserved states.
 
 ## Phase 6 — Final snapshot and cutover
 

@@ -94,6 +94,8 @@ const vi = {
   ownerContactFailed:
     'Chưa hiện được liên hệ chủ nhà. Thử lại dùng lại lượt ghi nhận này, không tạo thêm.',
   ownerContactKeyConflict: 'Lượt ghi nhận này đã dùng cho bất động sản khác.',
+  ownerContactUnavailable:
+    'Đã ghi nhận lượt mở liên hệ chủ nhà; hiện chưa có số để hiển thị.',
   call: 'Gọi',
   callUnavailable: 'Số đã ghi không đủ để quay số.',
   ownerContactNote:
@@ -295,6 +297,8 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
       'Owner contact could not be revealed. Retrying reuses this recorded access without adding another.',
     ownerContactKeyConflict:
       'This access reference was already used for another property.',
+    ownerContactUnavailable:
+      'Owner-contact access was recorded; no owner phone is currently recorded.',
     call: 'Call',
     callUnavailable: 'The recorded number is not dialable.',
     ownerContactNote:

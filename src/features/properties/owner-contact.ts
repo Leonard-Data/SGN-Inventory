@@ -16,34 +16,37 @@ function disclosure(value: unknown): OwnerContactDisclosure {
     value && typeof value === 'object'
       ? (value as Record<string, unknown>)
       : null;
+  const raw = row?.contact;
   const contact =
-    row?.contact && typeof row.contact === 'object'
-      ? (row.contact as Record<string, unknown>)
-      : null;
+    raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null;
   if (
     !row ||
     (row.eventId !== null && typeof row.eventId !== 'string') ||
     typeof row.businessDay !== 'string' ||
     typeof row.credited !== 'boolean' ||
-    !contact ||
-    typeof contact.id !== 'string' ||
-    typeof contact.displayName !== 'string' ||
-    typeof contact.relation !== 'string' ||
-    typeof contact.isPrimary !== 'boolean' ||
-    typeof contact.phone !== 'string'
+    (raw !== null && !contact) ||
+    (contact !== null &&
+      (typeof contact.id !== 'string' ||
+        typeof contact.displayName !== 'string' ||
+        typeof contact.relation !== 'string' ||
+        typeof contact.isPrimary !== 'boolean' ||
+        typeof contact.phone !== 'string'))
   )
     throw new ApiError(503, 'unavailable');
   return {
     eventId: row.eventId,
     businessDay: row.businessDay,
     credited: row.credited,
-    contact: {
-      id: contact.id,
-      displayName: contact.displayName,
-      relation: contact.relation,
-      isPrimary: contact.isPrimary,
-      phone: contact.phone,
-    },
+    contact:
+      contact === null
+        ? null
+        : {
+            id: contact.id as string,
+            displayName: contact.displayName as string,
+            relation: contact.relation as string,
+            isPrimary: contact.isPrimary as boolean,
+            phone: contact.phone as string,
+          },
   };
 }
 

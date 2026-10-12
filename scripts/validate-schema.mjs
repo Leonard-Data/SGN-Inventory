@@ -547,6 +547,20 @@ await check('manager archived review keeps contact access without new credit',as
 await asUser(0);
 await check('ordinary employee stays denied archived contact access',()=>fails('select public.reveal_owner_contact($1,$2)',[ownerProperty2,randomUUID()],'P0002'));
 await check('archiving a property does not erase earlier owner-contact credit',async()=>assert.equal(Number((await db.query('select owner_contact_properties from public.my_today_activity()')).rows[0].owner_contact_properties),2));
+await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
+await asUser(2);
+const managerKey=randomUUID();
+const managerFirst=(await db.query('select public.reveal_owner_contact($1,$2) as result',[ownerProperty,managerKey])).rows[0].result;
+await check('manager retry after archiving returns the original reference and day',async()=>{
+  await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
+  await db.query('update public.properties set archived_at=now() where id=$1',[ownerProperty]);
+  await asUser(2);
+  const retried=(await db.query('select public.reveal_owner_contact($1,$2) as result',[ownerProperty,managerKey])).rows[0].result;
+  assert.equal(retried.eventId,managerFirst.eventId);
+  assert.equal(retried.businessDay,managerFirst.businessDay);
+  assert.equal(retried.credited,true);
+});
+await check('reusing a committed key on another archived property is rejected',()=>fails('select public.reveal_owner_contact($1,$2)',[ownerProperty2,managerKey],'P0005'));
 await asUser(null);
 await check('anonymous today activity denied',()=>fails('select * from public.my_today_activity()',[],'42501'));
 await check('anonymous owner disclosure denied',()=>fails('select public.reveal_owner_contact($1,$2)',[ownerProperty,randomUUID()],'42501'));
