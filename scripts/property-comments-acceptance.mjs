@@ -740,9 +740,11 @@ await settle(secondary);
     !after.statuses.some((status) => /Chưa gỡ được/.test(status)),
     'A committed removal is never reported as failed',
   );
+  const withdrawnText = own.body.replace(/\s+/g, ' ').trim();
+  assert.ok(withdrawnText.length > 0, 'The withdrawn comment carried text');
   assert.equal(
     evaluate(
-      `() => document.body.innerText.includes(${JSON.stringify(own.body)})`,
+      `() => document.body.innerText.replace(/\\s+/g, ' ').includes(${JSON.stringify(withdrawnText)})`,
       primary,
     ),
     false,
