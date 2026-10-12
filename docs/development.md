@@ -50,7 +50,7 @@ src/
   features/property-files/     # Private file read workspace, types, signed URLs
   features/property-maintenance/ # Create/edit maintenance, address/contact forms, history
   features/corrections/        # Correction submission, queue and amendment rendering
-  features/property-comments/  # Shared Property discussion, submission-key recovery and paging
+  features/property-comments/  # Shared Property discussion with author edit, submission-key recovery and paging
   i18n/messages.ts             # Equivalent typed VI/EN journey dictionaries
   lib/supabase/route.ts         # User-scoped SSR cookies/cache/input boundary
   types/database.ts            # Generated from the live dev public schema
@@ -63,7 +63,7 @@ scripts/
   validate-schema.mjs           # Existing embedded SQL assertions
   maintenance-contract.mjs      # Embedded maintenance/history regressions
   correction-contract.mjs       # Embedded correction-workflow regressions
-  comments-contract.mjs         # Embedded discussion role/validation/retry/paging regressions
+  comments-contract.mjs         # Embedded discussion role/validation/retry/paging and retained-edit regressions
   employee-access-acceptance.mjs # Real app/browser/Auth/RLS dev fixture acceptance
   auth-visual-compare.mjs        # Exact-viewport auth design comparison vs preserved prototype
   prepare_workbook.py           # Existing private, dry-run preparation
