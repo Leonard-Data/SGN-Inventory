@@ -11,6 +11,7 @@ import { messages, type Locale } from '@/i18n/messages';
 import { api, RequestError } from '@/features/employees/api';
 import { vietnamTimestamp } from '@/features/properties/format';
 import { COMMENT_MAX_LENGTH, COMMENT_PAGE_SIZE } from './types';
+import { mergeComments } from './merge';
 import type { Comment, CommentCursor, CommentPage } from './types';
 
 const cursorOf = (row: Comment | undefined): CommentCursor | null =>
@@ -101,7 +102,7 @@ export function Discussion({
       return null;
     });
     if (version === generation.current && page) {
-      setComments(page.comments);
+      setComments((rows) => mergeComments(page.comments, rows));
       setNext(page.nextCursor);
       setError(null);
     }
@@ -245,13 +246,14 @@ export function Discussion({
         )
       ).comment;
     } catch (problem) {
-      if (
-        problem instanceof RequestError &&
-        (problem.status === 401 || problem.status === 403)
-      ) {
+      if (problem instanceof RequestError && problem.status === 401) {
         onDenied(problem.status);
         return;
       }
+      // A 403 covers an archived Property, a changed author and an inactive employee, and the
+      // routine raises one code for all of them, so an edit refusal is a save failure that keeps
+      // the draft; only a 401 clears the session. A dedicated state-change code is a later
+      // slice's contract, not this ticket's.
       const stale =
         problem instanceof RequestError && problem.code === 'stale-edit';
       setSaving(false);

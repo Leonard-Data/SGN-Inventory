@@ -120,15 +120,12 @@ begin
   -- never retried as a serialization failure.
   if comment.revision <> p_expected_revision then raise exception 'stale comment edit; reload current text' using errcode = 'PT409'; end if;
   select e.display_name into author from public.employees e where e.id = me;
-  -- An unchanged save is a no-op success: no revision row and no false edited marker.
-  if comment.body <> text_body then
-    insert into public.property_comment_revisions(comment_id,property_id,actor_id,actor_name,edited_at,before_revision,after_revision,before_body,after_body)
-      values(p_comment_id,prop,me,author,stamp,comment.revision,next_revision,comment.body,text_body);
-    update public.property_comments set body = text_body, revision = next_revision, edited_at = stamp
-      where id = p_comment_id returning * into updated;
-  else
-    updated := comment;
-  end if;
+  -- An unchanged body violates the retained-revision check below, so it is rejected rather than
+  -- reported as an edit that wrote no evidence.
+  insert into public.property_comment_revisions(comment_id,property_id,actor_id,actor_name,edited_at,before_revision,after_revision,before_body,after_body)
+    values(p_comment_id,prop,me,author,stamp,comment.revision,next_revision,comment.body,text_body);
+  update public.property_comments set body = text_body, revision = next_revision, edited_at = stamp
+    where id = p_comment_id returning * into updated;
   return jsonb_build_object(
     'id',updated.id,'property_id',updated.property_id,'author_id',updated.author_id,
     'author_name',updated.author_name,'body',updated.body,'created_at',updated.created_at,

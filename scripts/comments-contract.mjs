@@ -802,7 +802,7 @@ export async function commentsContract({
     },
   );
   await check(
-    'edited text keeps the posting validation and an unchanged save adds no version',
+    'edited text keeps the posting validation and an unchanged save is rejected',
     async () => {
       await asUser(1);
       for (const bad of ['', '   ', 'a'.repeat(2001), null])
@@ -817,18 +817,15 @@ export async function commentsContract({
         await db.query(edit, [firstId, boundary, thirdEdit.revision])
       ).rows[0].edited;
       assert.equal((await own(firstId)).body, boundary);
-      const unchanged = (
-        await db.query(edit, [firstId, boundary, accepted.revision])
-      ).rows[0].edited;
-      assert.equal(unchanged.revision, accepted.revision);
-      assert.equal(unchanged.edited_at, accepted.edited_at);
+      await fails(edit, [firstId, boundary, accepted.revision], '23514');
+      assert.equal((await own(firstId)).body, boundary);
       await asAdmin();
       assert.equal(
         (await revisions(firstId)).length,
         4,
-        'an unchanged save is a no-op success',
+        'an unchanged save appends no version',
       );
-      thirdEdit = unchanged;
+      thirdEdit = accepted;
     },
   );
   await check(

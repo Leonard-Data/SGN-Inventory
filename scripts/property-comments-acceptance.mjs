@@ -1682,9 +1682,11 @@ await openDiscussion(discussion, secondary);
 }
 
 // --------------------------------------------------------- post and archive race
-// The holder takes the parent Property row lock and only then records its marker, so the
-// marker is proof the lock is held; the competing requests are dispatched inside that window.
-function holdPropertyLock(propertyId, seconds, markerKey) {
+// The holder takes the parent Property row lock, then takes a transaction-scoped advisory lock
+// that a second connection observes in pg_locks immediately. Unlike the previous uncommitted
+// marker row, the advisory lock proves the row lock is held before the holder commits; the
+// competing requests are dispatched only after that readiness is observed.
+function holdPropertyLock(propertyId, seconds, lockKey) {
   return spawn(
     'npx',
     [
@@ -1693,10 +1695,9 @@ function holdPropertyLock(propertyId, seconds, markerKey) {
       'query',
       '--db-url',
       operator.dbUrl,
-      `with locked as (select id from public.properties where id='${propertyId}' for update),
-       marker as (insert into public.activity_events(employee_id,property_id,kind,idempotency_key)
-         select '${alphaEmployee}'::uuid,'${propertyId}'::uuid,'page_view','${markerKey}'::uuid from locked returning id)
-       select pg_sleep(${seconds}) from marker`,
+      `with locked as (select id from public.properties where id='${propertyId}' for update)
+       select pg_sleep(${seconds})
+       from (select pg_advisory_xact_lock(${lockKey}) from locked) held`,
     ],
     { encoding: 'utf8', stdio: 'ignore' },
   );
@@ -1763,18 +1764,23 @@ async function attempt(propertyId, key, body) {
     p_key: key,
   });
 }
-async function markerCount(markerKey) {
+async function lockCount(lockKey) {
   const rows = await operatorSqlAsync(
-    `select count(*)::int as n from public.activity_events where idempotency_key = '${markerKey}'`,
+    `select count(*)::int as n from pg_locks
+      where locktype = 'advisory' and granted
+        and classid::bigint * 4294967296 + objid::bigint = ${lockKey}`,
   );
   return Number(rows[0]?.n ?? 0);
 }
-async function waitForMarker(markerKey) {
-  for (let attempt = 0; attempt < 6; attempt++) {
-    if ((await markerCount(markerKey)) > 0) return true;
-    await new Promise((resolve) => setTimeout(resolve, 200));
+async function waitForLock(lockKey) {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    if ((await lockCount(lockKey)) > 0) return true;
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
   return false;
+}
+function readinessKey() {
+  return BigInt('0x' + randomUUID().replaceAll('-', '').slice(0, 15));
 }
 // Server-side ordering evidence for one round: the archive records its own update in
 // property_history with clock_timestamp(), directly comparable with the comment's
@@ -1800,13 +1806,13 @@ async function runRaceRound(round) {
   await resetRaceProperty(race.id);
   const revision = await archiveRevision(reviewer, race.id);
   const marker = `SGN44 race round ${round}`;
-  const markerKey = randomUUID();
+  const lockKey = readinessKey();
   // Short hold: both requests must queue and still finish inside the 8s authenticated
   // statement timeout.
-  const holder = holdPropertyLock(race.id, 5, markerKey);
+  const holder = holdPropertyLock(race.id, 5, lockKey);
   assert.ok(
-    await waitForMarker(markerKey),
-    'The holder records its marker only after locking the parent property',
+    await waitForLock(lockKey),
+    'The holder holds the parent property row before the competing requests',
   );
   const [posted, archivedResult] = await Promise.all([
     Promise.resolve(
@@ -1937,8 +1943,8 @@ async function runRaceRound(round) {
   );
 }
 // ------------------------------------------------------- edit and archive race
-// The holder takes the parent Property row lock and only then records its marker, so the
-// marker is proof the lock is held; both competing requests are dispatched inside that window.
+// The holder takes the parent Property row lock and the readiness lock, so both competing
+// requests are dispatched inside that genuinely held window.
 async function runEditRaceRound(round) {
   await resetRaceProperty(race.id);
   const created = await alpha.rpc('post_property_comment', {
@@ -1950,10 +1956,10 @@ async function runEditRaceRound(round) {
   const revision = await archiveRevision(reviewer, race.id);
   const session = await appSession('alpha');
   const marker = `SGN44 edit race round ${round}`;
-  const markerKey = randomUUID();
-  const holder = holdPropertyLock(race.id, 5, markerKey);
+  const lockKey = readinessKey();
+  const holder = holdPropertyLock(race.id, 5, lockKey);
   assert.ok(
-    await waitForMarker(markerKey),
+    await waitForLock(lockKey),
     'The holder takes the parent property row before the competing requests',
   );
   const [edited, archivedResult] = await Promise.all([
@@ -2028,6 +2034,7 @@ const report = {
   limits: [
     `Fixture-only writes: the ${namespace} namespace is created and removed by this task; retained revisions reference their comment and are removed first.`,
     'The held-lock races use the operator connection to hold the parent property row; they do not replace a staging gate for production contention.',
+    'The readiness gate is an advisory lock visible in pg_locks while the parent row lock is held; the earlier #44 rounds recorded posted: 0 and denied: 4 because their uncommitted marker row became visible only after the holder released the lock, so the competing requests were dispatched with no lock held.',
     'The harness was reconciled for the design-system record page (tabbed record, shell language switch and account menu) and extended for the ticket #46 edit journey at this head.',
   ],
 };
