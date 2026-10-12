@@ -946,6 +946,40 @@ try {
     'a colleague’s rows on the same days are absent from the owner report',
   );
 
+  // Same-period agreement with the manager/admin company figures for every employee and day:
+  // both reports derive from the committed rows, so the separated metrics must match exactly.
+  const company = await retryResult('company report', () =>
+    manager.rpc('company_employee_daily_activity', { p_from: from, p_to: to }),
+  );
+  assert.equal(company.error, null, 'company report read failed');
+  for (const [name, personal] of [
+    ['salesA', own],
+    ['staff', colleague],
+    ['manager', reviewer],
+  ]) {
+    for (const value of days) {
+      const row = company.data.find(
+        (entry) =>
+          entry.employee_id === fixtures[name].employeeId &&
+          entry.business_day === value,
+      );
+      assert.ok(row, `missing company row for ${name} on ${value}`);
+      assert.deepEqual(
+        {
+          pageViewEvents: Number(row.page_view_events),
+          distinctPropertiesViewed: Number(row.distinct_properties_viewed),
+          ownerContactProperties: Number(row.owner_contact_properties),
+        },
+        cell(personal.data, value),
+        `company and personal same-period values disagree for ${name} on ${value}`,
+      );
+    }
+  }
+  observed(
+    'the personal range report agrees with the company same-period figures for every employee and requested day',
+    { employees: 3, days: days.length },
+  );
+
   // Today's summary agrees with the delivered personal today report.
   const todayOnly = await todayReport(salesA);
   assert.equal(todayOnly.error, null, 'personal today report failed');

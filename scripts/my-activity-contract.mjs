@@ -128,6 +128,37 @@ export async function myActivityContract({
   );
 
   await check(
+    'the personal range report agrees with the company report same-period row',
+    async () => {
+      // The reviewer reads the manager/admin company report for the same period; the caller's
+      // own row must carry exactly the personal report's separated metrics on every day,
+      // including a zero day, so the two reports share one counting definition.
+      const company = (
+        await db.query(
+          'select business_day::text as business_day,page_view_events,distinct_properties_viewed,owner_contact_properties from public.company_employee_daily_activity($1,$2) where employee_id=$3',
+          [first, empty, reader],
+        )
+      ).rows;
+      const personal = await read(first, empty);
+      assert.equal(company.length, personal.length);
+      for (const day of days) {
+        const companyRow = company.find((row) => row.business_day === day);
+        assert.ok(companyRow, `missing company report row for ${day}`);
+        assert.deepEqual(
+          {
+            pageViewEvents: Number(companyRow.page_view_events),
+            distinctPropertiesViewed: Number(
+              companyRow.distinct_properties_viewed,
+            ),
+            ownerContactProperties: Number(companyRow.owner_contact_properties),
+          },
+          cell(personal, day),
+        );
+      }
+    },
+  );
+
+  await check(
     'personal totals equal the eligible committed events for this employee alone',
     async () => {
       const rows = await read(first, empty);
