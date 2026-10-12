@@ -9,6 +9,7 @@ import { createHmac, randomUUID } from 'node:crypto';
 import { maintenanceContract } from './maintenance-contract.mjs';
 import { correctionContract } from './correction-contract.mjs';
 import { commentsContract } from './comments-contract.mjs';
+import { companyActivityContract } from './company-activity-contract.mjs';
 const root = process.env.SGN_PROJECT_ROOT || process.cwd();
 const db = new PGlite({extensions:{unaccent,pg_trgm,pgcrypto}});
 await db.exec(`
@@ -568,6 +569,8 @@ await asUser(4);
 await check('unlinked and inactive today activity denied',()=>fails('select * from public.my_today_activity()',[],'42501'));
 await check('inactive owner disclosure denied',()=>fails('select public.reveal_owner_contact($1,$2)',[ownerProperty,randomUUID()],'42501'));
 await commentsContract({db,asUser,check,fails,employees,property});
+// Ticket #31: company employee-by-day activity for live manager/admin readers.
+await companyActivityContract({db,asUser,check,fails,employees});
 const report={checked_at:new Date().toISOString(),engine:'PGlite embedded PostgreSQL; mocked auth/storage schemas',passed,
  limitations:['Not a live Supabase integration test','HTTP Auth, signed URLs, Vercel and browser flows not exercised','True multi-session concurrent transaction test remains a staging acceptance gate']};
 await fs.writeFile(path.join(root,'docs/validation-results.json'),JSON.stringify(report,null,2)+'\n');

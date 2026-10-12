@@ -1,5 +1,6 @@
 'use client';
 import { useState, useCallback, type FormEvent } from 'react';
+import Link from 'next/link';
 import type { Locale } from '@/i18n/messages';
 import { label, messages } from '@/i18n/messages';
 import type { PropertyPage } from './types';
@@ -92,6 +93,13 @@ export function Inventory({
         </div>
         <p className="intro-copy">{text.searchHint}</p>
       </section>
+      {employee?.role === 'manager' || employee?.role === 'admin' ? (
+        <p>
+          <Link href="/activity/company" prefetch={false}>
+            {text.companyActivityLink}
+          </Link>
+        </p>
+      ) : null}
       <form
         className="search-panel"
         action="/properties"
