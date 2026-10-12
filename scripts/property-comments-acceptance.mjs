@@ -254,8 +254,8 @@ function screen(session) {
           removed: Boolean(node.querySelector('.comment-removed')),
           actions: Boolean(node.querySelector('.comment-actions')),
         })),
-        removeControls: discussion ? [...discussion.querySelectorAll('button')].filter(node => /Xoá bình luận|^Remove$/.test(node.textContent.trim())).length : 0,
-        moderateControls: discussion ? [...discussion.querySelectorAll('button')].filter(node => /Xoá kèm lý do|Remove with reason/.test(node.textContent)).length : 0,
+        removeControls: discussion ? [...discussion.querySelectorAll('button')].filter(node => /Gỡ bình luận|^Remove$/.test(node.textContent.trim())).length : 0,
+        moderateControls: discussion ? [...discussion.querySelectorAll('button')].filter(node => /Gỡ kèm lý do|Remove with reason/.test(node.textContent)).length : 0,
         moderationReason: discussion?.querySelector('.comment-moderation textarea')?.value ?? null,
         statuses: [...(discussion?.querySelectorAll('[role=status],[role=alert]') ?? [])].map(node => node.textContent),
         empty: discussion ? discussion.innerText.includes('Chưa có bình luận nào.') || discussion.innerText.includes('No comments yet.') : null,
@@ -712,7 +712,7 @@ await settle(secondary);
     0,
     'An ordinary employee holds no moderation control',
   );
-  click('Xoá bình luận', primary);
+  click('Gỡ bình luận', primary);
   await waitUntil(
     `() => document.querySelectorAll('section.discussion .comment-removed').length === 1`,
     primary,
@@ -733,11 +733,11 @@ await settle(secondary);
   );
   assert.ok(marker.time, 'The marker keeps the original posting time');
   assert.ok(
-    after.statuses.some((status) => /Bình luận đã được xoá/.test(status)),
+    after.statuses.some((status) => /Bình luận đã được gỡ/.test(status)),
     'A committed removal is reported in VI',
   );
   assert.ok(
-    !after.statuses.some((status) => /Chưa xoá được/.test(status)),
+    !after.statuses.some((status) => /Chưa gỡ được/.test(status)),
     'A committed removal is never reported as failed',
   );
   assert.equal(
@@ -776,7 +776,7 @@ await settle(secondary);
   observed(
     'author removal hides the text and shows a localized marker in VI and EN',
     {
-      markerVi: 'Bình luận đã được xoá.',
+      markerVi: 'Bình luận đã được gỡ.',
       markerEn: 'Comment removed.',
       originalTimeRetained: Boolean(marker.time),
       entries: after.comments.length,
@@ -1596,13 +1596,13 @@ await settle(secondary);
     false,
     'An archived Property cannot receive comments',
   );
-  click('Xoá kèm lý do', secondary);
+  click('Gỡ kèm lý do', secondary);
   await waitUntil(
     `() => Boolean(document.querySelector('section.discussion .comment-moderation textarea'))`,
     secondary,
   );
   fill('Lý do kiểm duyệt', 'Gỡ nội dung sau khi lưu trữ', secondary);
-  click('Xác nhận xoá', secondary);
+  click('Xác nhận gỡ', secondary);
   await waitUntil(
     `() => document.querySelectorAll('section.discussion .comment-removed').length === 1`,
     secondary,
@@ -1610,7 +1610,7 @@ await settle(secondary);
   await settle(secondary);
   const after = screen(secondary);
   assert.ok(
-    after.statuses.some((status) => /Bình luận đã được xoá/.test(status)),
+    after.statuses.some((status) => /Bình luận đã được gỡ/.test(status)),
     'Archived moderation is reported',
   );
   assert.ok(
@@ -1691,9 +1691,9 @@ await settle(secondary);
     p_reason: 'Phiên khác đã gỡ',
   });
   assert.equal(competing.error, null, 'The competing removal commits');
-  click('Xác nhận xoá', secondary);
+  click('Xác nhận gỡ', secondary);
   await waitUntil(
-    `() => [...document.querySelectorAll('section.discussion [role=alert]')].some((node) => /đã thay đổi|đã bị xoá/.test(node.textContent))`,
+    `() => [...document.querySelectorAll('section.discussion [role=alert]')].some((node) => /đã thay đổi|đã bị gỡ/.test(node.textContent))`,
     secondary,
   );
   const failed = screen(secondary);
@@ -1703,7 +1703,7 @@ await settle(secondary);
     'The unsent reason is preserved',
   );
   assert.ok(
-    !failed.statuses.some((status) => /Bình luận đã được xoá/.test(status)),
+    !failed.statuses.some((status) => /Bình luận đã được gỡ/.test(status)),
     'No success is claimed for the failed moderation',
   );
   observed('failed moderation keeps the typed reason and claims no success', {

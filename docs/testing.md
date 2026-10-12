@@ -423,6 +423,22 @@ Measured over the original inventory before any fixture existed and again after 
 
 **Remaining limits.** This is scoped development evidence on the authorized dev project. It does not establish production acceptance, deployment, real-mailbox recovery behaviour, or a separate staging gate for two groups the hosted harness does not cover: lazy expiry of an expired pending request, and a successful approval immediately after a previous approved reservation expired. Those two remain embedded-regression and staging gates and are not claimed as observed; the invariants that are asserted in embedded PostgreSQL by `scripts/validate-schema.mjs` under `npm run test:schema` are `expired approved rows are not effective` and `new request lazily expires previous approved row`. This record also does not claim sustained multi-session contention at production load.
 
+### Ticket #45 removal acceptance (not yet executed)
+
+Scope: [ticket #45 accountable comment removal](database-contract.md#ticket-45--accountable-property-comment-removal) on top of the discussion acceptance above. Real development Supabase Auth/Data API/RLS, the actual VI/EN browser interface and independent connections for contention are required; embedded assertions and mocked responses are not acceptance.
+
+**This acceptance has not run and no executed evidence exists for ticket #45.** `scripts/property-comments-acceptance.mjs` carries the probes, but this lane is queued for the shared development project behind issues #18, #30 and #46 and no authorized environment has been handed over, so `docs/property-comments-acceptance.json` still records only the ticket #44 run above. The scenarios below remain unproven staging gates and are not replaced with mocks:
+
+| Scenario | Required observation |
+| --- | --- |
+| VI/default and EN author and moderator browser journeys | Author withdrawal, reasoned moderation entry, removal markers and validation/conflict/error outcomes work in both languages with working keyboard and mobile behaviour |
+| Real Data API/RPC bypass probes with independent sessions | Removed text, preceding versions and moderation reasons stay unreachable to ordinary readers and authors through raw tables, views, RPCs/APIs and property change history, and reachable only to active manager/admin with current Property access |
+| Posting retry recovery for a key whose comment was withdrawn | The replay reports the marker, announces no post, keeps the draft and never reveals restricted removed text or prepends the marker out of order |
+| Competing real removal/removal and archive/removal sessions | Exactly one transition commits, no contradictory duplicate history or reordering is created and the archived moderation exception holds |
+| Failed moderation | The typed reason is preserved and no success is claimed |
+
+If the environment cannot be reached when the turn comes, record that as missing infrastructure rather than substituting embedded or mocked checks.
+
 ## Contention test procedure
 
 Prepare two pending requests from different employees. In session A use an authenticated reviewer JWT context, call `decide_property_lock(A, true, reason)` within a transaction and hold the transaction open. In session B use a different connection and reviewer context to approve B. B must wait on the same parent property row. Commit A; B must fail with reservation conflict. Query effective locks and audit/events to confirm one approval. Repeat with A rolling back: B may then succeed. Do not treat parallel calls in a single embedded DB connection as a proof of real multi-session locking.

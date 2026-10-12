@@ -194,6 +194,14 @@ export function Discussion({
       setPosting(false);
       return;
     }
+    // A replayed key can converge on an already-withdrawn comment, so the marker is not a post.
+    if (created.removedAt !== null) {
+      submissionKey.current = '';
+      setNotice(text.commentPostRemoved);
+      setPosting(false);
+      refresh();
+      return;
+    }
     // Committed state is authoritative: only now is the draft spent and its key retired.
     submissionKey.current = '';
     setDraft('');
