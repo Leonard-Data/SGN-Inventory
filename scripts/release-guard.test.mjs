@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   releaseTarget,
   releaseConfiguration,
+  releasePendingMigrations,
   verifyPulledConfiguration,
 } from './release-guard.mjs';
 
@@ -110,5 +111,47 @@ test('downloaded Vercel configuration cannot override the selected stage', () =>
         NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_other',
       }),
     /KEY mismatch/,
+  );
+});
+
+// Mirrors the pinned CLI's `supabase db push --dry-run --output-format json`
+// result shape for both outcomes, so a verify-only release cannot pass while the
+// database is behind the commit being released.
+test('verify-only release fails while migrations are pending', () => {
+  assert.deepEqual(
+    releasePendingMigrations({
+      upToDate: true,
+      dryRun: true,
+      migrations: [],
+      seeds: [],
+      roles: [],
+      message: 'Remote database is up to date.',
+    }),
+    { pending: [] },
+  );
+  assert.throws(
+    () =>
+      releasePendingMigrations({
+        upToDate: false,
+        dryRun: true,
+        migrations: ['20261014093000_add_property_note.sql'],
+        seeds: [],
+        roles: [],
+        message: 'Finished supabase db push.',
+      }),
+    /must be applied before the application release/,
+  );
+  assert.throws(
+    () =>
+      releasePendingMigrations({
+        upToDate: false,
+        dryRun: false,
+        migrations: ['20261014093000_add_property_note.sql'],
+      }),
+    /must come from a migration dry run/,
+  );
+  assert.throws(
+    () => releasePendingMigrations({ upToDate: true, dryRun: true }),
+    /must list its pending migrations/,
   );
 });
