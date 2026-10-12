@@ -402,6 +402,8 @@ export function Reservation({
             <>
               <h3>{text.reservationRequests}</h3>
               {state.pending.length ? (
+                // The database refuses every decision on an archived property, so show the
+                // archived notice instead of a control that cannot succeed.
                 state.pending.map((request) => {
                   const isOwn = request.claimantId === employeeId;
                   return isOwn || archived ? (
