@@ -894,6 +894,9 @@ let rejectedLock;
     { statuses: outcomes, effective: effective.length },
   );
   const winner = effective[0];
+  const claimantId = fixtures.identities.claimant.employeeId;
+  const claimantWon = winner.requested_by === claimantId;
+  const losingLockId = claimantWon ? managerLock : firstLock[0].id;
   const fresh = new ApplicationSession();
   assert.equal((await fresh.login('claimant')).status, 200);
   const read = await fresh.request(reservationRoute(main));
@@ -905,11 +908,25 @@ let rejectedLock;
     Date.parse(winner.expires_at),
     'The application expiry is the committed instant',
   );
-  assert.equal(
-    read.body.pending.length,
-    0,
-    'No pending request remains visible as effective',
+  assert.notEqual(
+    read.body.effective.id,
+    losingLockId,
+    'A losing request is never shown as effective',
   );
+  assert.ok(
+    read.body.pending.every((row) => row.claimantId === claimantId),
+    'A claimant only ever sees their own request',
+  );
+  if (claimantWon) {
+    assert.equal(
+      read.body.pending.length,
+      0,
+      'The winning claimant has nothing pending',
+    );
+  } else {
+    assert.equal(read.body.pending.length, 1);
+    assert.equal(read.body.pending[0].id, firstLock[0].id);
+  }
   observed('the application read agrees with the committed reservation row');
 }
 
