@@ -3,10 +3,12 @@ import { useMemo } from 'react';
 import Link from 'next/link';
 import { messages, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
-import { SessionHeader } from '@/features/employees/session-header';
 import { vietnamDate } from '@/features/properties/format';
 import type { CompanyActivityReport } from './company-report-data';
 
+// Company employee-by-day activity report (#57). One authenticated screen: the filter
+// posts back to this route so the range stays in the URL, and the report itself is read
+// through /api/activity/company. The shell provides the rail, topbar and skip link.
 export function CompanyReport({
   initialLocale,
   initialFrom,
@@ -23,154 +25,226 @@ export function CompanyReport({
     const query = params.toString();
     return '/api/activity/company' + (query ? '?' + query : '');
   })();
-  const {
-    employee,
-    data,
-    error,
-    busy,
-    surface,
-    logout,
-    applyLocale,
-    clear,
-    reload,
-  } = useProtectedData<CompanyActivityReport>(endpoint);
-  const locale = employee?.locale ?? initialLocale;
+  const { data, error, busy, surface, logout, reload } =
+    useProtectedData<CompanyActivityReport>(endpoint);
+  // The sgn-locale cookie is the rendered locale; the shell keeps it equal to the saved
+  // preference (see detail.tsx).
+  const locale = initialLocale;
   const text = messages[locale];
   const numberFormat = useMemo(
     () => new Intl.NumberFormat(locale === 'vi' ? 'vi-VN' : 'en-GB'),
     [locale],
   );
   return (
-    <main lang={locale}>
-      <a className="skip-link" href="#main-content">
-        {text.skipToContent}
-      </a>
-      <SessionHeader
-        employee={employee}
-        locale={locale}
-        busy={busy}
-        logout={logout}
-        applyLocale={applyLocale}
-        clear={clear}
-      />
-      <section className="page-intro">
-        <div>
-          <p className="eyebrow">{text.title}</p>
-          <h1 id="main-content" tabIndex={-1}>
-            {text.companyActivity}
-          </h1>
+    <>
+      <div className="page-head">
+        <div className="page-intro">
+          <p className="example">{text.title}</p>
+          <h1>{text.companyActivity}</h1>
+          <p className="intro-copy">{text.companyActivityNote}</p>
         </div>
-        <p className="intro-copy">{text.companyActivityNote}</p>
+        <div className="page-actions">
+          <Link
+            className="btn btn-secondary"
+            href="/properties"
+            prefetch={false}
+          >
+            {text.backToInventory}
+          </Link>
+        </div>
+      </div>
+
+      <section className="panel page-section">
+        <div className="panel-body">
+          <form
+            className="toolbar toolbar-labelled"
+            action="/activity/company"
+            method="get"
+          >
+            <div className="field">
+              <label className="field-label" htmlFor="report-from">
+                {text.filterFrom}
+              </label>
+              <input
+                className="input"
+                id="report-from"
+                name="from"
+                type="date"
+                defaultValue={initialFrom}
+              />
+            </div>
+            <div className="field">
+              <label className="field-label" htmlFor="report-to">
+                {text.filterTo}
+              </label>
+              <input
+                className="input"
+                id="report-to"
+                name="to"
+                type="date"
+                defaultValue={initialTo}
+              />
+            </div>
+            <button className="btn btn-primary" type="submit">
+              {text.applyFilter}
+            </button>
+          </form>
+        </div>
       </section>
-      <p>
-        <Link href="/properties" prefetch={false}>
-          {text.backToInventory}
-        </Link>
-      </p>
-      <form className="report-filter" action="/activity/company" method="get">
-        <label htmlFor="report-from">
-          {text.filterFrom}
-          <input
-            id="report-from"
-            name="from"
-            type="date"
-            defaultValue={initialFrom}
-          />
-        </label>
-        <label htmlFor="report-to">
-          {text.filterTo}
-          <input
-            id="report-to"
-            name="to"
-            type="date"
-            defaultValue={initialTo}
-          />
-        </label>
-        <button>{text.applyFilter}</button>
-      </form>
-      {busy ? <p role="status">{text.loading}</p> : null}
+
       {error ? (
-        <p role="alert">
-          {error === 'invalid-range'
-            ? text.invalidRange
-            : error === 'invalid-input'
-              ? text.invalidInput
-              : error === 'range-too-large'
-                ? text.rangeTooLarge
-                    .replace('{from}', initialFrom)
-                    .replace('{to}', initialTo)
-                : error === 'sign-out-failed'
-                  ? text.signOutFailed
-                  : text.unavailable}{' '}
-          <button onClick={error === 'sign-out-failed' ? logout : reload}>
+        <div className="alert" data-tone="danger" role="alert">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 8v4M12 16h.01" />
+          </svg>
+          <span>
+            {error === 'invalid-range'
+              ? text.invalidRange
+              : error === 'invalid-input'
+                ? text.invalidInput
+                : error === 'range-too-large'
+                  ? text.rangeTooLarge
+                      .replace('{from}', initialFrom)
+                      .replace('{to}', initialTo)
+                  : error === 'sign-out-failed'
+                    ? text.signOutFailed
+                    : text.unavailable}
+          </span>
+          <button
+            type="button"
+            className="btn btn-sm btn-ghost"
+            onClick={error === 'sign-out-failed' ? logout : reload}
+          >
             {text.retry}
           </button>
+        </div>
+      ) : null}
+
+      {busy ? (
+        <p className="panel-note" role="status">
+          {text.loading}
         </p>
       ) : null}
+
       <div ref={surface} hidden={!data || busy}>
         {data ? (
           <>
-            <section className="panel" aria-labelledby="today-summary">
-              <h2 id="today-summary">{text.todaySummary}</h2>
-              <dl>
-                <dt>{text.todayDay}</dt>
-                <dd>{vietnamDate(data.today)}</dd>
-                <dt>{text.todayPageViews}</dt>
-                <dd>{numberFormat.format(data.todayTotals.pageViewEvents)}</dd>
-                <dt>{text.todayProperties}</dt>
-                <dd>
-                  {numberFormat.format(
-                    data.todayTotals.distinctPropertiesViewed,
-                  )}
-                </dd>
-                <dt>{text.todayOwnerContacts}</dt>
-                <dd>
-                  {numberFormat.format(data.todayTotals.ownerContactProperties)}
-                </dd>
-              </dl>
+            <section
+              className="panel page-section"
+              aria-labelledby="today-summary"
+            >
+              <div className="panel-head">
+                <h2 id="today-summary">{text.todaySummary}</h2>
+                <span className="panel-note num">
+                  {vietnamDate(data.today)}
+                </span>
+              </div>
+              <div className="panel-body">
+                <dl className="facts">
+                  <div className="fact">
+                    <dt>{text.todayPageViews}</dt>
+                    <dd className="num">
+                      {numberFormat.format(data.todayTotals.pageViewEvents)}
+                    </dd>
+                  </div>
+                  <div className="fact">
+                    <dt>{text.todayProperties}</dt>
+                    <dd className="num">
+                      {numberFormat.format(
+                        data.todayTotals.distinctPropertiesViewed,
+                      )}
+                    </dd>
+                  </div>
+                  <div className="fact">
+                    <dt>{text.todayOwnerContacts}</dt>
+                    <dd className="num">
+                      {numberFormat.format(
+                        data.todayTotals.ownerContactProperties,
+                      )}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+              <div className="panel-foot">
+                <span>{text.companyActivityNote}</span>
+              </div>
             </section>
-            <section className="panel" aria-labelledby="company-history">
-              <h2 id="company-history">{text.companyHistory}</h2>
-              {data.rows.length === 0 ? (
-                <p>{text.noEmployees}</p>
-              ) : (
-                <div className="report-table-wrap">
-                  <table className="report-table">
-                    <caption>
-                      {text.companyActivity} · {vietnamDate(data.from)} –{' '}
-                      {vietnamDate(data.to)}
-                    </caption>
-                    <thead>
-                      <tr>
-                        <th scope="col">{text.companyEmployee}</th>
-                        <th scope="col">{text.todayDay}</th>
-                        <th scope="col">{text.todayPageViews}</th>
-                        <th scope="col">{text.todayProperties}</th>
-                        <th scope="col">{text.todayOwnerContacts}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.rows.map((row) => (
-                        <tr key={row.employeeId + row.businessDay}>
-                          <th scope="row">{row.employeeName}</th>
-                          <td>{vietnamDate(row.businessDay)}</td>
-                          <td>{numberFormat.format(row.pageViewEvents)}</td>
-                          <td>
-                            {numberFormat.format(row.distinctPropertiesViewed)}
-                          </td>
-                          <td>
-                            {numberFormat.format(row.ownerContactProperties)}
-                          </td>
+
+            <section
+              className="panel page-section"
+              aria-labelledby="company-history"
+            >
+              <div className="panel-head">
+                <h2 id="company-history">{text.companyHistory}</h2>
+                <span className="panel-note num">
+                  {vietnamDate(data.from)} – {vietnamDate(data.to)}
+                </span>
+              </div>
+              <div className="panel-body">
+                {data.rows.length === 0 ? (
+                  <div className="state-panel">
+                    <h3>{text.noEmployees}</h3>
+                  </div>
+                ) : (
+                  <div className="table-wrap">
+                    <table className="data-table stackable">
+                      <thead>
+                        <tr>
+                          <th scope="col">{text.companyEmployee}</th>
+                          <th scope="col">{text.todayDay}</th>
+                          <th scope="col">{text.todayPageViews}</th>
+                          <th scope="col">{text.todayProperties}</th>
+                          <th scope="col">{text.todayOwnerContacts}</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                      </thead>
+                      <tbody>
+                        {data.rows.map((row) => (
+                          <tr key={row.employeeId + row.businessDay}>
+                            <th scope="row" data-label={text.companyEmployee}>
+                              {row.employeeName}
+                            </th>
+                            <td className="num" data-label={text.todayDay}>
+                              {vietnamDate(row.businessDay)}
+                            </td>
+                            <td
+                              className="num"
+                              data-label={text.todayPageViews}
+                            >
+                              {numberFormat.format(row.pageViewEvents)}
+                            </td>
+                            <td
+                              className="num"
+                              data-label={text.todayProperties}
+                            >
+                              {numberFormat.format(
+                                row.distinctPropertiesViewed,
+                              )}
+                            </td>
+                            <td
+                              className="num"
+                              data-label={text.todayOwnerContacts}
+                            >
+                              {numberFormat.format(row.ownerContactProperties)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </section>
           </>
         ) : null}
       </div>
-    </main>
+    </>
   );
 }

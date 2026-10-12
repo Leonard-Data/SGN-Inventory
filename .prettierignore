@@ -17,3 +17,8 @@ docs/**
 !docs/setup.md
 !docs/development.md
 *.tsbuildinfo
+# Verbatim ports of the OpenDesign design-system package (tokens + app layer).
+# The package requires its values and formatting be copied, not tidied; updates
+# are whole-file replacements, so do not reformat them here.
+src/app/app.css
+src/app/sgn-app.css

@@ -1,0 +1,51 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   Surfaces the design package does not draw, and two extensions to its own
+   components. Values come only from the token layer in app.css; the vocabulary
+   in sgn-app.css stays the contract. Anything the package already defines is
+   deleted from globals.css rather than restated here.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* A stored cover photograph fills the 16:10 cover box the plate also uses. */
+.cover > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* The package's dropzone is one flex row for an icon and two lines of copy. This
+   application puts the whole upload form inside it, and the hint's min-content is a
+   single word, so as flex items the controls crowded a narrow column and the row never
+   wrapped. The hint takes its own line and the fields and native file control may
+   shrink instead of forcing the page wider than the viewport. */
+.dropzone {
+  flex-wrap: wrap;
+}
+.dropzone > p {
+  flex: 1 0 100%;
+}
+.dropzone .field {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.dropzone input[type='file'] {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* A recorded file category is user text and can be long. The package's badge is sized
+   for a short status word and does not wrap, so inside a document row it wraps within
+   the middle cell the row's grid already limits. */
+.doc-row .badge {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* An exact recorded figure is preserved verbatim, and a long one (a 20-digit VND value
+   in the narrow facts rail) is wider than its cell. The package's row does not wrap it,
+   so it painted across the neighbouring column; wrapping keeps it inside its own cell
+   without changing a digit. */
+.facts dd {
+  overflow-wrap: anywhere;
+}

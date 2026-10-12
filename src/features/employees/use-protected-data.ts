@@ -15,11 +15,6 @@ export function useProtectedData<T>(
   const controller = useRef<AbortController | null>(null);
   const surfaceElement = useRef<HTMLDivElement | null>(null);
   const renderedFor = useRef<string | null>(null);
-  const savedLocale = useRef<{
-    employeeId: string;
-    locale: Employee['locale'];
-    revision: number;
-  } | null>(null);
   const bindSurface = useCallback((element: HTMLDivElement | null) => {
     surfaceElement.current = element;
   }, []);
@@ -40,7 +35,6 @@ export function useProtectedData<T>(
   const load = useCallback(async () => {
     invalidate();
     const version = generation.current;
-    const localeRevision = savedLocale.current?.revision ?? 0;
     const abort = new AbortController();
     controller.current = abort;
     try {
@@ -57,18 +51,10 @@ export function useProtectedData<T>(
           },
         });
       if (version !== generation.current) return;
-      const latest = savedLocale.current;
-      const active =
-        latest &&
-        latest.revision !== localeRevision &&
-        latest.employeeId === sessionEmployee.id
-          ? { ...sessionEmployee, locale: latest.locale }
-          : sessionEmployee;
-      setEmployee(active);
+      setEmployee(sessionEmployee);
       setData(result);
-      renderedFor.current = active.id;
+      renderedFor.current = sessionEmployee.id;
       setError(null);
-      document.documentElement.lang = active.locale;
       if (surfaceElement.current) surfaceElement.current.hidden = false;
     } catch (failure) {
       if (version !== generation.current || abort.signal.aborted) return;
@@ -135,17 +121,6 @@ export function useProtectedData<T>(
       setBusy(false);
     }
   }
-  function applyLocale(locale: Employee['locale'], employeeId: string) {
-    savedLocale.current = {
-      locale,
-      employeeId,
-      revision: (savedLocale.current?.revision ?? 0) + 1,
-    };
-    setEmployee((current) =>
-      current?.id === employeeId ? { ...current, locale } : current,
-    );
-    document.documentElement.lang = locale;
-  }
   return {
     employee,
     data,
@@ -155,6 +130,5 @@ export function useProtectedData<T>(
     clear,
     reload,
     logout,
-    applyLocale,
   };
 }

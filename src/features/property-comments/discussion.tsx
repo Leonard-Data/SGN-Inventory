@@ -193,10 +193,15 @@ export function Discussion({
   }
   const loadingMore = busy || more;
   return (
-    <section className="panel discussion" aria-labelledby={headingId}>
-      <div className="discussion-head">
+    <section className="panel" aria-labelledby={headingId}>
+      <div className="panel-head">
         <h2 id={headingId}>{text.discussion}</h2>
-        <button type="button" onClick={refresh} disabled={loadingMore}>
+        <button
+          type="button"
+          className="btn btn-sm btn-ghost"
+          onClick={refresh}
+          disabled={loadingMore}
+        >
           {text.refresh}
         </button>
       </div>
@@ -208,34 +213,54 @@ export function Discussion({
             : error === 'invalid-input'
               ? text.invalidInput
               : text.unavailable}{' '}
-          <button type="button" onClick={refresh}>
+          <button
+            type="button"
+            className="btn btn-sm btn-ghost"
+            onClick={refresh}
+          >
             {text.retry}
           </button>
         </p>
       ) : null}
-      <ol className="comment-list">
-        {comments.map((row) => (
-          <li key={row.id}>
-            <article className="comment">
-              <p className="comment-meta">
-                <span translate="no">{row.authorName}</span> ·{' '}
-                <time dateTime={row.createdAt}>
-                  {vietnamTimestamp(row.createdAt, locale)}
-                </time>{' '}
-                <span className="muted">({text.vietnamTime})</span>
-              </p>
-              <p className="comment-body" translate="no">
-                {row.body}
-              </p>
-            </article>
-          </li>
-        ))}
+      <ol>
+        {comments.map((row) => {
+          const parts = row.authorName.trim().split(/\s+/);
+          const initials = parts
+            .slice(-2)
+            .map((p) => p.charAt(0))
+            .join('')
+            .toUpperCase();
+          return (
+            <li key={row.id}>
+              <article className="comment">
+                <span className="sgn-avatar" aria-hidden="true">
+                  {initials}
+                </span>
+                <div>
+                  <p className="comment-author" translate="no">
+                    {row.authorName}
+                  </p>
+                  <p className="comment-meta">
+                    <time dateTime={row.createdAt}>
+                      {vietnamTimestamp(row.createdAt, locale)}
+                    </time>{' '}
+                    <span className="field-hint">({text.vietnamTime})</span>
+                  </p>
+                  <p className="comment-body" translate="no">
+                    {row.body}
+                  </p>
+                </div>
+              </article>
+            </li>
+          );
+        })}
       </ol>
       {!busy && !error && !comments.length ? <p>{text.noComments}</p> : null}
       {next ? (
         <p>
           <button
             type="button"
+            className="btn btn-sm btn-ghost"
             onClick={() => void loadMore()}
             disabled={loadingMore}
           >
@@ -244,19 +269,24 @@ export function Discussion({
         </p>
       ) : null}
       {archived ? null : (
-        <form className="comment-form" onSubmit={submit}>
-          <label htmlFor={fieldId}>{text.addComment}</label>
-          <textarea
-            id={fieldId}
-            name="comment"
-            rows={4}
-            maxLength={COMMENT_MAX_LENGTH}
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            aria-describedby={helpId}
-            disabled={posting}
-          />
-          <p className="muted" id={helpId}>
+        <form className="composer" onSubmit={submit}>
+          <div className="field">
+            <label className="field-label" htmlFor={fieldId}>
+              {text.addComment}
+            </label>
+            <textarea
+              id={fieldId}
+              className="textarea"
+              name="comment"
+              rows={4}
+              maxLength={COMMENT_MAX_LENGTH}
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              aria-describedby={helpId}
+              disabled={posting}
+            />
+          </div>
+          <p className="field-hint" id={helpId}>
             {text.commentHint}{' '}
             <span translate="no">
               {[...draft.trim()].length}/{COMMENT_MAX_LENGTH}
@@ -265,15 +295,25 @@ export function Discussion({
           {postError ? (
             <p role="alert">
               {postError}{' '}
-              <button type="button" onClick={refresh}>
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost"
+                onClick={refresh}
+              >
                 {text.refresh}
               </button>
             </p>
           ) : null}
           {notice ? <p role="status">{notice}</p> : null}
-          <button type="submit" disabled={posting}>
-            {posting ? text.posting : text.postComment}
-          </button>
+          <div className="composer-foot">
+            <button
+              type="submit"
+              className="btn btn-primary btn-sm"
+              disabled={posting}
+            >
+              {posting ? text.posting : text.postComment}
+            </button>
+          </div>
         </form>
       )}
     </section>

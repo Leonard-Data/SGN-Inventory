@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-10-12T13:58:46.712Z",
+  "checked_at": "2026-10-12T15:46:16.683Z",
   "engine": "PGlite embedded PostgreSQL; mocked auth/storage schemas",
   "passed": 201,
   "limitations": [

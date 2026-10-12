@@ -26,7 +26,10 @@ function AmendmentList({
       {busy ? <p role="status">{text.loading}</p> : null}
       {error ? (
         <p role="alert">
-          {text.unavailable} <button onClick={reload}>{text.refresh}</button>
+          {text.unavailable}{' '}
+          <button className="btn btn-sm btn-ghost" onClick={reload}>
+            {text.refresh}
+          </button>
         </p>
       ) : null}
       <div ref={surface} hidden={!data || busy}>
@@ -54,10 +57,18 @@ function AmendmentList({
             ))}
             <nav aria-label={text.amendments}>
               {after ? (
-                <button onClick={() => setAfter(null)}>{text.first}</button>
+                <button
+                  className="btn btn-sm btn-ghost"
+                  onClick={() => setAfter(null)}
+                >
+                  {text.first}
+                </button>
               ) : null}
               {data.nextCursor ? (
-                <button onClick={() => setAfter(data.nextCursor)}>
+                <button
+                  className="btn btn-sm btn-ghost"
+                  onClick={() => setAfter(data.nextCursor)}
+                >
                   {text.more}
                 </button>
               ) : null}
@@ -78,7 +89,10 @@ export function Amendments({
   const [open, setOpen] = useState(false),
     text = maintenanceText(locale);
   return (
-    <details onToggle={(event) => setOpen(event.currentTarget.open)}>
+    <details
+      className="maintenance"
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
       <summary>{text.amendments}</summary>
       {open ? <AmendmentList requestId={requestId} locale={locale} /> : null}
     </details>

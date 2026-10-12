@@ -131,7 +131,12 @@ function RequestActions({
         <form ref={form} onSubmit={submit}>
           {snapshot.target === 'contact' ? (
             <>
-              <button type="button" onClick={previewContact} disabled={busy}>
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={previewContact}
+                disabled={busy}
+              >
                 {text.contactImpact}
               </button>
               {impact ? (
@@ -150,7 +155,7 @@ function RequestActions({
                       </li>
                     ))}
                   </ul>
-                  <label>
+                  <label className="check">
                     <input type="checkbox" required />
                     {text.confirmImpact}
                   </label>
@@ -158,36 +163,49 @@ function RequestActions({
               ) : null}
             </>
           ) : null}
-          <label>
-            {text.reason}
+          <div className="field">
+            <label className="field-label">{text.reason}</label>
             <textarea
               name="reason"
+              className="textarea"
               required
               minLength={10}
               maxLength={2000}
               rows={2}
               disabled={busy}
             />
-          </label>
+          </div>
           <button
+            className="btn btn-sm btn-primary"
             value="apply"
             disabled={busy || (snapshot.target === 'contact' && !impact)}
           >
             {text.apply}
           </button>
-          <button value="reject" disabled={busy} formNoValidate>
+          <button
+            className="btn btn-sm btn-ghost"
+            value="reject"
+            disabled={busy}
+            formNoValidate
+          >
             {text.reject}
           </button>
         </form>
       ) : null}
       {staff || request.requester_id === employee.id ? (
-        <button type="button" disabled={busy} onClick={amendCurrent}>
+        <button
+          type="button"
+          className="btn btn-sm btn-ghost"
+          disabled={busy}
+          onClick={amendCurrent}
+        >
           {text.amend}
         </button>
       ) : null}
       {request.requester_id === employee.id ? (
         <button
           type="button"
+          className="btn btn-sm btn-ghost"
           disabled={busy}
           onClick={() => decide('withdraw')}
         >
@@ -206,6 +224,7 @@ function RequestActions({
             href={'/properties/' + request.property_id}
             target="_blank"
             rel="noopener noreferrer"
+            className="link"
           >
             {text.current}
           </a>
@@ -214,6 +233,7 @@ function RequestActions({
       {error ? (
         <button
           type="button"
+          className="btn btn-sm btn-ghost"
           onClick={() => {
             setSnapshot(request);
             setError(null);
@@ -237,7 +257,12 @@ function RequestActions({
               onSaved();
             }}
           />
-          <button onClick={() => setAmend(null)}>{text.cancel}</button>
+          <button
+            className="btn btn-sm btn-ghost"
+            onClick={() => setAmend(null)}
+          >
+            {text.cancel}
+          </button>
         </div>
       ) : null}
     </div>
@@ -271,142 +296,174 @@ export function CorrectionQueue({
     onChanged?.();
   }
   return (
-    <section className="panel maintenance" id="correction-queue">
-      <h2>{text.queue}</h2>
-      {busy ? <p role="status">{text.loading}</p> : null}
-      {error ? (
-        <p role="alert">
-          {text.unavailable} <button onClick={reload}>{text.refresh}</button>
-        </p>
-      ) : null}
-      <div ref={surface} hidden={!data || busy}>
-        {data ? (
-          <>
-            {data.requests.length ? (
-              data.requests.map((request) => {
-                const amendments = data.amendments.filter(
-                  (a) => a.request_id === request.id,
-                );
-                return (
-                  <article className="history-event" key={request.id}>
-                    <h3>
-                      <a
-                        href={'/properties/' + request.property_id}
-                        translate="no"
-                      >
-                        {data.properties.find(
-                          (p) => p.id === request.property_id,
-                        )?.property_code ?? request.property_id}
-                      </a>{' '}
-                      · {optionLabel(locale, request.target)}
-                    </h3>
-                    <p>
-                      {optionLabel(locale, request.category)} ·{' '}
-                      <span className="badge">
-                        {requestStatusLabel(locale, request.status)}
-                      </span>{' '}
-                      ·{' '}
-                      <time dateTime={request.created_at}>
-                        {vietnamTimestamp(request.created_at, locale)}
-                      </time>{' '}
-                      ({text.time})
-                    </p>
-                    <h4>{text.original}</h4>
-                    <p>
-                      {text.actor}:{' '}
-                      <span translate="no">
-                        {data.actors.find((a) => a.id === request.requester_id)
-                          ?.display_name ?? request.requester_id}
-                      </span>
-                    </p>
-                    <p translate="no">{request.explanation}</p>
-                    <details>
-                      <summary>{text.observed}</summary>
-                      <BusinessValues
-                        values={request.observed_values}
-                        locale={locale}
-                      />
-                    </details>
-                    <details>
-                      <summary>{text.proposal}</summary>
-                      <BusinessValues
-                        values={request.proposed_values}
-                        locale={locale}
-                      />
-                    </details>
-                    <h4>{text.latestProposal}</h4>
-                    <BusinessValues
-                      values={
-                        amendments[0]?.proposed_values ??
-                        request.proposed_values
-                      }
-                      locale={locale}
-                    />
-                    {amendments[0] ? (
-                      <>
-                        <p>
-                          {text.actor}:{' '}
-                          <span translate="no">
-                            {data.actors.find(
-                              (a) => a.id === amendments[0]?.actor_id,
-                            )?.display_name ?? amendments[0].actor_id}
-                          </span>{' '}
-                          ·{' '}
-                          <time dateTime={amendments[0].created_at}>
-                            {vietnamTimestamp(amendments[0].created_at, locale)}
-                          </time>
-                        </p>
-                        <p translate="no">{amendments[0].explanation}</p>
-                        <Amendments requestId={request.id} locale={locale} />
-                      </>
-                    ) : null}
-                    {request.outcome_at ? (
+    <section className="panel" id="correction-queue">
+      <div className="panel-head">
+        <h2 className="panel-title">{text.queue}</h2>
+      </div>
+      <div className="panel-body">
+        {busy ? <p role="status">{text.loading}</p> : null}
+        {error ? (
+          <div className="alert" data-tone="danger" role="alert">
+            <span>{text.unavailable}</span>
+            <button className="btn btn-sm btn-ghost" onClick={reload}>
+              {text.refresh}
+            </button>
+          </div>
+        ) : null}
+        <div ref={surface} hidden={!data || busy}>
+          {data ? (
+            <>
+              {data.requests.length ? (
+                data.requests.map((request) => {
+                  const amendments = data.amendments.filter(
+                    (a) => a.request_id === request.id,
+                  );
+                  return (
+                    <article className="history-event" key={request.id}>
+                      <h3>
+                        <a
+                          href={'/properties/' + request.property_id}
+                          translate="no"
+                        >
+                          {data.properties.find(
+                            (p) => p.id === request.property_id,
+                          )?.property_code ?? request.property_id}
+                        </a>{' '}
+                        · {optionLabel(locale, request.target)}
+                      </h3>
+                      <p>
+                        {optionLabel(locale, request.category)} ·{' '}
+                        <span
+                          className="badge"
+                          data-tone={
+                            request.status === 'open'
+                              ? 'accent'
+                              : request.status === 'applied'
+                                ? 'success'
+                                : request.status === 'rejected'
+                                  ? 'danger'
+                                  : 'muted'
+                          }
+                        >
+                          {requestStatusLabel(locale, request.status)}
+                        </span>{' '}
+                        ·{' '}
+                        <time dateTime={request.created_at}>
+                          {vietnamTimestamp(request.created_at, locale)}
+                        </time>{' '}
+                        ({text.time})
+                      </p>
+                      <h4>{text.original}</h4>
                       <p>
                         {text.actor}:{' '}
                         <span translate="no">
                           {data.actors.find(
-                            (a) => a.id === request.outcome_actor_id,
-                          )?.display_name ?? request.outcome_actor_id}
-                        </span>{' '}
-                        ·{' '}
-                        <time dateTime={request.outcome_at}>
-                          {vietnamTimestamp(request.outcome_at, locale)}
-                        </time>
+                            (a) => a.id === request.requester_id,
+                          )?.display_name ?? request.requester_id}
+                        </span>
                       </p>
-                    ) : null}
-                    {request.outcome_reason ? (
-                      <p translate="no">{request.outcome_reason}</p>
-                    ) : null}
-                    {request.status === 'open' ? (
-                      <RequestActions
-                        request={request}
-                        employee={employee}
+                      <p translate="no">{request.explanation}</p>
+                      <details className="maintenance">
+                        <summary>{text.observed}</summary>
+                        <BusinessValues
+                          values={request.observed_values}
+                          locale={locale}
+                        />
+                      </details>
+                      <details className="maintenance">
+                        <summary>{text.proposal}</summary>
+                        <BusinessValues
+                          values={request.proposed_values}
+                          locale={locale}
+                        />
+                      </details>
+                      <h4>{text.latestProposal}</h4>
+                      <BusinessValues
+                        values={
+                          amendments[0]?.proposed_values ??
+                          request.proposed_values
+                        }
                         locale={locale}
-                        onDenied={onDenied}
-                        onSaved={changed}
                       />
-                    ) : (
-                      <p>{text.terminal}</p>
-                    )}
-                  </article>
-                );
-              })
-            ) : (
-              <p>{text.emptyRequests}</p>
-            )}
-            <nav aria-label={text.requests}>
-              {after ? (
-                <button onClick={() => setAfter(null)}>{text.first}</button>
-              ) : null}
-              {data.nextCursor ? (
-                <button onClick={() => setAfter(data.nextCursor)}>
-                  {text.more}
+                      {amendments[0] ? (
+                        <>
+                          <p>
+                            {text.actor}:{' '}
+                            <span translate="no">
+                              {data.actors.find(
+                                (a) => a.id === amendments[0]?.actor_id,
+                              )?.display_name ?? amendments[0].actor_id}
+                            </span>{' '}
+                            ·{' '}
+                            <time dateTime={amendments[0].created_at}>
+                              {vietnamTimestamp(
+                                amendments[0].created_at,
+                                locale,
+                              )}
+                            </time>
+                          </p>
+                          <p translate="no">{amendments[0].explanation}</p>
+                          <Amendments requestId={request.id} locale={locale} />
+                        </>
+                      ) : null}
+                      {request.outcome_at ? (
+                        <p>
+                          {text.actor}:{' '}
+                          <span translate="no">
+                            {data.actors.find(
+                              (a) => a.id === request.outcome_actor_id,
+                            )?.display_name ?? request.outcome_actor_id}
+                          </span>{' '}
+                          ·{' '}
+                          <time dateTime={request.outcome_at}>
+                            {vietnamTimestamp(request.outcome_at, locale)}
+                          </time>
+                        </p>
+                      ) : null}
+                      {request.outcome_reason ? (
+                        <p translate="no">{request.outcome_reason}</p>
+                      ) : null}
+                      {request.status === 'open' ? (
+                        <RequestActions
+                          request={request}
+                          employee={employee}
+                          locale={locale}
+                          onDenied={onDenied}
+                          onSaved={changed}
+                        />
+                      ) : (
+                        <p>{text.terminal}</p>
+                      )}
+                    </article>
+                  );
+                })
+              ) : (
+                <p>{text.emptyRequests}</p>
+              )}
+              <nav aria-label={text.requests}>
+                {after ? (
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setAfter(null)}
+                  >
+                    {text.first}
+                  </button>
+                ) : null}
+                {data.nextCursor ? (
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setAfter(data.nextCursor)}
+                  >
+                    {text.more}
+                  </button>
+                ) : null}
+                <button className="btn btn-ghost btn-sm" onClick={reload}>
+                  {text.refresh}
                 </button>
-              ) : null}
-              <button onClick={reload}>{text.refresh}</button>
-            </nav>
-          </>
-        ) : null}
+              </nav>
+            </>
+          ) : null}
+        </div>
       </div>
     </section>
   );

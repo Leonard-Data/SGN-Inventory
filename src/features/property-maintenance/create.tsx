@@ -50,36 +50,44 @@ export function CreateProperty({
     }
   }
   return (
-    <details className="maintenance">
-      <summary>{text.create}</summary>
-      <p>{text.immediate}</p>
-      <form onSubmit={submit}>
-        <fieldset disabled={busy}>
-          <legend>{text.create}</legend>
-          <p>{text.optional}</p>
-          <RecordFields
-            locale={locale}
-            values={{
-              listing_mode: 'sale',
-              property_type: 'unclassified',
-              access_type: 'unknown',
-            }}
-            names={targetFields.property.filter((k) => k !== 'status')}
-          />
-          <AddressFields
-            locale={locale}
-            values={{ is_primary: true }}
-            onDenied={onDenied}
-          />
-        </fieldset>
-        {error ? (
-          <p role="alert">
-            {error === 'invalid-input' ? text.invalid : text.unavailable}
-          </p>
-        ) : null}
-        <button disabled={busy}>{busy ? text.saving : text.create}</button>
-      </form>
-      <p>{messages[locale].legalNote}</p>
+    <details className="panel maintenance">
+      <summary className="panel-head">
+        <span className="panel-title">{text.create}</span>
+      </summary>
+      <div className="panel-body">
+        <p>{text.immediate}</p>
+        <form onSubmit={submit}>
+          <fieldset disabled={busy} className="stack-4">
+            <legend>{text.create}</legend>
+            <p>{text.optional}</p>
+            <RecordFields
+              locale={locale}
+              values={{
+                listing_mode: 'sale',
+                property_type: 'unclassified',
+                access_type: 'unknown',
+              }}
+              names={targetFields.property.filter((k) => k !== 'status')}
+            />
+            <AddressFields
+              locale={locale}
+              values={{ is_primary: true }}
+              onDenied={onDenied}
+            />
+          </fieldset>
+          {error ? (
+            <p role="alert" className="field-error">
+              {error === 'invalid-input' ? text.invalid : text.unavailable}
+            </p>
+          ) : null}
+          <div className="form-foot">
+            <button className="btn btn-primary" disabled={busy}>
+              {busy ? text.saving : text.create}
+            </button>
+          </div>
+        </form>
+        <p className="search-hint">{messages[locale].legalNote}</p>
+      </div>
     </details>
   );
 }
