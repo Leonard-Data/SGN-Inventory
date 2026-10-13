@@ -170,7 +170,11 @@ export async function priceHistoryContract({
   await check(
     'an authorized price correction keeps its optional explanation on its own revision',
     async () => {
-      await maintain(id, { sale_price_vnd: '1000' }, 'Sửa lại giá đã ghi nhầm');
+      await maintain(
+        id,
+        { sale_price_vnd: '1000' },
+        '  Sửa lại giá đã ghi nhầm  ',
+      );
       const events = await series(id, 'sale');
       assert.equal(events[0].after_value, '1000');
       assert.equal(events[0].explanation, 'Sửa lại giá đã ghi nhầm');
@@ -234,6 +238,46 @@ export async function priceHistoryContract({
           )
         ).rows[0].price,
         '1000',
+      );
+    },
+  );
+  await check(
+    'an oversized padded explanation is refused before storage',
+    async () => {
+      const before = await series(id, 'sale');
+      const currentPrice = (
+        await db.query(
+          'select sale_price_vnd::text as price from public.properties where id=$1',
+          [id],
+        )
+      ).rows[0].price;
+      const rev = await revision(id);
+      await fails(
+        maintainSql,
+        [
+          id,
+          'property',
+          id,
+          rev,
+          { sale_price_vnd: '3000' },
+          rev,
+          `${' '.repeat(1990)}Giải thích hợp lệ`,
+        ],
+        '23514',
+      );
+      const after = await series(id, 'sale');
+      assert.deepEqual(
+        after.map((event) => event.id),
+        before.map((event) => event.id),
+      );
+      assert.equal(
+        (
+          await db.query(
+            'select sale_price_vnd::text as price from public.properties where id=$1',
+            [id],
+          )
+        ).rows[0].price,
+        currentPrice,
       );
     },
   );

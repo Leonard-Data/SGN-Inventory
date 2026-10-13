@@ -8,10 +8,12 @@ begin;
 -- accepted, so a shared-contact fan-out can never leave an explanation on one property.
 create function private.maintain_property_explained(p_property_id uuid,p_target text,p_target_id uuid,p_expected_revision uuid,p_changes jsonb,p_property_revision uuid,p_explanation text) returns uuid
 language plpgsql security definer set search_path='' as $$
-declare result uuid; me uuid:=private.employee_id();
+declare result uuid; me uuid:=private.employee_id(); raw_explanation_length integer;
 begin
   if p_explanation is not null then
-    if length(btrim(p_explanation)) not between 10 and 2000 then
+    raw_explanation_length:=length(p_explanation);
+    p_explanation:=btrim(p_explanation);
+    if length(p_explanation) not between 10 and 2000 or raw_explanation_length>2000 then
       raise exception 'correction explanation must be 10 to 2000 characters' using errcode='23514'; end if;
     if p_target is distinct from 'property'
       or not (coalesce(p_changes,'{}'::jsonb) ?| array['sale_price_vnd','monthly_rent_vnd']) then
