@@ -7,7 +7,7 @@ export type NavItem = {
   id: string;
   label: MessageKey;
   href: string;
-  icon: 'search' | 'plus' | 'inbox' | 'chart';
+  icon: 'search' | 'plus' | 'inbox' | 'chart' | 'people';
   roles: Role[];
 };
 
@@ -16,6 +16,8 @@ export type NavGroup = { label: MessageKey; items: NavItem[] };
 const ALL_ROLES: Role[] = ['sales', 'staff', 'manager', 'admin'];
 // The company activity report is an admin/manager read (its API checks the live role).
 const REPORT_ROLES: Role[] = ['manager', 'admin'];
+// The employee list is an admin read (its API and route guard check the live role).
+const ADMIN_ROLES: Role[] = ['admin'];
 
 // ADR 0001 defines six menu groups (Inventory, Reservations & Reviews, Rentals,
 // People, Reports, Admin). Only destinations that exist are listed: a group or
@@ -52,6 +54,18 @@ export const NAV_GROUPS: NavGroup[] = [
         href: '/reviews/corrections',
         icon: 'inbox',
         roles: ALL_ROLES,
+      },
+    ],
+  },
+  {
+    label: 'people',
+    items: [
+      {
+        id: 'employees',
+        label: 'employeesLink',
+        href: '/people/employees',
+        icon: 'people',
+        roles: ADMIN_ROLES,
       },
     ],
   },

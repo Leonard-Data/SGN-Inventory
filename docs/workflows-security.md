@@ -15,6 +15,7 @@
 | Approve/reject lock | No | No | Another employee only | Another employee only |
 | Set legal/review state; sold/rented arrives with issue #32 sale transition | No | No | Yes | Yes |
 | Manage employee activation/roles and catalogs | No | No | No | Yes |
+| Open the admin employee list (`/people/employees`) | No | No | No | Yes |
 | Read area/employee analytics | No | No | Yes | Yes |
 | Read staging/audit directly through API | No | No | No | No |
 

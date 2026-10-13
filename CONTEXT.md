@@ -22,6 +22,10 @@ _Avoid_: Signed-in employee, active session
 An employee whose company inventory access is disabled, regardless of whether they can still authenticate.
 _Avoid_: Signed-out employee
 
+**Unlinked employee**:
+An employee record with no confirmed sign-in identity. It is a distinct access state, not a pending invitation, a disabled account or a deleted person; the schema records no invitation.
+_Avoid_: Invited employee, deleted employee
+
 **Employee interface language**:
 The employee's preferred Vietnamese or English interface language. It is independent of the language of addresses, source records and signed documents.
 _Avoid_: Record language
