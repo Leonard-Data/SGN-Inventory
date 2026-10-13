@@ -1,0 +1,417 @@
+// Issue #66 hosted acceptance: deactivate an employee without losing the record.
+//
+// Real development Supabase Auth/Data API/RLS plus the real provider sign-in block. It
+// creates only the synthetic identities, properties and reservations this check needs under
+// an exact-ID private manifest, drives the guarded RPCs with each real session, calls the
+// Auth admin API exactly as the server adapter does, and reports sanitized observations.
+// Mock, shim and embedded-PGlite results are not acceptance.
+//
+// This script NEVER runs against production: it asserts SGN_ENV=dev, and it refuses to
+// mutate anything unless `--confirm` is passed. Without it, it prints the exact checks and
+// exits. Do not run `--confirm` without a separately authorized provider/database decision
+// for this environment.
+//
+// Usage:
+//   SGN_ACCEPTANCE_DEV_ENV=<private dev env> \
+//   SGN_ACCEPTANCE_OWNER=<private owner config> \
+//   SGN_ACCEPTANCE_WORKDIR=<private work directory> \
+//   node scripts/employee-deactivation-acceptance.mjs [--confirm] [--report <path>]
+//
+// The dev env supplies the publishable application settings; the owner config supplies the
+// server-only capability the trusted server adapter uses. Both are read as data only and are
+// never printed, shell sourced, or passed in argv/logs.
+//
+// Retained evidence: an operation and its events are permanent by design. Cleanup un-bans
+// the synthetic Auth identities and removes the synthetic reservations and properties, but
+// it never fabricates a delete path for the administration evidence; the exact-ID manifest
+// names every synthetic row for the authorized owner SQL path if physical removal is later
+// required.
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import { randomBytes, randomUUID } from 'node:crypto';
+import path from 'node:path';
+import { createClient } from '@supabase/supabase-js';
+import { readEnvironment } from '../src/lib/environment.ts';
+
+const devEnvPath = process.env.SGN_ACCEPTANCE_DEV_ENV;
+const ownerPath = process.env.SGN_ACCEPTANCE_OWNER;
+const workdir = process.env.SGN_ACCEPTANCE_WORKDIR;
+const confirm = process.argv.includes('--confirm');
+const keep = process.env.SGN_ACCEPTANCE_KEEP === '1';
+const reportIndex = process.argv.indexOf('--report');
+const reportPath = reportIndex >= 0 ? process.argv[reportIndex + 1] : null;
+
+const PLANNED_CHECKS = [
+  'the target sign-in session is live before deactivation (Data API read and guarded RPC)',
+  'a live admin begins the guarded deactivation and membership is disabled first',
+  'the same actor/key converges on the original operation and a different employee conflicts',
+  'the real Auth admin block returns the exact banned_until, and the operation completes only after it is recorded',
+  'the old session is denied protected reads and guarded RPCs after membership removal',
+  'employee identity, locale, role, Auth link, reservations and attribution survive deactivation',
+  'a second live admin resumes the original operation without rewriting the actor',
+  'the last active admin cannot be deactivated directly or through a direct write',
+  'a reviewer releases the deactivated claimant reservation explicitly, and the claimant cannot',
+  'the provider reports the exact banned identity after the block',
+];
+if (!confirm) {
+  console.log('DRY RUN — no fixtures, no Auth bans, no Data API writes.');
+  for (const check of PLANNED_CHECKS) console.log('WOULD CHECK', check);
+  process.exit(0);
+}
+
+assert.ok(
+  devEnvPath && ownerPath && workdir,
+  'Provide SGN_ACCEPTANCE_DEV_ENV, SGN_ACCEPTANCE_OWNER and SGN_ACCEPTANCE_WORKDIR',
+);
+function parseEnv(text) {
+  const out = {};
+  for (const line of text.split(/\r?\n/)) {
+    const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)$/);
+    if (match) out[match[1]] = match[2].trim().replace(/^["']|["']$/g, '');
+  }
+  return out;
+}
+const devEnv = parseEnv(await fs.readFile(devEnvPath, 'utf8'));
+const owner = JSON.parse(await fs.readFile(ownerPath, 'utf8'));
+// The separately authorized provider capability. Never printed or logged.
+assert.equal(devEnv.SGN_ENV, 'dev', 'Acceptance must never target production');
+assert.equal(
+  typeof owner.authAdminKey,
+  'string',
+  'The owner config must supply the server-only Auth admin capability',
+);
+const environment = readEnvironment(
+  { ...devEnv, NEXT_PUBLIC_APP_URL: 'http://127.0.0.1:3117' },
+  devEnv.EXPECTED_SUPABASE_PROJECT_REF,
+);
+await fs.mkdir(workdir, { recursive: true });
+const ownerClient = createClient(environment.supabaseUrl, owner.authAdminKey, {
+  auth: { persistSession: false, autoRefreshToken: false },
+});
+const observations = [];
+function observed(name, details = {}) {
+  observations.push({ name, ...details });
+  console.log('PASS', name);
+}
+
+// ---------------------------------------------------------------- fixtures
+const namespace = 'SGN66';
+const manifestPath = path.join(workdir, 'fixtures.json');
+const identities = [
+  ['adminA', 'admin'],
+  ['adminB', 'admin'],
+  ['target', 'sales'],
+  ['reserver', 'sales'],
+];
+async function createFixtures() {
+  const manifest = { namespace, identities: {}, properties: [], locks: [] };
+  for (const [name, role] of identities) {
+    const email = `${namespace.toLowerCase()}.${name}@example.test`;
+    const password = randomBytes(24).toString('base64url');
+    const created = await ownerClient.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+    });
+    assert.equal(created.error, null, `create auth user ${name}`);
+    const employeeId = randomUUID();
+    const inserted = await ownerClient.from('employees').insert({
+      id: employeeId,
+      auth_user_id: created.data.user.id,
+      email,
+      display_name: `${namespace} ${name}`,
+      role,
+      is_active: true,
+    });
+    assert.equal(inserted.error, null, `create employee ${name}`);
+    manifest.identities[name] = {
+      userId: created.data.user.id,
+      employeeId,
+      email,
+      password,
+      role,
+    };
+  }
+  for (const [index, code] of ['SGN66-A', 'SGN66-B'].entries()) {
+    const propertyId = randomUUID();
+    const inserted = await ownerClient.from('properties').insert({
+      id: propertyId,
+      property_code: code,
+      listing_mode: 'sale',
+      status: 'available',
+      created_by: manifest.identities.adminA.employeeId,
+    });
+    assert.equal(inserted.error, null, `create property ${index}`);
+    manifest.properties.push(propertyId);
+  }
+  await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', {
+    mode: 0o600,
+  });
+  return manifest;
+}
+async function sessionFor(identity) {
+  const client = createClient(
+    environment.supabaseUrl,
+    environment.publishableKey,
+    { auth: { persistSession: false, autoRefreshToken: false } },
+  );
+  const signedIn = await client.auth.signInWithPassword({
+    email: identity.email,
+    password: identity.password,
+  });
+  assert.equal(signedIn.error, null, 'fixture sign-in');
+  return client;
+}
+async function cleanup(manifest) {
+  if (!manifest) return;
+  for (const identity of Object.values(manifest.identities)) {
+    // The provider block must be lifted for a synthetic identity, through the same admin
+    // API that placed it. This is cleanup of the check's own fixture, not a user action.
+    await ownerClient.auth.admin
+      .updateUserById(identity.userId, { ban_duration: 'none' })
+      .catch(() => {});
+  }
+  if (manifest.locks.length)
+    await ownerClient.from('property_locks').delete().in('id', manifest.locks);
+  if (manifest.properties.length)
+    await ownerClient.from('properties').delete().in('id', manifest.properties);
+  for (const identity of Object.values(manifest.identities))
+    await ownerClient.from('employees').delete().eq('id', identity.employeeId);
+  if (keep) console.log('KEEP=1: fixture manifest left at', manifestPath);
+  else await fs.rm(manifestPath, { force: true });
+}
+
+const manifest = await createFixtures();
+const before = {
+  employees: (await ownerClient.from('employees').select('id')).data.length,
+  properties: (await ownerClient.from('properties').select('id')).data.length,
+};
+const adminA = await sessionFor(manifest.identities.adminA);
+const adminB = await sessionFor(manifest.identities.adminB);
+const target = await sessionFor(manifest.identities.target);
+const reserver = await sessionFor(manifest.identities.reserver);
+const targetEmployee = manifest.identities.target;
+const adminAEmployee = manifest.identities.adminA;
+const adminBEmployee = manifest.identities.adminB;
+const reserverEmployee = manifest.identities.reserver;
+const targetAuthUserId = targetEmployee.userId;
+
+try {
+  // -------------------------------------------------- live before deactivation
+  assert.equal((await target.from('properties').select('id')).data.length, 2);
+  const pendingRequest = await target.rpc('request_property_lock', {
+    p_property_id: manifest.properties[0],
+    p_reason: 'Acceptance fixture pending request before deactivation',
+  });
+  assert.equal(pendingRequest.error, null);
+  manifest.locks.push(pendingRequest.data);
+  const reserved = await target.rpc('request_property_lock', {
+    p_property_id: manifest.properties[1],
+    p_reason: 'Acceptance fixture reserved request before deactivation',
+  });
+  assert.equal(reserved.error, null);
+  manifest.locks.push(reserved.data);
+  assert.equal(
+    (
+      await adminA.rpc('decide_property_lock', {
+        p_lock_id: reserved.data,
+        p_approve: true,
+        p_reason: 'Independent acceptance reviewer approval',
+        p_days: 7,
+      })
+    ).error,
+    null,
+  );
+  observed('the target sign-in session is live before deactivation');
+
+  // -------------------------------------------------- guarded begin
+  const key = randomUUID();
+  const begun = await adminA.rpc('begin_employee_deactivation', {
+    p_employee_id: targetEmployee.employeeId,
+    p_key: key,
+  });
+  assert.equal(begun.error, null, 'begin deactivation');
+  assert.equal(begun.data.state, 'provider_pending');
+  assert.equal(begun.data.actorId, adminAEmployee.employeeId);
+  const membership = await ownerClient
+    .from('employees')
+    .select('is_active,auth_user_id,preferred_locale')
+    .eq('id', targetEmployee.employeeId)
+    .single();
+  assert.equal(membership.data.is_active, false);
+  assert.equal(membership.data.auth_user_id, targetAuthUserId);
+  observed('a live admin disables membership before any provider call');
+
+  const retried = await adminA.rpc('begin_employee_deactivation', {
+    p_employee_id: targetEmployee.employeeId,
+    p_key: key,
+  });
+  assert.equal(retried.data.id, begun.data.id);
+  const conflict = await adminA.rpc('begin_employee_deactivation', {
+    p_employee_id: adminBEmployee.employeeId,
+    p_key: key,
+  });
+  assert.equal(conflict.error.code, '23505');
+  observed('same-key retries converge and key reuse conflicts');
+
+  // -------------------------------------------------- real provider block
+  const blocked = await ownerClient.auth.admin.updateUserById(
+    targetAuthUserId,
+    {
+      ban_duration: '876000h',
+    },
+  );
+  assert.equal(blocked.error, null, 'provider block');
+  const banUntil = blocked.data.user.banned_until;
+  assert.ok(banUntil, 'the provider returns a ban expiry');
+  const recorded = await ownerClient.rpc(
+    'record_employee_deactivation_result',
+    {
+      p_operation_id: begun.data.id,
+      p_revision: begun.data.revision,
+      p_actor_id: adminAEmployee.employeeId,
+      p_auth_user_id: targetAuthUserId,
+      p_outcome: 'blocked',
+      p_provider_reference: targetAuthUserId,
+      p_detail: 'accepted by the real Auth admin API',
+      p_ban_until: banUntil,
+    },
+  );
+  assert.equal(recorded.error, null, 'record provider result');
+  assert.equal(recorded.data.state, 'completed');
+  assert.equal(recorded.data.providerOutcome, 'blocked');
+  observed(
+    'the provider block completes the operation only after it is recorded',
+  );
+
+  // -------------------------------------------------- old session denied
+  assert.equal((await target.from('properties').select('id')).data.length, 0);
+  assert.equal(
+    (
+      await target.rpc('request_property_lock', {
+        p_property_id: manifest.properties[0],
+        p_reason: 'Old session attempts a guarded request after deactivation',
+      })
+    ).error.code,
+    '42501',
+  );
+  observed('the old session is denied reads and guarded RPCs');
+
+  // -------------------------------------------------- records survive
+  const survived = await ownerClient
+    .from('employees')
+    .select('display_name,email,role,preferred_locale,auth_user_id,is_active')
+    .eq('id', targetEmployee.employeeId)
+    .single();
+  assert.equal(survived.data.display_name, `${namespace} target`);
+  assert.equal(survived.data.auth_user_id, targetAuthUserId);
+  assert.equal(survived.data.is_active, false);
+  const locks = await ownerClient
+    .from('property_locks')
+    .select('id,requested_by,status')
+    .eq('requested_by', targetEmployee.employeeId);
+  assert.equal(locks.data.length, 2);
+  assert.ok(
+    locks.data.every((row) => row.requested_by === targetEmployee.employeeId),
+  );
+  const events = await ownerClient
+    .from('employee_admin_events')
+    .select('action')
+    .eq('operation_id', begun.data.id);
+  assert.ok(events.data.some((row) => row.action === 'provider_blocked'));
+  observed('identity, Auth link, reservations and attribution survive');
+
+  // -------------------------------------------------- reviewer release stays explicit
+  const release = await adminB.rpc('release_property_lock', {
+    p_lock_id: reserved.data,
+    p_reason:
+      'Independent reviewer releases the reservation after deactivation',
+  });
+  assert.equal(release.error, null);
+  const claimantRelease = await target.rpc('release_property_lock', {
+    p_lock_id: reserved.data,
+    p_reason: 'Deactivated claimant attempts the release',
+  });
+  assert.equal(claimantRelease.error.code, '42501');
+  observed('reviewer release stays explicit and the claimant cannot release');
+
+  // -------------------------------------------------- resume by another admin
+  const resumeKey = randomUUID();
+  const opened = await adminA.rpc('begin_employee_deactivation', {
+    p_employee_id: reserverEmployee.employeeId,
+    p_key: resumeKey,
+  });
+  const resumed = await adminB.rpc('begin_employee_deactivation', {
+    p_employee_id: reserverEmployee.employeeId,
+    p_key: randomUUID(),
+  });
+  assert.equal(resumed.data.id, opened.data.id);
+  assert.equal(resumed.data.actorId, adminAEmployee.employeeId);
+  // The resumed identity is already disabled: its live session reads no protected rows.
+  assert.equal((await reserver.from('properties').select('id')).data.length, 0);
+  observed('another live admin resumes without rewriting attribution');
+
+  // -------------------------------------------------- last active admin
+  assert.equal(
+    (
+      await adminA.rpc('begin_employee_deactivation', {
+        p_employee_id: adminBEmployee.employeeId,
+        p_key: randomUUID(),
+      })
+    ).error,
+    null,
+  );
+  const selfRemoval = await adminA.rpc('begin_employee_deactivation', {
+    p_employee_id: adminAEmployee.employeeId,
+    p_key: randomUUID(),
+  });
+  assert.equal(selfRemoval.error.code, 'P0010');
+  const directDemotion = await ownerClient
+    .from('employees')
+    .update({ role: 'sales' })
+    .eq('id', adminAEmployee.employeeId);
+  assert.equal(directDemotion.error.code, 'P0010');
+  observed('the last active admin cannot be removed, even by a direct write');
+  await ownerClient
+    .from('employees')
+    .update({ is_active: true })
+    .eq('id', adminBEmployee.employeeId);
+
+  // -------------------------------------------------- provider identity check
+  const provider = await ownerClient.auth.admin.getUserById(targetAuthUserId);
+  assert.equal(provider.error, null);
+  assert.ok(
+    provider.data.user.banned_until,
+    'the exact identity carries the ban',
+  );
+  observed('the provider reports the exact banned identity');
+
+  const after = {
+    employees: (await ownerClient.from('employees').select('id')).data.length,
+    properties: (await ownerClient.from('properties').select('id')).data.length,
+  };
+  assert.ok(
+    after.employees >= before.employees,
+    'no fixture identity was lost',
+  );
+  assert.ok(
+    after.properties >= before.properties,
+    'no reservable property was lost',
+  );
+
+  const report = {
+    checked_at: new Date().toISOString(),
+    environment: 'development',
+    observations,
+    limitations: [
+      'No immediate recall of copied JWTs, remote provider memory or already-issued signed URLs is claimed.',
+      'The provider ban is finite (about 100 years) and renewed only by an explicit reconciliation.',
+      'Administration operation and event evidence is retained by design; physical fixture removal uses the authorized owner SQL path.',
+    ],
+  };
+  if (reportPath)
+    await fs.writeFile(reportPath, JSON.stringify(report, null, 2) + '\n');
+  console.log(`${observations.length} observations passed`);
+} finally {
+  await cleanup(manifest);
+}

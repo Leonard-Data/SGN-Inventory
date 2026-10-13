@@ -16,6 +16,7 @@
 | Approve/reject lock | No | No | Another employee only | Another employee only |
 | Set legal/review state; sold/rented arrives with issue #32 sale transition | No | No | Yes | Yes |
 | Manage employee activation/roles and catalogs | No | No | No | Yes |
+| Deactivate a linked employee (guarded; provider block confirmed) | No | No | No | Yes |
 | Open the admin employee list (`/people/employees`) | No | No | No | Yes |
 | Read area/employee analytics | No | No | Yes | Yes |
 | Read staging/audit directly through API | No | No | No | No |
@@ -41,7 +42,7 @@ Reviewers inspect the deal reason, customer agreement evidence and claimant, the
 
 Each transition writes a lock event and an audit snapshot. Expired rows are cleaned lazily when a reservation RPC operates on the same property. Dashboards always use effective locks, so expiry is correct even before cleanup. A scheduled sweeper is optional; if added, acquire the property lock first and append expiry events. Do not let a stale approved row block an approval without expiring it within the same transaction.
 
-Deactivation is immediate for subsequent RLS/RPC requests. Review the departing employee's reservations, then release/reassign through new approved requests as appropriate. Do not rewrite the historical claimant to make reports look cleaner. Existing short-lived file links remain bearer links until expiry, so the application should keep their lifetime short.
+Deactivation disables internal membership first and confirms the exact Auth sign-in block through the server-only adapter; a failed or ambiguous provider result stays a recorded reconciliation state and never claims completed deactivation. The departing employee's outstanding reservations stay attributed to them: the control makes their existence visible, and the existing claimant or reviewer may release them or let them expire. Nothing is transferred automatically and the historical claimant is never rewritten. Existing short-lived file links remain bearer links until expiry, so the application should keep their lifetime short.
 
 ## Employee activity and daily KPIs
 
@@ -73,4 +74,4 @@ The required languages are VI/EN, with Vietnamese regional conventions in either
 
 Validate every form and server input. Require POST/Server Action mutations with origin/CSRF protections appropriate to the route. Limit high-volume search/event submissions in application middleware or an equivalent rate limiter. Prevent shared caching of signed-in data. Keep logs limited to request IDs, error classes and safe identifiers. Alert on repeated reservation conflicts or failed file completions without logging deal/contact content.
 
-Admin user invitations must link the correct Auth account to an employee email, confirm the requested role and prevent unintentional lockout of the last active admin. The schema does not yet enforce a last-admin invariant; implement a guarded administrative RPC before exposing activation/role forms. Bootstrap the first admin through a controlled administrative database action after creating the Auth account.
+Admin user invitations must link the correct Auth account to an employee email and confirm the requested role. The last active admin is protected by a database trigger that refuses a deactivation, demotion, unlink or removal that would leave the company without an active admin, serialized with an advisory lock so concurrent removals cannot both pass; deactivation runs through the guarded `begin_employee_deactivation` RPC and a direct lifecycle, link or role write cannot bypass the guard. Activation, invitation and role-change forms remain unshipped. Bootstrap the first admin through a controlled administrative database action after creating the Auth account.
