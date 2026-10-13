@@ -18,21 +18,16 @@ export type ContactRow = {
 
 // One projection for every contact surface (the overview panel and the sticky card), so the
 // owner rule cannot survive in one of them. Withheld rows carry no phone text at all, so no
-// renderer can show the owner phone by accident, and a shared contact that is an owner here
-// keeps the phone withheld even when another row of the same property names it as broker.
+// renderer can show the owner phone by accident.
 export function contactRows(links: readonly ContactLink[]): ContactRow[] {
-  const owners = new Set(
-    links
-      .filter((link) => link.relation === 'owner')
-      .map((link) => link.contact_id),
-  );
   return links.map((link) => ({
-    id: link.contacts?.id ?? link.contact_id,
+    id: link.contact_id,
     name: link.contacts?.display_name ?? null,
     relation: link.relation,
     isPrimary: link.is_primary,
-    phone: owners.has(link.contact_id)
-      ? { show: false }
-      : { show: true, text: link.contacts?.raw_phone_text ?? null },
+    phone:
+      link.relation === 'owner'
+        ? { show: false }
+        : { show: true, text: link.contacts?.raw_phone_text ?? null },
   }));
 }

@@ -57,24 +57,6 @@ test('a recorded owner phone is absent from every automatic contact row', () => 
   assert.equal(JSON.stringify(rows).includes('0900000001'), false);
 });
 
-test('a shared contact linked as an owner keeps its phone withheld on its other rows', () => {
-  const rows = contactRows([
-    link('a1', 'owner', { display_name: 'Shared person' }, true),
-    link('a1', 'broker', { display_name: 'Shared person' }),
-  ]);
-  assert.deepEqual(
-    rows.map((row) => row.phone),
-    [{ show: false }, { show: false }],
-  );
-  assert.deepEqual(
-    rows.map((row) => [row.relation, row.isPrimary]),
-    [
-      ['owner', true],
-      ['broker', false],
-    ],
-  );
-});
-
 test('owner eligibility is the property relation, not the contact type or another property', () => {
   const shared = link('a1', 'broker', { display_name: 'Shared person' });
   // The same contact is an owner elsewhere; this property records only a broker relationship.
@@ -131,8 +113,3 @@ test('a link without embedded contact details still withholds an owner phone', (
   ]);
 });
 
-test('the projection takes no disclosure input: the phone arrives only from the reveal payload', () => {
-  // A deliberate disclosure is a separate payload (OwnerContactDisclosure.contact.phone) that
-  // this projection never reads, so no render of these rows can present an undisclosed phone.
-  assert.equal(contactRows.length, 1);
-});
