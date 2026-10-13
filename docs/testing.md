@@ -69,6 +69,18 @@ Repository-side delivery preparation only: no cloud operation was performed and 
 
 Not executed, and therefore unverified external prerequisites: no workflow was dispatched, no migration was applied, no Vercel project, project ID or domain is established by this evidence, neither Web Analytics toggle was enabled, no deployed request was measured, and the GitHub environments `dev`/`prod` with a required reviewer are unconfirmed — read-only repository checks observed no environments and no protection on `main` or `develop` at the time of writing. Until those exist, production delivery stays blocked. The dispatched behaviour of the pipeline, real migration application and the analytics view all remain unexecuted.
 
+### Stage-scoped CD activation verification (13 October 2026)
+
+Repository-side delivery configuration only: no cloud operation was performed and no workflow was dispatched. The single repository-wide `CD_ENABLED` switch was replaced by `CD_PREVIEW_ENABLED` (same-repository PR previews), `CD_DEV_ENABLED` (`develop`/`stage=dev` releases) and `CD_PROD_ENABLED` (production). All three are unset by default, each run is enabled only by its own kind's switch, and the branch, environment, fork, project/database mapping, credential, migration and exact-head guards are unchanged. Each activated deploy job also reruns `node scripts/release-guard.mjs activation` before cloud contact, so a mistyped workflow guard fails closed instead of publishing.
+
+- `scripts/release-guard.test.mjs` asserts that no delivery kind is enabled by another kind's switch — including that `CD_DEV_ENABLED` or `CD_PREVIEW_ENABLED` alone never enables production — and that only the literal `true` enables one. `scripts/workflow-activation.test.mjs` pins each workflow's activation gate as a whole expression (preview on the preview switch; production clauses on `CD_PROD_ENABLED` alone), keeps the migrate-before-deploy dependency and stage environments, and asserts the retired shared switch appears in no workflow and the database-only workflows keep their own authorization.
+- The CLI guard was exercised directly for each kind and switch: only the matching switch exits `0`, and a missing or foreign switch exits `1` without printing values.
+- `actionlint 1.7.12` reported nothing for all five workflow files with `shellcheck 0.11.0` on the PATH. The integration was verified by probe rather than assumed: actionlint reports `SC2086` for a deliberately unquoted variable in a throwaway copy, and rejects a job-level `if` using the disallowed `secrets` context — so the new gates were genuinely parsed and context-checked as expressions.
+- `npm run check` passed with the pinned Node `24.14.0` / npm `11.13.0` toolchain: formatting, ESLint, strict TypeScript, 69 unit/configuration/release/workflow regressions and all 232 embedded schema assertions.
+- Read-only GitHub inspection on the same day found `main` and `develop` protected with `quality` required, the `preview`/`dev`/`prod` environments with required-reviewer protection, and the isolation variables set; **no activation switch was set**, so no CD job could run. The current inventory is recorded in [setup.md](setup.md#observed-external-state-13-october-2026-read-only).
+
+Not executed: no workflow was dispatched and no deployment or migration was performed, so the dispatched behaviour of each switch, the PR preview path and production delivery remain unverified until the external checklist and a real same-repository PR preview exist.
+
 ## Required staging gates
 
 | Test | Expected result |

@@ -4,6 +4,24 @@ import { parseEnv } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { readEnvironment } from '../src/lib/environment.ts';
 
+// Stage-scoped activation. Exactly one repository variable owns each delivery
+// kind, and a kind is enabled only by its own switch, so setting the preview or
+// development switch can never enable a production run (or the reverse). Absent
+// and non-literal values stay off, so every kind is disabled by default.
+const CD_ACTIVATION_SWITCH = {
+  preview: 'CD_PREVIEW_ENABLED',
+  dev: 'CD_DEV_ENABLED',
+  prod: 'CD_PROD_ENABLED',
+};
+
+export function cdActivation(kind, values) {
+  assert.ok(
+    Object.hasOwn(CD_ACTIVATION_SWITCH, kind),
+    'Use a known CD activation kind',
+  );
+  return values[CD_ACTIVATION_SWITCH[kind]] === 'true';
+}
+
 export function releaseTarget(values) {
   const stage = values.SGN_ENV;
   assert.ok(stage === 'dev' || stage === 'prod', 'Select dev or prod');
@@ -131,6 +149,11 @@ if (
     const command = process.argv[2];
     if (command === 'target') {
       releaseTarget(process.env);
+    } else if (command === 'activation') {
+      assert.ok(
+        cdActivation(process.env.SGN_CD_KIND, process.env),
+        'CD is not activated for this stage',
+      );
     } else if (command === 'configuration') {
       releaseConfiguration(process.env);
     } else if (command === 'pulled') {
@@ -175,13 +198,15 @@ if (
         JSON.parse(await readFile(process.argv[3], 'utf8')),
       );
     } else {
-      throw new Error('Use target, configuration, pending, pulled, or smoke');
+      throw new Error(
+        'Use target, activation, configuration, pending, pulled, or smoke',
+      );
     }
     console.log(`Release ${command} check passed`);
   } catch {
     // Assertions may contain compared key values; never print their payloads.
     console.error(
-      'Release check failed: verify branch, stage, project IDs, configuration, pending migrations and deployment health.',
+      'Release check failed: verify stage activation, branch, stage, project IDs, configuration, pending migrations and deployment health.',
     );
     process.exitCode = 1;
   }
