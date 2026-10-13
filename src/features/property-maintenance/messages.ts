@@ -88,6 +88,34 @@ const copy = {
     'Chưa có thay đổi nghiệp vụ được ghi nhận; lịch sử nhập cũ không được suy đoán.',
     'No recorded business changes yet; imported historical changes are not invented.',
   ],
+  priceHistory: ['Giá chào đã ghi', 'Recorded asking price'],
+  priceHistoryNote: [
+    'Chỉ gồm giá chào đã được ghi; không phải giá bán thực tế, tiền thuê theo hợp đồng hay biên nhận thanh toán. Giá trị chưa ghi là khoảng trống, không phải số 0.',
+    'Recorded asking prices only; not achieved sale prices, contractual rent or payment receipts. A value that was never recorded is a gap, not zero.',
+  ],
+  salePriceSeries: ['Giá bán chào', 'Asking sale price'],
+  rentPriceSeries: ['Giá thuê tháng chào', 'Monthly asking rent'],
+  perMonth: ['tháng', 'month'],
+  emptySalePrices: [
+    'Chưa có thay đổi giá bán được ghi nhận; không suy đoán lịch sử nhập cũ.',
+    'No recorded sale asking-price changes yet; imported history is not invented.',
+  ],
+  emptyRentPrices: [
+    'Chưa có thay đổi giá thuê được ghi nhận; không suy đoán lịch sử nhập cũ.',
+    'No recorded monthly asking-rent changes yet; imported history is not invented.',
+  ],
+  correctionExplanation: [
+    'Giải thích đính chính (không bắt buộc)',
+    'Correction explanation (optional)',
+  ],
+  correctionExplanationHint: [
+    'Chỉ áp dụng khi giá bán hoặc giá thuê thay đổi; 10–2000 ký tự; được giữ cùng thay đổi đó.',
+    'Applies only when a sale or monthly rent price changes; 10–2000 characters; kept with that change.',
+  ],
+  correctionExplanationNeedsPrice: [
+    'Giải thích đính chính chỉ áp dụng khi có thay đổi giá bán hoặc giá thuê.',
+    'A correction explanation applies only when a sale or monthly rent price changes.',
+  ],
   before: ['Trước', 'Before'],
   after: ['Sau', 'After'],
   actor: ['Người thực hiện', 'Actor'],
@@ -137,6 +165,10 @@ const copy = {
     'No requests on this page. Report an issue from property details.',
   ],
   loading: ['Đang đọc dữ liệu được phép…', 'Reading authorized information…'],
+  seriesFailed: [
+    'Chưa xác nhận được dòng giá này. Đọc lại trước khi kết luận.',
+    'This price series could not be confirmed. Read it again before concluding anything.',
+  ],
   refresh: ['Đọc lại', 'Refresh'],
   more: ['Trang tiếp theo', 'Next page'],
   first: ['Trang đầu', 'First page'],

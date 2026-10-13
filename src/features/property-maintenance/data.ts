@@ -85,6 +85,31 @@ export async function createProperty(
   databaseError(error);
   return { id: data };
 }
+// An optional explanation is a correction note, not another business field: it is only
+// accepted on an authorized price edit and the database attaches it to that revision's
+// own history entries. Unknown or non-price explanations are refused, never dropped.
+function correctionExplanation(
+  value: unknown,
+  kind: Target,
+  changed: Record<string, Json>,
+): string | null {
+  if (value === undefined || value === null) return null;
+  if (
+    typeof value !== 'string' ||
+    value.trim().length < 10 ||
+    value.length > 2000
+  )
+    throw new ApiError(400, 'invalid-input');
+  if (
+    kind !== 'property' ||
+    !(
+      Object.hasOwn(changed, 'sale_price_vnd') ||
+      Object.hasOwn(changed, 'monthly_rent_vnd')
+    )
+  )
+    throw new ApiError(400, 'explanation-without-price');
+  return value;
+}
 export async function maintainProperty(
   context: RouteContext,
   id: string,
@@ -96,17 +121,21 @@ export async function maintainProperty(
     'revision',
     'propertyRevision',
     'changes',
+    'explanation',
   ]);
   if (!uuid(id)) throw new ApiError(400, 'invalid-input');
   const kind = target(body.target),
-    rev = revisions(body);
+    rev = revisions(body),
+    changed = changes(kind, body.changes),
+    explanation = correctionExplanation(body.explanation, kind, changed);
   const { data, error } = await context.client.rpc('maintain_property', {
     p_property_id: id,
     p_target: kind,
     p_target_id: rev.targetId,
     p_expected_revision: rev.revision,
     p_property_revision: rev.propertyRevision,
-    p_changes: changes(kind, body.changes),
+    p_changes: changed,
+    p_explanation: explanation,
   });
   databaseError(error);
   return { id: data };
@@ -246,6 +275,80 @@ export async function historyPage(
         : null,
   };
 }
+export type PriceSeries = 'sale' | 'rent';
+export type PriceChange = {
+  id: string;
+  actor_name: string;
+  occurred_at: string;
+  explanation: string | null;
+  before: string | null;
+  after: string | null;
+};
+// One recorded price series at a time: sale asking prices and monthly asking rents are
+// separate units, and each series keyset-pages past the single generic history page.
+// Values stay exact whole-VND text extracted by the view; null is an unknown gap, never 0.
+export async function priceHistoryPage(
+  context: RouteContext,
+  id: string,
+  params: URLSearchParams,
+) {
+  if (!uuid(id)) throw new ApiError(400, 'invalid-input');
+  const series = params.get('series'),
+    before = params.get('before'),
+    beforeId = params.get('beforeId');
+  if (
+    [...params.keys()].some(
+      (k) => !['series', 'before', 'beforeId'].includes(k),
+    ) ||
+    (series !== 'sale' && series !== 'rent') ||
+    !!before !== !!beforeId ||
+    (before &&
+      (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|\+00:00)$/.test(
+        before,
+      ) ||
+        !Number.isFinite(Date.parse(before)) ||
+        !uuid(beforeId)))
+  )
+    throw new ApiError(400, 'invalid-input');
+  const parent = await context.client
+    .from('properties')
+    .select('id')
+    .eq('id', id)
+    .maybeSingle();
+  databaseError(parent.error);
+  if (!parent.data) throw new ApiError(404, 'not-found');
+  let request = context.client
+    .from('property_price_history')
+    .select('id,actor_name,occurred_at,explanation,before_value,after_value')
+    .eq('property_id', id)
+    .eq('series', series)
+    .order('occurred_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(31);
+  if (before)
+    request = request.or(
+      `occurred_at.lt.${before},and(occurred_at.eq.${before},id.lt.${beforeId})`,
+    );
+  const { data, error } = await request;
+  databaseError(error);
+  const page = (data ?? []).slice(0, 30),
+    last = page.at(-1);
+  return {
+    events: page.map((event): PriceChange => ({
+      id: event.id!,
+      actor_name: event.actor_name!,
+      occurred_at: event.occurred_at!,
+      explanation: event.explanation,
+      before: event.before_value,
+      after: event.after_value,
+    })),
+    nextCursor:
+      (data?.length ?? 0) > 30 && last
+        ? { before: last.occurred_at!, beforeId: last.id! }
+        : null,
+  };
+}
+export type PriceHistoryPage = Awaited<ReturnType<typeof priceHistoryPage>>;
 export type HistoryPage = Awaited<ReturnType<typeof historyPage>>;
 export type ContactDetail = Awaited<ReturnType<typeof contactDetail>>;
 export type Unit = Awaited<ReturnType<typeof listUnits>>['units'][number];

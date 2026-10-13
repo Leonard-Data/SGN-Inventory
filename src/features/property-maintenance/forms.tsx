@@ -19,14 +19,17 @@ export function MutationForm({
   save,
   onSaved,
   onDenied,
+  explanation = false,
   children,
 }: {
   locale: Locale;
   target: Target;
   values?: Record<string, unknown>;
-  save: (changes: Changes) => Promise<unknown>;
+  save: (changes: Changes, explanation?: string) => Promise<unknown>;
   onSaved: () => void | Promise<void>;
   onDenied: (status: number) => void;
+  // The optional correction note only reaches the API when the form offers it.
+  explanation?: boolean;
   children: ReactNode;
 }) {
   const text = maintenanceText(locale);
@@ -44,7 +47,10 @@ export function MutationForm({
         setError('noChange');
         return;
       }
-      await save(changes);
+      const note = explanation
+        ? String(form.get('explanation') ?? '').trim()
+        : '';
+      await save(changes, note || undefined);
       await onSaved();
     } catch (failure) {
       if (
@@ -68,9 +74,11 @@ export function MutationForm({
         ? text.stale
         : error === 'conflict'
           ? text.conflict
-          : error === 'invalid-input'
-            ? text.invalid
-            : text.unavailable;
+          : error === 'explanation-without-price'
+            ? text.correctionExplanationNeedsPrice
+            : error === 'invalid-input'
+              ? text.invalid
+              : text.unavailable;
   return (
     <form onSubmit={submit}>
       <fieldset disabled={busy}>{children}</fieldset>

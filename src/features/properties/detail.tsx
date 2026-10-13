@@ -22,6 +22,7 @@ import type { PropertyDetail } from './detail-data';
 import type { OwnerContactDisclosure } from './types';
 import { Maintenance } from '@/features/property-maintenance/workspace';
 import { History } from '@/features/property-maintenance/history';
+import { PriceHistory } from '@/features/property-maintenance/price-history';
 import {
   CorrectionQueue,
   CorrectionReport,
@@ -612,6 +613,15 @@ export function Detail({
                       <p className="field-hint">{text.legalNote}</p>
                     </div>
                   </div>
+
+                  {/* recorded asking-price series */}
+                  <PriceHistory
+                    key={
+                      'prices' + property.id + property.revision + refreshTick
+                    }
+                    propertyId={property.id}
+                    locale={locale}
+                  />
 
                   {/* addresses */}
                   <div className="panel" data-od-id="panel-addresses">
