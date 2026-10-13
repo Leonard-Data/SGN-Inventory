@@ -150,8 +150,11 @@ export async function editComment(
     !uuid(id) ||
     !uuid(commentId) ||
     !uuid(body.revision) ||
+    !uuid(body.key) ||
     typeof body.body !== 'string' ||
-    Object.keys(body).some((key) => key !== 'revision' && key !== 'body')
+    Object.keys(body).some(
+      (key) => key !== 'revision' && key !== 'body' && key !== 'key',
+    )
   )
     throw new ApiError(400, 'invalid-input');
   // Application boundary mirrors the database: the same trimmed 1–2000 characters as posting.
@@ -164,6 +167,7 @@ export async function editComment(
     p_comment_id: commentId,
     p_revision: body.revision,
     p_body: text,
+    p_key: body.key,
   });
   if (error) {
     if (error.code === '42501') throw new ApiError(403, 'access-denied');

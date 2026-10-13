@@ -156,6 +156,10 @@ _Avoid_: Chat, live feed, moderation queue
 An employee-scoped key identifying one comment submission, so an interrupted or ambiguous post retries the same original comment instead of creating another. Reusing it with a different property, or with text other than the original validated submission, is rejected, including after the comment has been edited.
 _Avoid_: Draft identity, temporary ID
 
+**Comment edit key**:
+An employee-scoped key identifying one author edit operation. Retrying the same comment, opening revision and validated replacement text recovers that accepted operation without adding another retained version; another use is rejected.
+_Avoid_: Comment revision, submission key
+
 
 ### Property files
 

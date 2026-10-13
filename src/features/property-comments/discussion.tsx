@@ -10,15 +10,8 @@ import {
 import { messages, type Locale } from '@/i18n/messages';
 import { api, RequestError } from '@/features/employees/api';
 import { vietnamTimestamp } from '@/features/properties/format';
-import {
-  COMMENT_MAX_LENGTH,
-  COMMENT_REASON_MAX_LENGTH,
-} from './types';
-import {
-  mergePage,
-  mergeStaleEditState,
-  withPost,
-} from './discussion-state';
+import { COMMENT_MAX_LENGTH, COMMENT_REASON_MAX_LENGTH } from './types';
+import { mergePage, mergeStaleEditState, withPost } from './discussion-state';
 import type {
   Comment,
   CommentCursor,
@@ -67,16 +60,22 @@ export function Discussion({
   );
   const [removeNotice, setRemoveNotice] = useState<string | null>(null);
   // Author editing: the open editor, its unsent draft, the kept failure state and its notice.
-  const [editing, setEditing] = useState<string | null>(null);
+  const [editing, setEditing] = useState<{
+    id: string;
+    expectedRevision: string;
+    key: string;
+  } | null>(null);
   const [editDraft, setEditDraft] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
   const [editAction, setEditAction] = useState<{
     id: string;
     code: string;
   } | null>(null);
+  const [editReconciled, setEditReconciled] = useState(false);
   const [editNotice, setEditNotice] = useState<string | null>(null);
   const inFlight = useRef<AbortController | null>(null);
   const generation = useRef(0);
+  const editTarget = useRef<string | null>(null);
   // One submission key per draft: an ambiguous failure retries the original comment, a conflict
   // proves that key can never succeed and retires it.
   const submissionKey = useRef('');
@@ -122,18 +121,62 @@ export function Discussion({
   // Every state update happens after an await, so mounting or refreshing never cascades a render.
   const load = useCallback(async () => {
     const version = ++generation.current;
-    const page = await fetchPage(null).catch((problem: unknown) => {
-      if (version === generation.current) failure(problem);
-      return null;
-    });
-    if (version === generation.current && page) {
-      setComments((rows) => mergePage(rows, page.comments));
+    const target = editTarget.current;
+    try {
+      const [pageResult, currentResult] = await Promise.allSettled([
+        fetchPage(null),
+        target
+          ? fetchComment(target)
+              .then(({ comment }) => comment)
+              .catch((problem: unknown) => {
+                if (
+                  problem instanceof RequestError &&
+                  (problem.status === 401 || problem.status === 403)
+                )
+                  throw problem;
+                return null;
+              })
+          : Promise.resolve(null),
+      ]);
+      if (version !== generation.current) return 'superseded';
+      const denied = [pageResult, currentResult].find(
+        (result) =>
+          result.status === 'rejected' &&
+          result.reason instanceof RequestError &&
+          (result.reason.status === 401 || result.reason.status === 403),
+      );
+      if (denied?.status === 'rejected') throw denied.reason;
+      if (pageResult.status === 'rejected') throw pageResult.reason;
+      const page = pageResult.value;
+      const current =
+        currentResult.status === 'fulfilled' ? currentResult.value : null;
+      const activeTarget = editTarget.current;
+      const exact = activeTarget === target ? current : null;
+      setComments((rows) =>
+        activeTarget
+          ? mergeStaleEditState(rows, page.comments, exact)
+          : mergePage(rows, page.comments),
+      );
       setNext(page.nextCursor);
       setError(null);
+      if (activeTarget)
+        setEditReconciled(
+          exact !== null ||
+            page.comments.some((row) => row.id === activeTarget),
+        );
+      return 'loaded';
+    } catch (problem) {
+      if (version !== generation.current) return 'superseded';
+      failure(problem);
+      return problem instanceof RequestError &&
+        (problem.status === 401 || problem.status === 403)
+        ? 'denied'
+        : 'failed';
+    } finally {
+      // Released unconditionally: a superseding request owns the list, not the spinner.
+      setBusy(false);
     }
-    // Released unconditionally: a superseding request owns the list, not the spinner.
-    setBusy(false);
-  }, [failure, fetchPage]);
+  }, [failure, fetchComment, fetchPage]);
   const stop = useCallback(() => {
     generation.current++;
     inFlight.current?.abort();
@@ -243,23 +286,30 @@ export function Discussion({
   // Opening the editor replaces the entry's text with the draft and clears the other actions,
   // so one entry is never being edited, moderated and withdrawn at the same time.
   function beginEdit(row: Comment) {
-    setEditing(row.id);
+    editTarget.current = row.id;
+    setEditing({
+      id: row.id,
+      expectedRevision: row.revision,
+      key: crypto.randomUUID(),
+    });
     setEditDraft(row.body ?? '');
     setEditAction(null);
+    setEditReconciled(false);
     setEditNotice(null);
     setReasonFor(null);
     setReason('');
     setAction(null);
   }
   function cancelEdit() {
+    editTarget.current = null;
     setEditing(null);
     setEditDraft('');
     setEditAction(null);
+    setEditReconciled(false);
   }
-  // An author edit is revision-checked against the text the editor opened. A failure keeps the
-  // unsent draft. A stale save is reconciled against the already committed text first, so a lost
-  // response after a successful edit is reported as the edit it was rather than as a conflict.
   async function saveEdit(row: Comment) {
+    const session = editing;
+    if (!session || session.id !== row.id) return;
     const value = editDraft.trim();
     const length = [...value].length;
     if (length < 1 || length > COMMENT_MAX_LENGTH) {
@@ -274,7 +324,11 @@ export function Discussion({
       updated = (
         await api<{ comment: Comment }>(
           '/api/properties/' + propertyId + '/comments/' + row.id,
-          { revision: row.revision, body: value },
+          {
+            revision: session.expectedRevision,
+            body: value,
+            key: session.key,
+          },
           undefined,
           'PATCH',
         )
@@ -284,33 +338,16 @@ export function Discussion({
         problem instanceof RequestError &&
         (problem.status === 401 || problem.status === 403)
       ) {
+        setSavingEdit(false);
         onDenied(problem.status);
         return;
       }
       const code =
         problem instanceof RequestError ? problem.code : 'unavailable';
       if (code === 'stale-comment') {
-        const [page, current] = await Promise.all([
-          fetchPage(null).catch(() => null),
-          fetchComment(row.id)
-            .then(({ comment }) => comment)
-            .catch(() => null),
-        ]);
-        if (page || current) {
-          setComments((rows) =>
-            mergeStaleEditState(rows, page?.comments ?? [], row.id, current),
-          );
-          if (page) setNext(page.nextCursor);
-          setError(null);
-        }
-        if (
-          current &&
-          current.removedAt === null &&
-          (current.body ?? '').trim() === value
-        ) {
-          setEditing(null);
-          setEditDraft('');
-          setEditNotice(text.commentEdited);
+        setBusy(true);
+        const result = await load();
+        if (result === 'denied') {
           setSavingEdit(false);
           return;
         }
@@ -324,8 +361,10 @@ export function Discussion({
     setComments((rows) =>
       rows.map((entry) => (entry.id === updated.id ? updated : entry)),
     );
+    editTarget.current = null;
     setEditing(null);
     setEditDraft('');
+    setEditReconciled(false);
     setEditNotice(text.commentEdited);
     setSavingEdit(false);
   }
@@ -423,7 +462,7 @@ export function Discussion({
             .join('')
             .toUpperCase();
           const removed = row.removedAt !== null;
-          const editingHere = editing === row.id;
+          const editingHere = editing?.id === row.id;
           // Author withdrawal and editing are the author's own controls and are blocked on an
           // archived Property; reasoned moderation stays available there for a reviewer.
           const canWithdraw =
@@ -458,7 +497,7 @@ export function Discussion({
                       </>
                     ) : null}
                   </p>
-                  {removed ? (
+                  {removed && !editingHere ? (
                     <p className="comment-body comment-removed">
                       {text.commentRemoved}
                     </p>
@@ -473,6 +512,17 @@ export function Discussion({
                         void saveEdit(row);
                       }}
                     >
+                      {editReconciled ? (
+                        <div className="field comment-current">
+                          <p className="field-label">{text.commentCurrent}</p>
+                          <p
+                            className={`comment-body${removed ? ' comment-removed' : ''}`}
+                            translate={removed ? undefined : 'no'}
+                          >
+                            {removed ? text.commentRemoved : row.body}
+                          </p>
+                        </div>
+                      ) : null}
                       <div className="field">
                         <label
                           className="field-label"

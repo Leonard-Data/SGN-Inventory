@@ -39,12 +39,7 @@ test('stale edit refresh keeps exact older-page current row visible', () => {
   };
 
   assert.deepEqual(
-    mergeStaleEditState(
-      [newest, older],
-      [refreshedNewest],
-      older.id,
-      currentOlder,
-    ),
+    mergeStaleEditState([newest, older], [refreshedNewest], currentOlder),
     [refreshedNewest, currentOlder],
   );
 });
@@ -60,9 +55,67 @@ test('stale edit refresh keeps removal marker for an older-page row', () => {
   };
 
   assert.deepEqual(
-    mergeStaleEditState([newest, older], [newest], older.id, removedOlder),
+    mergeStaleEditState([newest, older], [newest], removedOlder),
     [newest, removedOlder],
   );
+});
+
+test('exact stale read cannot roll back a newer page edit', () => {
+  const local = comment('edited', 'Local', '2026-10-12T09:00:00.000Z');
+  const page = {
+    ...local,
+    body: 'Newer page edit',
+    revision: 'edited-revision-newer',
+    editedAt: '2026-10-13T10:00:00.000Z',
+  };
+  const exact = {
+    ...local,
+    body: 'Older exact edit',
+    revision: 'edited-revision-older',
+    editedAt: '2026-10-13T09:00:00.000Z',
+  };
+
+  assert.deepEqual(mergeStaleEditState([local], [page], exact), [page]);
+});
+
+test('exact read replaces the matching fresh page row without duplication', () => {
+  const page = comment(
+    'edited',
+    'Page edit',
+    '2026-10-12T09:00:00.000Z',
+    '2026-10-13T09:00:00.000Z',
+  );
+  const exact = {
+    ...page,
+    body: 'Exact newer edit',
+    revision: 'edited-revision-exact',
+    editedAt: '2026-10-13T10:00:00.000Z',
+  };
+
+  assert.deepEqual(mergeStaleEditState([], [page], exact), [exact]);
+});
+
+test('exact live read cannot replace a newer page removal marker', () => {
+  const local = comment(
+    'edited',
+    'Local edit',
+    '2026-10-12T09:00:00.000Z',
+    '2026-10-13T09:00:00.000Z',
+  );
+  const removed = {
+    ...local,
+    body: null,
+    revision: 'edited-revision-removed',
+    removedAt: '2026-10-13T11:00:00.000Z',
+  };
+  const exact = {
+    ...local,
+    body: 'Older exact edit',
+    revision: 'edited-revision-exact',
+    editedAt: '2026-10-13T10:00:00.000Z',
+  };
+
+  assert.deepEqual(mergeStaleEditState([local], [removed], exact), [removed]);
 });
 
 test('older in-flight page cannot roll back a newer local edit', () => {
@@ -140,14 +193,19 @@ test('stale edit merge preserves loaded row position', () => {
   const currentOlder = { ...older, body: 'Current older' };
 
   assert.deepEqual(
-    mergeStaleEditState(
-      [newest, middle, older],
-      [newest],
-      older.id,
-      currentOlder,
-    ),
+    mergeStaleEditState([newest, middle, older], [newest], currentOlder),
     [newest, middle, currentOlder],
   );
+});
+
+test('editor refresh keeps loaded older-page rows without an exact result', () => {
+  const newest = comment('newest', 'Newest', '2026-10-13T09:00:00.000Z');
+  const older = comment('older', 'Draft owner', '2026-10-12T09:00:00.000Z');
+
+  assert.deepEqual(mergeStaleEditState([newest, older], [newest], null), [
+    newest,
+    older,
+  ]);
 });
 
 test('ordinary page refresh still follows the refreshed page contents', () => {

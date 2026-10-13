@@ -13,7 +13,10 @@ export async function commentEditContract({
   employees,
 }) {
   const post = 'select public.post_property_comment($1,$2,$3) as created';
-  const edit = 'select public.edit_property_comment($1,$2,$3,$4) as edited';
+  const edit =
+    'select public.edit_property_comment($1,$2,$3,$4,gen_random_uuid()) as edited';
+  const editWithKey =
+    'select public.edit_property_comment($1,$2,$3,$4,$5) as edited';
   const remove =
     'select public.remove_property_comment($1,$2,$3,$4,$5) as removed';
   const list = 'select * from public.list_property_comments($1,$2,$3,$4)';
@@ -27,7 +30,7 @@ export async function commentEditContract({
   const editRows = async (commentId) =>
     (
       await db.query(
-        'select version,previous_body,body,previous_revision,revision,author_id,author_name,edited_by,edited_actor_name,edited_at from public.property_comment_edits where comment_id=$1 order by version asc',
+        'select edit_key,version,previous_body,body,previous_revision,revision,author_id,author_name,edited_by,edited_actor_name,edited_at from public.property_comment_edits where comment_id=$1 order by version asc',
         [commentId],
       )
     ).rows;
@@ -183,6 +186,15 @@ export async function commentEditContract({
         ).rows.length,
         'one deterministic row per accepted edit version',
       );
+      assert.ok(
+        (
+          await db.query(
+            'select 1 from pg_indexes where schemaname=$1 and indexname=$2',
+            ['public', 'property_comment_edits_edited_by_edit_key_key'],
+          )
+        ).rows.length,
+        'one accepted edit operation per employee-scoped key',
+      );
       assert.deepEqual(
         (
           await db.query(
@@ -217,6 +229,7 @@ export async function commentEditContract({
   );
 
   let firstRevision;
+  let firstEditKey;
   await check(
     'an active author replaces only the live text and retains before/after evidence atomically',
     async () => {
@@ -254,6 +267,8 @@ export async function commentEditContract({
       await asAdmin();
       const evidence = await editRows(ownComment);
       assert.equal(evidence.length, 1);
+      firstEditKey = evidence[0].edit_key;
+      assert.match(firstEditKey, /^[0-9a-f-]{36}$/);
       assert.deepEqual(
         {
           version: evidence[0].version,
@@ -279,6 +294,53 @@ export async function commentEditContract({
         },
       );
       assert.ok(!Number.isNaN(new Date(evidence[0].edited_at).getTime()));
+    },
+  );
+  await check(
+    'an accepted edit key recovers only its operation while a different same-text edit stays stale',
+    async () => {
+      await asAdmin();
+      const current = await own(ownComment);
+      await asUser(1);
+      const recovered = (
+        await db.query(editWithKey, [
+          live,
+          ownComment,
+          firstRevision,
+          'Nội dung đã sửa\nDòng thứ hai — giữ dấu.',
+          firstEditKey,
+        ])
+      ).rows[0].edited;
+      assert.equal(recovered.id, ownComment);
+      assert.equal(recovered.revision, current.revision);
+      await fails(
+        editWithKey,
+        [
+          live,
+          ownComment,
+          firstRevision,
+          'Nội dung đã sửa\nDòng thứ hai — giữ dấu.',
+          '24000000-0000-4000-8000-0000000000d1',
+        ],
+        'PT409',
+      );
+      await fails(
+        editWithKey,
+        [
+          live,
+          ownComment,
+          firstRevision,
+          'Dùng lại khóa cho nội dung khác',
+          firstEditKey,
+        ],
+        '23505',
+      );
+      await asAdmin();
+      assert.equal(await editCount(ownComment), 1);
+      assert.equal(
+        (await own(ownComment)).body,
+        'Nội dung đã sửa\nDòng thứ hai — giữ dấu.',
+      );
     },
   );
   await check(
@@ -451,6 +513,11 @@ export async function commentEditContract({
         '23514',
       );
       await fails(edit, [null, replayComment, revision, 'Thiếu'], '23514');
+      await fails(
+        editWithKey,
+        [live, replayComment, revision, 'Thiếu khóa', null],
+        '23514',
+      );
       assert.deepEqual(
         await db
           .query('select body from public.property_comments where id=$1', [

@@ -15,6 +15,7 @@ comment on column public.property_comments.edited_at is 'Time of the most recent
 -- actor. Ordinary readers and the author cannot select it; active manager/admin can.
 create table public.property_comment_edits (
   id uuid primary key default gen_random_uuid(),
+  edit_key uuid not null,
   comment_id uuid not null references public.property_comments(id),
   property_id uuid not null references public.properties(id),
   author_id uuid not null references public.employees(id),
@@ -32,9 +33,11 @@ create table public.property_comment_edits (
   check (body = private.trim_unicode(body) and length(body) between 1 and 2000),
   check (body is distinct from previous_body),
   check (previous_revision is distinct from revision),
-  unique (comment_id, version)
+  unique (comment_id, version),
+  unique (edited_by, edit_key)
 );
 comment on table public.property_comment_edits is 'Retained before/after text of every accepted Property comment edit; reviewer-only, no automatic expiry';
+comment on column public.property_comment_edits.edit_key is 'Employee-scoped identity of an accepted edit operation, used to recover an ambiguous response';
 comment on column public.property_comment_edits.version is 'Accepted-edit ordinal for the comment; version 1 is the first edit of the original text';
 comment on column public.property_comment_edits.previous_body is 'Text the comment carried immediately before this edit; the earliest version retains the original validated text';
 comment on column public.property_comment_edits.previous_revision is 'Comment revision that was current when this edit was accepted';
@@ -118,7 +121,8 @@ create function private.edit_property_comment(
   p_property_id uuid,
   p_comment_id uuid,
   p_revision uuid,
-  p_body text
+  p_body text,
+  p_key uuid
 ) returns jsonb language plpgsql security definer set search_path = '' as $$
 declare
   me uuid := private.employee_id();
@@ -127,11 +131,12 @@ declare
   actor text;
   comment public.property_comments;
   edited public.property_comments;
+  prior_edit public.property_comment_edits;
   next_version integer;
 begin
   if me is null then raise exception 'active employee required' using errcode = '42501'; end if;
-  if p_property_id is null or p_comment_id is null or p_revision is null then
-    raise exception 'property, comment and revision required' using errcode = '23514';
+  if p_property_id is null or p_comment_id is null or p_revision is null or p_key is null then
+    raise exception 'property, comment, revision and edit key required' using errcode = '23514';
   end if;
   if text_body is null or length(text_body) not between 1 and 2000 then
     raise exception 'comment text must be 1 to 2000 characters' using errcode = '23514';
@@ -152,6 +157,21 @@ begin
   if comment.author_id <> me then
     raise exception 'only the author may edit this comment' using errcode = '42501';
   end if;
+  select * into prior_edit
+    from public.property_comment_edits e
+    where e.edited_by = me and e.edit_key = p_key;
+  if prior_edit.id is not null then
+    if prior_edit.property_id is distinct from p_property_id
+      or prior_edit.comment_id is distinct from p_comment_id
+      or prior_edit.previous_revision is distinct from p_revision
+      or prior_edit.body is distinct from text_body then
+      raise exception 'edit key reused with a different operation' using errcode = '23505';
+    end if;
+    return jsonb_build_object(
+      'id',comment.id,'property_id',comment.property_id,'author_id',comment.author_id,
+      'author_name',comment.author_name,'body',comment.body,'created_at',comment.created_at,
+      'revision',comment.revision,'removed_at',comment.removed_at,'edited_at',comment.edited_at);
+  end if;
   if comment.removed_at is not null then
     raise exception 'removed comments cannot be edited' using errcode = 'PT409';
   end if;
@@ -170,10 +190,10 @@ begin
     where id = p_comment_id
     returning * into edited;
   insert into public.property_comment_edits(
-    comment_id,property_id,author_id,author_name,edited_by,edited_actor_name,version,
+    edit_key,comment_id,property_id,author_id,author_name,edited_by,edited_actor_name,version,
     previous_body,body,previous_revision,revision)
     values (
-      comment.id,comment.property_id,comment.author_id,comment.author_name,me,actor,
+      p_key,comment.id,comment.property_id,comment.author_id,comment.author_name,me,actor,
       next_version,comment.body,text_body,comment.revision,edited.revision);
   -- The current-discussion projection carries the live text and the edited marker only.
   return jsonb_build_object(
@@ -182,19 +202,20 @@ begin
     'revision',edited.revision,'removed_at',edited.removed_at,'edited_at',edited.edited_at);
 end;
 $$;
-revoke all on function private.guard_comment_edit(),private.edit_property_comment(uuid,uuid,uuid,text) from public,anon,authenticated;
-grant execute on function private.edit_property_comment(uuid,uuid,uuid,text) to authenticated;
+revoke all on function private.guard_comment_edit(),private.edit_property_comment(uuid,uuid,uuid,text,uuid) from public,anon,authenticated;
+grant execute on function private.edit_property_comment(uuid,uuid,uuid,text,uuid) to authenticated;
 
 create function public.edit_property_comment(
   p_property_id uuid,
   p_comment_id uuid,
   p_revision uuid,
-  p_body text
+  p_body text,
+  p_key uuid
 ) returns jsonb language sql security invoker set search_path = '' as $$
-  select private.edit_property_comment(p_property_id,p_comment_id,p_revision,p_body);
+  select private.edit_property_comment(p_property_id,p_comment_id,p_revision,p_body,p_key);
 $$;
-revoke all on function public.edit_property_comment(uuid,uuid,uuid,text) from public,anon,authenticated;
-grant execute on function public.edit_property_comment(uuid,uuid,uuid,text) to authenticated;
+revoke all on function public.edit_property_comment(uuid,uuid,uuid,text,uuid) from public,anon,authenticated;
+grant execute on function public.edit_property_comment(uuid,uuid,uuid,text,uuid) to authenticated;
 
 -- Posting recovery compares against the original validated submission, never the latest
 -- edited text: the earliest retained edit carries the original, then a live current body, then
