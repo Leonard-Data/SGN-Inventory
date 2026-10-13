@@ -778,6 +778,83 @@ export async function maintenanceContract({
         ],
         '42501',
       );
+      await fails(
+        'select public.contact_impact($1)',
+        [unlinkedContact],
+        '42501',
+      );
+    },
+  );
+  await asUser(5);
+  await check(
+    'staff can preview an unlinked identity for maintenance',
+    async () => {
+      const preview = (
+        await db.query('select public.contact_impact($1) as impact', [
+          unlinkedContact,
+        ])
+      ).rows[0].impact;
+      assert.ok(preview.revision);
+      assert.deepEqual(preview.properties, []);
+    },
+  );
+  await asUser(0);
+  await check(
+    'shared-contact edit rejects a stale opened parent after serialization',
+    async () => {
+      const parentRevision = await revision('properties', created);
+      const contactRevision = await revision('contacts', shared);
+      await db.exec('reset role');
+      await db.exec(`
+        create table private.fixture_parent_revision_bump(property_id uuid primary key);
+        create or replace function private.maintenance_gate() returns void language plpgsql security definer set search_path='' as $$
+        declare parent uuid;
+        begin
+          perform pg_advisory_xact_lock(7317,7);
+          select property_id into parent from private.fixture_parent_revision_bump limit 1;
+          if parent is not null then
+            delete from private.fixture_parent_revision_bump;
+            update public.properties set notes=coalesce(notes,'')||' synthetic parent race' where id=parent;
+          end if;
+        end;
+        $$;
+      `);
+      await db.query(
+        'insert into private.fixture_parent_revision_bump(property_id) values($1)',
+        [created],
+      );
+      await asUser(0);
+      try {
+        await fails(
+          'select public.maintain_property($1,$2,$3,$4,$5,$6)',
+          [
+            created,
+            'contact',
+            shared,
+            contactRevision,
+            { display_name: 'stale parent race' },
+            parentRevision,
+          ],
+          'PT409',
+        );
+      } finally {
+        await db.exec('reset role');
+        await db.exec(`
+          create or replace function private.maintenance_gate() returns void language sql security invoker set search_path='' as $$
+            select pg_advisory_xact_lock(7317,7);
+          $$;
+          drop table if exists private.fixture_parent_revision_bump;
+        `);
+        await asUser(0);
+      }
+      assert.notEqual(
+        (
+          await db.query('select display_name from public.contacts where id=$1', [
+            shared,
+          ])
+        ).rows[0].display_name,
+        'stale parent race',
+      );
     },
   );
   await asUser(2);
