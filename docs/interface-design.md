@@ -89,7 +89,7 @@ The contract is `src/app/sgn-app.css` — the ported design package. Compose the
 | States | `.state-panel` (+ `data-tone="danger"`, `.state-mark`, `.state-title`), `.busy-bar`, `.busy-line` + `.spinner`, `.skeleton`/`.sk-card`, `.alert` (+ `data-tone`), `.toast` | loading, empty, error and denial stay distinct; empty ≠ zero ≠ denied |
 | Lists / tables | `.data-table.stackable` (`[data-num]`, `data-label`), `.pagination` > `.page-info` + `.page-buttons` > `.pager-btn` | tables stack to label/value cards under 640px |
 | Dialogs | `.sgn-dialog` > `.sgn-dialog-panel`/`.sgn-dialog-head`/`.sgn-dialog-body`/`.sgn-dialog-foot` | native `<dialog>`: focus trap and Escape come from the platform |
-| Repo-only surfaces | `.maintenance*` (disclosures, inline editors), `.history-event`, `.history-comparison`, `.history-field`, `.owner-disclosure`, `.owner-phone`, `.reservation*` (`.reservation-effective`, `.reservation-pending`, `.reservation-request`), `.proposal-choices`, `.contact-choices`, `.eyebrow` (auth) | `globals.css` + `sgn-surfaces.css`; package tokens only |
+| Repo-only surfaces | `.maintenance*` (disclosures, inline editors), `.history-event`, `.history-comparison`, `.history-field`, `.owner-disclosure`, `.owner-phone`, `.reservation*` (`.reservation-effective`, `.reservation-pending`, `.reservation-request`), `.proposal-choices`, `.contact-choices`, `.eyebrow` (auth), `.comment-removed` and `.comment-moderation` (extensions to the comment row) | `globals.css` + `sgn-surfaces.css`; package tokens only |
 
 ## 5. Page layouts
 
@@ -129,7 +129,7 @@ Shipped: the card cover is the site plate drawn from the record's own fields; a 
         panel Maintenance→ in-page maintenance workspace (revision-checked)
         panel Corrections→ report + role-scoped queue
       .tabpanel "Tài liệu": panel Files → property-files Workspace (.doc-row vocabulary, cover, dropzone)
-      .tabpanel "Thảo luận": Discussion → 30-item list newest-first, .composer, edit/remove
+      .tabpanel "Thảo luận": Discussion → 30-item list newest-first, .composer, author withdrawal and reasoned manager/admin removal (.comment-actions, .comment-removed marker, .comment-moderation); editing is not shipped
     aside.detail-rail (sticky):
       panel History    → maintenance history rows (.hist-row)
       page-view note, then panel Activity → today's own counts
@@ -263,4 +263,4 @@ page-intro · [New category] / [New unit]
 - The asking-price timeline (`.price-row`), the change timeline (`.timeline`/`.tl-item`) and the **Nhân sự & liên hệ** screen (employee accounts + contact book, `.directory-tabs`, `.cell-person`, `.sgn-avatar-sm`) are rendered in the design review route `/design/app-preview` from fictional fixtures: the app has no price-history feed and no directory endpoint, and the review route is where unused package vocabulary is inspectable. Their product routes (`/people/*`) and data contracts are separate, unauthorized work.
 - The personal activity report (#30) shipped at **`/activity/me`** rather than this document's planned `/reports/activity`, with its own acceptance evidence and API path (`/api/activity/me`), and the company employee-by-day report (#57) shipped at **`/activity/company`** rather than the planned `/reports/company` with API path (`/api/activity/company`); both routes were left where the features shipped and the rail's Reports group points at them. `/requests`, `/reviews/*`, `/rentals*`, `/people/*`, `/admin/*` remain unbuilt and are only described above.
 - The auth surfaces keep their own layout sheet (`.sgn-auth` + `sgn-auth.css`); they share the token layer and the control vocabulary but they are shell-free by design (ADR 0001).
-- **Not in scope:** no geographic map, no physical-visit UI, no threads/reactions/mentions, no dashboards beyond §5.9, no design for any archived-property exception beyond the existing reviewer read boundary.
+- **Not in scope:** no geographic map, no physical-visit UI, no threads/reactions/mentions, no dashboards beyond §5.9, and no archived-property exception beyond the existing reviewer read boundary and the reasoned manager/admin discussion removal in §5.2.

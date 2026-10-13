@@ -26,6 +26,8 @@ erDiagram
   CORRECTION_REQUESTS ||--o{ CORRECTION_AMENDMENTS : amends
   PROPERTIES ||--o{ PROPERTY_COMMENTS : discusses
   EMPLOYEES ||--o{ PROPERTY_COMMENTS : posts
+  PROPERTY_COMMENTS ||--o| PROPERTY_COMMENT_REMOVALS : retains
+  EMPLOYEES ||--o{ PROPERTY_COMMENT_REMOVALS : removes
 ```
 
 ## Business tables
@@ -47,7 +49,8 @@ erDiagram
 | `activity_events` | UUID, employee/property FK, page_view/owner_contact_access/site_visit, occurred/recorded timestamps, generated Vietnam day, source, idempotency key, retained visit decision | No direct client DML; one key per employee; owner-contact access counts one distinct property per employee/Vietnam day; new `site_visit` submission and confirmation are retired while retained rows keep their state; page_view and owner_contact_access have no visit status |
 | `property_locks` | UUID, property/claimant, reason, optional evidence, attribution reference, lifecycle state, expiry, independent decision | One approved row per property; one pending request per property/employee; effective reservation additionally requires future expiry |
 | `lock_events` | Identity key, lock FK, actor, action, reason, timestamp | Append-only client access; all approved/rejected/released/expired transitions retain trace |
-| `property_comments` | UUID, property/author FKs, author display name retained at posting time, original text, server posting time, `revision`, employee-scoped `idempotency_key` | No direct client writes: `select`-only grant, `anon` excluded, and a trigger rejects client inserts and every update/delete; text is trimmed Unicode of 1–2000 characters; author identity, text and posting time stay immutable |
+| `property_comments` | UUID, property/author FKs, author display name retained at posting time, original text (null once removed), server posting time, `revision`, `removed_at`, employee-scoped `idempotency_key` | No direct client writes: `select`-only grant, `anon` excluded, and a trigger rejects client inserts, every ordinary update and every delete; text is trimmed Unicode of 1–2000 characters; author identity, text and posting time stay immutable; text is null exactly when `removed_at` is set, so a removed entry is a marker |
+| `property_comment_removals` | One row per removed comment: comment/property/author FKs, retained author name, retained original text, original posting time and revision, removing actor and retained actor name, removal time, `author`/`moderation` kind and mandatory moderation reason | Reviewer-only `select` under RLS; no client insert/update/delete; the guard trigger keeps the retained evidence immutable and non-expiring; the current discussion projection never exposes it |
 
 `properties`, `property_addresses`, `contacts` and `property_contacts` each carry a `revision` UUID that guards stale maintenance saves. Issue #7's maintenance RPCs, correction lifecycle and history rules are in [maintenance-contract.md](maintenance-contract.md).
 

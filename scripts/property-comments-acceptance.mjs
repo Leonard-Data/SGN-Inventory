@@ -1,8 +1,8 @@
-// Issue #44 hosted acceptance: shared Property discussion.
+// Issue #44/#45 hosted acceptance: shared Property discussion and accountable removal.
 //
 // Real development Supabase Auth/Data API/RLS plus the local real Next.js application and
 // real Chrome sessions. Mock, shim and readiness-page results are not acceptance. Mutates
-// only the declared SGN-TEST-44 synthetic namespace and restores the declared fixture
+// only the declared SGN-TEST-44/45 synthetic namespace and restores the declared fixture
 // activation on every exit path.
 //
 // Usage:
@@ -13,7 +13,7 @@
 //   node --env-file-if-exists=.env.local scripts/property-comments-acceptance.mjs \
 //     --allow-deactivation [--report <sanitized json path>]
 //
-// The manifest supplies the SGN-TEST-44 identities, properties and passwords; the operator
+// The manifest supplies the synthetic namespace identities, properties and passwords; the operator
 // config supplies the owner connection string and Auth admin key for fixture-only reads and
 // resets. Neither file is ever printed.
 import assert from 'node:assert/strict';
@@ -62,17 +62,23 @@ const fixtures = JSON.parse(
 const operator = JSON.parse(
   await fs.readFile(process.env.SGN_ACCEPTANCE_OPERATOR, 'utf8'),
 );
-assert.equal(
+assert.match(
   fixtures.namespace,
-  'SGN-TEST-44',
-  'Only the declared synthetic namespace is allowed',
+  /^SGN-TEST-4[45]$/,
+  'Only a declared synthetic namespace is allowed',
 );
-for (const name of ['alpha', 'beta', 'reviewer', 'inactive'])
+for (const name of ['alpha', 'beta', 'reviewer', 'inactive']) {
   assert.equal(
     typeof fixtures.identities[name]?.employeeId,
     'string',
     'Missing declared fixture identity',
   );
+  assert.equal(
+    typeof fixtures.displayNames?.[name],
+    'string',
+    'Missing declared fixture display name',
+  );
+}
 assert.equal(
   typeof fixtures.unlinked?.email,
   'string',
@@ -80,7 +86,7 @@ assert.equal(
 );
 assert.ok(
   Object.values(fixtures.properties).every((property) =>
-    property.code.startsWith('SGN-TEST-44-'),
+    property.code.startsWith(fixtures.namespace + '-'),
   ),
   'Only declared synthetic properties are allowed',
 );
@@ -137,6 +143,12 @@ function operatorSqlAsync(statement) {
     });
   });
 }
+async function dbNow() {
+  // The hosted database clock is authoritative for posting times; the local host clock can
+  // drift, so recency is measured against the database rather than Date.now().
+  const rows = await operatorSqlAsync('select now() as now');
+  return Date.parse(rows[0].now);
+}
 function waitForExit(child) {
   return new Promise((resolve) => {
     if (child.exitCode !== null) return resolve();
@@ -192,6 +204,12 @@ function browser(args, session = primary) {
 }
 function evaluate(expression, session = primary) {
   const output = browser(['eval', expression], session);
+  // A truncated result would otherwise be parsed as a partial value and could make an
+  // assertion pass vacuously; fail loudly and keep the payload small instead.
+  assert.ok(
+    !/Result was truncated/.test(output),
+    'Browser evaluation result was truncated; reduce the payload',
+  );
   const row = output.match(/^result: (.+)$/m);
   assert.ok(row, 'Browser evaluation returned no result');
   let value = JSON.parse(row[1]);
@@ -220,6 +238,45 @@ function click(name, session) {
 function wait(text, session) {
   browser(['wait', text], session);
 }
+// The app shell names its language buttons by lang attribute and keeps its sign-out control
+// inside a user popover, so both are driven through the rendered elements rather than a
+// label that the design-system shell can rename.
+function switchLocale(code, session) {
+  const clicked = evaluate(
+    `() => {
+      const button = document.querySelector('.lang-btn[lang="${code}"]');
+      if (!button) return false;
+      button.click();
+      return true;
+    }`,
+    session,
+  );
+  assert.equal(clicked, true, `Language switch to ${code} is present`);
+}
+function signOut(session) {
+  const opened = evaluate(
+    `() => {
+      const button = document.querySelector('.sgn-user-btn');
+      if (!button) return false;
+      button.click();
+      return true;
+    }`,
+    session,
+  );
+  if (opened) {
+    click('Đăng xuất', session);
+    return;
+  }
+  // Not on a shell page (for example a denial screen): end the session through the
+  // application route, then the caller lands on the login form.
+  evaluate(
+    `() => {
+      fetch('/api/auth/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}', credentials: 'same-origin' });
+      return true;
+    }`,
+    session,
+  );
+}
 // Polling tolerates a transient command failure while a page navigates; the deadline decides.
 async function waitUntil(expression, session = primary, attempts = 60) {
   for (let attempt = 0; attempt < attempts; attempt++) {
@@ -238,14 +295,19 @@ function screen(session) {
       const discussion = document.querySelector('section.discussion');
       return {
         path: location.pathname,
-        locale: document.querySelector('main')?.lang,
+        locale: document.documentElement.lang,
         code: document.querySelector('h1')?.textContent?.trim(),
         heading: discussion?.querySelector('h2')?.textContent ?? null,
         comments: [...(discussion?.querySelectorAll('.comment') ?? [])].map(node => ({
-          author: node.querySelector('.comment-meta span')?.textContent ?? null,
+          author: node.querySelector('.comment-author')?.textContent ?? null,
           time: node.querySelector('time')?.dateTime ?? null,
           body: node.querySelector('.comment-body')?.textContent ?? null,
+          removed: Boolean(node.querySelector('.comment-removed')),
+          actions: Boolean(node.querySelector('.comment-actions')),
         })),
+        removeControls: discussion ? [...discussion.querySelectorAll('button')].filter(node => /Gỡ bình luận|^Remove$/.test(node.textContent.trim())).length : 0,
+        moderateControls: discussion ? [...discussion.querySelectorAll('button')].filter(node => /Gỡ kèm lý do|Remove with reason/.test(node.textContent)).length : 0,
+        moderationReason: discussion?.querySelector('.comment-moderation textarea')?.value ?? null,
         statuses: [...(discussion?.querySelectorAll('[role=status],[role=alert]') ?? [])].map(node => node.textContent),
         empty: discussion ? discussion.innerText.includes('Chưa có bình luận nào.') || discussion.innerText.includes('No comments yet.') : null,
         more: discussion ? Boolean([...discussion.querySelectorAll('button')].find(node => /Xem bình luận cũ hơn|More comments/.test(node.textContent))) : null,
@@ -253,7 +315,7 @@ function screen(session) {
         postButton: discussion ? Boolean([...discussion.querySelectorAll('button[type=submit]')].length) : null,
         editControls: Boolean(document.querySelector('.maintenance-actions')),
         injected: Boolean(document.querySelector('script[data-injected], img[data-injected]')),
-        discussionText: discussion?.innerText ?? null,
+        hasDiscussionText: discussion ? discussion.innerText.trim().length > 0 : false,
       };
     }`,
     session,
@@ -269,6 +331,25 @@ const settled = `() => {
   return Boolean(discussion) && !discussion.querySelector('button[disabled]');
 }`;
 async function settle(session = primary) {
+  // The design-system detail places the discussion in a tab that starts hidden; activate it so
+  // the accessibility snapshot used by click/fill reaches the discussion controls. The click is
+  // retried until React has hydrated the tab, then the discussion is left to finish loading.
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const visible = evaluate(
+      `() => {
+        const panel = document.getElementById('record-panel-comments');
+        if (!panel) return false;
+        if (panel.hidden) {
+          const tab = document.getElementById('record-tab-comments');
+          if (tab) tab.click();
+        }
+        return !panel.hidden;
+      }`,
+      session,
+    );
+    if (visible) break;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
   await waitUntil(settled, session);
   await new Promise((resolve) => setTimeout(resolve, 600));
   await waitUntil(settled, session);
@@ -339,7 +420,7 @@ async function browserLogin(name, session, preferredLocale) {
   if (preferredLocale) {
     evaluate(
       `() => {
-        const button = document.querySelector('.sgn-lang-btn[lang="${preferredLocale}"]');
+        const button = document.querySelector('.lang-btn[lang="${preferredLocale}"]');
         if (button) button.click();
         return Boolean(button);
       }`,
@@ -367,6 +448,7 @@ const paging = fixtures.properties.paging;
 const archived = fixtures.properties.archived;
 const race = fixtures.properties.race;
 const second = fixtures.properties.second;
+const names = fixtures.displayNames;
 const detail = (property) => origin + '/properties/' + property.id;
 
 const alpha = await userClient('alpha');
@@ -430,9 +512,10 @@ await waitUntil(
     viBody.trim(),
     'Trimming preserves accents and line breaks',
   );
-  assert.equal(comment.author, 'SGN44 Alpha', 'Author is shown');
+  assert.equal(comment.author, names.alpha, 'Author is shown');
   assert.ok(
-    comment.time && Math.abs(Date.parse(comment.time) - Date.now()) < 300000,
+    comment.time &&
+      Math.abs(Date.parse(comment.time) - (await dbNow())) < 300000,
     'Original Vietnam posting time is a real recent instant',
   );
   assert.ok(
@@ -541,7 +624,7 @@ browser(['open', detail(discussion)], primary);
 await settle(primary);
 {
   const before = screen(primary);
-  click('English', primary);
+  switchLocale('en', primary);
   await waitUntil(
     `() => document.querySelector('section.discussion h2')?.textContent === 'Property discussion'`,
     primary,
@@ -555,7 +638,7 @@ await settle(primary);
     before.comments.map((comment) => comment.body),
     'Source comment text is not translated',
   );
-  click('Tiếng Việt', primary);
+  switchLocale('vi', primary);
   await waitUntil(
     `() => document.querySelector('section.discussion h2')?.textContent === 'Thảo luận bất động sản'`,
     primary,
@@ -601,7 +684,7 @@ await settle(secondary);
   );
   const after = screen(secondary);
   assert.equal(
-    after.comments.filter((comment) => comment.author === 'SGN44 Beta').length,
+    after.comments.filter((comment) => comment.author === names.beta).length,
     1,
     'Colleague comment is attributed to the colleague',
   );
@@ -614,7 +697,7 @@ await settle(secondary);
     },
   );
 }
-click('Đăng xuất', secondary);
+signOut(secondary);
 browser(['open', detail(discussion)], secondary);
 {
   const page = screen(secondary);
@@ -623,7 +706,11 @@ browser(['open', detail(discussion)], secondary);
     '/login',
     'Protected detail is not reachable after sign-out',
   );
-  assert.equal(page.discussionText, null, 'No cached discussion is displayed');
+  assert.equal(
+    page.hasDiscussionText,
+    false,
+    'No cached discussion is displayed',
+  );
   observed('sign-out and back-navigation expose no cached discussion', {
     path: page.path,
   });
@@ -653,12 +740,12 @@ await settle(secondary);
   const page = screen(secondary);
   assert.equal(page.path, '/access-denied', 'Deactivated identity is denied');
   assert.equal(
-    page.discussionText,
-    null,
+    page.hasDiscussionText,
+    false,
     'No discussion text survives the denial',
   );
   const leaked = evaluate(
-    `() => ['SGN44 Alpha', 'SGN44 Beta', 'Beta xem nhà'].some((text) => document.body.innerText.includes(text))`,
+    `() => [${JSON.stringify(names.alpha)}, ${JSON.stringify(names.beta)}, 'Beta xem nhà'].some((text) => document.body.innerText.includes(text))`,
     secondary,
   );
   assert.equal(leaked, false, 'No cached discussion text remains after denial');
@@ -669,6 +756,104 @@ await settle(secondary);
     cachedText: leaked,
   });
   setBetaActive(true);
+}
+
+// ------------------------------------------------------- author removal journey
+{
+  browser(['open', detail(discussion)], primary);
+  await settle(primary);
+  const before = screen(primary);
+  const own = before.comments.find(
+    (comment) => comment.author === names.alpha && !comment.removed,
+  );
+  assert.ok(own, 'The author has a current comment to withdraw');
+  assert.ok(
+    before.removeControls > 0,
+    'An author sees the removal control for their own comment',
+  );
+  assert.equal(
+    before.moderateControls,
+    0,
+    'An ordinary employee holds no moderation control',
+  );
+  click('Gỡ bình luận', primary);
+  await waitUntil(
+    `() => document.querySelectorAll('section.discussion .comment-removed').length === 1`,
+    primary,
+  );
+  await settle(primary);
+  const after = screen(primary);
+  assert.equal(
+    after.comments.length,
+    before.comments.length,
+    'Removal neither reorders nor adds an entry',
+  );
+  const marker = after.comments.find((comment) => comment.removed);
+  assert.equal(marker.author, names.alpha, 'The marker keeps authorship');
+  assert.equal(
+    marker.actions,
+    false,
+    'A removed comment offers no further action',
+  );
+  assert.ok(marker.time, 'The marker keeps the original posting time');
+  assert.ok(
+    after.statuses.some((status) => /Bình luận đã được gỡ/.test(status)),
+    'A committed removal is reported in VI',
+  );
+  assert.ok(
+    !after.statuses.some((status) => /Chưa gỡ được/.test(status)),
+    'A committed removal is never reported as failed',
+  );
+  const withdrawnText = own.body.replace(/\s+/g, ' ').trim();
+  assert.ok(withdrawnText.length > 0, 'The withdrawn comment carried text');
+  assert.equal(
+    evaluate(
+      `() => document.body.innerText.replace(/\\s+/g, ' ').includes(${JSON.stringify(withdrawnText)})`,
+      primary,
+    ),
+    false,
+    'Withdrawn text is absent from the rendered page',
+  );
+  // EN keeps the marker, the surviving source text and the Vietnam posting convention.
+  switchLocale('en', primary);
+  await waitUntil(
+    `() => document.querySelector('section.discussion h2')?.textContent === 'Property discussion'`,
+    primary,
+  );
+  await settle(primary);
+  const english = screen(primary);
+  assert.ok(english.removeControls > 0, 'The author control is localized');
+  assert.equal(
+    english.comments.filter((comment) => comment.removed).length,
+    1,
+    'The marker survives the language switch',
+  );
+  assert.equal(
+    english.comments.find((comment) => comment.removed).body,
+    'Comment removed.',
+    'EN shows a localized removal marker',
+  );
+  assert.ok(
+    english.comments
+      .filter((comment) => !comment.removed)
+      .every((comment) => (comment.body ?? '').length > 0),
+    'Surviving source text is unchanged by the language switch',
+  );
+  observed(
+    'author removal hides the text and shows a localized marker in VI and EN',
+    {
+      markerVi: 'Bình luận đã được gỡ.',
+      markerEn: 'Comment removed.',
+      originalTimeRetained: Boolean(marker.time),
+      entries: after.comments.length,
+    },
+  );
+  switchLocale('vi', primary);
+  await waitUntil(
+    `() => document.querySelector('section.discussion h2')?.textContent === 'Thảo luận bất động sản'`,
+    primary,
+  );
+  await settle(primary);
 }
 
 // ------------------------------------------------------- direct Data API and RPC
@@ -813,7 +998,7 @@ await settle(secondary);
   );
   assert.equal(
     original.data[0].author_name,
-    'SGN44 Alpha',
+    names.alpha,
     'Original attribution is retained',
   );
   assert.ok(
@@ -897,7 +1082,7 @@ await settle(secondary);
     'Property association is the request target',
   );
   assert.ok(
-    Math.abs(Date.parse(created.data.created_at) - Date.now()) < 300000,
+    Math.abs(Date.parse(created.data.created_at) - (await dbNow())) < 300000,
     'Posting time is server generated',
   );
   const retried = await alpha.rpc('post_property_comment', {
@@ -984,7 +1169,7 @@ await settle(secondary);
     reviewer,
     archived.id,
     revision,
-    'SGN-TEST-44 archived fixture',
+    `${fixtures.namespace} archived fixture`,
   );
   assert.equal(
     archivedNow.error,
@@ -1119,6 +1304,481 @@ await settle(secondary);
   );
 }
 
+// ------------------------------------------------------- removal authority and retention
+{
+  const seeded = await beta.rpc('post_property_comment', {
+    p_property_id: second.id,
+    p_body: 'Nội dung cần gỡ để kiểm duyệt',
+    p_key: '53000000-0000-4000-8000-000000000001',
+  });
+  assert.equal(seeded.error, null, 'Fixture comment posted for moderation');
+  const seededId = seeded.data.id;
+  const seededRevision = seeded.data.revision;
+  // Authorship is not transferred by Property-edit authority or by an ordinary session.
+  const claimed = await alpha.rpc('remove_property_comment', {
+    p_property_id: second.id,
+    p_comment_id: seededId,
+    p_revision: seededRevision,
+    p_kind: 'author',
+  });
+  assert.equal(
+    claimed.error?.code,
+    '42501',
+    'Another employee cannot claim authorship of a comment',
+  );
+  const ordinaryModeration = await beta.rpc('remove_property_comment', {
+    p_property_id: second.id,
+    p_comment_id: seededId,
+    p_revision: seededRevision,
+    p_kind: 'moderation',
+    p_reason: 'Lý do không có thẩm quyền',
+  });
+  assert.equal(
+    ordinaryModeration.error?.code,
+    '42501',
+    'An ordinary employee cannot moderate',
+  );
+  // A nonblank moderation reason is mandatory.
+  for (const reason of ['', '   ', '\n\t ', null]) {
+    const blank = await reviewer.rpc('remove_property_comment', {
+      p_property_id: second.id,
+      p_comment_id: seededId,
+      p_revision: seededRevision,
+      p_kind: 'moderation',
+      p_reason: reason,
+    });
+    assert.equal(
+      blank.error?.code,
+      '23514',
+      'A blank moderation reason is rejected',
+    );
+  }
+  const overlong = await reviewer.rpc('remove_property_comment', {
+    p_property_id: second.id,
+    p_comment_id: seededId,
+    p_revision: seededRevision,
+    p_kind: 'moderation',
+    p_reason: 'a'.repeat(2001),
+  });
+  assert.equal(
+    overlong.error?.code,
+    '23514',
+    'An over-limit reason is rejected',
+  );
+  // A stale revision is refused rather than applied to newer text.
+  const stale = await reviewer.rpc('remove_property_comment', {
+    p_property_id: second.id,
+    p_comment_id: seededId,
+    p_revision: '53000000-0000-4000-8000-0000000000ff',
+    p_kind: 'moderation',
+    p_reason: 'Lý do hợp lệ nhưng sai phiên bản',
+  });
+  assert.equal(stale.error?.code, 'PT409', 'A stale removal is refused');
+  const unconsumed = await beta
+    .from('property_comments')
+    .select('body')
+    .eq('id', seededId)
+    .single();
+  assert.equal(
+    unconsumed.data.body,
+    'Nội dung cần gỡ để kiểm duyệt',
+    'A refused removal leaves the comment current',
+  );
+  const removed = await reviewer.rpc('remove_property_comment', {
+    p_property_id: second.id,
+    p_comment_id: seededId,
+    p_revision: seededRevision,
+    p_kind: 'moderation',
+    p_reason: '  Nội dung nhạy cảm, gỡ theo yêu cầu  ',
+  });
+  assert.equal(
+    removed.error,
+    null,
+    'An active manager moderates with a reason',
+  );
+  assert.equal(removed.data.body, null, 'The removal response carries no text');
+  assert.equal(
+    removed.data.removed_at !== null,
+    true,
+    'The removal response is a marker',
+  );
+  assert.equal(
+    Object.hasOwn(removed.data, 'removal_reason'),
+    false,
+    'No moderation reason reaches the ordinary projection',
+  );
+  // Terminal and replay boundaries.
+  const again = await reviewer.rpc('remove_property_comment', {
+    p_property_id: second.id,
+    p_comment_id: seededId,
+    p_revision: seededRevision,
+    p_kind: 'moderation',
+    p_reason: 'Gỡ lần hai',
+  });
+  assert.equal(again.error?.code, 'PT409', 'A removed comment is terminal');
+  const replay = await beta.rpc('post_property_comment', {
+    p_property_id: second.id,
+    p_body: 'Nội dung cần gỡ để kiểm duyệt',
+    p_key: '53000000-0000-4000-8000-000000000001',
+  });
+  assert.equal(replay.error, null, 'The original posting key still recovers');
+  assert.equal(
+    replay.data.id,
+    seededId,
+    'Replay converges on the original identity',
+  );
+  assert.equal(replay.data.body, null, 'Replay never returns withdrawn text');
+  assert.equal(
+    replay.data.removed_at !== null,
+    true,
+    'Replay reports the removal marker',
+  );
+  // Only active manager/admin reach the retained evidence; the author has no exception.
+  const managerRows = await reviewer
+    .from('property_comment_removals')
+    .select(
+      'comment_id,body,removal_kind,removal_reason,removed_by,author_id,original_revision',
+    )
+    .eq('comment_id', seededId);
+  assert.equal(managerRows.error, null, 'A manager reads retained evidence');
+  assert.equal(managerRows.data.length, 1, 'The retained evidence row exists');
+  assert.equal(
+    managerRows.data[0].body,
+    'Nội dung cần gỡ để kiểm duyệt',
+    'The original text is retained',
+  );
+  assert.equal(managerRows.data[0].removal_kind, 'moderation');
+  assert.equal(
+    managerRows.data[0].removal_reason,
+    'Nội dung nhạy cảm, gỡ theo yêu cầu',
+    'The reason is retained trimmed',
+  );
+  assert.equal(
+    managerRows.data[0].removed_by,
+    fixtures.identities.reviewer.employeeId,
+    'The removing actor is retained',
+  );
+  assert.equal(
+    managerRows.data[0].author_id,
+    betaEmployee,
+    'The original author is retained rather than the moderator',
+  );
+  assert.equal(
+    managerRows.data[0].original_revision,
+    seededRevision,
+    'The removed revision is retained',
+  );
+  for (const [name, client] of [
+    ['author', beta],
+    ['colleague', alpha],
+  ]) {
+    const hidden = await client
+      .from('property_comment_removals')
+      .select('comment_id')
+      .eq('comment_id', seededId);
+    assert.ok(
+      hidden.error || hidden.data.length === 0,
+      `${name} cannot read retained evidence`,
+    );
+  }
+  const inactive = await userClient('inactive');
+  const inactiveRows = await inactive
+    .from('property_comment_removals')
+    .select('comment_id');
+  assert.ok(
+    inactiveRows.error || inactiveRows.data.length === 0,
+    'An inactive identity reads no retained evidence',
+  );
+  // No direct client write bypasses the transition, attribution or retention.
+  const forged = await reviewer.from('property_comment_removals').insert({
+    comment_id: seededId,
+    property_id: second.id,
+    author_id: alphaEmployee,
+    author_name: 'Forged',
+    body: 'forged',
+    original_created_at: new Date().toISOString(),
+    original_revision: randomUUID(),
+    removed_by: alphaEmployee,
+    removed_actor_name: 'Forged',
+    removal_kind: 'moderation',
+    removal_reason: 'forged',
+  });
+  assert.ok(forged.error, 'A direct retained-evidence insert is rejected');
+  const rewritten = await reviewer
+    .from('property_comments')
+    .update({ body: 'rewritten' })
+    .eq('id', seededId)
+    .select('id');
+  assert.ok(
+    rewritten.error || rewritten.data.length === 0,
+    'Withdrawn text cannot be rewritten in place',
+  );
+  const purged = await reviewer
+    .from('property_comments')
+    .delete()
+    .eq('id', seededId)
+    .select('id');
+  assert.ok(
+    purged.error || purged.data.length === 0,
+    'A removed comment is never hard-deleted',
+  );
+  observed(
+    'moderation requires a reason and retains the original text, actor and revision',
+    {
+      ordinaryDenied: ordinaryModeration.error?.code,
+      claimedDenied: claimed.error?.code,
+      staleDenied: stale.error?.code,
+      terminalDenied: again.error?.code,
+      replayMarker: replay.data.body === null,
+      reasonRetained: managerRows.data[0].removal_reason,
+    },
+  );
+  observed(
+    'retained removal evidence is reviewer-only and immune to direct writes',
+    {
+      managerRows: managerRows.data.length,
+      ordinaryRows: 0,
+      inactiveRows: inactiveRows.data?.length ?? 0,
+      forgedInsert: forged.error?.code ?? 'blocked',
+    },
+  );
+}
+{
+  // Competing moderation sessions: exactly one transition and one retained record.
+  const seeded = await beta.rpc('post_property_comment', {
+    p_property_id: second.id,
+    p_body: 'Đua gỡ song song',
+    p_key: '53000000-0000-4000-8000-000000000002',
+  });
+  assert.equal(
+    seeded.error,
+    null,
+    'Fixture comment posted for the removal race',
+  );
+  const competingSession = await userClient('reviewer');
+  const [firstAttempt, secondAttempt] = await Promise.all([
+    reviewer.rpc('remove_property_comment', {
+      p_property_id: second.id,
+      p_comment_id: seeded.data.id,
+      p_revision: seeded.data.revision,
+      p_kind: 'moderation',
+      p_reason: 'Phiên kiểm duyệt thứ nhất',
+    }),
+    competingSession.rpc('remove_property_comment', {
+      p_property_id: second.id,
+      p_comment_id: seeded.data.id,
+      p_revision: seeded.data.revision,
+      p_kind: 'moderation',
+      p_reason: 'Phiên kiểm duyệt thứ hai',
+    }),
+  ]);
+  const committed = [firstAttempt, secondAttempt].filter(
+    (result) => !result.error,
+  ).length;
+  const refused = [firstAttempt, secondAttempt]
+    .filter((result) => result.error)
+    .map((result) => result.error.code);
+  assert.equal(committed, 1, 'Exactly one competing removal commits');
+  assert.ok(
+    refused.every((code) => code === 'PT409' || code === '23505'),
+    'The losing attempt is refused as stale',
+  );
+  const records = await reviewer
+    .from('property_comment_removals')
+    .select('comment_id')
+    .eq('comment_id', seeded.data.id);
+  assert.equal(records.error, null, 'Retained evidence stays readable');
+  assert.equal(
+    records.data.length,
+    1,
+    'Competing attempts never create duplicate history',
+  );
+  const marker = await alpha
+    .from('property_comments')
+    .select('body,removed_at')
+    .eq('id', seeded.data.id)
+    .single();
+  assert.equal(marker.data.body, null, 'The surviving state is the marker');
+  assert.equal(
+    marker.data.removed_at !== null,
+    true,
+    'The surviving state records the removal time',
+  );
+  observed(
+    'competing removal sessions serialize into one transition and one retained record',
+    {
+      committed,
+      refused: refused.join(','),
+      records: records.data.length,
+    },
+  );
+}
+{
+  // Archived moderation: a manager acting as the author is blocked, reasoned moderation is not.
+  const archivedRow = await reviewer
+    .from('property_comments')
+    .select('id,revision,author_id')
+    .eq('property_id', archived.id)
+    .single();
+  assert.equal(archivedRow.error, null, 'Reviewer reads the archived comment');
+  assert.equal(
+    archivedRow.data.author_id,
+    fixtures.identities.reviewer.employeeId,
+    'The archived fixture comment is manager-authored',
+  );
+  const archivedAuthor = await reviewer.rpc('remove_property_comment', {
+    p_property_id: archived.id,
+    p_comment_id: archivedRow.data.id,
+    p_revision: archivedRow.data.revision,
+    p_kind: 'author',
+  });
+  assert.equal(
+    archivedAuthor.error?.code,
+    '42501',
+    'A manager acting as the author cannot remove on an archived property',
+  );
+  signOut(secondary);
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  await browserLogin('reviewer', secondary, 'vi');
+  browser(['open', detail(archived)], secondary);
+  await settle(secondary);
+  const before = screen(secondary);
+  assert.equal(
+    before.comments.length,
+    1,
+    'Reviewer reads the archived discussion',
+  );
+  assert.equal(
+    before.removeControls,
+    0,
+    'Author removal is absent on an archived Property',
+  );
+  assert.equal(
+    before.moderateControls,
+    1,
+    'Reasoned moderation stays available to a reviewer',
+  );
+  assert.equal(
+    before.postButton,
+    false,
+    'An archived Property cannot receive comments',
+  );
+  click('Gỡ kèm lý do', secondary);
+  await waitUntil(
+    `() => Boolean(document.querySelector('section.discussion .comment-moderation textarea'))`,
+    secondary,
+  );
+  fill('Lý do kiểm duyệt', 'Gỡ nội dung sau khi lưu trữ', secondary);
+  click('Xác nhận gỡ', secondary);
+  await waitUntil(
+    `() => document.querySelectorAll('section.discussion .comment-removed').length === 1`,
+    secondary,
+  );
+  await settle(secondary);
+  const after = screen(secondary);
+  assert.ok(
+    after.statuses.some((status) => /Bình luận đã được gỡ/.test(status)),
+    'Archived moderation is reported',
+  );
+  assert.ok(
+    !after.comments.some((comment) =>
+      (comment.body ?? '').includes('Thảo luận trước khi lưu trữ'),
+    ),
+    'The archived text is no longer shown',
+  );
+  assert.equal(
+    after.comments.find((comment) => comment.removed).author,
+    names.reviewer,
+    'The retained author attribution is shown with the marker',
+  );
+  const archivedEvidence = await reviewer
+    .from('property_comment_removals')
+    .select('body,removal_kind,removal_reason')
+    .eq('comment_id', archivedRow.data.id)
+    .single();
+  assert.equal(
+    archivedEvidence.error,
+    null,
+    'The archived removal is retained',
+  );
+  assert.equal(
+    archivedEvidence.data.body,
+    'Thảo luận trước khi lưu trữ',
+    'The archived original text is retained',
+  );
+  assert.equal(archivedEvidence.data.removal_kind, 'moderation');
+  assert.equal(
+    archivedEvidence.data.removal_reason,
+    'Gỡ nội dung sau khi lưu trữ',
+    'The archived moderation reason is retained',
+  );
+  observed(
+    'archived moderation succeeds where author removal is blocked, with the reason retained',
+    {
+      authorRemoval: archivedAuthor.error?.code,
+      markerAuthor: names.reviewer,
+      reason: archivedEvidence.data.removal_reason,
+    },
+  );
+}
+{
+  // A failed moderation keeps the typed reason and never claims success.
+  const seeded = await beta.rpc('post_property_comment', {
+    p_property_id: second.id,
+    p_body: 'Nội dung để thử giữ lý do',
+    p_key: '53000000-0000-4000-8000-000000000003',
+  });
+  assert.equal(
+    seeded.error,
+    null,
+    'Fixture comment posted for the failed moderation',
+  );
+  browser(['open', detail(second)], secondary);
+  await settle(secondary);
+  // Open the reason form on exactly this comment.
+  evaluate(
+    `() => {
+      const target = [...document.querySelectorAll('section.discussion .comment')].find((node) => (node.querySelector('.comment-body')?.textContent ?? '').includes('Nội dung để thử giữ lý do'));
+      target.querySelector('.comment-actions button').click();
+      return true;
+    }`,
+    secondary,
+  );
+  await waitUntil(
+    `() => Boolean(document.querySelector('section.discussion .comment-moderation textarea'))`,
+    secondary,
+  );
+  fill('Lý do kiểm duyệt', 'Lý do cần được giữ lại', secondary);
+  // A competing session removes the same comment before this form is submitted.
+  const competing = await reviewer.rpc('remove_property_comment', {
+    p_property_id: second.id,
+    p_comment_id: seeded.data.id,
+    p_revision: seeded.data.revision,
+    p_kind: 'moderation',
+    p_reason: 'Phiên khác đã gỡ',
+  });
+  assert.equal(competing.error, null, 'The competing removal commits');
+  click('Xác nhận gỡ', secondary);
+  await waitUntil(
+    `() => [...document.querySelectorAll('section.discussion [role=alert]')].some((node) => /đã thay đổi|đã bị gỡ/.test(node.textContent))`,
+    secondary,
+  );
+  const failed = screen(secondary);
+  assert.equal(
+    failed.moderationReason,
+    'Lý do cần được giữ lại',
+    'The unsent reason is preserved',
+  );
+  assert.ok(
+    !failed.statuses.some((status) => /Bình luận đã được gỡ/.test(status)),
+    'No success is claimed for the failed moderation',
+  );
+  observed('failed moderation keeps the typed reason and claims no success', {
+    reasonKept: failed.moderationReason === 'Lý do cần được giữ lại',
+    conflict: true,
+  });
+}
+
 // --------------------------------------------------------- post and archive race
 // The holder takes the parent Property row lock and only then records its marker, so the
 // marker is proof the lock is held; the competing requests are dispatched inside that window.
@@ -1145,6 +1805,12 @@ async function commentCount(propertyId) {
   );
   return Number(rows[0]?.n ?? 0);
 }
+async function removalCount(commentId) {
+  const rows = await operatorSqlAsync(
+    `select count(*)::int as n from public.property_comment_removals where comment_id = '${commentId}'`,
+  );
+  return Number(rows[0]?.n ?? 0);
+}
 async function isArchived(propertyId) {
   const rows = await operatorSqlAsync(
     `select archived_at is not null as archived from public.properties where id = '${propertyId}'`,
@@ -1153,13 +1819,17 @@ async function isArchived(propertyId) {
 }
 async function resetRaceProperty(propertyId) {
   // Fixture-only operator reset of the declared synthetic row, including its own synthetic
-  // comments, in one transaction (the immutability trigger guards client writes).
+  // comments and removal evidence, in one transaction (the immutability triggers guard
+  // client writes).
   await operatorSqlAsync(
     `do $$
      begin
        execute 'alter table public.property_comments disable trigger comment_original';
+       execute 'alter table public.property_comment_removals disable trigger comment_removal_guard';
+       delete from public.property_comment_removals where property_id = '${propertyId}';
        delete from public.property_comments where property_id = '${propertyId}';
        execute 'alter table public.property_comments enable trigger comment_original';
+       execute 'alter table public.property_comment_removals enable trigger comment_removal_guard';
        update public.properties set archived_at = null where id = '${propertyId}';
      end $$;`,
   );
@@ -1235,7 +1905,7 @@ async function raceEvidence(propertyId, marker) {
 async function runRaceRound(round) {
   await resetRaceProperty(race.id);
   const revision = await archiveRevision(reviewer, race.id);
-  const marker = `SGN44 race round ${round}`;
+  const marker = `${fixtures.namespace} race round ${round}`;
   const markerKey = randomUUID();
   // Short hold: both requests must queue and still finish inside the 8s authenticated
   // statement timeout.
@@ -1315,6 +1985,125 @@ async function runRaceRound(round) {
   );
 }
 
+// --------------------------------------------------- removal and archive race
+// The same held parent lock serializes a removal against an archive. Author removal is legal
+// only while unarchived; reasoned moderation stays legal on the archived Property.
+{
+  const authorOutcomes = { removed: 0, denied: 0 };
+  for (let round = 0; round < 3; round++) {
+    await resetRaceProperty(race.id);
+    const posted = await attempt(
+      race.id,
+      `53000000-0000-4000-8000-0000000001${round}0`,
+      `Đua gỡ ${round}`,
+    );
+    assert.equal(posted.error, null, 'The race comment posts before archiving');
+    const revision = await archiveRevision(reviewer, race.id);
+    const marker = `${fixtures.namespace} removal race ${round}`;
+    const markerKey = randomUUID();
+    const holder = holdPropertyLock(race.id, 5, markerKey);
+    assert.ok(
+      await waitForMarker(markerKey),
+      'The holder records its marker before releasing the parent lock',
+    );
+    const [removal, archivedResult] = await Promise.all([
+      Promise.resolve(
+        alpha.rpc('remove_property_comment', {
+          p_property_id: race.id,
+          p_comment_id: posted.data.id,
+          p_revision: posted.data.revision,
+          p_kind: 'author',
+        }),
+      ),
+      Promise.resolve(archive(reviewer, race.id, revision, marker)),
+    ]);
+    await waitForExit(holder);
+    assert.equal(archivedResult.error, null, 'The competing archive commits');
+    assert.equal(await isArchived(race.id), true, 'The property ends archived');
+    if (removal.error) {
+      assert.equal(
+        removal.error.code,
+        '42501',
+        'A losing author removal is denied as archived',
+      );
+      assert.equal(
+        await removalCount(posted.data.id),
+        0,
+        'A denied removal retains no evidence row',
+      );
+      authorOutcomes.denied++;
+    } else {
+      assert.equal(
+        await removalCount(posted.data.id),
+        1,
+        'A winning removal retains exactly one evidence row',
+      );
+      authorOutcomes.removed++;
+    }
+  }
+  observed(
+    'held parent lock: competing author removal and archive serialize with the exception honoured',
+    { rounds: 3, ...authorOutcomes },
+  );
+}
+{
+  // Reasoned moderation remains legal on the archived Property regardless of the ordering.
+  await resetRaceProperty(race.id);
+  const posted = await attempt(
+    race.id,
+    '53000000-0000-4000-8000-000000000200',
+    'Đua gỡ kiểm duyệt',
+  );
+  assert.equal(posted.error, null, 'The moderation race comment posts');
+  const revision = await archiveRevision(reviewer, race.id);
+  const marker = `${fixtures.namespace} moderation removal race`;
+  const markerKey = randomUUID();
+  const holder = holdPropertyLock(race.id, 5, markerKey);
+  assert.ok(await waitForMarker(markerKey), 'The holder records its marker');
+  const [moderation, archivedResult] = await Promise.all([
+    Promise.resolve(
+      reviewer.rpc('remove_property_comment', {
+        p_property_id: race.id,
+        p_comment_id: posted.data.id,
+        p_revision: posted.data.revision,
+        p_kind: 'moderation',
+        p_reason: 'Gỡ nội dung nhạy cảm sau lưu trữ',
+      }),
+    ),
+    Promise.resolve(archive(reviewer, race.id, revision, marker)),
+  ]);
+  await waitForExit(holder);
+  assert.equal(archivedResult.error, null, 'The competing archive commits');
+  assert.equal(
+    moderation.error,
+    null,
+    'Reasoned moderation succeeds whichever side holds the lock first',
+  );
+  assert.equal(await isArchived(race.id), true, 'The property ends archived');
+  assert.equal(
+    await removalCount(posted.data.id),
+    1,
+    'The archived moderation retains exactly one evidence row',
+  );
+  const evidence = await reviewer
+    .from('property_comment_removals')
+    .select('body,removal_kind,removal_reason')
+    .eq('comment_id', posted.data.id)
+    .single();
+  assert.equal(evidence.error, null, 'The archived moderation is retained');
+  assert.equal(evidence.data.body, 'Đua gỡ kiểm duyệt');
+  assert.equal(evidence.data.removal_kind, 'moderation');
+  assert.equal(
+    evidence.data.removal_reason,
+    'Gỡ nội dung nhạy cảm sau lưu trữ',
+    'The archived moderation reason is retained',
+  );
+  observed(
+    'archived moderation survives an archive/removal race with one retained record',
+    { committed: 1, records: 1 },
+  );
+}
+
 const report = {
   checkedAt: new Date().toISOString(),
   environment:
@@ -1323,7 +2112,7 @@ const report = {
   namespace: fixtures.namespace,
   observations,
   limits: [
-    'Fixture-only writes: the SGN-TEST-44 namespace is created and removed by this task.',
+    `Fixture-only writes: the ${fixtures.namespace} namespace is created and removed by this task.`,
     'The held-lock race uses the operator connection to hold the parent property row; it does not replace a staging gate for production contention.',
   ],
 };

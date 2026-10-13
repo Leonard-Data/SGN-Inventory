@@ -9,6 +9,7 @@ import { createHmac, randomUUID } from 'node:crypto';
 import { maintenanceContract } from './maintenance-contract.mjs';
 import { correctionContract } from './correction-contract.mjs';
 import { commentsContract } from './comments-contract.mjs';
+import { commentRemovalContract } from './comment-removal-contract.mjs';
 import { companyActivityContract } from './company-activity-contract.mjs';
 import { myActivityContract } from './my-activity-contract.mjs';
 const root = process.env.SGN_PROJECT_ROOT || process.cwd();
@@ -570,6 +571,8 @@ await asUser(4);
 await check('unlinked and inactive today activity denied',()=>fails('select * from public.my_today_activity()',[],'42501'));
 await check('inactive owner disclosure denied',()=>fails('select public.reveal_owner_contact($1,$2)',[ownerProperty,randomUUID()],'42501'));
 await commentsContract({db,asUser,check,fails,employees,property});
+// Ticket #45: accountable Property comment removal.
+await commentRemovalContract({db,asUser,check,fails,employees});
 // Ticket #31: company employee-by-day activity for live manager/admin readers.
 await companyActivityContract({db,asUser,check,fails,employees});
 // Ticket #30: the employee's own activity over an explicit Vietnam date range.

@@ -146,8 +146,25 @@ const vi = {
     'Chưa gửi được bình luận. Bản nháp được giữ lại; gửi lại sẽ không tạo bình luận trùng.',
   commentConflict:
     'Khóa gửi này đã được ghi với nội dung khác. Hãy làm mới để xem bình luận đã ghi.',
+  commentPostRemoved:
+    'Bình luận đã được gỡ trước đó. Nội dung đã nhập được giữ lại; gửi lại sẽ tạo bình luận mới.',
   noComments: 'Chưa có bình luận nào.',
   moreComments: 'Xem bình luận cũ hơn',
+  removeComment: 'Gỡ bình luận',
+  moderateComment: 'Gỡ kèm lý do',
+  confirmRemove: 'Xác nhận gỡ',
+  removing: 'Đang gỡ…',
+  cancel: 'Huỷ',
+  commentRemoved: 'Bình luận đã được gỡ.',
+  removalReason: 'Lý do kiểm duyệt',
+  removalReasonHint:
+    'Bắt buộc. Lý do được lưu lại cho quản lý và quản trị viên.',
+  removalReasonRequired: 'Vui lòng nhập lý do kiểm duyệt.',
+  removalStale:
+    'Bình luận đã thay đổi hoặc đã bị gỡ. Hãy làm mới để xem trạng thái hiện tại.',
+  removalFailed: 'Chưa gỡ được bình luận. Nội dung đã nhập được giữ lại.',
+  removalDenied:
+    'Chưa gỡ được bình luận. Quyền truy cập hoặc trạng thái lưu trữ của bất động sản đã thay đổi; hãy làm mới để xem trạng thái hiện tại.',
   refresh: 'Làm mới',
   vietnamTime: 'giờ Việt Nam',
   savedLocaleFailed:
@@ -419,8 +436,25 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
       'Comment not posted. Your draft is kept; retrying does not create a duplicate.',
     commentConflict:
       'This submission key already recorded different text. Refresh to see the recorded comment.',
+    commentPostRemoved:
+      'That comment was already removed. Your text is kept; posting again creates a new comment.',
     noComments: 'No comments yet.',
     moreComments: 'More comments',
+    removeComment: 'Remove',
+    moderateComment: 'Remove with reason',
+    confirmRemove: 'Confirm removal',
+    removing: 'Removing…',
+    cancel: 'Cancel',
+    commentRemoved: 'Comment removed.',
+    removalReason: 'Moderation reason',
+    removalReasonHint:
+      'Required. The reason is retained for managers and admins.',
+    removalReasonRequired: 'Enter a moderation reason.',
+    removalStale:
+      'This comment changed or was already removed. Refresh to see the current state.',
+    removalFailed: 'Comment not removed. What you entered is kept.',
+    removalDenied:
+      'Comment not removed. Access or the Property archived state changed; refresh to see the current state.',
     refresh: 'Refresh',
     vietnamTime: 'Vietnam time',
     savedLocaleFailed:
