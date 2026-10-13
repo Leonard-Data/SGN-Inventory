@@ -51,12 +51,33 @@ export type Database = {
         Update: never;
         Relationships: [];
       };
+      property_comment_edits: {
+        Row: {
+          author_id: string;
+          author_name: string;
+          body: string;
+          comment_id: string;
+          edited_actor_name: string;
+          edited_at: string;
+          edited_by: string;
+          id: string;
+          previous_body: string;
+          previous_revision: string;
+          property_id: string;
+          revision: string;
+          version: number;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
       property_comments: {
         Row: {
           author_id: string;
           author_name: string;
           body: string | null;
           created_at: string;
+          edited_at: string | null;
           id: string;
           idempotency_key: string;
           property_id: string;
@@ -1678,6 +1699,7 @@ export type Database = {
           author_name: string;
           body: string | null;
           created_at: string;
+          edited_at: string | null;
           id: string;
           property_id: string;
           removed_at: string | null;
@@ -1712,6 +1734,15 @@ export type Database = {
           owner_contact_properties: number;
           page_view_events: number;
         }[];
+      };
+      edit_property_comment: {
+        Args: {
+          p_body: string;
+          p_comment_id: string;
+          p_property_id: string;
+          p_revision: string;
+        };
+        Returns: Json;
       };
       post_property_comment: {
         Args: { p_body: string; p_key: string; p_property_id: string };

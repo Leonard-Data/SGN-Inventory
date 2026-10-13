@@ -133,19 +133,27 @@ _Avoid_: Pending lock, permanent property lock
 ### Discussion
 
 **Property comment**:
-A plain-text message an active employee posts to a property's shared flat discussion. Its author identity, text and posting time are retained from creation; a comment is never edited, and removal withdraws its text while keeping the record.
+A plain-text message an active employee posts to a property's shared flat discussion. Its author identity and posting time are retained from creation; its author may replace the current text under a revision check, which retains every prior version and marks the entry as edited, and removal withdraws its text while keeping the record.
 _Avoid_: Note, activity entry, private message
 
+**Comment edit**:
+An author's revision-checked replacement of their own current Property comment on an unarchived property. It keeps the comment identity, author and posting position, changes only the live text, and retains the preceding text as reviewer-only evidence.
+_Avoid_: Rewrite, overwrite, new comment
+
+**Comment revision**:
+One retained version of a Property comment's text, identified by its edit ordinal. The earliest retained text is the original validated submission, and only an active manager or admin with current property access can read a prior version.
+_Avoid_: Draft, replaced comment
+
 **Comment removal**:
-The one-way withdrawal of a Property comment's text. An author may remove their own current comment on an unarchived property without a reason; an active manager or admin may remove any current comment with a required moderation reason, including on an archived property, where author removal is blocked. The current discussion shows a removal marker instead of the text, and the original text, author, removing actor, time and reason are retained for manager/admin review.
+The one-way withdrawal of a Property comment's text. An author may remove their own current comment on an unarchived property without a reason; an active manager or admin may remove any current comment with a required moderation reason, including on an archived property, where author removal is blocked. The current discussion shows a removal marker instead of the text, and the text current at removal, author, removing actor, time and reason are retained for manager/admin review. A removed comment can no longer be edited.
 _Avoid_: Delete, edit, permanent erasure, comment restoration
 
 **Property discussion**:
-The newest-first shared list of a property's Property comments, readable and postable by any active employee who can read the property without holding property-edit authority. A removed comment stays in place as a marker without its text. Posting to an archived property is denied for every role, and only manager/admin read archived discussion.
+The newest-first shared list of a property's Property comments, readable and postable by any active employee who can read the property without holding property-edit authority. A removed comment stays in place as a marker without its text, and an edited comment shows its current text with an edited marker. Posting to an archived property is denied for every role, and only manager/admin read archived discussion.
 _Avoid_: Chat, live feed, moderation queue
 
 **Submission key**:
-An employee-scoped key identifying one comment submission, so an interrupted or ambiguous post retries the same original comment instead of creating another. Reusing it with different property or text is rejected.
+An employee-scoped key identifying one comment submission, so an interrupted or ambiguous post retries the same original comment instead of creating another. Reusing it with a different property, or with text other than the original validated submission, is rejected, including after the comment has been edited.
 _Avoid_: Draft identity, temporary ID
 
 

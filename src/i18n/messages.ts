@@ -149,6 +149,18 @@ const vi = {
     'Khóa gửi này đã được ghi với nội dung khác. Hãy làm mới để xem bình luận đã ghi.',
   commentPostRemoved:
     'Bình luận đã được gỡ trước đó. Nội dung đã nhập được giữ lại; gửi lại sẽ tạo bình luận mới.',
+  editComment: 'Chỉnh sửa bình luận',
+  editHint: 'Chỉnh sửa nội dung bình luận chung. Tối đa 2.000 ký tự.',
+  saveComment: 'Lưu thay đổi',
+  savingComment: 'Đang lưu…',
+  commentEdited: 'Đã cập nhật bình luận.',
+  commentEditedMarker: 'đã chỉnh sửa',
+  commentUnchanged: 'Nội dung chưa thay đổi.',
+  editStale:
+    'Bình luận đã thay đổi hoặc đã bị gỡ. Bản nháp đang sửa được giữ lại; hãy làm mới để đối chiếu.',
+  editFailed: 'Chưa lưu được thay đổi. Bản nháp đang sửa được giữ lại.',
+  editDenied:
+    'Chưa lưu được thay đổi. Quyền truy cập hoặc trạng thái lưu trữ của bất động sản đã thay đổi; hãy làm mới để xem trạng thái hiện tại.',
   noComments: 'Chưa có bình luận nào.',
   moreComments: 'Xem bình luận cũ hơn',
   removeComment: 'Gỡ bình luận',
@@ -457,6 +469,18 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
       'This submission key already recorded different text. Refresh to see the recorded comment.',
     commentPostRemoved:
       'That comment was already removed. Your text is kept; posting again creates a new comment.',
+    editComment: 'Edit comment',
+    editHint: 'Edit the shared comment text. Up to 2,000 characters.',
+    saveComment: 'Save changes',
+    savingComment: 'Saving…',
+    commentEdited: 'Comment updated.',
+    commentEditedMarker: 'edited',
+    commentUnchanged: 'No changes to save.',
+    editStale:
+      'This comment changed or was removed. Your unsent edit is kept; refresh to reconcile.',
+    editFailed: 'Changes not saved. Your unsent edit is kept.',
+    editDenied:
+      'Changes not saved. Access or the Property archived state changed; refresh to see the current state.',
     noComments: 'No comments yet.',
     moreComments: 'More comments',
     removeComment: 'Remove',
