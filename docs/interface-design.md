@@ -61,7 +61,7 @@ The shell replaces the per-page `SessionHeader`. Locale switch and sign-out move
 | Inventory | Search (`/properties`); New property (`/properties/new`, shipped) | all |
 | Reservations & Reviews | My requests (`/requests`); Reviews hub (`/reviews/…`, corrections shipped) | all; queues per role |
 | Rentals | Agreements (`/rentals`) | staff, manager, admin |
-| People | Employees (`/people/employees`); Contacts (`/people/contacts`) | admin; staff/manager/admin |
+| People | Employees (`/people/employees`, shipped: list only, admin); Vendors (`/people/vendors`, shipped, all roles); Contacts (`/people/contacts`) | admin; all; staff/manager/admin |
 | Reports | My activity (`/activity/me`, shipped); Company (`/activity/company`, shipped) | all; manager/admin |
 | Admin | Categories (`/admin/categories`); Units (`/admin/units`) | admin |
 
@@ -89,7 +89,7 @@ The contract is `src/app/sgn-app.css` — the ported design package. Compose the
 | States | `.state-panel` (+ `data-tone="danger"`, `.state-mark`, `.state-title`), `.busy-bar`, `.busy-line` + `.spinner`, `.skeleton`/`.sk-card`, `.alert` (+ `data-tone`), `.toast` | loading, empty, error and denial stay distinct; empty ≠ zero ≠ denied |
 | Lists / tables | `.data-table.stackable` (`[data-num]`, `data-label`), `.pagination` > `.page-info` + `.page-buttons` > `.pager-btn` | tables stack to label/value cards under 640px |
 | Dialogs | `.sgn-dialog` > `.sgn-dialog-panel`/`.sgn-dialog-head`/`.sgn-dialog-body`/`.sgn-dialog-foot` | native `<dialog>`: focus trap and Escape come from the platform |
-| Repo-only surfaces | `.maintenance*` (disclosures, inline editors), `.history-event`, `.history-comparison`, `.history-field`, `.owner-disclosure`, `.owner-phone`, `.reservation*` (`.reservation-effective`, `.reservation-pending`, `.reservation-request`), `.proposal-choices`, `.contact-choices`, `.eyebrow` (auth), `.comment-removed` and `.comment-moderation` (extensions to the comment row) | `globals.css` + `sgn-surfaces.css`; package tokens only |
+| Repo-only surfaces | `.maintenance*` (disclosures, inline editors), `.history-event`, `.history-comparison`, `.history-field`, `.owner-disclosure`, `.owner-phone`, `.reservation*` (`.reservation-effective`, `.reservation-pending`, `.reservation-request`), `.proposal-choices`, `.contact-choices`, `.eyebrow` (auth), `.comment-removed` and `.comment-moderation` (extensions to the comment row), `.vendor-note` and `.data-table .is-unknown` (vendor record) | `globals.css` + `sgn-surfaces.css`; package tokens only |
 
 ## 5. Page layouts
 
@@ -194,6 +194,21 @@ panel Employees → .data-table.stackable: name · email · role · access state
 Shipped: the list reads existing employee identities from `GET /api/employees` and shows the recorded display name, email, role and access state (`Đang hoạt động` / `Đã tắt truy cập` / `Chưa liên kết đăng nhập`), at most 30 rows per page with a keyset cursor. An unlinked imported person is labelled not linked, never invited: the schema records no invitation. The rail renders the destination for admin only and the proxy refuses a direct visit by another role.
 
 Still planned, not shipped: the `[Invite employee]` disclosure, the last-activity column, the `[Activate|Deactivate]` and `[Change role]` row actions, last-admin protection and the "review approved locks before deactivation" warnings. No per-employee route.
+
+### 5.6b `/people/vendors` + `/people/vendors/[id]` (shipped, issue #73)
+
+```
+page-intro (.example · h1 · .intro-copy)
+panel search: .toolbar > .search > .input + .search-btn, .search-hint
+panel [Record a vendor] (staff/manager/admin only): .field × 6 → company name (required),
+  contact name, phone lines, email, address/source text, notes; .form-foot submit
+panel Vendor directory → .data-table.stackable: company (row link) · contact · phones · email
+  .panel-foot → .pagination (.page-info + .page-buttons > .pager-btn)
+  states: .panel-note[role=status] (loading) · .state-panel (empty / no match) · .alert[data-tone=danger] (error)
+detail: quiet back link · .detail-head · panel .facts (recorded contact block; unknown details
+  read as unknown, never a dash)
+```
+Shipped: `GET /api/vendors` serves the newest-first bounded directory through `list_vendors` (at most 30 rows, keyset cursor pair); `POST /api/vendors` creates one company through the guarded `create_vendor` operation for a live staff/manager/admin, keeping the draft and the submission key on failure; `GET /api/vendors/[id]` reads one recorded identity. Every active role sees the People → Vendors destination; only maintainers see the create panel, and the route and database refuse the mutation independently. Detail has no edit control in this slice.
 
 ### 5.7 `/people/contacts` (new, staff/manager/admin)
 

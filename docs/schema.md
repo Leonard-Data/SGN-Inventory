@@ -28,6 +28,7 @@ erDiagram
   EMPLOYEES ||--o{ PROPERTY_COMMENTS : posts
   PROPERTY_COMMENTS ||--o| PROPERTY_COMMENT_REMOVALS : retains
   EMPLOYEES ||--o{ PROPERTY_COMMENT_REMOVALS : removes
+  EMPLOYEES ||--o{ VENDORS : records
 ```
 
 ## Business tables
@@ -52,6 +53,7 @@ erDiagram
 | `property_comments` | UUID, property/author FKs, author display name retained at posting time, original text (null once removed), server posting time, `revision`, `removed_at`, employee-scoped `idempotency_key` | No direct client writes: `select`-only grant, `anon` excluded, and a trigger rejects client inserts, every ordinary update and every delete; text is trimmed Unicode of 1–2000 characters; author identity, text and posting time stay immutable; text is null exactly when `removed_at` is set, so a removed entry is a marker |
 | `property_comment_removals` | One row per removed comment: comment/property/author FKs, retained author name, retained original text, original posting time and revision, removing actor and retained actor name, removal time, `author`/`moderation` kind and mandatory moderation reason | Reviewer-only `select` under RLS; no client insert/update/delete; the guard trigger keeps the retained evidence immutable and non-expiring; the current discussion projection never exposes it |
 | `property_price_history` (view) | Select-only `security_invoker` projection of `property_history`: one row per recorded price revision per `sale`/`rent` series with property, actor name, authoritative time, retained explanation and exact whole-VND `before_value`/`after_value` text | No direct client writes; revisions whose recorded price is unknown on both sides are excluded; keyset-paged on `(occurred_at,id)` per series; reads follow live membership and the archived-property RLS boundary |
+| `vendors` | UUID, company/display name, one optional contact block (contact name, 1–5 verbatim phone strings, email, raw address/source text, notes), stored normalized search projection, creator FK/time and employee-scoped submission key | No direct client writes: `select`-only grant for authenticated, `anon`/`service_role` excluded, and a trigger rejects client inserts plus every update or delete; every optional detail is independently null (unknown); same-key retries converge on one company and conflicting reuse is refused; no property link, deduplication or deletion |
 
 `properties`, `property_addresses`, `contacts` and `property_contacts` each carry a `revision` UUID that guards stale maintenance saves. Issue #7's maintenance RPCs, correction lifecycle and history rules are in [maintenance-contract.md](maintenance-contract.md).
 
