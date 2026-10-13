@@ -302,6 +302,35 @@ export async function employeeDeactivationContract({
   // --- Direct write denial ----------------------------------------------------------------
   await asActor(users.newAdmin);
   await check(
+    'direct employee lifecycle, sign-in link and role writes are denied',
+    async () => {
+      await fails(
+        'update public.employees set is_active=false where id=$1',
+        [staff.linked],
+        '42501',
+      );
+      await fails(
+        'update public.employees set auth_user_id=$1 where id=$2',
+        [users.relinked, staff.linked],
+        '42501',
+      );
+      await fails(
+        "update public.employees set role='manager' where id=$1",
+        [staff.linked],
+        '42501',
+      );
+      assert.deepEqual(
+        (
+          await db.query(
+            'select is_active,auth_user_id,role from public.employees where id=$1',
+            [staff.linked],
+          )
+        ).rows[0],
+        { is_active: true, auth_user_id: users.linked, role: 'sales' },
+      );
+    },
+  );
+  await check(
     'client roles cannot write operations or evidence directly',
     async () => {
       await fails(
@@ -854,19 +883,19 @@ export async function employeeDeactivationContract({
     },
   );
   await check(
-    'a direct role demotion of the last active admin is refused',
+    'a direct role demotion of the last active admin is denied to clients',
     () =>
       fails(
         "update public.employees set role='sales' where id=$1",
         [staff.newAdmin],
-        'P0010',
+        '42501',
       ),
   );
-  await check('a direct deactivation of the last active admin is refused', () =>
+  await check('a direct deactivation of the last active admin is denied to clients', () =>
     fails(
       'update public.employees set is_active=false where id=$1',
       [staff.newAdmin],
-      'P0010',
+      '42501',
     ),
   );
   await check('clients have no direct delete path on employees', () =>
@@ -877,17 +906,17 @@ export async function employeeDeactivationContract({
     ),
   );
   await check(
-    'an admin link removal that would disable the last admin is refused',
+    'an admin link removal that would disable the last admin is denied to clients',
     () =>
       fails(
         'update public.employees set auth_user_id=null, is_active=false where id=$1',
         [staff.newAdmin],
-        'P0010',
+        '42501',
       ),
   );
-  await asService();
+  await asOwner();
   await check(
-    'service_role direct removal cannot bypass the last-admin guard',
+    'the last-active-admin guard still protects trusted employee writes',
     async () => {
       await fails(
         "update public.employees set role='sales' where id=$1",
@@ -903,6 +932,27 @@ export async function employeeDeactivationContract({
         'delete from public.employees where id=$1',
         [staff.newAdmin],
         'P0010',
+      );
+    },
+  );
+  await asService();
+  await check(
+    'service_role direct lifecycle writes cannot bypass the guarded operation',
+    async () => {
+      await fails(
+        "update public.employees set role='sales' where id=$1",
+        [staff.newAdmin],
+        '42501',
+      );
+      await fails(
+        'update public.employees set is_active=false where id=$1',
+        [staff.newAdmin],
+        '42501',
+      );
+      await fails(
+        'delete from public.employees where id=$1',
+        [staff.newAdmin],
+        '42501',
       );
     },
   );
