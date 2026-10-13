@@ -143,6 +143,12 @@ function operatorSqlAsync(statement) {
     });
   });
 }
+async function dbNow() {
+  // The hosted database clock is authoritative for posting times; the local host clock can
+  // drift, so recency is measured against the database rather than Date.now().
+  const rows = await operatorSqlAsync('select now() as now');
+  return Date.parse(rows[0].now);
+}
 function waitForExit(child) {
   return new Promise((resolve) => {
     if (child.exitCode !== null) return resolve();
@@ -198,6 +204,12 @@ function browser(args, session = primary) {
 }
 function evaluate(expression, session = primary) {
   const output = browser(['eval', expression], session);
+  // A truncated result would otherwise be parsed as a partial value and could make an
+  // assertion pass vacuously; fail loudly and keep the payload small instead.
+  assert.ok(
+    !/Result was truncated/.test(output),
+    'Browser evaluation result was truncated; reduce the payload',
+  );
   const row = output.match(/^result: (.+)$/m);
   assert.ok(row, 'Browser evaluation returned no result');
   let value = JSON.parse(row[1]);
@@ -226,6 +238,45 @@ function click(name, session) {
 function wait(text, session) {
   browser(['wait', text], session);
 }
+// The app shell names its language buttons by lang attribute and keeps its sign-out control
+// inside a user popover, so both are driven through the rendered elements rather than a
+// label that the design-system shell can rename.
+function switchLocale(code, session) {
+  const clicked = evaluate(
+    `() => {
+      const button = document.querySelector('.lang-btn[lang="${code}"]');
+      if (!button) return false;
+      button.click();
+      return true;
+    }`,
+    session,
+  );
+  assert.equal(clicked, true, `Language switch to ${code} is present`);
+}
+function signOut(session) {
+  const opened = evaluate(
+    `() => {
+      const button = document.querySelector('.sgn-user-btn');
+      if (!button) return false;
+      button.click();
+      return true;
+    }`,
+    session,
+  );
+  if (opened) {
+    click('Đăng xuất', session);
+    return;
+  }
+  // Not on a shell page (for example a denial screen): end the session through the
+  // application route, then the caller lands on the login form.
+  evaluate(
+    `() => {
+      fetch('/api/auth/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}', credentials: 'same-origin' });
+      return true;
+    }`,
+    session,
+  );
+}
 // Polling tolerates a transient command failure while a page navigates; the deadline decides.
 async function waitUntil(expression, session = primary, attempts = 60) {
   for (let attempt = 0; attempt < attempts; attempt++) {
@@ -244,7 +295,7 @@ function screen(session) {
       const discussion = document.querySelector('section.discussion');
       return {
         path: location.pathname,
-        locale: document.querySelector('main')?.lang,
+        locale: document.documentElement.lang,
         code: document.querySelector('h1')?.textContent?.trim(),
         heading: discussion?.querySelector('h2')?.textContent ?? null,
         comments: [...(discussion?.querySelectorAll('.comment') ?? [])].map(node => ({
@@ -264,7 +315,7 @@ function screen(session) {
         postButton: discussion ? Boolean([...discussion.querySelectorAll('button[type=submit]')].length) : null,
         editControls: Boolean(document.querySelector('.maintenance-actions')),
         injected: Boolean(document.querySelector('script[data-injected], img[data-injected]')),
-        discussionText: discussion?.innerText ?? null,
+        hasDiscussionText: discussion ? discussion.innerText.trim().length > 0 : false,
       };
     }`,
     session,
@@ -281,16 +332,24 @@ const settled = `() => {
 }`;
 async function settle(session = primary) {
   // The design-system detail places the discussion in a tab that starts hidden; activate it so
-  // the accessibility snapshot used by click/fill reaches the discussion controls.
-  evaluate(
-    `() => {
-      const panel = document.getElementById('record-panel-comments');
-      const tab = document.getElementById('record-tab-comments');
-      if (panel && panel.hidden && tab) { tab.click(); return true; }
-      return false;
-    }`,
-    session,
-  );
+  // the accessibility snapshot used by click/fill reaches the discussion controls. The click is
+  // retried until React has hydrated the tab, then the discussion is left to finish loading.
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const visible = evaluate(
+      `() => {
+        const panel = document.getElementById('record-panel-comments');
+        if (!panel) return false;
+        if (panel.hidden) {
+          const tab = document.getElementById('record-tab-comments');
+          if (tab) tab.click();
+        }
+        return !panel.hidden;
+      }`,
+      session,
+    );
+    if (visible) break;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
   await waitUntil(settled, session);
   await new Promise((resolve) => setTimeout(resolve, 600));
   await waitUntil(settled, session);
@@ -361,7 +420,7 @@ async function browserLogin(name, session, preferredLocale) {
   if (preferredLocale) {
     evaluate(
       `() => {
-        const button = document.querySelector('.sgn-lang-btn[lang="${preferredLocale}"]');
+        const button = document.querySelector('.lang-btn[lang="${preferredLocale}"]');
         if (button) button.click();
         return Boolean(button);
       }`,
@@ -455,7 +514,8 @@ await waitUntil(
   );
   assert.equal(comment.author, names.alpha, 'Author is shown');
   assert.ok(
-    comment.time && Math.abs(Date.parse(comment.time) - Date.now()) < 300000,
+    comment.time &&
+      Math.abs(Date.parse(comment.time) - (await dbNow())) < 300000,
     'Original Vietnam posting time is a real recent instant',
   );
   assert.ok(
@@ -564,7 +624,7 @@ browser(['open', detail(discussion)], primary);
 await settle(primary);
 {
   const before = screen(primary);
-  click('English', primary);
+  switchLocale('en', primary);
   await waitUntil(
     `() => document.querySelector('section.discussion h2')?.textContent === 'Property discussion'`,
     primary,
@@ -578,7 +638,7 @@ await settle(primary);
     before.comments.map((comment) => comment.body),
     'Source comment text is not translated',
   );
-  click('Tiếng Việt', primary);
+  switchLocale('vi', primary);
   await waitUntil(
     `() => document.querySelector('section.discussion h2')?.textContent === 'Thảo luận bất động sản'`,
     primary,
@@ -637,7 +697,7 @@ await settle(secondary);
     },
   );
 }
-click('Đăng xuất', secondary);
+signOut(secondary);
 browser(['open', detail(discussion)], secondary);
 {
   const page = screen(secondary);
@@ -646,7 +706,11 @@ browser(['open', detail(discussion)], secondary);
     '/login',
     'Protected detail is not reachable after sign-out',
   );
-  assert.equal(page.discussionText, null, 'No cached discussion is displayed');
+  assert.equal(
+    page.hasDiscussionText,
+    false,
+    'No cached discussion is displayed',
+  );
   observed('sign-out and back-navigation expose no cached discussion', {
     path: page.path,
   });
@@ -676,8 +740,8 @@ await settle(secondary);
   const page = screen(secondary);
   assert.equal(page.path, '/access-denied', 'Deactivated identity is denied');
   assert.equal(
-    page.discussionText,
-    null,
+    page.hasDiscussionText,
+    false,
     'No discussion text survives the denial',
   );
   const leaked = evaluate(
@@ -751,7 +815,7 @@ await settle(secondary);
     'Withdrawn text is absent from the rendered page',
   );
   // EN keeps the marker, the surviving source text and the Vietnam posting convention.
-  click('English', primary);
+  switchLocale('en', primary);
   await waitUntil(
     `() => document.querySelector('section.discussion h2')?.textContent === 'Property discussion'`,
     primary,
@@ -784,7 +848,7 @@ await settle(secondary);
       entries: after.comments.length,
     },
   );
-  click('Tiếng Việt', primary);
+  switchLocale('vi', primary);
   await waitUntil(
     `() => document.querySelector('section.discussion h2')?.textContent === 'Thảo luận bất động sản'`,
     primary,
@@ -1018,7 +1082,7 @@ await settle(secondary);
     'Property association is the request target',
   );
   assert.ok(
-    Math.abs(Date.parse(created.data.created_at) - Date.now()) < 300000,
+    Math.abs(Date.parse(created.data.created_at) - (await dbNow())) < 300000,
     'Posting time is server generated',
   );
   const retried = await alpha.rpc('post_property_comment', {
@@ -1573,7 +1637,8 @@ await settle(secondary);
     '42501',
     'A manager acting as the author cannot remove on an archived property',
   );
-  click('Đăng xuất', secondary);
+  signOut(secondary);
+  await new Promise((resolve) => setTimeout(resolve, 1000));
   await browserLogin('reviewer', secondary, 'vi');
   browser(['open', detail(archived)], secondary);
   await settle(secondary);
