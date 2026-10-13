@@ -376,7 +376,7 @@ export async function maintenanceContract({
         preview.revision,
         { raw_phone_text: '0900 mới %_', phones: ['0900999999'] },
       ]);
-      for (const id of [created, property]) {
+      for (const id of [created, property, other]) {
         const event = (
           await db.query(
             "select actor_id,before_values,after_values from public.property_history where property_id=$1 and target='contact' and target_id=$2",
@@ -566,6 +566,13 @@ export async function maintenanceContract({
     await revision('properties', property),
     { contact_id: shared, relation: 'broker' },
   ]);
+  await db.query(mutate, [
+    other,
+    'link',
+    null,
+    await revision('properties', other),
+    { contact_id: shared, relation: 'representative' },
+  ]);
   const unlinkedContact = (
     await db.query('select public.create_contact($1) as id', [
       { display_name: 'Unlinked person' },
@@ -580,7 +587,7 @@ export async function maintenanceContract({
       ).rows[0].impact;
       assert.deepEqual(
         preview.properties.map((r) => r.id).sort(),
-        [created, property].sort(),
+        [created, property, other].sort(),
       );
       // Opened from another employee's property (SGN-002, created_by employees[1]) so the correction
       // is only possible when contact-detail authority is separate from property-fact authority.
@@ -766,6 +773,17 @@ export async function maintenanceContract({
         mutate,
         [created, 'link', shared, link.revision, { remove: true }],
         '42501',
+      );
+      await fails(
+        mutate,
+        [
+          created,
+          'contact',
+          unrelated,
+          await revision('contacts', unrelated),
+          { display_name: 'wrong parent' },
+        ],
+        '23514',
       );
       await fails(
         mutate,
