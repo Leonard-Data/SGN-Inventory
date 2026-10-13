@@ -292,7 +292,8 @@ Prepare distinct active sales/staff/manager/admin identities, an inactive and an
 | Create with raw current address while catalogs lack matching units | Save unverified without district or guessed ward; later verification requires valid reviewed unit data/evidence |
 | Sales edits own property versus another employee's property | Own unarchived edit succeeds immediately; cross-owner write is denied, including direct API attempts; denied writes leave no data change |
 | Staff edits a shared property's price or facts | Corrected values appear in fresh search/detail reads; property history shows actor, time and before/after; no approval queue is created |
-| Sales attempts contact/link maintenance or optional verified designation | Denied under database authorization, even if UI controls are bypassed; sales can submit a correction request instead |
+| Sales attempts property-fact, address, mapping, contact creation/link maintenance or optional verified designation | Denied under database authorization, even if UI controls are bypassed; sales can submit a correction request instead |
+| Sales corrects a recorded linked owner/property-contact detail on another employee's readable property | The complete affected-property preview and same-person confirmation are shown; the save commits immediately; each linked property's fresh details and scoped history show actor, time and before/after; property-fact, address, mapping and link editing stay denied |
 | Staff creates a contact, links it, changes relation/primary, then unlinks a mistaken relationship | At most one primary contact; unlink preserves the contact and other links; each actual change is visible in property history |
 | Replace a primary contact or current address concurrently | One consistent primary remains; stale replacement is rejected; previous current-address rows/source history are retained |
 | Correct a shared contact's phone | Affected properties are shown before saving; each linked property's fresh details and scoped history reflect the correction; unrelated contacts are unchanged |
@@ -319,6 +320,26 @@ Prepare distinct active sales/staff/manager/admin identities, an inactive and an
 | Search/open the corrected address, including literal `%`/`_` | Fresh results/details show corrected searchable facts and honest address labels; original legacy text stays searchable; the implemented literal search continues to exclude nonmatching wildcard controls |
 
 Add embedded database regressions only for consumer-visible invariants and run `npm run test:schema` when implementing the schema/workflow changes. Browser, real Data API/Storage boundaries and separate-session contention remain distinct staging proof. Record sanitized observations without tokens, private source payloads or customer records; no scenario above has been executed by this documentation change.
+
+## Shared-contact detail-edit acceptance (ticket #70)
+
+Scope: the confirmed requirement that any Active employee may edit owner and property contact details with every edit recorded in the property's history, plus the [implemented contract](maintenance-contract.md#shared-identities-and-local-links). Use the authorized isolated development/staging target with real Supabase Auth, Data API/RLS and the actual VI/EN browser interface; two independent sessions are required for the race and stale-context rows. Embedded `scripts/maintenance-contract.mjs` assertions are the deterministic supplement, not this acceptance.
+
+Prepare sanitized fixtures: a sales employee who did not create the property, the property's staff/manager creator, a Contact linked to two readable properties, a second unrelated Contact, an unlinked Contact, an archived property with a link to the shared Contact, and source phone text with Vietnamese spelling, `%`/`_` and mask characters.
+
+| Scenario | Required observation |
+| --- | --- |
+| Sales opens another employee's readable property and deliberately opens the shared-contact editor | The editor loads through the guarded impact RPC; the complete affected-property list and the same-person confirmation are presented before saving; no owner-contact access credit, physical visit or connected-call claim is created |
+| Sales saves a corrected name/phone | Changed values appear on a fresh read of both linked properties; each linked property's history shows actor, Vietnam time, changed fields and before/after; the unrelated Contact is unchanged |
+| Two independent sessions correct the same Contact, or one adds/removes a link while the other's editor is open | The stale save is refused with `409/PT409`, the draft is retained, the current record stays available for reconciliation, and no silent merge or overwrite occurs |
+| A no-op save and a save failing while history is written | No changed-field history is invented for a no-op; an injected history failure rolls the corrected Contact back completely |
+| Sales edits an unlinked Contact or attempts contact creation, link replacement, unlink, property facts, address or mapping | Denied under database authorization even with the UI bypassed; the retained Contact and links are unchanged |
+| Sales opens a Contact whose affected set includes an archived property | Preview and correction are denied; a manager/admin reviewer keeps the existing authorized archived read |
+| Direct Data API probes with the sales session against `contacts`/`property_contacts`/`property_history` | No direct write path exists; the correction is only reachable through the guarded operation; history rows carry only allowlisted business fields |
+| Fresh property read and history after save, then a later unlink | The committed values and their history remain visible; the later unlink retains the earlier contact-change history |
+| VI/default and EN, keyboard and mobile | Equivalent labels, impact preview, confirmation and stale/failure states; protected data clears on denial, sign-out and loss of membership |
+
+No row above has been executed by this documentation change; the worktree held no scoped development credentials or fixtures. It is the required staging proof before production, separate from the source implementation.
 
 
 

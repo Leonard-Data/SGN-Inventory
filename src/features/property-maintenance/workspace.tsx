@@ -35,7 +35,10 @@ export function Maintenance({
     staff = ['staff', 'manager', 'admin'].includes(employee.role),
     reviewer = ['manager', 'admin'].includes(employee.role),
     canEdit =
-      !property.archived_at && (staff || property.created_by === employee.id);
+      !property.archived_at && (staff || property.created_by === employee.id),
+    // Shared-contact detail correction is its own permission: any live employee on a readable
+    // property, independent of property-fact authority. Links, creation and unlink stay staff-only.
+    canEditContact = !property.archived_at || reviewer;
   const [editor, setEditor] = useState<Editor | null>(null),
     [selected, setSelected] = useState(''),
     [contactBusy, setContactBusy] = useState(false),
@@ -168,91 +171,99 @@ export function Maintenance({
                 </span>
               </div>
             ))}
-            {staff ? (
-              <>
-                <h3>{text.contacts}</h3>
-                <p>{text.wrongPerson}</p>
-                <button
-                  className="btn btn-sm"
-                  onClick={() =>
-                    open('link', null, property.revision, {
-                      relation: 'unknown',
-                      is_primary: false,
-                    })
-                  }
-                >
-                  {text.link}
-                </button>
-                {detail.contacts.map((link) => (
-                  <div className="record" key={link.contact_id}>
-                    <h4 className="record-title" translate="no">
-                      {link.contacts?.display_name ?? text.unknown}
-                    </h4>
-                    <span className="record-actions">
-                      <button
-                        className="btn btn-sm btn-ghost"
-                        onClick={() => contact(link.contact_id)}
-                        disabled={contactBusy}
-                      >
-                        {text.contactEdit}
-                      </button>
-                      <button
-                        className="btn btn-sm btn-ghost"
-                        onClick={() =>
-                          open('link', link.contact_id, link.revision, link)
-                        }
-                      >
-                        {text.link}
-                      </button>
-                      <button
-                        className="btn btn-sm btn-ghost"
-                        onClick={() =>
-                          open('link', link.contact_id, link.revision, {
-                            ...link,
-                            remove: false,
-                          })
-                        }
-                      >
-                        {text.unlink}
-                      </button>
-                    </span>
-                  </div>
-                ))}
-                <details className="maintenance">
-                  <summary>{text.newContact}</summary>
-                  <MutationForm
-                    locale={locale}
-                    target="contact"
-                    save={(changes) =>
-                      api<{ id: string }>('/api/contacts', { changes })
-                    }
-                    onSaved={async () => {
-                      setNotice(true);
-                      await onSaved();
-                    }}
-                    onDenied={onDenied}
-                  >
-                    <p>{text.wrongPerson}</p>
-                    <RecordFields
-                      locale={locale}
-                      names={targetFields.contact}
-                      values={{ contact_type: 'unknown' }}
-                    />
-                  </MutationForm>
-                </details>
-              </>
-            ) : null}
           </>
+        ) : null}
+        <h3>{text.contacts}</h3>
+        {staff && canEdit ? <p>{text.wrongPerson}</p> : null}
+        {staff && canEdit ? (
+          <button
+            className="btn btn-sm"
+            onClick={() =>
+              open('link', null, property.revision, {
+                relation: 'unknown',
+                is_primary: false,
+              })
+            }
+          >
+            {text.link}
+          </button>
+        ) : null}
+        {detail.contacts.map((link) => (
+          <div className="record" key={link.contact_id}>
+            <h4 className="record-title" translate="no">
+              {link.contacts?.display_name ?? text.unknown}
+            </h4>
+            <span className="record-actions">
+              {canEditContact ? (
+                <button
+                  className="btn btn-sm btn-ghost"
+                  onClick={() => contact(link.contact_id)}
+                  disabled={contactBusy}
+                >
+                  {text.contactEdit}
+                </button>
+              ) : null}
+              {staff && canEdit ? (
+                <>
+                  <button
+                    className="btn btn-sm btn-ghost"
+                    onClick={() =>
+                      open('link', link.contact_id, link.revision, link)
+                    }
+                  >
+                    {text.link}
+                  </button>
+                  <button
+                    className="btn btn-sm btn-ghost"
+                    onClick={() =>
+                      open('link', link.contact_id, link.revision, {
+                        ...link,
+                        remove: false,
+                      })
+                    }
+                  >
+                    {text.unlink}
+                  </button>
+                </>
+              ) : null}
+            </span>
+          </div>
+        ))}
+        {staff && canEdit ? (
+          <details className="maintenance">
+            <summary>{text.newContact}</summary>
+            <MutationForm
+              locale={locale}
+              target="contact"
+              save={(changes) =>
+                api<{ id: string }>('/api/contacts', { changes })
+              }
+              onSaved={async () => {
+                setNotice(true);
+                await onSaved();
+              }}
+              onDenied={onDenied}
+            >
+              <p>{text.wrongPerson}</p>
+              <RecordFields
+                locale={locale}
+                names={targetFields.contact}
+                values={{ contact_type: 'unknown' }}
+              />
+            </MutationForm>
+          </details>
         ) : null}
         {contactBusy ? <p role="status">{text.loading}</p> : null}
         {contactError ? <p role="alert">{text.unavailable}</p> : null}
         {editor &&
-        canEdit &&
-        (editor.target === 'mapping'
-          ? reviewer
-          : ['contact', 'link'].includes(editor.target)
-            ? staff
-            : true) ? (
+        (editor.target === 'contact'
+          ? canEditContact
+          : canEdit &&
+            (editor.target === 'mapping'
+              ? reviewer
+              : editor.target === 'link'
+                ? staff
+                : true)) ? (
           <div key={editor.target + editor.targetId + editor.revision}>
             <h3>{optionLabel(locale, editor.target)}</h3>
             <p>{text.optional}</p>
