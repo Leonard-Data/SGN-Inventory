@@ -12,9 +12,13 @@ import { api, RequestError } from '@/features/employees/api';
 import { vietnamTimestamp } from '@/features/properties/format';
 import {
   COMMENT_MAX_LENGTH,
-  COMMENT_PAGE_SIZE,
   COMMENT_REASON_MAX_LENGTH,
 } from './types';
+import {
+  mergePage,
+  mergePageKeepingComment,
+  withPost,
+} from './discussion-state';
 import type {
   Comment,
   CommentCursor,
@@ -22,28 +26,6 @@ import type {
   CommentRemovalKind,
 } from './types';
 
-const cursorOf = (row: Comment | undefined): CommentCursor | null =>
-  row ? { before: row.createdAt, beforeId: row.id } : null;
-// Keep the caller's confirmed post visible without disturbing the server's newest-first page.
-function withPost(created: Comment, page: Comment[], more: boolean) {
-  const rows = [created, ...page.filter((row) => row.id !== created.id)].slice(
-    0,
-    COMMENT_PAGE_SIZE,
-  );
-  return { rows, next: more ? cursorOf(rows.at(-1)) : null };
-}
-// A removal is terminal and an accepted edit replaces the text, so a page snapshot that
-// predates either must never restore withdrawn or superseded text.
-function mergePage(current: Comment[], page: Comment[]): Comment[] {
-  const local = new Map(current.map((row) => [row.id, row]));
-  return page.map((row) => {
-    const existing = local.get(row.id);
-    if (!existing) return row;
-    if (existing.removedAt !== null && row.removedAt === null) return existing;
-    if (existing.editedAt !== null && row.editedAt === null) return existing;
-    return row;
-  });
-}
 export function Discussion({
   propertyId,
   locale,
@@ -307,7 +289,9 @@ export function Discussion({
       if (code === 'stale-comment') {
         const page = await fetchPage(null).catch(() => null);
         if (page) {
-          setComments((rows) => mergePage(rows, page.comments));
+          setComments((rows) =>
+            mergePageKeepingComment(rows, page.comments, row.id),
+          );
           setNext(page.nextCursor);
           setError(null);
         }
