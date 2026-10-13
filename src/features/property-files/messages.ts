@@ -60,11 +60,6 @@ const vi = {
   changingCover: 'Đang lưu ảnh bìa…',
   selectedCover: 'Ảnh bìa đã chọn',
   checkPhoto: 'Kiểm tra kỹ thuật ảnh trước khi chọn',
-  cardImage: 'Ảnh thẻ hồ sơ',
-  cardImageNote:
-    'Ảnh được chọn hiển thị trên thẻ hồ sơ trong kho bất động sản.',
-  cardImageEmpty:
-    'Chưa có ảnh bất động sản nào được đăng. Mở tab Tài liệu để tải lên.',
   save: 'Lưu',
   cancel: 'Hủy',
   changeCategory: 'Đổi danh mục',
@@ -130,11 +125,6 @@ const en: Record<keyof typeof vi, string> = {
   changingCover: 'Saving cover…',
   selectedCover: 'Selected cover',
   checkPhoto: 'Technically validate photo before selection',
-  cardImage: 'Card image',
-  cardImageNote:
-    'The selected image is shown on the record card in the inventory.',
-  cardImageEmpty:
-    'No property photos have been uploaded. Open the Documents tab to upload one.',
   save: 'Save',
   cancel: 'Cancel',
   changeCategory: 'Change category',

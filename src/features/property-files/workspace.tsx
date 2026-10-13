@@ -649,7 +649,12 @@ export function Workspace({
             </ul>
           </section>
         ) : null}
-        <section className="cover-section" aria-label={fileText.cover}>
+        <section
+          className="cover-section"
+          id="record-cover"
+          tabIndex={-1}
+          aria-label={fileText.cover}
+        >
           <h3>{fileText.cover}</h3>
           <CoverImage
             propertyId={propertyId}

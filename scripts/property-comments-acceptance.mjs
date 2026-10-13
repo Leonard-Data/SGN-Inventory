@@ -2777,17 +2777,14 @@ async function waitForMarker(markerKey) {
   }
   return false;
 }
-// The archive/comment commit ordering is not observable after the price-only history change, so
-// this evidence keeps only durable outcomes and post-archive retry behavior.
 async function raceEvidence(propertyId) {
   const rows = await operatorSqlAsync(
-    `select (select count(*)::int from public.property_comments where property_id = '${propertyId}') as comments`,
+    `select count(*)::int as comments from public.property_comments where property_id = '${propertyId}'`,
   );
-  const row = rows[0] ?? {};
-  return { comments: Number(row.comments ?? 0) };
+  return { comments: Number(rows[0]?.comments ?? 0) };
 }
 // One round: the parent Property row is held, then both real sessions compete for it. The two
-// requests serialize on that row, but this harness does not expose which one committed first.
+// requests serialize on that row.
 async function runRaceRound(round) {
   await resetRaceProperty(race.id);
   const revision = await archiveRevision(reviewer, race.id);
