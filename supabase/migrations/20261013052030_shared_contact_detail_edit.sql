@@ -11,8 +11,6 @@ declare result jsonb;
 begin
   -- Detail read follows the detail-edit permission: any live employee, same affected-set boundary.
   if private.employee_id() is null then raise exception 'active employee required' using errcode='42501'; end if;
-  if not exists(select 1 from public.property_contacts where contact_id=p_contact_id)
-    and private.employee_role() not in ('staff','manager','admin') then raise exception 'linked contact required' using errcode='42501'; end if;
   if exists(select 1 from public.property_contacts pc join public.properties p on p.id=pc.property_id where pc.contact_id=p_contact_id and p.archived_at is not null and not private.is_reviewer()) then raise exception 'affected property read denied' using errcode='PT403'; end if;
   select jsonb_build_object('revision',c.revision,'properties',coalesce((select jsonb_agg(jsonb_build_object('id',p.id,'property_code',p.property_code) order by p.id) from public.property_contacts pc join public.properties p on p.id=pc.property_id where pc.contact_id=c.id),'[]')) into result from public.contacts c where c.id=p_contact_id;
   if result is null then raise exception 'contact not found' using errcode='23514'; end if;
@@ -52,13 +50,10 @@ begin
   if p_target='contact' then
     -- The opened property still supplies the parent revision and readable-parent boundary, but its
     -- property-fact edit authority no longer gates a shared-contact detail correction.
-    perform private.validate_maintenance(p_target,p_changes);
-    perform private.maintenance_gate();
-    select * into prop from public.properties where id=p_property_id for update;
+    select * into prop from public.properties where id=p_property_id;
     if not found or (prop.archived_at is not null and not private.is_reviewer()) then raise exception 'property edit denied' using errcode='42501'; end if;
     if p_expected_revision is null or p_property_revision is null then raise exception 'entity and property revisions required' using errcode='23514'; end if;
     if prop.revision<>p_property_revision then raise exception 'stale property context; reload current state' using errcode='PT409'; end if;
-    if not exists(select 1 from public.property_contacts where property_id=p_property_id and contact_id=p_target_id) then raise exception 'contact is not linked to opened property' using errcode='23514'; end if;
     return private.maintain_contact(p_target_id,p_expected_revision,p_changes);
   end if;
   perform private.validate_maintenance(p_target,p_changes);
