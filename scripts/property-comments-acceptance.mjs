@@ -1996,7 +1996,7 @@ await settle(secondary);
   });
   assert.equal(
     archivedEdit.error?.code,
-    '42501',
+    'PT403',
     'An archived Property blocks an author edit for a reviewer too',
   );
   const ordinaryEdit = await alpha.rpc('edit_property_comment', {
@@ -2007,7 +2007,7 @@ await settle(secondary);
   });
   assert.equal(
     ordinaryEdit.error?.code,
-    '42501',
+    'PT403',
     'A non-author is refused on an archived Property',
   );
   const state = await commentState(seededId);
@@ -2654,7 +2654,7 @@ async function runRaceRound(round) {
     if (editResult.error) {
       assert.equal(
         editResult.error.code,
-        '42501',
+        'PT403',
         'A losing edit is denied as archived',
       );
       assert.equal(

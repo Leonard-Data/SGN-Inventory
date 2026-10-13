@@ -266,10 +266,6 @@ export function Discussion({
       setEditAction({ id: row.id, code: 'invalid-input' });
       return;
     }
-    if (value === (row.body ?? '').trim()) {
-      setEditAction({ id: row.id, code: 'comment-unchanged' });
-      return;
-    }
     setSavingEdit(true);
     setEditAction(null);
     setEditNotice(null);
