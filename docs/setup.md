@@ -1,42 +1,30 @@
-# Local setup and isolated dev/prod delivery
+# Local setup and continuous delivery
 
-This repository contains a runnable bilingual Next.js readiness page, configuration health, development tooling and the existing database foundation. **It is not a working inventory application.** Sign-in, live membership guards, property workflows and real Supabase/browser acceptance remain unimplemented or unexecuted. This runbook configures delivery; it does not authorize resource provisioning, imports or deployments.
+This repository contains the Next.js/Supabase foundation and implemented slices, **not a completed inventory application or production acceptance**. This runbook prepares delivery; it does not authorize provisioning, imports, database changes or a production release by itself. Feature acceptance remains in [testing.md](testing.md).
 
-## 1. Prerequisites and installation
+## 1. Tooling first
 
-- Git with a shell available to Husky (Git for Windows includes it).
-- Node `24.14.0`, npm `11.14.1`. `.nvmrc`, `.node-version`, `packageManager` and engine checks record the baseline. Use your version manager; `nvm use` works with compatible nvm installations. Vercel runtime is `24.x`, not a guaranteed exact patch.
-- Python `3.11+` for preparation tests; Docker Desktop/Engine only for the optional real local Supabase stack.
-- Required agent tooling: official GitHub CLI (`gh`), Chrome, and the globally installed `gh-axi`, `chrome-devtools-axi` and compatible `lavish-axi` versions below. Complete this step before agent-assisted project work; optional hooks/plugins are not required.
-- No cloud credentials are needed for formatting, lint, types, tests, build or the readiness page.
-
-### Required initial setup: agent command-line tools
-
-Install any missing repository-required CLIs globally, not as application dependencies. Initial agent-assisted setup is incomplete until all three commands are available on `PATH` and their version checks pass. These compatible versions were exercised with Node `24.14.0` and npm `11.14.1`:
+- Node `24.14.0`, npm `11.13.0`, as recorded in `.nvmrc`, `.node-version` and `package.json`. Vercel uses Node `24.x`, not an exact patch. npm is the only JavaScript package manager.
+- Git and a shell for Husky (Git for Windows includes one).
+- Python `3.11+` for workbook preparation tests. Docker is needed only for separately authorized real local Supabase checks.
+- Agent work requires authenticated official GitHub CLI (`gh`), Chrome, and `gh-axi`, `chrome-devtools-axi`, and compatible `lavish-axi`. The previously exercised versions are `0.1.36`, `0.1.39`, and `0.1.85` respectively. Install missing agent tools globally, not into the application, and consult current help before use. Installation grants no cloud or GitHub write authority.
 
 ```bash
 npm install --global gh-axi@0.1.36 chrome-devtools-axi@0.1.39 lavish-axi@0.1.85
 gh-axi --version
 chrome-devtools-axi --version
 lavish-axi --version
-```
 
-`gh-axi` requires the official GitHub CLI (`gh`) installed and authenticated. `chrome-devtools-axi` requires Chrome and starts its browser bridge on demand; standalone mode obtains `chrome-devtools-mcp` through npm. `lavish-axi` requires Node 22+, satisfied by the project baseline. Ensure npm's global executable directory is on `PATH`; on Windows it is normally `%APPDATA%\npm`.
-
-Use `gh-axi` for GitHub, `chrome-devtools-axi` for browser work, and `lavish-axi` for visual decisions/reports. Read each command's current `--help` before use. Optional agent hooks/plugins are not installed by these commands. CLI installation does not authorize GitHub writes, publication of visual artifacts, cloud provisioning or deployment.
-
-### Application dependencies and verification
-
-```bash
+# After selecting Node 24.14.0:
+npm install --global npm@11.13.0
 npm ci
 npm run check
 npm run build
-npm run dev
 ```
 
-Open `http://localhost:3000`; `/?lang=en` exercises English. This language choice is only the readiness page, not persisted employee preference. The first `npm ci` installs `.husky/pre-commit`. It formats staged files and runs lint/types/JavaScript and schema tests. Use `npm run format` before CI if formatting fails. See [development.md](development.md) for structure, pinned stack and conventions.
+`npm ci` installs the pre-commit hook; it formats staged files and runs lint, types and tests. CI sets `HUSKY=0`. Every workflow bootstraps the same npm pin before the locked install. Use `npm run format` for formatting; see [development.md](development.md) for conventions. Vercel CLI `63.1.2` is already pinned in the lockfile: use `npx --no-install vercel`, not an unpinned download.
 
-Python preparation, POSIX:
+Python, POSIX:
 
 ```bash
 python3 -m venv .venv
@@ -45,201 +33,134 @@ python -m pip install -r requirements-import.txt
 npm run test:import
 ```
 
-Windows PowerShell:
+Windows PowerShell: `py -3.11 -m venv .venv`, then `.\.venv\Scripts\Activate.ps1` and the same pip/npm commands. If activation is unavailable, invoke the virtual environment's Python directly rather than weakening execution policy.
 
-```powershell
-py -3.11 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements-import.txt
-npm run test:import
-```
+## 2. Local and application environment
 
-If activation is unavailable, invoke `.venv`'s Python directly instead of weakening machine-wide execution policy. CI installs Python 3.11 and the same requirements.
+Copy `.env.example` to ignored `.env.local` (`cp` on POSIX, `Copy-Item` in PowerShell). Supply local or isolated dev values, never production values. Examples are placeholders, not credentials. No live credentials are required for CI, tests or compilation.
 
-## 2. Local environment
-
-POSIX: `cp .env.example .env.local`. PowerShell: `Copy-Item .env.example .env.local`.
-
-`.env.local` is ignored. Supply values from an authorized local Supabase instance or isolated dev project, never prod. The examples contain deliberately invalid placeholders, not credentials. Only `.env.example`, `.env.dev.example` and `.env.prod.example` may be committed.
-
-| Variable                               | Meaning                                                                                                                                           |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SGN_ENV`                              | Exactly `dev` or `prod`; local is `dev`                                                                                                           |
-| `NEXT_PUBLIC_SUPABASE_URL`             | Supabase origin; HTTPS hosted, HTTP loopback permitted only in dev                                                                                |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Publishable key; local legacy `anon` JWT also accepted, secret/service-role rejected                                                              |
-| `NEXT_PUBLIC_APP_URL`                  | Canonical application origin, HTTPS hosted                                                                                                        |
-| `EXPECTED_SUPABASE_PROJECT_REF`        | Optional local check, required in releases to match selected hosted ref                                                                           |
-| `SGN_FILE_VALIDATION_KEY`              | Server-only file-completion HMAC key: exactly 64 lowercase hex characters, matching that stage's private database singleton; never `NEXT_PUBLIC_` |
+| Variable                               | Required value                                                                               |
+| -------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `SGN_ENV`                              | `dev` for local/previews/dev, `prod` for production                                          |
+| `NEXT_PUBLIC_SUPABASE_URL`             | Selected Supabase HTTPS origin; HTTP loopback is allowed only locally in dev                 |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Matching publishable key (local legacy `anon` JWT accepted); never secret/service-role       |
+| `NEXT_PUBLIC_APP_URL`                  | Canonical HTTPS origin of that stage; local example is `http://localhost:3000`               |
+| `EXPECTED_SUPABASE_PROJECT_REF`        | Selected 20-letter hosted ref; optional locally, required for release checks                 |
+| `SGN_FILE_VALIDATION_KEY`              | Server-only 64 lowercase hex characters, unique per stage, matching the private DB singleton |
 
 ```bash
 npm run check:env
 npm run dev
 ```
 
-`check:env` reads `.env.local` if present, validates configuration without contacting Supabase and never prints keys. `/api/health` returns `200` with `{"status":"ok","stage":"dev"}` for valid configuration, `503` with `{"status":"configuration-error"}` otherwise; responses are `no-store`. It does not verify network connectivity, key validity at Supabase or authorization. The home page runs without environment configuration; health intentionally does not.
+`check:env` validates configuration without contacting Supabase or printing keys. `/api/health` is private/no-store configuration readiness only: `200` with `{"status":"ok","stage":"dev"}` (or `prod`), otherwise `503`. It proves neither database connectivity, file-key agreement nor user authorization.
 
-File completion also requires a separately authorized operator to generate a random 32-byte secret in private tooling, configure its lowercase hex value as `SGN_FILE_VALIDATION_KEY` in that stage's server environment, and install the same value in `private.file_validation_keys` (`id=1`, `key_hex`) through an owner-authorized database connection. Keep the key out of source, logs, browser variables, ordinary clients and service-role requests; the table revokes their access. Development and production use different keys. The migration intentionally does not seed a key. Missing/malformed server configuration fails file completion closed with `503`; the configuration-only health check is not a file-completion or database-key smoke. Provisioning production or rotating an existing key requires separate concrete authorization.
+For a Vercel **Preview** deployment, `SGN_ENV` must be `dev`. Runtime redirects and password-recovery links use Vercel's server-supplied `VERCEL_URL` hostname, so they remain on the deployment that initiated the request instead of jumping to the stable dev site. Enable Vercel's automatic system environment variables; do not override `VERCEL_ENV` or `VERCEL_URL`. Local/prebuilt compilation has no deployment URL yet and uses the configured dev origin. Production and the stable dev deployment keep their canonical `NEXT_PUBLIC_APP_URL`. This does not trust request Host headers or widen the production redirect allowlist.
 
-Optional **local-only** Supabase, after Docker is installed and you have authorized local database initialization:
+File completion requires a separately authorized operator to generate a random 32-byte key privately, configure its hex value as `SGN_FILE_VALIDATION_KEY` in Vercel, and install the identical value in `private.file_validation_keys` (`id=1`, `key_hex`) through an owner-authorized connection. Never print, commit or expose this key through `NEXT_PUBLIC_`; ordinary users and service-role clients have no key-table access. Missing configuration fails file completion closed. Production key provisioning/rotation is separate authorization.
 
-```bash
-npx --no-install supabase start --help
-npx --no-install supabase start
-npx --no-install supabase status
-npx --no-install supabase db reset --help
-# Destructive to local development data only; never omit --local:
-npx --no-install supabase db reset --local
-npx --no-install supabase test db --help
-npx --no-install supabase test db
-```
+Optional local Supabase: inspect the pinned CLI help before `supabase start`, `supabase status`, `supabase test db`, or an explicitly authorized **local-only** `supabase db reset --local`. Never reset a linked hosted database. Embedded `npm run test:schema` does not replace real Auth/Data API/RLS/Storage verification.
 
-Read current help before using commands. Do not run reset against a linked/cloud database. Use the returned local URL and publishable/anon key; never copy a service-role key into a public variable. Open signup stays disabled; expose only `public`, never `private`. Embedded `npm run test:schema` needs no Docker and does not replace this real stack.
+## 3. Resource isolation and activation checklist
 
-## 3. Two stages, isolated resources
+Keep the existing two logical stages and two isolated hosting/database pairs. Previews belong to dev; they are not a third business stage or a paid custom Vercel environment.
 
-| Concern                               | `dev`                                             | `prod`                                                 |
-| ------------------------------------- | ------------------------------------------------- | ------------------------------------------------------ |
-| Trusted release branch                | `develop`                                         | `main`                                                 |
-| GitHub environment                    | `dev`                                             | `prod`                                                 |
-| Supabase                              | Dedicated dev project, sanitized fixtures         | Dedicated prod project, authorized company data        |
-| Vercel                                | Dedicated dev project                             | Dedicated prod project                                 |
-| Vercel deployment target              | Its own **Production** environment                | Its own **Production** environment                     |
-| Canonical origin                      | Dev HTTPS review URL                              | Prod HTTPS production URL                              |
-| Vercel Web Analytics                  | Toggle on the dev project; reports the review URL | Toggle on the prod project; reports the production URL |
-| Local development / optional previews | Dev resources only                                | Never used locally or by previews                      |
+| Delivery               | Trigger                                                           | GitHub environment | Vercel project / target       | Database                     |
+| ---------------------- | ----------------------------------------------------------------- | ------------------ | ----------------------------- | ---------------------------- |
+| Pull request preview   | Same-repository PR opened, updated or reopened                    | `preview`          | Dev project / **Preview**     | Dev, sanitized fixtures only |
+| Stable dev review site | Manual dispatch on `develop`, `stage=dev`                         | `dev`              | Dev project / **Production**  | Dev                          |
+| Production             | Push/merge to default branch `main`, or manual dispatch on `main` | `prod`             | Prod project / **Production** | Prod                         |
 
-Each stage's canonical origin is that project's stable `vercel.app` production domain and is the `NEXT_PUBLIC_APP_URL` value for the stage. Below, the **review URL** is the dev project's Production domain and the **production URL** is the prod project's Production domain. Neither is created or changed by this repository.
+The same Next.js application is built separately for each target. Never promote a dev build to prod: public values are baked at build time. `vercel.json` deliberately retains `git.deploymentEnabled: false`; GitHub Actions owns delivery so native Git integration cannot bypass quality, database or environment gates. Do not enable a second deployment path.
 
-Two Vercel projects host the **same application**, not separate application architectures. There are exactly two business stages; local and optional preview deployments belong to dev. This requires no paid custom Vercel environment. Even a project's first Vercel deployment uses its own Production environment, so an isolated dev project cannot accidentally select prod credentials. Dev and prod project IDs and Supabase refs must differ; release guards enforce this.
+### Observed external state (13 October 2026)
 
-### Authorized operator provisioning checklist
+Read-only inspection found default branch `main`, unprotected `main` and `develop`, **no GitHub environments**, and no repository Actions variables or secrets (`CD_ENABLED` is unset). Local Vercel CLI authentication exists, but this worktree has no `.vercel/project.json` or `.vercel/repo.json`, and no task-provided deployment token/project variables. No resource was linked, created or deployed.
 
-These dashboard actions remain external prerequisites, not actions performed by repository setup:
+An existing candidate project is [sgn-inventory](https://vercel.com/leonard-datas-projects/sgn-inventory), project ID `prj_AiubrTA5b64d3GeVKAozTT6gSeSZ`, under organization `team_oozazFdUW2laanPddNHGwpVi`. **Its dev/prod assignment is not confirmed.** The operator must confirm that mapping and supply the second isolated project's exact dashboard URL/ID and both canonical domains; do not guess, reuse an unrelated project, or silently share one project between stages. These identifiers are not credentials. A local login is not a GitHub Actions `VERCEL_TOKEN`.
 
-1. Create/identify two Supabase projects and two Vercel projects with appropriate regions and ownership. Set Vercel framework Next.js, repository root, Node `24.x`, `npm ci` and `npm run build`.
-2. Enable **Web Analytics** on **each** Vercel project (project → **Analytics** → Web Analytics). The application integration is already committed; the toggle is what starts collection, and it reports to whichever project served the request. See [Vercel Analytics for the review and production URLs](#vercel-analytics-for-the-review-and-production-urls) for the exact scope of each toggle and what remains unverified.
-3. Disable Vercel automatic Git deployments; `vercel.json` also sets `git.deploymentEnabled: false`. Do not enable an alternate deployment path that bypasses GitHub reviews. Optional previews must stay on the dev project with dev configuration only.
-4. Populate each Vercel project's **Production** variables from its corresponding `.env.dev.example` or `.env.prod.example`, with actual values and matching `SGN_ENV`. Set dev project's optional Preview/Development variables to dev only. Never copy prod variables to dev.
-5. Configure each Supabase Auth site URL and exact invitation/recovery/callback allowlist for that stage when implementing auth; no broad prod wildcards. Disable public/anonymous signup, keep documents private and expose only `public`. Ordinary requests never need a Supabase secret/service-role key; file completion requires the separate server-only attestation configuration above.
-6. Create GitHub environments `dev` and `prod`. Restrict dev to `develop`, prod to `main`. Require a prod reviewer, prevent self-review and disable protection bypass where the account plan permits. Verify required-reviewer support on the repository's visibility/plan **before enabling deployment credentials**. If unavailable, do not activate prod delivery until an equivalent enforceable external approval gate is established. A workflow that names a nonexistent environment creates an unprotected one, so an unconfigured environment is not a gate.
-7. Protect `develop` and `main`: require pull requests, reviews and the CI `quality` status; block force pushes/deletion and restrict bypass. Run CI first to learn the exact status name GitHub presents. No deployment secrets on feature PRs or forks.
-8. Create `develop` from the reviewed baseline. Nothing in repository setup creates or pushes this branch automatically.
+### Before enabling credentials or CD
 
-**External state observed on 12 October 2026, not a repository guarantee:** the repository had no GitHub environments and neither `main` nor `develop` was protected. Until items 6 and 7 exist, the `dev`/`prod` jobs run without an approval gate, so production delivery must stay blocked. Re-check both in repository settings before enabling deployment credentials; the repository cannot verify them.
+1. Confirm/create the authorized isolated Vercel and Supabase projects. Record both exact Vercel links, project IDs, organization ID, canonical domains and Supabase refs. Select repository root, Next.js, Node `24.x`, `npm ci`, and `npm run build` in both Vercel projects.
+2. Keep native Git deployments disabled. Enable automatic system environment variables. Configure the dev project's **Preview and Production** variables using `.env.dev.example`; configure the prod project's **Production** variables using `.env.prod.example`. Never store prod values in Preview/Development. The dev Preview `NEXT_PUBLIC_APP_URL` remains the stable dev origin; runtime preview URL handling is automatic as above. Branch-specific Preview overrides must still match the guarded dev values.
+3. Create GitHub environments `preview`, `dev`, `prod` **before** enabling workflows. Restrict `dev` to `develop`, `prod` to `main`; allow only intended same-repository PR merge refs for `preview` (GitHub evaluates `refs/pull/<number>/merge`, not just the head branch). Require reviewers, prevent self-review and disable protection bypass where available. A named-but-missing environment is auto-created unprotected: that is not a gate. Verify plan support before storing credentials; if unavailable, establish an equivalent enforceable approval gate first.
+4. Protect `main` and `develop`: require PR review and CI's `quality` check, block force pushes/deletion and restrict bypass. Preserve existing stronger rules. The workflows change none of these settings. Read the actual CI check name from a completed run. Do not require the optional preview check for forks, since fork previews deliberately do not deploy.
+5. Keep deployment secrets **environment-scoped**, not repository/organization secrets exposed to PRs. A same-repository PR executes its code during install/build: the `preview` reviewer must trust the exact commit before releasing secrets. Use the narrowest available Vercel token/team access; a token authorized for both projects can publish both, irrespective of these code-level guards. No production or database-admin secrets belong in `preview`. Forks receive secret-free CI only; never switch this workflow to `pull_request_target` to enable them.
+6. Configure Supabase as described below and apply reviewed compatible migrations through separately authorized database work. Previews never migrate. Automatic production delivery **verifies** that no migrations are pending and stops otherwise.
+7. Complete staging acceptance from [testing.md](testing.md) before activating production. Then set repository variable **`CD_ENABLED=true`**. Until this explicit activation switch is set, CD jobs are skipped; CI still runs. Skipped CD is not a successful deployment. The same switch gates manual application releases; the separately authorized database-only workflow is unchanged.
 
-### GitHub variables and secrets
+### Exact GitHub variables and secrets
 
-Repository-level **variables** (nonsecret target allowlist, do not redefine them differently per environment):
+Repository variables (target allowlists; do not shadow them with different environment values):
 
-- `DEV_SUPABASE_PROJECT_REF`, `PROD_SUPABASE_PROJECT_REF`: actual 20-letter refs.
+- `CD_ENABLED`: literal `true` only after the activation checklist.
+- `DEV_SUPABASE_PROJECT_REF`, `PROD_SUPABASE_PROJECT_REF`: distinct 20-letter refs.
 - `DEV_VERCEL_PROJECT_ID`, `PROD_VERCEL_PROJECT_ID`: distinct `prj_...` IDs.
 
-For **each** GitHub environment:
+For **each** GitHub environment (`preview` uses the dev values):
 
-| Kind                            | Name                                   | Value                                                       |
-| ------------------------------- | -------------------------------------- | ----------------------------------------------------------- |
-| Variable                        | `SUPABASE_PROJECT_REF`                 | That stage's ref                                            |
-| Variable                        | `VERCEL_ORG_ID`                        | Organization/team ID                                        |
-| Variable                        | `VERCEL_PROJECT_ID`                    | That stage's hosting project ID                             |
-| Variable                        | `NEXT_PUBLIC_SUPABASE_URL`             | That stage's Supabase HTTPS origin                          |
-| Variable                        | `NEXT_PUBLIC_APP_URL`                  | That stage's canonical HTTPS origin                         |
-| Secret                          | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Matching public key (not privileged despite secret storage) |
-| Secret                          | `VERCEL_TOKEN`                         | Authorized delivery token, scoped as narrowly as available  |
-| Secret, if deployment protected | `VERCEL_AUTOMATION_BYPASS_SECRET`      | That project's automation bypass secret for health smoke    |
-| Secret, migration and release   | `SUPABASE_ACCESS_TOKEN`                | Authorized CLI access token                                 |
-| Secret, migration and release   | `SUPABASE_DB_PASSWORD`                 | That stage's database password                              |
+| Kind                      | Name                                   | Source/value                                                                      |
+| ------------------------- | -------------------------------------- | --------------------------------------------------------------------------------- |
+| Variable                  | `SUPABASE_PROJECT_REF`                 | Selected stage's Supabase ref                                                     |
+| Variable                  | `VERCEL_ORG_ID`                        | Vercel organization/team ID (`orgId` from authorized linking)                     |
+| Variable                  | `VERCEL_PROJECT_ID`                    | Selected project Settings → General → Project ID                                  |
+| Variable                  | `NEXT_PUBLIC_SUPABASE_URL`             | Supabase project Settings → API → project URL                                     |
+| Variable                  | `NEXT_PUBLIC_APP_URL`                  | Selected stage's stable HTTPS origin from Vercel Domains                          |
+| Secret                    | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Matching Supabase publishable key, not secret/service-role                        |
+| Secret                    | `VERCEL_TOKEN`                         | Authorized Vercel account Settings → Tokens token, narrowly scoped                |
+| Secret, if protected      | `VERCEL_AUTOMATION_BYPASS_SECRET`      | That Vercel project's Deployment Protection → Protection Bypass for Automation    |
+| Secret, `dev`/`prod` only | `SUPABASE_ACCESS_TOKEN`                | Authorized Supabase account CLI access token for migration inspection/application |
+| Secret, `dev`/`prod` only | `SUPABASE_DB_PASSWORD`                 | Selected stage's database password                                                |
 
-`SGN_ENV` and `EXPECTED_SUPABASE_PROJECT_REF` are selected by workflows. Match the GitHub public configuration and Vercel configuration exactly, including trailing-slash spelling. The release guard verifies the downloaded `.vercel/project.json` and `.vercel/.env.production.local` before build. Pulled configuration cannot silently override the selected stage. No tokens, database passwords or server secret keys belong in Vercel browser variables; database credentials are not supplied to the app deployment job.
+`SGN_ENV`, `EXPECTED_SUPABASE_PROJECT_REF` and `VERCEL_TARGET` are selected by workflows, not user secrets. Match GitHub and pulled Vercel values exactly, including trailing-slash spelling. `SGN_FILE_VALIDATION_KEY` belongs only in Vercel's server environment and the matching private database singleton; it need not be duplicated as a GitHub secret. Pulled environment files and build outputs remain ephemeral on the runner, never uploaded as artifacts. Vercel CLI reads `VERCEL_TOKEN` from the environment, not command-line arguments.
 
-Where each value comes from — dashboard labels move, so confirm the value is the one your own project shows for that stage:
+### Exact Supabase settings
 
-| Name                                   | Source                                                                                                                |
-| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `DEV_/PROD_VERCEL_PROJECT_ID`          | Vercel project → **Settings → General → Project ID**; the same value appears as `projectId` in `.vercel/project.json` |
-| `VERCEL_ORG_ID`                        | Vercel team or account identifier; the same value appears as `orgId` in `.vercel/project.json`                        |
-| `VERCEL_TOKEN`                         | Vercel → account **Settings → Tokens**; create one scoped to the team that owns both projects                         |
-| `VERCEL_AUTOMATION_BYPASS_SECRET`      | Vercel project → **Settings → Deployment Protection → Protection Bypass for Automation**                              |
-| `NEXT_PUBLIC_SUPABASE_URL`             | Supabase project → **Project Settings → API**: the project URL                                                        |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase project → **Project Settings → API**: the publishable key, not the secret or service-role key                |
-| `DEV_/PROD_SUPABASE_PROJECT_REF`       | The 20-character reference in that project's Supabase URL or project settings                                         |
-| `SUPABASE_ACCESS_TOKEN`                | Supabase account → **Access Tokens**                                                                                  |
-| `SUPABASE_DB_PASSWORD`                 | The database password set when that Supabase project was created, or reset under **Project Settings → Database**      |
-| `NEXT_PUBLIC_APP_URL`                  | Vercel project → **Domains**: that project's stable `vercel.app` production domain                                    |
+- One dev and one prod project with distinct refs and keys. Expose only `public` in the Data API, never `private`. Preserve grants/RLS and the private file bucket. Use the user's publishable-key session for ordinary requests; no service-role fallback.
+- Disable open signup/anonymous sign-in; employee invitation and live employee linkage remain separate. Supply an authorized linked active test employee for preview acceptance, never real production customer fixtures.
+- Auth **Site URL**: stable dev origin on dev; canonical production origin on prod.
+- Auth **Redirect URLs**: permit `<stage-origin>/auth/callback` for the PKCE recovery flow. Email templates using the token-hash flow must target the same stage's `/auth/confirm` with `type=recovery`; never point dev mail at prod. Configure real SMTP/delivered recovery separately.
+- Dev only: allow each emitted preview origin's `/auth/callback` before testing recovery. Exact URLs are safest; if opting into automation, use a reviewed project-and-team-scoped Vercel preview glob, never `https://*.vercel.app/**`, and never add preview wildcards to prod. Confirm the generated URL pattern from a real deployment rather than guessing a slug. Deployment Protection must still allow the authorized recipient to return through the same preview/browser PKCE flow.
+- Apply the reviewed migration set and configure the matching file attestation key before relying on features. Compile/configuration health is not proof of schema, recovery, RLS or Storage acceptance.
 
-## 4. CI and release procedure
+## 4. CI and delivery operation
 
-### Continuous integration
+### CI
 
-`.github/workflows/ci.yml` runs on PRs and pushes to `main`/`develop`, and is reused by manual release workflows. Read-only checkout; pinned action revisions; locked npm install; Python preparation, formatting, lint, type checks, configuration/release regression tests, embedded schema tests and Next build. CI configuration uses an inert publishable-key fixture and never calls a cloud database. No credential-bearing artifacts are uploaded.
+`.github/workflows/ci.yml` runs on every PR and pushes to `main`/`develop`, and is reused by delivery. It installs pinned npm dependencies and Python requirements, then runs formatting, lint, types, unit/configuration/release tests, embedded schema checks, import tests, environment validation and the Next build. Its publishable key is an inert fixture; no database/network acceptance is claimed.
 
-### Release pipeline: database, then application
+### Pull request previews
 
-`.github/workflows/deploy.yml` (**Release application and database**) is the single gated pipeline that applies reviewed migrations and publishes the application for one stage. It is the only path that both changes a hosted database and publishes an application. It runs on explicit dispatch only — there is no deploy trigger on a push, pull request, tag or merge, so production is never released implicitly — and it serializes per stage through one `release-<stage>` concurrency group shared with the database workflow, with `cancel-in-progress: false`.
+`.github/workflows/preview.yml` reuses CI, then enters the protected `preview` environment for same-repository PRs only. It checks the merge ref and dev-only project/database mapping, pulls that dev project's Preview configuration, verifies it, builds with `--target=preview`, and deploys the exact prebuilt output with `--target=preview` (never `--prod`). It writes the URL to the GitHub environment deployment and Actions step summary, then checks configuration health. A newer update cancels the older run for that PR. A failed build never uploads; a post-upload smoke failure does not undo an already-created deployment.
 
-| Job       | Purpose                                                                                                                                                                                                                            | Timeout |
-| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| `quality` | Reuses `.github/workflows/ci.yml` unchanged: formatting, lint, types, environment/release regressions, schema tests and Next build                                                                                                 | 15 min  |
-| `migrate` | Shared `.github/workflows/migration.yml` sequence: verifies the stage database target, links it, lists pending migrations, then applies them (default) or fails while any remain pending                                           | 15 min  |
-| `deploy`  | Verifies the isolated release configuration, pulls the stage project's Production environment, verifies the pulled project and variables, builds, uploads that exact prebuilt output with `--prod`, and smoke-checks `/api/health` | 20 min  |
+The preview builds the tested PR merge ref. It has no Supabase migration credentials and never applies SQL. If the PR needs a schema change, separately review/apply a compatible change on dev before using that feature. Closed previews are not deleted automatically; cleanup is a separately authorized operation. Vercel credentials in this workflow require the exact-commit trust/approval boundary above.
 
-`deploy` needs `migrate`, so **a failed migration ends the run before anything is published**. Both release jobs carry the same branch guard — `dev` only on `develop`, `prod` only on `main` — and the executable guards repeat the check before any cloud contact.
+### Production from the default branch
 
-Dispatch inputs: `stage` (`dev` or `prod`) and `migration` (`apply`, the default, applies the stage's reviewed pending migrations before the release; `verify` never writes and **fails the run while any migration is pending**).
+`.github/workflows/deploy.yml` runs automatically on pushes to **`main` (the current default branch)**. CI must pass, then the protected `prod` environment gates a **verify-only** database check. Any pending migration fails the run before application upload. Once current, it checks the isolated prod configuration, pulls Production values, builds with `--prod`, deploys the exact prebuilt artifact with `--prod`, and records the deployment URL and configuration smoke result. Branch protections remain the merge authority; this workflow never pushes or merges.
 
-**Order of operations.** Run each step on the stage's own branch, after the [provisioning checklist](#authorized-operator-provisioning-checklist).
+If the default branch is renamed, update the trigger, branch guards, environment restrictions and tests together. Application/database releases serialize through `release-dev` or `release-prod` with `cancel-in-progress: false`, shared with the database-only workflow; do not cancel a running migration to rush a release.
 
-1. **Release the dev stage.** Actions → **Release application and database** → _Run workflow_ → branch `develop`, `stage=dev`, `migration=apply`. Expected: `quality` passes; `migrate` prints `Release target check passed`, the pending set reported by `db push --linked --dry-run --skip-vault --output-format json`, and then applies exactly that list; `deploy` prints `Release configuration check passed` and `Release pulled check passed`, then a `https://…vercel.app` URL from the deploy step and `Release smoke check passed` from `/api/health`. The dev project's Production slot — the **review URL** — now serves that commit against a database that already has its schema.
-2. **Confirm the database is current.** The `migrate` dry run prints the pending set that the same run then applies. Re-running is safe: applied versions are recorded in `supabase_migrations.schema_migrations` and are skipped, and `--skip-vault` leaves Vault secrets untouched.
-3. **Check without writing.** Dispatch the same stage and commit with `migration=verify` to list the pending set without any write. A verify run **fails while any migration is pending**, so a passing verify run means the database already matches the commit; use it to confirm that, never to authorize a release.
-4. **Fix forward on failure.** A non-zero `migrate` step stops the run and skips `deploy`; nothing is published. Create a new migration — never rewrite deployed SQL — and re-dispatch. The database stays on its last applied version.
-5. **Release the prod stage.** After the dev release and the [staging acceptance](testing.md) are recorded, merge to `main` and repeat steps 1–3 with `stage=prod` on `main`. The `prod` environment approval pauses the run **before any cloud contact**, so the reviewer approves the commit and its pending migrations together; inspect the commit, the dev evidence and the pending list first. `prod` deploys only to the prod project's Production slot — the **production URL**.
-6. **Keep the order.** Database compatibility first, then the application release, then smoke and business acceptance. Public variables are bundled at build time, so **never promote a dev build into prod** or reuse cross-stage artifacts; each stage builds its own.
+Manual **Release application and database** remains available on `develop`/`dev` or `main`/`prod`. `migration=apply` explicitly applies reviewed pending migrations before deploying (existing manual default); `migration=verify` never writes and fails if any remain. A main push always selects verify, never inherits that manual default. Do not dispatch `apply` without concrete migration authorization. After separately applying a reviewed migration, re-run the failed automatic release for the same commit or dispatch `migration=verify`. Never bypass the guard or rewrite deployed migrations.
 
-Smoke runs after the upload. A failed smoke or health check does not roll back the domain or the database automatically; use [Recovery and troubleshooting](#5-recovery-and-troubleshooting). Neither workflow seeds, imports, resets, restores a backup, changes Vercel projects, domains, deployment protection or Auth settings, or rolls the application back.
+**Review database migrations** (`migrate.yml`, shared `migration.yml`) remains the database-only operation. Default `apply=false` lists pending migrations and fails if any remain. With separate authorization, `apply=true` repeats the guarded dry run and applies through the pinned Supabase CLI. Neither flow imports, seeds, resets, restores, changes Auth/Storage settings or provisions resources.
 
-**What a failed run looks like:** a wrong branch for the selected stage skips both release jobs; shared, swapped or missing project IDs and a mismatched pulled configuration print only `Release check failed: verify branch, stage, project IDs, configuration, pending migrations and deployment health.` and upload nothing; `migration=verify` fails when the pending list is non-empty, so a verify-only run never passes while the database is behind; a missing variable or secret fails at the release guard, `link` or `pull`; a protection login page, wrong stage, non-`200` response or timeout fails the smoke instead of being accepted as health.
+### Activation evidence still required
 
-**Unverified external prerequisites:** the environment gate and its reviewer, both projects and their Production variables, the Analytics toggle, and the reachability of a real deployment or migration are all outside this repository. Until they exist, this pipeline has never been dispatched here, and a workflow is never dispatched merely to demonstrate that it exists.
+After inputs and approvals exist: open/update a same-repository PR and confirm its dev-only preview URL, exercise login/recovery and private workflows against sanitized dev data, confirm forks get CI but no preview secrets, then release an accepted commit through the protected default branch and confirm the prod URL/stage and affected real workflows. Retain evidence without keys, signed links or customer data. **No hosted deployment, migration or live Supabase acceptance was performed by this CD configuration task.**
 
-### Database review without releasing the application
+## 5. Operations and limits
 
-**Review database migrations** (`.github/workflows/migrate.yml`) remains the database-only path for reviewing or applying migrations without publishing the application. It shares the stage concurrency group, the same target guard and the same `.github/workflows/migration.yml` sequence as the release pipeline.
-
-1. Review the migration diff and backwards compatibility. Run CI and local/staging tests. The existing migrations target a fresh database; review any existing remote schema/history before linking. This workflow is **not** an import, reset, seed or destructive recovery tool.
-2. Dispatch it with the stage's branch selected and `apply=false` (default) for a verify-only run. Both stages require their configured environment gate, and wrong-branch dispatches do not run a release job.
-3. Inspect the pending list, target and compatibility. CLI `link` contacts the selected project; `db push --linked --dry-run --skip-vault` lists pending migrations without application or Vault updates, and the shared sequence reads that list from its `--output-format json` result. No seed/roles/reset flags are used. `apply=false` **fails while the pending list is non-empty**, so a passing verify run means the database is already current and a failing one leaves the pending set printed by the dry run directly above the failure line.
-4. Only after separate migration authorization, dispatch the reviewed commit with `apply=true`. The workflow repeats the dry run, then `db push --linked --skip-vault --yes`. Environment approval must cover that exact commit and operation; do not approve pending unreviewed or destructive SQL merely because tests pass.
-5. Execute real dev/staging acceptance in [testing.md](testing.md). Dry run and PGlite are not proof of real Auth/RLS/Storage or multi-session concurrency.
-
-### Vercel Analytics for the review and production URLs
-
-The application mounts `@vercel/analytics` (`2.0.1`, pinned) in the root layout (`src/app/layout.tsx`), so every page reports to whichever Vercel project served it. That is all the repository can do: **collection starts only when the dashboard toggle is on**, and the Analytics view stays empty until then.
-
-| URL            | Vercel project                                            | Environment scope of the toggle       | What it reports                                                                            |
-| -------------- | --------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Review URL     | The project whose ID is `DEV_VERCEL_PROJECT_ID` (`dev`)   | Web Analytics enabled on that project | Its Production deployment, which is the dev review URL, and any of its Preview deployments |
-| Production URL | The project whose ID is `PROD_VERCEL_PROJECT_ID` (`prod`) | Web Analytics enabled on that project | Its Production deployment, which is the production URL                                     |
-
-To enable, in the Vercel dashboard: select the project → **Analytics** → **Web Analytics** → **Enable**. Then release each stage through the pipeline above and open **Analytics → Web Analytics** on that project to read page views, visitors, top pages and referrers. Nothing is collected from local `next dev`, which never reaches Vercel.
-
-**Unverified external prerequisites:** neither toggle, project, plan quota nor region has been set or observed from this repository, and no deployed request has been measured. Confirm the toggle, the quota your plan includes, and — after the first release — that the Analytics view shows traffic before relying on it. Because `git.deploymentEnabled` is `false` and releases are explicit, there is no traffic to measure before the first successful release.
-
-## 5. Recovery and troubleshooting
-
-- **App rollback:** restore a previously verified deployment from the **same Vercel project/stage**, after checking compatibility with current database schema and authorization behavior. Re-run stage health and actual affected browser workflows. Do not use a dev deployment as prod rollback.
-- **Database recovery:** prefer reviewed forward fixes. Do not blindly reverse migrations or reset production. Restore from backup only under separate authorization with a plan for post-backup writes, identities, Storage and reconciliation; rehearse recovery before release.
-- **`check:env` fails:** placeholders are intentionally rejected. Verify origin-only URLs, stage and publishable/anon key; inspect errors without printing secrets. A secret/service-role key is never an acceptable replacement.
-- **Hooks missing:** rerun `npm run prepare`, check Git and Node on the hook shell PATH. `HUSKY=0` is for CI, not the normal local workflow. Windows hooks use Git's shell and LF line endings.
-- **CI formatting:** run `npm run format`. Historical contract files and migrations are intentionally excluded rather than mass-restyled.
-- **Release guard fails:** verify branch, distinct repository allowlists, stage environment variables, the pending migration list and the Vercel pulled configuration. A `pending` failure means the stage database is behind the commit; apply the reviewed migrations through the release pipeline or the database-only workflow. CLI reports only a safe summary because assertion payloads can contain keys. Do not bypass the guard.
-- **The Analytics view is empty:** confirm **Web Analytics** is enabled on the project that served the request, and that the visit came from a deployed URL rather than `next dev`. The repository-side component is inert until that toggle is on, and nothing here configures it.
-- **Local real-stack checks unavailable:** install Docker and rerun local Supabase checks; do not report embedded tests as equivalent. No real cloud provisioning or deployment is required to run repository quality gates.
+- Enable Web Analytics separately on each Vercel project (Analytics → Web Analytics). The already-pinned application integration reports to the serving project, not across projects. No dashboard toggle, quota or collection is established by repository configuration.
+- Failed configuration/migration/build checks publish nothing. A failed post-deployment smoke does **not** automatically roll back a domain or database. `/api/health` proves only stage/configuration shape.
+- Rollback requires separate authorization: use a compatible previously verified deployment from the **same** project/stage, then rerun health and affected user acceptance. Prefer reviewed database forward fixes; never reset production or blindly reverse migrations.
+- Missing inputs fail closed; do not replace publishable keys with privileged keys, loosen guards, disable environment reviewers or enable native Git deploys to make a run green.
+- If CD is skipped, check `CD_ENABLED`, fork origin and event/branch selection. If a job awaits approval, inspect its exact commit and target. If a verify run fails, inspect pending migrations, authorize/apply them separately and retry the same reviewed release.
 
 ## Sources
 
-- [Next.js installation](https://nextjs.org/docs/app/getting-started/installation)
-- [Supabase SSR guidance](https://supabase.com/docs/guides/auth/server-side/creating-a-client)
-- [Vercel environments and first-deployment behavior](https://vercel.com/docs/deployments/environments)
-- [Vercel CLI prebuilt deployment](https://vercel.com/docs/cli/deploying-from-cli)
-- [Vercel Web Analytics quickstart](https://vercel.com/docs/analytics/quickstart)
-- [GitHub deployment environments and protections](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments)
+- [Next.js environment variables](https://nextjs.org/docs/app/guides/environment-variables)
+- [Vercel prebuilt delivery](https://vercel.com/docs/cli/deploying-from-cli)
+- [Vercel system environment variables](https://vercel.com/docs/environment-variables/system-environment-variables)
+- [GitHub environments and protections](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments)
+- [Supabase redirect URLs](https://supabase.com/docs/guides/auth/redirect-urls)

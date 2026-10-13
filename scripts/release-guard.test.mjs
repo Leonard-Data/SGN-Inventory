@@ -114,6 +114,53 @@ test('downloaded Vercel configuration cannot override the selected stage', () =>
   );
 });
 
+const preview = {
+  ...dev,
+  VERCEL_TARGET: 'preview',
+  GITHUB_EVENT_NAME: 'pull_request',
+  GITHUB_REF: 'refs/pull/123/merge',
+  GITHUB_REPOSITORY: 'example/inventory',
+  GITHUB_HEAD_REPOSITORY: 'example/inventory',
+};
+
+test('same-repository previews use only the dev project and database', () => {
+  assert.deepEqual(releaseConfiguration(preview), {
+    stage: 'dev',
+    projectRef: dev.SUPABASE_PROJECT_REF,
+  });
+  verifyPulledConfiguration(
+    preview,
+    {
+      projectId: dev.VERCEL_PROJECT_ID,
+      orgId: dev.VERCEL_ORG_ID,
+    },
+    { ...dev, VERCEL_ENV: 'preview' },
+  );
+  for (const change of [
+    { SGN_ENV: 'prod' },
+    { GITHUB_HEAD_REPOSITORY: 'fork/inventory' },
+    { GITHUB_REPOSITORY: undefined, GITHUB_HEAD_REPOSITORY: undefined },
+    { GITHUB_EVENT_NAME: 'pull_request_target' },
+    { GITHUB_EVENT_NAME: 'push' },
+    { GITHUB_REF: 'refs/heads/main' },
+    { VERCEL_PROJECT_ID: dev.PROD_VERCEL_PROJECT_ID },
+    { SUPABASE_PROJECT_REF: dev.PROD_SUPABASE_PROJECT_REF },
+    { VERCEL_TARGET: 'unknown' },
+  ]) {
+    assert.throws(() => releaseConfiguration({ ...preview, ...change }));
+  }
+  assert.throws(() =>
+    verifyPulledConfiguration(
+      preview,
+      {
+        projectId: dev.VERCEL_PROJECT_ID,
+        orgId: dev.VERCEL_ORG_ID,
+      },
+      { ...dev, SGN_ENV: 'prod' },
+    ),
+  );
+});
+
 // Mirrors the pinned CLI's `supabase db push --dry-run --output-format json`
 // result shape for both outcomes, so a verify-only release cannot pass while the
 // database is behind the commit being released.
