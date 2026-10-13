@@ -60,6 +60,7 @@ export type Database = {
           edited_actor_name: string;
           edited_at: string;
           edited_by: string;
+          edit_key: string;
           id: string;
           previous_body: string;
           previous_revision: string;
@@ -1739,6 +1740,7 @@ export type Database = {
         Args: {
           p_body: string;
           p_comment_id: string;
+          p_key: string;
           p_property_id: string;
           p_revision: string;
         };

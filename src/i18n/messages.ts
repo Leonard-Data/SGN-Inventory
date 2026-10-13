@@ -150,6 +150,7 @@ const vi = {
   commentPostRemoved:
     'Bình luận đã được gỡ trước đó. Nội dung đã nhập được giữ lại; gửi lại sẽ tạo bình luận mới.',
   editComment: 'Chỉnh sửa bình luận',
+  commentCurrent: 'Nội dung hiện đang được lưu',
   editHint: 'Chỉnh sửa nội dung bình luận chung. Tối đa 2.000 ký tự.',
   saveComment: 'Lưu thay đổi',
   savingComment: 'Đang lưu…',
@@ -470,6 +471,7 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     commentPostRemoved:
       'That comment was already removed. Your text is kept; posting again creates a new comment.',
     editComment: 'Edit comment',
+    commentCurrent: 'Current saved comment',
     editHint: 'Edit the shared comment text. Up to 2,000 characters.',
     saveComment: 'Save changes',
     savingComment: 'Saving…',

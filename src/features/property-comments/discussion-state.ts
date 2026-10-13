@@ -43,21 +43,32 @@ function timestampKey(value: string): string {
 export function mergeStaleEditState(
   current: Comment[],
   page: Comment[],
-  commentId: string,
   comment: Comment | null,
 ): Comment[] {
   const pageRows = mergePage(current, page);
   const incoming = new Map(pageRows.map((row) => [row.id, row]));
-  if (comment) incoming.set(comment.id, comment);
+  if (comment) {
+    const existing =
+      incoming.get(comment.id) ?? current.find((row) => row.id === comment.id);
+    incoming.set(
+      comment.id,
+      existing ? mergePage([existing], [comment])[0] : comment,
+    );
+  }
   const seen = new Set<string>();
   const rows = current.map((row) => {
     const next = incoming.get(row.id) ?? row;
     seen.add(row.id);
     return next;
   });
-  const fresh = pageRows.filter((row) => !seen.has(row.id));
-  if (comment && !seen.has(comment.id)) return [...fresh, ...rows, comment];
-  if (rows.some((row) => row.id === commentId)) return [...fresh, ...rows];
-  const existing = current.find((row) => row.id === commentId);
-  return existing ? [...fresh, ...rows, existing] : [...fresh, ...rows];
+  const fresh = pageRows
+    .filter((row) => !seen.has(row.id))
+    .map((row) => incoming.get(row.id) ?? row);
+  if (
+    comment &&
+    !seen.has(comment.id) &&
+    !fresh.some((row) => row.id === comment.id)
+  )
+    return [...fresh, ...rows, incoming.get(comment.id) ?? comment];
+  return [...fresh, ...rows];
 }

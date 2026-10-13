@@ -309,16 +309,17 @@ function screen(session) {
         removeControls: discussion ? [...discussion.querySelectorAll('button')].filter(node => /Gỡ bình luận|^Remove$/.test(node.textContent.trim())).length : 0,
         moderateControls: discussion ? [...discussion.querySelectorAll('button')].filter(node => /Gỡ kèm lý do|Remove with reason/.test(node.textContent)).length : 0,
         moderationReason: discussion?.querySelector('.comment-moderation textarea')?.value ?? null,
-        editControls: discussion ? [...discussion.querySelectorAll('button')].filter(node => /Chỉnh sửa bình luận|^Edit comment$/.test(node.textContent.trim())).length : 0,
+        commentEditControls: discussion ? [...discussion.querySelectorAll('button')].filter(node => /Chỉnh sửa bình luận|^Edit comment$/.test(node.textContent.trim())).length : 0,
         editedMarkers: discussion ? discussion.querySelectorAll('.comment-edited').length : 0,
         editDraft: discussion?.querySelector('.comment-edit textarea')?.value ?? null,
+        editCurrent: discussion?.querySelector('.comment-current .comment-body')?.textContent ?? null,
         editError: discussion?.querySelector('.comment-edit [role=alert]')?.textContent ?? null,
         statuses: [...(discussion?.querySelectorAll('[role=status],[role=alert]') ?? [])].map(node => node.textContent),
         empty: discussion ? discussion.innerText.includes('Chưa có bình luận nào.') || discussion.innerText.includes('No comments yet.') : null,
         more: discussion ? Boolean([...discussion.querySelectorAll('button')].find(node => /Xem bình luận cũ hơn|More comments/.test(node.textContent))) : null,
         refresh: discussion ? Boolean([...discussion.querySelectorAll('button')].find(node => /Làm mới|Refresh/.test(node.textContent))) : null,
         postButton: discussion ? Boolean([...discussion.querySelectorAll('button[type=submit]')].length) : null,
-        editControls: Boolean(document.querySelector('.maintenance-actions')),
+        maintenanceActions: Boolean(document.querySelector('.maintenance-actions')),
         injected: Boolean(document.querySelector('script[data-injected], img[data-injected]')),
         hasDiscussionText: discussion ? discussion.innerText.trim().length > 0 : false,
       };
@@ -677,7 +678,7 @@ await settle(secondary);
     'Colleague reads the shared discussion',
   );
   assert.equal(
-    page.editControls,
+    page.maintenanceActions,
     false,
     'No property-edit authority is granted',
   );
@@ -693,12 +694,16 @@ await settle(secondary);
     1,
     'Colleague comment is attributed to the colleague',
   );
-  assert.equal(after.editControls, false, 'Still no property-edit authority');
+  assert.equal(
+    after.maintenanceActions,
+    false,
+    'Still no property-edit authority',
+  );
   observed(
     'colleague posts on another employee property without edit authority',
     {
       comments: after.comments.length,
-      editControls: after.editControls,
+      maintenanceActions: after.maintenanceActions,
     },
   );
 }
@@ -759,6 +764,70 @@ await settle(secondary);
     pathBefore: before.path,
     commentsBefore: before.comments.length,
     cachedText: leaked,
+  });
+  setBetaActive(true);
+}
+{
+  const seeded = await beta.rpc('post_property_comment', {
+    p_property_id: second.id,
+    p_body: 'Bình luận beta để kiểm tra mất quyền',
+    p_key: randomUUID(),
+  });
+  assert.equal(seeded.error, null, 'The beta reconciliation comment posts');
+  browser(['open', detail(second)], secondary);
+  await settle(secondary);
+  click('Chỉnh sửa bình luận', secondary);
+  await waitUntil(
+    `() => Boolean(document.querySelector('section.discussion .comment-edit textarea'))`,
+    secondary,
+  );
+  fill('Chỉnh sửa bình luận', 'Bản nháp khi quyền thay đổi', secondary);
+  const competingBeta = await userClient('beta');
+  const competingEdit = await competingBeta.rpc('edit_property_comment', {
+    p_property_id: second.id,
+    p_comment_id: seeded.data.id,
+    p_revision: seeded.data.revision,
+    p_body: 'Phiên beta khác đã sửa',
+    p_key: randomUUID(),
+  });
+  assert.equal(competingEdit.error, null, 'The competing beta edit commits');
+  evaluate(
+    `() => {
+      const original = window.fetch.bind(window);
+      let release;
+      window.__editPatchPaused = false;
+      window.__releaseEditPatch = () => release?.();
+      window.fetch = async (...args) => {
+        const input = args[0];
+        const options = args[1] ?? {};
+        const url = typeof input === 'string' ? input : input.url;
+        const method = String(options.method ?? input?.method ?? 'GET').toUpperCase();
+        const response = await original(...args);
+        if (method === 'PATCH' && url.includes('/comments/')) {
+          window.__editPatchPaused = true;
+          await new Promise(resolve => { release = resolve; });
+          window.fetch = original;
+        }
+        return response;
+      };
+      return true;
+    }`,
+    secondary,
+  );
+  click('Lưu thay đổi', secondary);
+  await waitUntil(`() => window.__editPatchPaused === true`, secondary);
+  setBetaActive(false);
+  evaluate(`() => { window.__releaseEditPatch(); return true; }`, secondary);
+  await waitUntil(
+    `() => location.pathname === '/access-denied'`,
+    secondary,
+    30,
+  );
+  const denied = screen(secondary);
+  assert.equal(denied.hasDiscussionText, false);
+  observed('stale reconciliation denial clears the protected discussion', {
+    path: denied.path,
+    cachedText: denied.hasDiscussionText,
   });
   setBetaActive(true);
 }
@@ -1793,7 +1862,7 @@ await settle(secondary);
     (comment) => comment.author === names.alpha && !comment.removed,
   );
   assert.equal(
-    before.editControls,
+    before.commentEditControls,
     liveAuthorComments.length,
     'The author sees one edit control per live own comment and no other entry offers one',
   );
@@ -1857,7 +1926,10 @@ await settle(secondary);
   );
   await settle(primary);
   const english = screen(primary);
-  assert.ok(english.editControls >= 1, 'The edit control is localized in EN');
+  assert.ok(
+    english.commentEditControls >= 1,
+    'The edit control is localized in EN',
+  );
   assert.equal(
     english.editedMarkers,
     1,
@@ -1926,12 +1998,29 @@ await settle(secondary);
     p_property_id: discussion.id,
     p_comment_id: rows[0].id,
     p_revision: rows[0].revision,
-    p_body: 'Phiên khác đã sửa trước',
+    p_body: 'Bản nháp chưa gửi',
+    p_key: randomUUID(),
   });
   assert.equal(
     competingEdit.error,
     null,
     'A competing author session commits first',
+  );
+  click('Làm mới', primary);
+  await waitUntil(
+    `() => document.querySelector('section.discussion .comment-current .comment-body')?.textContent === 'Bản nháp chưa gửi'`,
+    primary,
+  );
+  const refreshedEditor = screen(primary);
+  assert.equal(
+    refreshedEditor.editDraft,
+    'Bản nháp chưa gửi',
+    'Refresh keeps the unsent edit draft',
+  );
+  assert.equal(
+    refreshedEditor.editCurrent,
+    'Bản nháp chưa gửi',
+    'Refresh presents the current committed text beside the draft',
   );
   click('Lưu thay đổi', primary);
   await waitUntil(
@@ -1944,18 +2033,31 @@ await settle(secondary);
     'Bản nháp chưa gửi',
     'The unsent edit draft is kept',
   );
+  assert.equal(
+    stale.editCurrent,
+    'Bản nháp chưa gửi',
+    'A same-text stale save keeps the authoritative committed text visible',
+  );
   assert.ok(
     !stale.statuses.some((status) => /Đã cập nhật bình luận/.test(status)),
     'A stale save claims no success',
   );
+  click('Làm mới', primary);
+  await waitUntil(
+    `() => /đã thay đổi|đã bị gỡ/.test(document.querySelector('section.discussion .comment-edit [role=alert]')?.textContent ?? '') && document.querySelector('section.discussion .comment-current .comment-body')?.textContent === 'Bản nháp chưa gửi'`,
+    primary,
+  );
+  const staleRefresh = screen(primary);
+  assert.equal(staleRefresh.editDraft, 'Bản nháp chưa gửi');
+  assert.equal(staleRefresh.editCurrent, 'Bản nháp chưa gửi');
   click('Huỷ', primary);
   await waitUntil(
     `() => !document.querySelector('section.discussion .comment-edit textarea')`,
     primary,
   );
   observed(
-    'competing author session makes the open editor stale and keeps its draft',
-    { conflict: true, draftKept: true },
+    'same-text competing edit stays stale after refresh with draft and current text visible',
+    { conflict: true, draftKept: true, currentVisible: true },
   );
 }
 {
@@ -1966,7 +2068,7 @@ await settle(secondary);
     (comment) => comment.author === names.alpha && !comment.removed,
   );
   assert.equal(
-    page.editControls,
+    page.commentEditControls,
     live.length,
     'Only live own comments offer an edit control',
   );
@@ -1993,6 +2095,7 @@ await settle(secondary);
     p_comment_id: seededId,
     p_revision: seededRevision,
     p_body: 'Sửa trên hồ sơ lưu trữ',
+    p_key: randomUUID(),
   });
   assert.equal(
     archivedEdit.error?.code,
@@ -2004,6 +2107,7 @@ await settle(secondary);
     p_comment_id: seededId,
     p_revision: seededRevision,
     p_body: 'Người khác sửa trên hồ sơ lưu trữ',
+    p_key: randomUUID(),
   });
   assert.equal(
     ordinaryEdit.error?.code,
@@ -2049,6 +2153,7 @@ await settle(secondary);
       p_comment_id: id,
       p_revision: revision,
       p_body: `${name} rewrite attempt`,
+      p_key: randomUUID(),
     });
     assert.equal(
       denied.error?.code,
@@ -2061,6 +2166,7 @@ await settle(secondary);
     p_comment_id: id,
     p_revision: '54000000-0000-4000-8000-0000000000ff',
     p_body: 'Sửa sai phiên bản',
+    p_key: randomUUID(),
   });
   assert.equal(stale.error?.code, 'PT409', 'A stale edit is refused');
   const noop = await alpha.rpc('edit_property_comment', {
@@ -2068,6 +2174,7 @@ await settle(secondary);
     p_comment_id: id,
     p_revision: revision,
     p_body: 'Nội dung để sửa',
+    p_key: randomUUID(),
   });
   assert.equal(
     noop.error?.code,
@@ -2080,14 +2187,17 @@ await settle(secondary);
       p_comment_id: id,
       p_revision: revision,
       p_body: bad,
+      p_key: randomUUID(),
     });
     assert.equal(invalid.error?.code, '23514', 'Invalid edit text is rejected');
   }
+  const editKey = randomUUID();
   const updated = await alpha.rpc('edit_property_comment', {
     p_property_id: second.id,
     p_comment_id: id,
     p_revision: revision,
     p_body: '  Nội dung đã sửa\nGiữ dấu — và dòng.  ',
+    p_key: editKey,
   });
   assert.equal(updated.error, null, 'The author edit commits');
   assert.equal(updated.data.id, id, 'Comment identity is preserved');
@@ -2111,6 +2221,36 @@ await settle(secondary);
     Object.hasOwn(updated.data, 'previous_body'),
     false,
     'No preceding version reaches the ordinary projection',
+  );
+  const recovered = await alpha.rpc('edit_property_comment', {
+    p_property_id: second.id,
+    p_comment_id: id,
+    p_revision: revision,
+    p_body: 'Nội dung đã sửa\nGiữ dấu — và dòng.',
+    p_key: editKey,
+  });
+  assert.equal(recovered.error, null, 'An exact edit-key retry recovers');
+  assert.equal(
+    recovered.data.revision,
+    updated.data.revision,
+    'An exact edit-key retry returns the committed revision',
+  );
+  assert.equal(
+    await editVersionCount(id),
+    1,
+    'An exact edit-key retry adds no retained version',
+  );
+  const sameTextOtherKey = await alpha.rpc('edit_property_comment', {
+    p_property_id: second.id,
+    p_comment_id: id,
+    p_revision: revision,
+    p_body: 'Nội dung đã sửa\nGiữ dấu — và dòng.',
+    p_key: randomUUID(),
+  });
+  assert.equal(
+    sameTextOtherKey.error?.code,
+    'PT409',
+    'The same text under another edit key stays stale',
   );
   const inactive = await userClient('inactive');
   for (const [name, client] of [
@@ -2580,12 +2720,14 @@ async function runRaceRound(round) {
       p_comment_id: posted.data.id,
       p_revision: posted.data.revision,
       p_body: 'Phiên sửa thứ nhất',
+      p_key: randomUUID(),
     }),
     secondSession.rpc('edit_property_comment', {
       p_property_id: race.id,
       p_comment_id: posted.data.id,
       p_revision: posted.data.revision,
       p_body: 'Phiên sửa thứ hai',
+      p_key: randomUUID(),
     }),
   ]);
   const committed = [firstAttempt, secondAttempt].filter(
@@ -2643,6 +2785,7 @@ async function runRaceRound(round) {
           p_comment_id: posted.data.id,
           p_revision: posted.data.revision,
           p_body: `Đã sửa trước lưu trữ ${round}`,
+          p_key: randomUUID(),
         }),
       ),
       Promise.resolve(archive(reviewer, race.id, revision, marker)),
@@ -2714,6 +2857,7 @@ async function runRaceRound(round) {
           p_comment_id: posted.data.id,
           p_revision: posted.data.revision,
           p_body: `Đã sửa khi đua ${round}`,
+          p_key: randomUUID(),
         }),
       ),
       Promise.resolve(
