@@ -99,7 +99,7 @@ All page bodies render inside the shell `main` region; `SessionHeader` is gone f
 
 ```
 .sgn-content
-  .page-head:  .page-intro (.example · h1 · .intro-copy)   |  .page-actions [ New property ]
+  .page-head:  .page-intro (.example · h1 · .intro-copy)   |  .page-actions [ Company activity ] (manager/admin)
   .toolbar > .search > .input + .search-btn, .search-hint
   .chips > .chip (applied conditions) · .result-line in .row-between
   .property-list[data-view="cards"] > .property-card × N

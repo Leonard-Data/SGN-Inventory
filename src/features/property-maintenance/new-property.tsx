@@ -2,8 +2,8 @@
 import { messages, type Locale } from '@/i18n/messages';
 import { CreateProperty } from './create';
 
-// Create property as its own destination (/properties/new). The form itself is the
-// maintenance disclosure it always was; only its placement changed.
+// Create property as its own destination (/properties/new). The form renders as a
+// plain panel there: the page holds nothing else to collapse it among.
 export function NewProperty({ locale }: { locale: Locale }) {
   const text = messages[locale];
   function denied(status: number) {
