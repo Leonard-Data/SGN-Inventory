@@ -97,7 +97,8 @@ test('a price-only change names that price; a mixed change does not', () => {
   assert.equal(priceFieldChanged(['sale_price_vnd']), 'sale_price_vnd');
   assert.equal(
     priceFieldChanged(['status', 'monthly_rent_vnd']),
-    'monthly_rent_vnd',
+    null,
+    'a change that also moved status is named by its target, not by the price',
   );
   assert.equal(priceFieldChanged(['sale_price_vnd', 'monthly_rent_vnd']), null);
   assert.equal(priceFieldChanged(['status']), null);

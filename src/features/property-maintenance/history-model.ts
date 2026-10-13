@@ -46,9 +46,10 @@ export function priceChanges(event: HistoryEvent): PriceChange[] {
     ),
   }));
 }
-// A price-only change is named by the price it moved; a change that moved both, or neither,
-// is named by its target so the timeline never claims one price moved when both did.
+// A price-only change is named by the price it moved; a change that also moved anything else,
+// or that moved no price, is named by its target so the timeline never claims one price moved
+// when the same event moved another field too.
 export function priceFieldChanged(changedFields: string[]): PriceField | null {
   const moved = PRICE_FIELDS.filter((field) => changedFields.includes(field));
-  return moved.length === 1 ? moved[0]! : null;
+  return changedFields.length === 1 && moved.length === 1 ? moved[0]! : null;
 }
