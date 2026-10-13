@@ -39,7 +39,7 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - name: Install pinned npm
-        run: npm install --global npm@11.14.1
+        run: npm install --global npm@11.13.0
       - run: npm ci
       - name: Verify database target before cloud contact
         run: node scripts/release-guard.mjs target

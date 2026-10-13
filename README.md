@@ -9,7 +9,7 @@ The first release is a shared property inventory: search addresses and character
 
 Start with [CONTEXT.md](CONTEXT.md), then [docs/architecture.md](docs/architecture.md), [docs/schema.md](docs/schema.md) and [docs/migration-plan.md](docs/migration-plan.md). [docs/database-contract.md](docs/database-contract.md) is the application/agent API contract. [AGENTS.md](AGENTS.md) and [CLAUDE.md](CLAUDE.md) guide coding agents.
 
-For engineering setup, start with [docs/setup.md](docs/setup.md) and [docs/development.md](docs/development.md): pinned stack, coding conventions, source layout, Windows/POSIX setup, hooks, CI and isolated `dev`/`prod` releases.
+For engineering setup, start with [docs/setup.md](docs/setup.md) and [docs/development.md](docs/development.md): pinned stack, coding conventions, source layout, Windows/POSIX setup, hooks, CI, dev-only pull request previews and production from the default branch. Delivery stays inactive until the external protection/configuration checklist is complete and `CD_ENABLED=true` is set.
 
 ## Included work
 
@@ -28,14 +28,14 @@ For engineering setup, start with [docs/setup.md](docs/setup.md) and [docs/devel
 | `docs/delivery-plan.md`                                 | Next.js structure, implementation order and acceptance gates                                                                                                                                                                                                                   |
 | `docs/validation-results.json`                          | Actual test results with explicit limitations                                                                                                                                                                                                                                  |
 | `src/app/`, `src/features/`, `src/i18n/`, `src/lib/`    | Employee access, inventory, maintenance/correction, private-file, personal-activity, company-activity, property-discussion and reservation routes, user-scoped data access, VI/EN UI and configuration health                                                                  |
-| `.github/workflows/`                                    | Read-only CI; manually dispatched release pipeline (reviewed migrations, then app release) and database-only dry-run/apply                                                                                                                                                     |
+| `.github/workflows/`                                    | Read-only CI; gated PR previews and main production delivery; explicit database dry-run/apply and manual stage releases                                                                                                                                                        |
 | `.husky/pre-commit`                                     | Staged formatting, lint, types and JavaScript/schema tests                                                                                                                                                                                                                     |
 | `.env.example`, `.env.dev.example`, `.env.prod.example` | Credential-free local/dev/prod configuration examples                                                                                                                                                                                                                          |
 | `scripts/employee-access-acceptance.mjs`                | Reusable real-browser/application/Supabase development acceptance; no mocked authorization                                                                                                                                                                                     |
 
 ## Required initial setup and local verification
 
-Use Node.js `24.14.0` and npm `11.14.1`. Agent-assisted project setup requires the official GitHub CLI (`gh`), Chrome and all three agent CLIs. Install missing agent CLIs globally and verify them before project work; they are not application dependencies:
+Use Node.js `24.14.0` and npm `11.13.0`. Agent-assisted project setup requires the official GitHub CLI (`gh`), Chrome and all three agent CLIs. Install missing agent CLIs globally and verify them before project work; they are not application dependencies:
 
 ```bash
 npm install --global gh-axi@0.1.36 chrome-devtools-axi@0.1.39 lavish-axi@0.1.85
@@ -50,7 +50,7 @@ npm run dev
 
 Copy `.env.example` to ignored `.env.local`, supply the intended dev publishable credentials, expected project reference, private file-validation key and exact local origin, then run `npm run check:env`. Open `/login` (VI by default) or `/login?lang=en`; successful login loads the saved employee preference. Spec #33's isolated worktree used `http://localhost:3038`, leaving the user's existing server untouched. See [executed acceptance](docs/testing.md) for scoped browser/Supabase evidence and private fixture prerequisites.
 
-Authenticate the official GitHub CLI for GitHub work. Use `gh-axi` for GitHub, `chrome-devtools-axi` for browser work and `lavish-axi` for visual decisions/reports; consult current command help before use. See [required agent setup](docs/setup.md#required-initial-setup-agent-command-line-tools) for prerequisites, `PATH` guidance and authorization boundaries. Optional agent hooks/plugins are not required.
+Authenticate the official GitHub CLI for GitHub work. Use `gh-axi` for GitHub, `chrome-devtools-axi` for browser work and `lavish-axi` for visual decisions/reports; consult current command help before use. See [required agent setup](docs/setup.md#1-tooling-first) for prerequisites, `PATH` guidance and authorization boundaries. Optional agent hooks/plugins are not required.
 
 For the full local Supabase stack, install Docker, inspect `npx supabase start --help` and `npx supabase db reset --help`, then start/reset a **local** project. These migrations are for a fresh database; do not apply them unreviewed to an existing CRM.
 
@@ -65,4 +65,4 @@ Add `--stage` only to create private local staging records. Never commit the wor
 
 ## GitHub approval
 
-GitHub publication was approved on 10 October 2026. The remote now contains `main`; the connected account has repository write access. This engineering setup does not push repository changes or trigger deployments. Supabase provisioning, customer-data import and cloud deployment remain separate authorization scopes.
+GitHub publication was approved on 10 October 2026. The remote now contains `main`; the connected account has repository write access. After explicit CD activation, same-repository PRs trigger dev-only previews and reviewed merges to the default branch trigger gated production delivery. Supabase provisioning, customer-data import and database application remain separate authorization scopes.

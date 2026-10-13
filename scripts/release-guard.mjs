@@ -7,11 +7,35 @@ import { readEnvironment } from '../src/lib/environment.ts';
 export function releaseTarget(values) {
   const stage = values.SGN_ENV;
   assert.ok(stage === 'dev' || stage === 'prod', 'Select dev or prod');
-  assert.equal(
-    values.GITHUB_REF,
-    stage === 'prod' ? 'refs/heads/main' : 'refs/heads/develop',
-    'Release must run on the trusted stage branch',
-  );
+  if (values.VERCEL_TARGET === 'preview') {
+    assert.equal(stage, 'dev', 'Previews must use dev resources');
+    assert.equal(
+      values.GITHUB_EVENT_NAME,
+      'pull_request',
+      'Preview requires a pull request',
+    );
+    assert.match(
+      values.GITHUB_REF ?? '',
+      /^refs\/pull\/[1-9]\d*\/merge$/,
+      'Preview requires a pull request merge ref',
+    );
+    assert.ok(values.GITHUB_REPOSITORY, 'Configure repository identity');
+    assert.equal(
+      values.GITHUB_HEAD_REPOSITORY,
+      values.GITHUB_REPOSITORY,
+      'Fork previews cannot receive deployment credentials',
+    );
+  } else {
+    assert.ok(
+      !values.VERCEL_TARGET || values.VERCEL_TARGET === 'production',
+      'Unknown Vercel target',
+    );
+    assert.equal(
+      values.GITHUB_REF,
+      stage === 'prod' ? 'refs/heads/main' : 'refs/heads/develop',
+      'Release must run on the trusted stage branch',
+    );
+  }
   const dev = values.DEV_SUPABASE_PROJECT_REF;
   const prod = values.PROD_SUPABASE_PROJECT_REF;
   assert.match(dev ?? '', /^[a-z]{20}$/, 'Configure dev Supabase project ref');
@@ -113,7 +137,14 @@ if (
       verifyPulledConfiguration(
         process.env,
         JSON.parse(await readFile('.vercel/project.json', 'utf8')),
-        parseEnv(await readFile('.vercel/.env.production.local', 'utf8')),
+        parseEnv(
+          await readFile(
+            process.env.VERCEL_TARGET === 'preview'
+              ? '.vercel/.env.preview.local'
+              : '.vercel/.env.production.local',
+            'utf8',
+          ),
+        ),
       );
     } else if (command === 'smoke') {
       const { stage } = releaseConfiguration(process.env);

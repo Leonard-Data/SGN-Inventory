@@ -1,5 +1,7 @@
 name: Release application and database
 on:
+  push:
+    branches: [main] # Repository default branch; update guards if it is renamed.
   workflow_dispatch:
     inputs:
       stage:
@@ -21,11 +23,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-${{ inputs.stage }}
+  group: release-${{ inputs.stage || 'prod' }}
   cancel-in-progress: false
 
 jobs:
   quality:
+    # Activate only after projects, credentials and protection gates are configured.
+    if: vars.CD_ENABLED == 'true'
     uses: ./.github/workflows/ci.yml
   # Database changes land before the application that depends on them. The
   # guard-and-push sequence is defined once in migration.yml; a failed migration
@@ -35,18 +39,21 @@ jobs:
     needs: quality
     uses: ./.github/workflows/migration.yml
     with:
-      stage: ${{ inputs.stage }}
-      apply: ${{ inputs.migration == 'apply' }}
+      stage: ${{ inputs.stage || 'prod' }}
+      # A merge authorizes application delivery, not new database writes.
+      apply: ${{ github.event_name == 'workflow_dispatch' && inputs.migration == 'apply' }}
     secrets: inherit
   deploy:
     needs: migrate
-    if: (inputs.stage == 'dev' && github.ref == 'refs/heads/develop') || (inputs.stage == 'prod' && github.ref == 'refs/heads/main')
-    environment: ${{ inputs.stage }}
+    if: (inputs.stage == 'dev' && github.ref == 'refs/heads/develop') || ((inputs.stage == 'prod' || github.event_name == 'push') && github.ref == 'refs/heads/main')
+    environment:
+      name: ${{ inputs.stage || 'prod' }}
+      url: ${{ steps.publish.outputs.url }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       HUSKY: '0'
-      SGN_ENV: ${{ inputs.stage }}
+      SGN_ENV: ${{ inputs.stage || 'prod' }}
       DEV_SUPABASE_PROJECT_REF: ${{ vars.DEV_SUPABASE_PROJECT_REF }}
       PROD_SUPABASE_PROJECT_REF: ${{ vars.PROD_SUPABASE_PROJECT_REF }}
       DEV_VERCEL_PROJECT_ID: ${{ vars.DEV_VERCEL_PROJECT_ID }}
@@ -66,20 +73,23 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - name: Install pinned npm
-        run: npm install --global npm@11.14.1
+        run: npm install --global npm@11.13.0
       - run: npm ci
       - name: Verify isolated release configuration before cloud contact
         run: node scripts/release-guard.mjs configuration
       # Both targets use their isolated project's Production environment.
-      - run: npx --no-install vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+      - run: npx --no-install vercel pull --yes --environment=production
       - name: Verify downloaded project and variables before building
         run: node scripts/release-guard.mjs pulled
-      - run: npx --no-install vercel build --prod --token="$VERCEL_TOKEN"
+      - run: npx --no-install vercel build --prod
       - name: Deploy exact stage build
+        id: publish
         shell: bash
         run: |
-          url=$(npx --no-install vercel deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN")
+          url=$(npx --no-install vercel deploy --prebuilt --prod --yes)
           printf 'DEPLOYMENT_URL=%s\n' "$url" >> "$GITHUB_ENV"
+          printf 'url=%s\n' "$url" >> "$GITHUB_OUTPUT"
+          printf '### Application deployment\n\n%s\n' "$url" >> "$GITHUB_STEP_SUMMARY"
       - name: Verify deployed stage health
         env:
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}

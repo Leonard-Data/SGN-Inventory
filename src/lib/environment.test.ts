@@ -54,6 +54,48 @@ test('missing stage, placeholders, and insecure production origins are rejected'
   );
 });
 
+test('Vercel preview redirects use the deployment origin without changing stable stages', () => {
+  const preview = {
+    ...valid,
+    VERCEL_ENV: 'preview',
+    VERCEL_URL: 'inventory-abc-team.vercel.app',
+  };
+  assert.equal(
+    readEnvironment(preview).appUrl,
+    'https://inventory-abc-team.vercel.app',
+  );
+  assert.equal(
+    readEnvironment({ ...preview, VERCEL_URL: '' }).appUrl,
+    valid.NEXT_PUBLIC_APP_URL,
+  );
+  assert.equal(
+    readEnvironment({ ...preview, VERCEL_ENV: 'production' }).appUrl,
+    valid.NEXT_PUBLIC_APP_URL,
+  );
+  assert.throws(
+    () =>
+      readEnvironment({
+        ...preview,
+        SGN_ENV: 'prod',
+        NEXT_PUBLIC_APP_URL: 'https://prod.example.test',
+      }),
+    /previews must use dev/,
+  );
+  for (const hostname of [
+    'https://inventory.vercel.app',
+    'inventory.vercel.app/path',
+    'inventory.vercel.app:443',
+    'inventory.vercel.app.evil.test',
+    'user@inventory.vercel.app',
+    'inventory.vercel.app?redirect=evil',
+  ]) {
+    assert.throws(
+      () => readEnvironment({ ...preview, VERCEL_URL: hostname }),
+      /deployment hostname/,
+    );
+  }
+});
+
 test('release configuration cannot use another Supabase project', () => {
   assert.throws(
     () => readEnvironment(valid, 'zyxwvutsrqponmlkjihg'),
