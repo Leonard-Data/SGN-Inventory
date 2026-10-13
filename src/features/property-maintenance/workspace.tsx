@@ -177,7 +177,7 @@ export function Maintenance({
           </>
         ) : null}
         <h3>{text.contacts}</h3>
-        {staff && canEdit ? <p>{text.wrongPerson}</p> : null}
+        {staff ? <p>{text.wrongPerson}</p> : null}
         {staff && canEdit ? (
           <button
             className="btn btn-sm"
@@ -232,7 +232,7 @@ export function Maintenance({
             </span>
           </div>
         ))}
-        {staff && canEdit ? (
+        {staff ? (
           <details className="maintenance">
             <summary>{text.newContact}</summary>
             <MutationForm
