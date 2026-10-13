@@ -63,11 +63,8 @@ export function accessState(
   return row.is_active ? 'active' : 'inactive';
 }
 
-export function directoryPage(
-  rows: readonly DirectoryRow[],
-  size = DIRECTORY_PAGE_SIZE,
-): DirectoryPage {
-  const page = rows.slice(0, size);
+export function directoryPage(rows: readonly DirectoryRow[]): DirectoryPage {
+  const page = rows.slice(0, DIRECTORY_PAGE_SIZE);
   const last = page[page.length - 1];
   return {
     employees: page.map((row) => ({
@@ -77,7 +74,7 @@ export function directoryPage(
       role: row.role,
       access: accessState(row),
     })),
-    nextCursor: rows.length > size && last ? last.id : null,
+    nextCursor: rows.length > DIRECTORY_PAGE_SIZE && last ? last.id : null,
   };
 }
 

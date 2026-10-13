@@ -1,15 +1,18 @@
 // Issue #65 hosted acceptance: the admin employee list.
 //
-// Real development Supabase Auth/Data API/RLS plus the local real Next.js application. It
-// creates only the synthetic identities and rows the list needs under an exact-ID private
-// manifest and removes exactly what it created through the supported owner paths. Mock,
-// shim and embedded-PGlite results are not acceptance.
+// Real development Supabase Auth/Data API/RLS plus the local real Next.js application and the
+// rendered browser journey driven over CDP in a task-private headless Chromium. It creates
+// only the synthetic identities and rows the list needs under an exact-ID private manifest and
+// removes exactly what it created through the supported owner paths. Mock, shim and
+// embedded-PGlite results are not acceptance.
 //
 // Usage:
 //   SGN_ACCEPTANCE_DEV_ENV=<private dev env> \
 //   SGN_ACCEPTANCE_OWNER=<private owner config> \
 //   SGN_ACCEPTANCE_WORKDIR=<private work directory> \
 //   [SGN_ACCEPTANCE_PORT=<app port>] \
+//   [SGN_ACCEPTANCE_BROWSER_CLI=<chrome-devtools-axi>] \
+//   [SGN_ACCEPTANCE_CHROME=<chromium binary>] \
 //   node --env-file-if-exists=.env.local scripts/employee-list-acceptance.mjs \
 //     [--report <sanitized json path>]
 //
@@ -21,7 +24,7 @@ import fs from 'node:fs/promises';
 import { openSync } from 'node:fs';
 import { randomBytes, randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
 import { readEnvironment } from '../src/lib/environment.ts';
 
@@ -29,6 +32,15 @@ const devEnvPath = process.env.SGN_ACCEPTANCE_DEV_ENV;
 const ownerPath = process.env.SGN_ACCEPTANCE_OWNER;
 const workdir = process.env.SGN_ACCEPTANCE_WORKDIR;
 const appPort = Number(process.env.SGN_ACCEPTANCE_PORT ?? 3103);
+const browserCli =
+  process.env.SGN_ACCEPTANCE_BROWSER_CLI ??
+  path.join(process.env.HOME ?? '', '.local/bin/chrome-devtools-axi');
+const chromeBin =
+  process.env.SGN_ACCEPTANCE_CHROME ??
+  path.join(
+    process.env.HOME ?? '',
+    '.cache/ms-playwright/chromium-1248/chrome-linux64/chrome',
+  );
 const keep = process.env.SGN_ACCEPTANCE_KEEP === '1';
 const root = path.resolve(import.meta.dirname, '..');
 const reportIndex = process.argv.indexOf('--report');
@@ -230,7 +242,9 @@ async function createFixtures() {
     assert.equal(inserted.error, null, `create paging employee ${index}`);
     manifest.pagingEmployeeIds.push(employeeId);
   }
-  await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+  await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', {
+    mode: 0o600,
+  });
   return manifest;
 }
 async function setRole(employeeId, role) {
@@ -278,19 +292,24 @@ async function stopApp() {
   if (app.exitCode === null) app.kill('SIGKILL');
   app = null;
 }
-async function appLogin(email, password) {
+async function appLoginResponse(email, password) {
   const response = await fetch(`${appUrl}/api/auth/login`, {
     method: 'POST',
     redirect: 'manual',
     headers: { 'content-type': 'application/json', origin: appUrl },
     body: JSON.stringify({ email, password, locale: 'vi' }),
   });
-  assert.equal(response.status, 200, `Application login ${response.status}`);
   const cookies = (response.headers.getSetCookie?.() ?? [])
     .map((value) => value.split(';')[0])
     .join('; ');
-  assert.ok(cookies, 'No application session cookie was issued');
-  return cookies;
+  const body = await response.json().catch(() => null);
+  return { status: response.status, cookies, body };
+}
+async function appLogin(email, password) {
+  const result = await appLoginResponse(email, password);
+  assert.equal(result.status, 200, `Application login ${result.status}`);
+  assert.ok(result.cookies, 'No application session cookie was issued');
+  return result.cookies;
 }
 async function appGet(cookies, route) {
   const response = await fetch(appUrl + route, {
@@ -304,9 +323,12 @@ async function appGet(cookies, route) {
 async function readAllPages(cookies) {
   const entries = [];
   const seen = new Set();
+  // cursors[i] is the `after` cursor that returned page i; cursors[0] is null.
+  const cursors = [];
   let after = null;
   let pages = 0;
   for (;;) {
+    cursors.push(after);
     const { status, body } = await appGet(
       cookies,
       '/api/employees' + (after ? `?after=${after}` : ''),
@@ -323,14 +345,276 @@ async function readAllPages(cookies) {
     after = body.nextCursor;
     assert.ok(pages < 40, 'Paging terminated');
   }
-  return { entries, pages };
+  return { entries, pages, cursors };
 }
+
+// ------------------------------------------------------------------ browsers
+const browsers = [];
+const profileDirs = [];
+const runStamp = new Date().toISOString().replace(/[-:.TZ]/g, '');
+async function startBrowser(cdpPort) {
+  const profile = path.join(workdir, `chrome-${cdpPort}-${runStamp}`);
+  profileDirs.push(profile);
+  const child = spawn(
+    chromeBin,
+    [
+      '--headless=new',
+      '--no-sandbox',
+      '--disable-gpu',
+      '--disable-dev-shm-usage',
+      `--remote-debugging-port=${cdpPort}`,
+      `--user-data-dir=${profile}`,
+      'about:blank',
+    ],
+    { env: { ...process.env, TZ: 'Asia/Ho_Chi_Minh' }, stdio: 'ignore' },
+  );
+  browsers.push(child);
+  for (let attempt = 0; attempt < 60; attempt++) {
+    try {
+      const response = await fetch(`http://127.0.0.1:${cdpPort}/json/version`);
+      if (response.ok) return child;
+    } catch {
+      // not listening yet
+    }
+    await sleep(500);
+  }
+  assert.fail('Headless Chromium did not become ready');
+}
+async function stopBrowsers() {
+  for (const child of browsers) child.kill('SIGTERM');
+  await sleep(1000);
+  for (const child of browsers)
+    if (child.exitCode === null) child.kill('SIGKILL');
+  browsers.length = 0;
+  for (const profile of profileDirs)
+    await fs.rm(profile, { recursive: true, force: true });
+  profileDirs.length = 0;
+}
+function browser(session, cdpPort, args) {
+  const result = spawnSync(process.execPath, [browserCli, ...args], {
+    encoding: 'utf8',
+    timeout: 120000,
+    env: {
+      ...process.env,
+      CHROME_DEVTOOLS_AXI_SESSION: session,
+      CHROME_DEVTOOLS_AXI_AUTO_CONNECT: '0',
+      CHROME_DEVTOOLS_AXI_BROWSER_URL: `http://127.0.0.1:${cdpPort}`,
+      CHROME_DEVTOOLS_AXI_MCP_SERVER_URL: '',
+      CHROME_DEVTOOLS_AXI_BRIDGE_TIMEOUT_MS: '180000',
+    },
+  });
+  const diagnostic = (result.stderr ?? '')
+    .split('\n')
+    .filter((line) => /^(error|code):/.test(line.trim()))
+    .join(' | ')
+    .slice(0, 200);
+  assert.equal(
+    result.status,
+    0,
+    `Browser ${args[0]} failed${diagnostic ? ': ' + diagnostic : ''}`,
+  );
+  return result.stdout;
+}
+function evaluate(session, cdpPort, expression) {
+  const output = browser(session, cdpPort, ['eval', expression]);
+  const match = output.match(/^result: (.+)$/m);
+  assert.ok(match, 'Browser evaluation returned no result');
+  let value = JSON.parse(match[1]);
+  while (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      break;
+    }
+  }
+  return value;
+}
+async function waitFor(session, cdpPort, expression, attempts = 60) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      if (evaluate(session, cdpPort, expression)) return;
+    } catch {
+      // mid-navigation
+    }
+    await sleep(500);
+  }
+  assert.fail('Timed out waiting for browser state');
+}
+const setInput = (selector, value) => `(() => {
+  const el = document.querySelector(${JSON.stringify(selector)});
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+  setter.call(el, ${JSON.stringify(value)});
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  return true;
+})()`;
+async function browserSignIn(
+  session,
+  cdpPort,
+  email,
+  password,
+  landing,
+  locale,
+) {
+  browser(session, cdpPort, ['open', `${appUrl}/login?lang=${locale}`]);
+  evaluate(session, cdpPort, setInput('#email', email));
+  evaluate(session, cdpPort, setInput('#password', password));
+  evaluate(
+    session,
+    cdpPort,
+    `(() => { document.querySelector('form').requestSubmit(); return true; })()`,
+  );
+  await waitFor(
+    session,
+    cdpPort,
+    `() => location.pathname === ${JSON.stringify(landing)}`,
+  );
+}
+// The rendered employee list: rows, column scope, per-cell mobile labels, pager and states.
+const directoryScreenExpression = `() => {
+  const table = document.querySelector('main table.data-table');
+  const thead = table ? table.querySelector('thead') : null;
+  const headings = thead ? [...thead.querySelectorAll('th')] : [];
+  const rows = table
+    ? [...table.querySelectorAll('tbody tr')].map((tr) => [...tr.children].map((cell) => cell.textContent.trim()))
+    : [];
+  const labelled = table ? [...table.querySelectorAll('tbody td[data-label]')] : [];
+  const pager = [...document.querySelectorAll('.pagination .pager-btn')];
+  return {
+    path: location.pathname + location.search,
+    lang: document.documentElement.lang,
+    heading: document.querySelector('h1')?.textContent?.trim() ?? null,
+    panelHeading: document.querySelector('#employees')?.textContent?.trim() ?? null,
+    railLink: Boolean(document.querySelector('a[href="/people/employees"]')),
+    hasTable: Boolean(table),
+    empty: document.querySelector('.state-panel h3')?.textContent?.trim() ?? null,
+    alerts: [...document.querySelectorAll('[role=alert]')].map((node) => node.textContent.trim()),
+    headers: headings.map((th) => [th.textContent.trim(), th.getAttribute('scope')]),
+    rows,
+    rowHeaderCount: table ? table.querySelectorAll('tbody th[scope=row]').length : 0,
+    labelledCells:
+      labelled.length > 0 &&
+      labelled.every(
+        (cell) =>
+          cell.getAttribute('data-label') ===
+          (headings[cell.cellIndex]?.textContent.trim() ?? ''),
+      ),
+    captions: labelled
+      .slice(0, 3)
+      .map((cell) => (getComputedStyle(cell, '::before').content ?? '').replace(/^"|"$/g, '')),
+    pageInfo: document.querySelector('.page-info')?.textContent?.trim() ?? null,
+    pager: pager.map((link) => ({ text: link.textContent.trim(), href: link.getAttribute('href') })),
+    theadDisplay: thead ? getComputedStyle(thead).display : null,
+    overflowX: Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth),
+  };
+}`;
+function directoryScreen(session, cdpPort) {
+  const value = evaluate(session, cdpPort, directoryScreenExpression);
+  assert.equal(typeof value, 'object', 'Unexpected directory screen payload');
+  return value;
+}
+let pageRetries = 0;
+async function waitForDirectory(session, cdpPort, attempts = 120) {
+  let last = null;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      last = evaluate(
+        session,
+        cdpPort,
+        `() => ({
+          table: Boolean(document.querySelector('main table.data-table')),
+          empty: document.querySelector('.state-panel h3')?.textContent?.trim() ?? null,
+          alert: document.querySelector('[role=alert]')?.textContent?.trim() ?? null,
+          denied: location.pathname === '/access-denied',
+        })`,
+      );
+      if (last.table || last.empty || last.denied) return last;
+      if (last.alert && attempt % 8 === 7 && pageRetries < 5) {
+        const clicked = evaluate(
+          session,
+          cdpPort,
+          `(() => { const button = document.querySelector('[role=alert] button'); if (!button) return false; button.click(); return true; })()`,
+        );
+        if (clicked) {
+          pageRetries++;
+          console.log('RETRY directory-page', pageRetries);
+        }
+      }
+    } catch {
+      // mid-navigation
+    }
+    await sleep(500);
+  }
+  assert.fail(`Employee page did not load: ${JSON.stringify(last)}`);
+}
+const observeStatus = `(() => {
+  window.__sgnStatusSeen = [];
+  const record = () => {
+    const text = document.querySelector('[role=status]')?.textContent?.trim();
+    if (text && !window.__sgnStatusSeen.includes(text)) window.__sgnStatusSeen.push(text);
+  };
+  new MutationObserver(record).observe(document.body, { childList: true, subtree: true, characterData: true });
+  record();
+  return true;
+})()`;
+// The localized text the shipped page must render, asserted as rendered output rather than as
+// source text. These are the owned strings of the application dictionaries.
+const directoryText = {
+  vi: {
+    heading: 'Danh sách nhân viên',
+    panel: 'Nhân viên',
+    headers: ['Họ tên', 'Email', 'Vai trò', 'Trạng thái truy cập'],
+    role: {
+      admin: 'Quản trị viên',
+      manager: 'Quản lý',
+      staff: 'Nhân viên',
+      sales: 'Kinh doanh',
+    },
+    access: {
+      active: 'Đang hoạt động',
+      inactive: 'Đã tắt truy cập',
+      unlinked: 'Chưa liên kết đăng nhập',
+    },
+    empty: 'Chưa có danh tính nhân viên nào được ghi nhận.',
+    failure: 'Không thể tải danh sách nhân viên.',
+    loading: 'Đang tải…',
+    pageInfo: (count) => `Trang này: ${count} nhân viên`,
+    next: 'Trang tiếp',
+    first: 'Trang đầu',
+    denied: 'Không có quyền truy cập',
+  },
+  en: {
+    heading: 'Employee list',
+    panel: 'Employees',
+    headers: ['Name', 'Email', 'Role', 'Access'],
+    role: {
+      admin: 'Administrator',
+      manager: 'Manager',
+      staff: 'Staff',
+      sales: 'Sales',
+    },
+    access: {
+      active: 'Active',
+      inactive: 'Access disabled',
+      unlinked: 'Not linked to sign-in',
+    },
+    empty: 'No employee identities are recorded.',
+    failure: 'The employee list could not be loaded.',
+    loading: 'Loading…',
+    pageInfo: (count) => `This page: ${count} employees`,
+    next: 'Next page',
+    first: 'First page',
+    denied: 'Access denied',
+  },
+};
 
 // ------------------------------------------------------------------ acceptance
 const report = { checked_at: new Date().toISOString(), observations: [] };
 let manifest = await readManifest();
+// Stale fixtures from an interrupted run are removed before the baseline is captured, so the
+// closing comparison cannot count rows this run is about to delete.
+await removeFixtures(manifest);
+manifest = null;
 const before = await baseline();
-if (manifest) await removeFixtures(manifest);
 manifest = await createFixtures();
 try {
   await startApp();
@@ -522,7 +806,424 @@ try {
       login: 'refused',
     });
   }
+
+  // The authenticated identity with no employee row is the fixture the list must never present
+  // as invited: it cannot sign in, and a session it still holds is refused the endpoint.
+  const unlinked = await appLoginResponse(
+    manifest.unlinked.email,
+    manifest.unlinked.password,
+  );
+  assert.equal(unlinked.status, 403, 'Unlinked sign-in refusal');
+  assert.equal(unlinked.body?.error, 'access-denied', 'Unlinked sign-in code');
+  if (unlinked.cookies) {
+    const unlinkedList = await appGet(unlinked.cookies, '/api/employees');
+    assert.equal(unlinkedList.status, 403, 'Unlinked endpoint denial');
+    assert.equal(
+      unlinkedList.body?.error,
+      'access-denied',
+      'Unlinked endpoint denial code',
+    );
+  }
+  observed(
+    'an authenticated identity with no employee row is refused, never listed as invited',
+    { signIn: 403, endpoint: 403 },
+  );
+
+  // Rendered journey on the shipped page: the VI/default and EN list, the distinct loading,
+  // empty, query-failure and access-denied states, mobile stacked rows and keyboard/<th scope>
+  // semantics, all as the live application renders them.
+  const pageSize = firstPage.body.employees.length;
+  const pageRows = (index) =>
+    walk.entries.slice(index * pageSize, (index + 1) * pageSize);
+  const pageOf = (employeeId) => {
+    const index = walk.entries.findIndex((entry) => entry.id === employeeId);
+    assert.ok(index >= 0, 'Fixture row is in the walk');
+    return { page: Math.floor(index / pageSize), row: index % pageSize };
+  };
+  const rendered = (entries, text) =>
+    entries.map((entry) => [
+      entry.displayName,
+      entry.email,
+      text.role[entry.role],
+      text.access[entry.access],
+    ]);
+  const openPage = async (index) => {
+    const cursor = walk.cursors[index];
+    browser('sgn65-vi', 9334, [
+      'open',
+      `${appUrl}/people/employees${cursor ? `?after=${cursor}` : ''}`,
+    ]);
+    await waitForDirectory('sgn65-vi', 9334);
+    return directoryScreen('sgn65-vi', 9334);
+  };
+
+  await startBrowser(9334);
+  await startBrowser(9335);
+  await browserSignIn(
+    'sgn65-vi',
+    9334,
+    manifest.identities.admin.email,
+    manifest.identities.admin.password,
+    '/properties',
+    'vi',
+  );
+  const adminRow = pageOf(manifest.identities.admin.employeeId);
+  const inactiveRow = pageOf(manifest.identities.inactive.employeeId);
+  const unlinkedRow = pageOf(manifest.pagingEmployeeIds[0]);
+  const pageIndexes = [
+    ...new Set([
+      0,
+      adminRow.page,
+      inactiveRow.page,
+      unlinkedRow.page,
+      walk.pages - 1,
+    ]),
+  ];
+  const screens = new Map();
+  for (const index of pageIndexes) {
+    const text = directoryText.vi;
+    const view = await openPage(index);
+    screens.set(index, view);
+    assert.equal(
+      view.path,
+      `/people/employees${walk.cursors[index] ? `?after=${walk.cursors[index]}` : ''}`,
+      `page ${index} location`,
+    );
+    assert.equal(view.lang, 'vi', `page ${index} locale`);
+    assert.equal(view.heading, text.heading, `page ${index} heading`);
+    assert.equal(view.panelHeading, text.panel, `page ${index} panel heading`);
+    assert.equal(
+      view.railLink,
+      true,
+      'the admin rail offers the employee list',
+    );
+    assert.deepEqual(
+      view.headers,
+      text.headers.map((heading) => [heading, 'col']),
+    );
+    assert.deepEqual(
+      view.rows,
+      rendered(pageRows(index), text),
+      `page ${index} rendered rows`,
+    );
+    assert.equal(
+      view.rowHeaderCount,
+      view.rows.length,
+      'every row is headed by its name cell',
+    );
+    assert.equal(
+      view.labelledCells,
+      true,
+      'every stacked cell carries its column label',
+    );
+    assert.equal(view.pageInfo, text.pageInfo(view.rows.length));
+    assert.deepEqual(view.alerts, []);
+    assert.equal(view.empty, null);
+    const next = view.pager.find((link) => link.text === text.next);
+    assert.equal(
+      Boolean(next),
+      index < walk.pages - 1,
+      `next link on page ${index}`,
+    );
+    if (next)
+      assert.equal(
+        next.href,
+        `/people/employees?after=${walk.cursors[index + 1]}`,
+      );
+    const first = view.pager.find((link) => link.text === text.first);
+    assert.equal(Boolean(first), index > 0, `first link on page ${index}`);
+    if (first) assert.equal(first.href, '/people/employees');
+  }
+  const row = (position) => screens.get(position.page).rows[position.row];
+  assert.equal(row(adminRow)[3], directoryText.vi.access.active, 'active row');
+  assert.equal(
+    row(inactiveRow)[3],
+    directoryText.vi.access.inactive,
+    'inactive row',
+  );
+  assert.equal(
+    row(unlinkedRow)[3],
+    directoryText.vi.access.unlinked,
+    'an employee with no linked sign-in identity is not presented as invited',
+  );
+  observed(
+    'a live admin reads every rendered page with the recorded fields and the three access states',
+    { pages: walk.pages, employees: walk.entries.length },
+  );
+
+  // Keyboard reachability of the pager on the last rendered page.
+  const keyboard = evaluate(
+    'sgn65-vi',
+    9334,
+    `(() => {
+      const link = document.querySelector('.pagination .pager-btn');
+      if (!link) return { present: false };
+      link.focus();
+      return {
+        present: true,
+        tag: link.tagName,
+        href: link.getAttribute('href'),
+        focused: document.activeElement === link,
+      };
+    })()`,
+  );
+  assert.equal(keyboard.present, true, 'the pager control is present');
+  assert.equal(
+    keyboard.focused,
+    true,
+    'the pager control is keyboard focusable',
+  );
+  assert.ok(
+    keyboard.href?.startsWith('/people/employees'),
+    'the pager control carries its destination',
+  );
+  observed('the pager stays keyboard reachable with its destination exposed');
+
+  // Mobile stacked rows: the header row is replaced by per-cell column labels at 375px.
+  const lastPageIndex = pageIndexes[pageIndexes.length - 1];
+  browser('sgn65-vi', 9334, ['resize', '375', '900']);
+  await sleep(500);
+  const mobile = directoryScreen('sgn65-vi', 9334);
+  assert.equal(
+    mobile.theadDisplay,
+    'none',
+    'the header row is replaced by per-cell labels at 375px',
+  );
+  assert.deepEqual(
+    mobile.captions,
+    directoryText.vi.headers.slice(1),
+    'each stacked cell shows its column label',
+  );
+  assert.deepEqual(
+    mobile.rows,
+    rendered(pageRows(lastPageIndex), directoryText.vi),
+  );
+  assert.equal(mobile.overflowX, 0, 'mobile viewport overflows horizontally');
+  browser('sgn65-vi', 9334, ['resize', '1440', '900']);
+  await sleep(500);
+  observed(
+    'the list stays readable at 375px with stacked labelled cells and no horizontal overflow',
+  );
+
+  // English: the same rows with localized role and access labels, no recorded value rewritten.
+  const viFirst = await openPage(0);
+  evaluate(
+    'sgn65-vi',
+    9334,
+    `(() => { document.querySelector('.lang-switch button[lang=en]').click(); return true; })()`,
+  );
+  await waitFor(
+    'sgn65-vi',
+    9334,
+    `() => document.documentElement.lang === 'en'`,
+  );
+  const en = directoryScreen('sgn65-vi', 9334);
+  assert.equal(en.heading, directoryText.en.heading);
+  assert.deepEqual(
+    en.headers,
+    directoryText.en.headers.map((heading) => [heading, 'col']),
+  );
+  assert.deepEqual(en.rows, rendered(pageRows(0), directoryText.en));
+  assert.deepEqual(
+    en.rows.map((cells) => cells.slice(0, 2)),
+    viFirst.rows.map((cells) => cells.slice(0, 2)),
+    'recorded name and email are unchanged by the language switch',
+  );
+  assert.deepEqual(en.alerts, []);
+  observed(
+    'switching to English re-renders the list with localized role and access labels and rewrites no recorded value',
+  );
+
+  const assertDirectoryStates = async (language) => {
+    const text = directoryText[language];
+    const label = language === 'vi' ? 'Vietnamese/default' : 'English';
+    // The cursor past the last recorded employee is the real empty page of the walked list.
+    browser('sgn65-vi', 9334, [
+      'open',
+      `${appUrl}/people/employees?after=${walk.entries.at(-1).id}`,
+    ]);
+    await waitForDirectory('sgn65-vi', 9334);
+    const empty = directoryScreen('sgn65-vi', 9334);
+    assert.equal(empty.hasTable, false, `empty page table in ${label}`);
+    assert.equal(empty.empty, text.empty, `empty state in ${label}`);
+    assert.deepEqual(empty.alerts, []);
+    assert.equal(
+      empty.pager.some((link) => link.text === text.first),
+      true,
+      `an empty page offers the first page in ${label}`,
+    );
+    observed(
+      `an empty page renders the localized empty state instead of rows in ${label}`,
+    );
+
+    // A genuine transport failure is distinguishable from empty and loading, and Retry recovers.
+    browser('sgn65-vi', 9334, ['open', `${appUrl}/people/employees`]);
+    await waitForDirectory('sgn65-vi', 9334);
+    browser('sgn65-vi', 9334, ['emulate', '--network', 'Offline']);
+    evaluate('sgn65-vi', 9334, observeStatus);
+    evaluate(
+      'sgn65-vi',
+      9334,
+      `(() => { window.dispatchEvent(new Event('focus')); return true; })()`,
+    );
+    await waitFor(
+      'sgn65-vi',
+      9334,
+      `() => (document.querySelector('[role=alert]')?.textContent ?? '').includes(${JSON.stringify(text.failure)})`,
+      120,
+    );
+    const failure = directoryScreen('sgn65-vi', 9334);
+    assert.equal(failure.hasTable, false, `failure table in ${label}`);
+    assert.equal(failure.empty, null, `failure empty state in ${label}`);
+    assert.ok(
+      failure.alerts.some((value) => value.includes(text.failure)),
+      `failure alert in ${label}`,
+    );
+    browser('sgn65-vi', 9334, ['emulate', '--network', 'Fast 4G']);
+    evaluate(
+      'sgn65-vi',
+      9334,
+      `(() => { const button = document.querySelector('[role=alert] button'); if (!button) return false; button.click(); return true; })()`,
+    );
+    await waitFor(
+      'sgn65-vi',
+      9334,
+      `() => Boolean(document.querySelector('main table.data-table'))`,
+    );
+    const recovered = directoryScreen('sgn65-vi', 9334);
+    assert.deepEqual(recovered.rows, rendered(pageRows(0), text));
+    const statusSeen = evaluate(
+      'sgn65-vi',
+      9334,
+      `() => window.__sgnStatusSeen ?? []`,
+    );
+    assert.ok(
+      statusSeen.includes(text.loading),
+      `loading state not observed in ${label}: ${JSON.stringify(statusSeen)}`,
+    );
+    observed(
+      `a query failure renders the localized failure and loading states, and Retry recovers the list in ${label}`,
+    );
+  };
+  await assertDirectoryStates('en');
+  evaluate(
+    'sgn65-vi',
+    9334,
+    `(() => { document.querySelector('.lang-switch button[lang=vi]').click(); return true; })()`,
+  );
+  await waitFor(
+    'sgn65-vi',
+    9334,
+    `() => document.documentElement.lang === 'vi'`,
+  );
+  await assertDirectoryStates('vi');
+
+  // Sign-out clears the list and Back exposes none of it.
+  evaluate(
+    'sgn65-vi',
+    9334,
+    `(() => { document.querySelector('.sgn-user-btn').click(); return true; })()`,
+  );
+  await sleep(300);
+  evaluate(
+    'sgn65-vi',
+    9334,
+    `(() => { const button = document.querySelector('.sgn-popover button'); if (!button) return false; button.click(); return true; })()`,
+  );
+  await waitFor('sgn65-vi', 9334, `() => location.pathname === '/login'`);
+  evaluate('sgn65-vi', 9334, `(() => { history.back(); return true; })()`);
+  await sleep(2000);
+  const afterBack = evaluate(
+    'sgn65-vi',
+    9334,
+    `() => ({ path: location.pathname, table: Boolean(document.querySelector('main table.data-table')) })`,
+  );
+  assert.equal(
+    afterBack.table,
+    false,
+    'sign-out and Back expose no employee list',
+  );
+  observed('sign-out clears the list and Back exposes none of it');
+
+  // Denial as rendered: anonymous and the unlinked/inactive identities never reach the list.
+  browser('sgn65-alt', 9335, ['open', `${appUrl}/people/employees`]);
+  await waitFor('sgn65-alt', 9335, `() => location.pathname === '/login'`);
+  const anonymousView = evaluate(
+    'sgn65-alt',
+    9335,
+    `() => ({ path: location.pathname, table: Boolean(document.querySelector('main table.data-table')) })`,
+  );
+  assert.equal(anonymousView.table, false, 'anonymous sees no list');
+  observed(
+    'an anonymous visit is redirected to the login screen and renders no list',
+  );
+  for (const [language, identity] of [
+    ['vi', manifest.unlinked],
+    ['en', manifest.unlinked],
+    ['vi', manifest.identities.inactive],
+    ['en', manifest.identities.inactive],
+  ]) {
+    await browserSignIn(
+      'sgn65-alt',
+      9335,
+      identity.email,
+      identity.password,
+      '/access-denied',
+      language,
+    );
+    const denied = evaluate(
+      'sgn65-alt',
+      9335,
+      `() => ({ heading: document.querySelector('h1')?.textContent?.trim() ?? null, table: Boolean(document.querySelector('main table.data-table')) })`,
+    );
+    assert.equal(
+      denied.heading,
+      directoryText[language].denied,
+      `${language} denial heading`,
+    );
+    assert.equal(denied.table, false, `${language} denial exposes no list`);
+  }
+  observed(
+    'an unlinked and an inactive identity are refused at sign-in in both languages and never reach the list',
+  );
+
+  await browserSignIn(
+    'sgn65-alt',
+    9335,
+    manifest.identities.manager.email,
+    manifest.identities.manager.password,
+    '/properties',
+    'vi',
+  );
+  await waitFor(
+    'sgn65-alt',
+    9335,
+    `() => (document.querySelector('.sgn-user-btn')?.textContent ?? '').includes(${JSON.stringify(`${namespace} manager`)})`,
+  );
+  const rail = evaluate(
+    'sgn65-alt',
+    9335,
+    `() => ({ link: Boolean(document.querySelector('a[href="/people/employees"]')) })`,
+  );
+  assert.equal(rail.link, false, 'the non-admin rail hides the employee list');
+  browser('sgn65-alt', 9335, ['open', `${appUrl}/people/employees`]);
+  await waitFor(
+    'sgn65-alt',
+    9335,
+    `() => location.pathname === '/access-denied'`,
+  );
+  const managerDenied = evaluate(
+    'sgn65-alt',
+    9335,
+    `() => ({ path: location.pathname, heading: document.querySelector('h1')?.textContent?.trim() ?? null, table: Boolean(document.querySelector('main table.data-table')) })`,
+  );
+  assert.equal(managerDenied.heading, directoryText.vi.denied);
+  assert.equal(managerDenied.table, false);
+  observed(
+    'a manager is refused the page before the shell renders, and the rail does not offer it',
+  );
 } finally {
+  await stopBrowsers();
   await stopApp();
   await removeFixtures(manifest);
   if (keep) {
@@ -538,6 +1239,7 @@ report.observations = observations;
 report.baseline = before;
 report.restored = after;
 report.retries = retryCount;
+report.pageRetries = pageRetries;
 if (reportPath) {
   await fs.mkdir(path.dirname(reportPath), { recursive: true });
   await fs.writeFile(reportPath, JSON.stringify(report, null, 2) + '\n');
