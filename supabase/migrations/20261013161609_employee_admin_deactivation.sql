@@ -107,9 +107,19 @@ declare
   target_id uuid;
 begin
   if tg_op = 'DELETE' then
+    if current_user in ('anon','authenticated','service_role') then
+      raise exception 'employee lifecycle changes use the guarded RPCs' using errcode = '42501';
+    end if;
     was_active_admin := old.role = 'admin' and old.is_active;
     target_id := old.id;
   elsif tg_op = 'UPDATE' then
+    if current_user in ('anon','authenticated','service_role')
+      and (new.is_active is distinct from old.is_active
+        or new.auth_user_id is distinct from old.auth_user_id
+        or new.role is distinct from old.role)
+    then
+      raise exception 'employee lifecycle, sign-in link and role changes use the guarded RPCs' using errcode = '42501';
+    end if;
     was_active_admin := old.role = 'admin' and old.is_active;
     is_active_admin := new.role = 'admin' and new.is_active;
     target_id := old.id;
