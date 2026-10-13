@@ -1118,6 +1118,20 @@ try {
   );
   await assertDirectoryStates('vi');
 
+  // The entry Back reaches after sign-out must be a list page that renders rows, or the check
+  // below would pass whether or not sign-out cleared the protected surface.
+  const signOutFrom = await openPage(1);
+  assert.equal(
+    signOutFrom.path,
+    `/people/employees?after=${walk.cursors[1]}`,
+    'a populated list entry sits behind the sign-out page',
+  );
+  assert.deepEqual(
+    signOutFrom.rows,
+    rendered(pageRows(1), directoryText.vi),
+    'the page signed out from renders the list',
+  );
+
   // Sign-out clears the list and Back exposes none of it.
   evaluate(
     'sgn65-vi',
