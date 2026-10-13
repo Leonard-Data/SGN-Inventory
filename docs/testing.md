@@ -449,7 +449,7 @@ Add embedded database regressions only for consumer-visible invariants and run `
 
 ### Executed ticket #46 development evidence
 
-Pending. The code-side work, the forward migration, the embedded regressions and the extended acceptance journey in `scripts/property-comments-acceptance.mjs` are complete, but the authorized shared development project was held by issue #18 at this head, so the hosted browser/API journey and the separate-session edit/edit and edit/archive races had not been run when this section was written.
+Pending. The code-side work, the forward migration, the embedded regressions and the extended acceptance journey in `scripts/property-comments-acceptance.mjs` are complete. That harness drives the author edit and its marker, the focus journeys for opening the editor, a successful save, Cancel and a conflicting save (on the first page and beyond it), the explicit Refresh that clears and the Refresh that replaces an open editor, the posting-key replay, the reader/reviewer boundaries and the separate-session edit/edit and edit/archive races. Two rows above are not driven by it — the VI → EN → VI switch while an edit is open or after a conflict, and the keyboard-only 360px pass (the focus assertions are real, but the edit journeys use programmatic clicks at the default viewport) — so the hosted-run record must cover those two rows itself rather than treat the harness as covering the table. The authorized shared development project was held by issue #18 at this head, so no hosted browser/API journey had been run when this section was written.
 
 ## Contention test procedure
 
