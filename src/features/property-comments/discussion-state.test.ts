@@ -82,6 +82,40 @@ test('older in-flight page cannot roll back a newer local edit', () => {
   assert.deepEqual(mergePage([latest], [stale]), [latest]);
 });
 
+test('microsecond-adjacent page edit cannot roll back newer local edit', () => {
+  const latest = comment(
+    'edited',
+    'Newer edit',
+    '2026-10-12T09:00:00.000Z',
+    '2026-10-13T10:00:00.123456Z',
+  );
+  const stale = {
+    ...latest,
+    body: 'Older edit',
+    revision: 'edited-revision-older',
+    editedAt: '2026-10-13T10:00:00.123000Z',
+  };
+
+  assert.deepEqual(mergePage([latest], [stale]), [latest]);
+});
+
+test('equal edited timestamp does not replace local edited state', () => {
+  const latest = comment(
+    'edited',
+    'Local edit',
+    '2026-10-12T09:00:00.000Z',
+    '2026-10-13T10:00:00.123456+00:00',
+  );
+  const equal = {
+    ...latest,
+    body: 'Equal timestamp response',
+    revision: 'edited-revision-equal',
+    editedAt: '2026-10-13T10:00:00.123456Z',
+  };
+
+  assert.deepEqual(mergePage([latest], [equal]), [latest]);
+});
+
 test('stale edit merge preserves loaded row position', () => {
   const newest = comment('newest', 'Newest', '2026-10-13T09:00:00.000Z');
   const middle = comment('middle', 'Middle', '2026-10-12T09:00:00.000Z');
