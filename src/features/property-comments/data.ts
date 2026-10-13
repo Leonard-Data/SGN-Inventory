@@ -118,6 +118,25 @@ export async function postComment(
   return comment(data);
 }
 
+export async function exactComment(
+  context: RouteContext,
+  id: string,
+  commentId: string,
+): Promise<Comment> {
+  if (!uuid(id) || !uuid(commentId)) throw new ApiError(400, 'invalid-input');
+  const { data, error } = await context.client
+    .from('property_comments')
+    .select(
+      'id, property_id, author_id, author_name, body, created_at, revision, removed_at, edited_at',
+    )
+    .eq('property_id', id)
+    .eq('id', commentId)
+    .maybeSingle();
+  if (error) databaseError(error);
+  if (!data) throw new ApiError(404, 'not-found');
+  return comment(data);
+}
+
 // An author edit is revision-checked: the caller names the revision it saw, and a stale save is
 // refused instead of overwriting newer text. The retained before/after evidence is written by
 // the guarded RPC; this boundary only validates the request shape and the shared text rule.

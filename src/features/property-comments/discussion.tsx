@@ -16,7 +16,7 @@ import {
 } from './types';
 import {
   mergePage,
-  mergePageKeepingComment,
+  mergeStaleEditState,
   withPost,
 } from './discussion-state';
 import type {
@@ -92,6 +92,13 @@ export function Discussion({
         abort.signal,
       );
     },
+    [propertyId],
+  );
+  const fetchComment = useCallback(
+    (commentId: string) =>
+      api<{ comment: Comment }>(
+        '/api/properties/' + propertyId + '/comments/' + commentId,
+      ),
     [propertyId],
   );
   const failure = useCallback(
@@ -287,15 +294,19 @@ export function Discussion({
       const code =
         problem instanceof RequestError ? problem.code : 'unavailable';
       if (code === 'stale-comment') {
-        const page = await fetchPage(null).catch(() => null);
-        if (page) {
+        const [page, current] = await Promise.all([
+          fetchPage(null).catch(() => null),
+          fetchComment(row.id)
+            .then(({ comment }) => comment)
+            .catch(() => null),
+        ]);
+        if (page || current) {
           setComments((rows) =>
-            mergePageKeepingComment(rows, page.comments, row.id),
+            mergeStaleEditState(rows, page?.comments ?? [], row.id, current),
           );
-          setNext(page.nextCursor);
+          if (page) setNext(page.nextCursor);
           setError(null);
         }
-        const current = page?.comments.find((entry) => entry.id === row.id);
         if (
           current &&
           current.removedAt === null &&
