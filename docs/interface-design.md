@@ -4,7 +4,7 @@ Design record (2026-10-12). Status: **implemented** for the token layer, the app
 
 ## 1. Scope
 
-Covers the authenticated app shell, the shared component vocabulary, and the layout of every planned page: `/properties`, `/properties/[id]`, `/requests`, `/reviews/*`, `/rentals`, `/rentals/[id]`, `/people/employees`, `/people/contacts`, `/reports/activity`, `/reports/company`, `/admin/categories`, `/admin/units`. The auth pages (`/login`, `/recover`, `/reset-password`, `/access-denied`) already exist and are unchanged except that the shell never wraps them.
+Covers the authenticated app shell, the shared component vocabulary, and the layout of every planned page: `/properties`, `/properties/[id]`, `/properties/new`, `/requests`, `/reviews/*`, `/rentals`, `/rentals/[id]`, `/people/employees`, `/people/contacts`, `/reports/activity`, `/reports/company`, `/admin/categories`, `/admin/units`. The auth pages (`/login`, `/recover`, `/reset-password`, `/access-denied`) already exist and are unchanged except that the shell never wraps them.
 
 Reuse rule: the visual language is the *Saigon New House* design package, ported verbatim into `src/app/app.css` (tokens at `:root`) and `src/app/sgn-app.css` (the class vocabulary). **Those class names are the contract** — a screen composes them, it does not restyle them. Anything the package does not draw lives in `src/app/globals.css` (repo-only surfaces: maintenance disclosures, history comparison, owner contact, correction proposals, reservation states) and `src/app/sgn-surfaces.css` (extensions to package components); both are valued on the same tokens, and neither introduces a colour, radius or spacing value the token layer does not define. The auth surfaces keep their own `.sgn-auth` layout sheet over the same tokens.
 
@@ -52,14 +52,14 @@ The shell replaces the per-page `SessionHeader`. Locale switch and sign-out move
 - **Role filter:** items come from the `role × item → visible` table in `src/features/navigation/`; hidden items are not rendered, not merely disabled. Route guards reuse the same table.
 - **Responsive (shipped):** under 1040px the rail becomes an off-canvas drawer (`--motion-base` slide, `.sgn-scrim` behind it, menu button with `aria-expanded`/`aria-controls`); the drawer closes on `Escape`, on the scrim and on navigation, traps Tab inside itself, and returns focus to the menu button. Above 1040px the rail is sticky at `--sidebar-w`. `--logo-size` and `--topbar-h` step down at 1039px.
 - **Access:** one skip link to `#main-content`; the shell never renders for a denied identity (§6).
-- **Session:** on window refocus the shell re-checks `/api/session`; on denial it clears page data and leaves the shell (§6).
+- **Session:** on window refocus the shell re-checks `/api/session`; on denial it clears page data and leaves the shell (§6). A refocus that follows no concealment re-checks membership only — it does not re-read data that is already displayed, so switching windows leaves a visible list in place.
 
 ### 3.1 Menu groups → routes
 
 | Group | Items (route) | Roles |
 | --- | --- | --- |
-| Inventory | Search (`/properties`) | all |
-| Reservations & Reviews | My requests (`/requests`); Reviews hub (`/reviews/…`) | all; queues per role |
+| Inventory | Search (`/properties`); New property (`/properties/new`, shipped) | all |
+| Reservations & Reviews | My requests (`/requests`); Reviews hub (`/reviews/…`, corrections shipped) | all; queues per role |
 | Rentals | Agreements (`/rentals`) | staff, manager, admin |
 | People | Employees (`/people/employees`); Contacts (`/people/contacts`) | admin; staff/manager/admin |
 | Reports | My activity (`/activity/me`, shipped); Company (`/activity/company`, shipped) | all; manager/admin |
@@ -108,7 +108,7 @@ All page bodies render inside the shell `main` region; `SessionHeader` is gone f
   .pagination > .page-info + .page-buttons > .pager-btn
   states: .busy-line (loading) · .state-panel (empty) · .state-panel[data-tone="danger"] (error)
 ```
-Shipped: the card cover is the site plate drawn from the record's own fields; a stored cover photograph wins; a record with no areas keeps the plate's muted placeholder. The package's `.seg` Cards/List/Table switch is **not** implemented (the app renders cards only) and the ordering control is not implemented — both are open items, not silent omissions.
+Shipped: the card cover is the site plate drawn from the record's own fields; a stored cover photograph wins; a record with no areas keeps the plate's muted placeholder. The package's `.seg` Cards/List/Table switch is **not** implemented (the app renders cards only) and the ordering control is not implemented — both are open items, not silent omissions. The two panels that used to sit under the results — the create-property form and the correction queue — moved to their own destinations (`/properties/new`, `/reviews/corrections`); `/properties` keeps search, results and pagination.
 
 ### 5.2 `/properties/[id]` — Detail *(shipped, minus the items noted)*
 
@@ -162,7 +162,7 @@ queue rows: .history-event — subject link · claimant/actor · dates · eviden
   expanding row reveals decision form: [reason textarea] [Approve] [Reject]
 pagination
 ```
-Routes: `/reviews/reservations`, `/reviews/corrections`, `/reviews/visits`, `/reviews/rental-activation`, `/reviews/sale-completions`, `/reviews/closure-corrections`. Same layout shell; each queue is its own route and guard. `/reviews` redirects to the first permitted queue.
+Routes: `/reviews/corrections` (shipped as **Correction requests**: page-intro plus the correction queue, guarded by its own protected read — every active employee reads their own requests, and staff/manager/admin decide them), `/reviews/reservations`, `/reviews/visits`, `/reviews/rental-activation`, `/reviews/sale-completions`, `/reviews/closure-corrections`. Same layout shell; each queue is its own route and guard. `/reviews` redirects to the first permitted queue.
 
 ### 5.5 `/rentals` + `/rentals/[id]` (new)
 
@@ -256,11 +256,11 @@ page-intro · [New category] / [New unit]
 
 ### Shipped-state gaps (deliberate, not silent)
 
-- Navigation renders two groups: Inventory (`/properties`, every role) and Reports (`/activity/me`, every role; `/activity/company`, manager/admin). The ADR's other four groups ship with their routes.
+- Navigation renders three groups: Inventory (`/properties` and `/properties/new`, every role), Reservations & Reviews (`/reviews/corrections`, every role — the queue reads the caller's own requests while only staff/manager/admin decide) and Reports (`/activity/me`, every role; `/activity/company`, manager/admin). The ADR's other three groups ship with their routes.
 - The inventory results have **cards only**: the package's Cards/List/Table `.seg` switch and the ordering control are not implemented, and `.cell-plate` table thumbnails therefore have no consumer yet.
 - The card shows the record's existing fact set (code, mode, address, status). The prototype's card also prints area and price lines; adding them would be new data display beyond this restyle, so they were left out.
 - The record page has no Edit action (no edit route exists; editing stays the in-page maintenance disclosure).
 - The asking-price timeline (`.price-row`), the change timeline (`.timeline`/`.tl-item`) and the **Nhân sự & liên hệ** screen (employee accounts + contact book, `.directory-tabs`, `.cell-person`, `.sgn-avatar-sm`) are rendered in the design review route `/design/app-preview` from fictional fixtures: the app has no price-history feed and no directory endpoint, and the review route is where unused package vocabulary is inspectable. Their product routes (`/people/*`) and data contracts are separate, unauthorized work.
-- The personal activity report (#30) shipped at **`/activity/me`** rather than this document's planned `/reports/activity`, with its own acceptance evidence and API path (`/api/activity/me`), and the company employee-by-day report (#57) shipped at **`/activity/company`** rather than the planned `/reports/company` with API path (`/api/activity/company`); both routes were left where the features shipped and the rail's Reports group points at them. `/requests`, `/reviews/*`, `/rentals*`, `/people/*`, `/admin/*` remain unbuilt and are only described above.
+- The personal activity report (#30) shipped at **`/activity/me`** rather than this document's planned `/reports/activity`, with its own acceptance evidence and API path (`/api/activity/me`), and the company employee-by-day report (#57) shipped at **`/activity/company`** rather than the planned `/reports/company` with API path (`/api/activity/company`); both routes were left where the features shipped and the rail's Reports group points at them. `/requests`, the rest of `/reviews/*`, `/rentals*`, `/people/*`, `/admin/*` remain unbuilt and are only described above.
 - The auth surfaces keep their own layout sheet (`.sgn-auth` + `sgn-auth.css`); they share the token layer and the control vocabulary but they are shell-free by design (ADR 0001).
 - **Not in scope:** no geographic map, no physical-visit UI, no threads/reactions/mentions, no dashboards beyond §5.9, and no archived-property exception beyond the existing reviewer read boundary and the reasoned manager/admin discussion removal in §5.2.

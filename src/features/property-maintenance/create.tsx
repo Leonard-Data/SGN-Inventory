@@ -50,7 +50,7 @@ export function CreateProperty({
     }
   }
   return (
-    <details className="panel maintenance">
+    <details className="panel maintenance" open>
       <summary className="panel-head">
         <span className="panel-title">{text.create}</span>
       </summary>
