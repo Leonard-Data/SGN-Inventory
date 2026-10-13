@@ -24,11 +24,19 @@ export function mergePage(current: Comment[], page: Comment[]): Comment[] {
     if (
       existing.editedAt !== null &&
       (row.editedAt === null ||
-        Date.parse(row.editedAt) < Date.parse(existing.editedAt))
+        timestampKey(row.editedAt) <= timestampKey(existing.editedAt))
     )
       return existing;
     return row;
   });
+}
+
+function timestampKey(value: string): string {
+  const match =
+    /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,6}))?(?:Z|\+00:00)$/.exec(
+      value,
+    );
+  return match ? `${match[1]}.${(match[2] ?? '').padEnd(6, '0')}` : value;
 }
 
 export function mergeStaleEditState(
