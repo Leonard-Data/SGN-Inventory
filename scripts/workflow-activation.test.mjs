@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { parse } from 'yaml';
+import { cdActivation } from './release-guard.mjs';
 
 // `.github/workflows` is delivery configuration, so the regression these tests
 // guard is silent activation: a run that starts for the wrong stage, or a
@@ -96,6 +97,73 @@ test('release activation is stage-scoped and production keeps its own switch', (
     activationStep(deploy.jobs.deploy)?.env?.SGN_CD_KIND,
     "${{ inputs.stage || 'prod' }}",
   );
+});
+
+// The release-guard step reads its activation switch from the process
+// environment, but a repository variable is not exported there on its own. A
+// job whose `if:` gate uses a switch yet omits it from `env:` starts, then
+// stops before any cloud contact with activation off. These expectations name
+// every delivery kind each guarded job can select, and the test resolves the
+// parsed job and step environments to prove the switch is wired, not merely
+// mentioned.
+const ACTIVATION_SWITCH_BY_KIND = {
+  preview: 'CD_PREVIEW_ENABLED',
+  dev: 'CD_DEV_ENABLED',
+  prod: 'CD_PROD_ENABLED',
+};
+
+const ACTIVATION_JOBS = [
+  { workflow: 'preview.yml', job: 'deploy', kinds: ['preview'] },
+  { workflow: 'deploy.yml', job: 'deploy', kinds: ['dev', 'prod'] },
+];
+
+const REPOSITORY_VARIABLE = /^\$\{\{\s*vars\.([A-Z0-9_]+)\s*\}\}$/;
+
+function resolveRepositoryEnv(env, variables) {
+  const resolved = {};
+  for (const [name, value] of Object.entries(env ?? {})) {
+    const reference = REPOSITORY_VARIABLE.exec(String(value).trim());
+    resolved[name] = reference ? (variables[reference[1]] ?? '') : value;
+  }
+  return resolved;
+}
+
+test('each activation-guard job exports its own kind switch from repository variables', () => {
+  for (const { workflow: name, job: jobName, kinds } of ACTIVATION_JOBS) {
+    const job = workflow(name).jobs[jobName];
+    const step = activationStep(job);
+    assert.ok(step, `${name}.${jobName} must run the activation guard`);
+    for (const kind of kinds) {
+      const switchName = ACTIVATION_SWITCH_BY_KIND[kind];
+      assert.equal(
+        String(job.env?.[switchName] ?? '').trim(),
+        `\${{ vars.${switchName} }}`,
+        `${name}.${jobName} must export ${switchName} from repository variables`,
+      );
+      // With every repository switch off except this kind's own, the resolved
+      // job and step environments must activate exactly this kind.
+      const off = Object.fromEntries(
+        Object.values(ACTIVATION_SWITCH_BY_KIND).map((key) => [key, 'false']),
+      );
+      const enabled = { ...off, [switchName]: 'true' };
+      assert.equal(
+        cdActivation(kind, {
+          ...resolveRepositoryEnv(job.env, enabled),
+          ...resolveRepositoryEnv(step.env, enabled),
+        }),
+        true,
+        `${name}.${jobName} must activate ${kind} from its environment`,
+      );
+      assert.equal(
+        cdActivation(kind, {
+          ...resolveRepositoryEnv(job.env, off),
+          ...resolveRepositoryEnv(step.env, off),
+        }),
+        false,
+        `${name}.${jobName} must stay off while ${switchName} is unset`,
+      );
+    }
+  }
 });
 
 test('the database-only migration workflows stay separately authorized', () => {

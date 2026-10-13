@@ -31,6 +31,9 @@ jobs:
     env:
       HUSKY: '0'
       SGN_ENV: dev
+      # The activation guard reads its switch from the process environment, so
+      # the job must export the preview switch it already gates on.
+      CD_PREVIEW_ENABLED: ${{ vars.CD_PREVIEW_ENABLED }}
       VERCEL_TARGET: preview
       GITHUB_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
       PR_BRANCH: ${{ github.head_ref }}
