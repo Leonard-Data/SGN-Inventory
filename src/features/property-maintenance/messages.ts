@@ -70,6 +70,10 @@ const copy = {
     'Tôi đã đối chiếu: đây là cùng một người, thay đổi áp dụng cho mọi liên kết nêu trên.',
     'I checked: this is the same person; the change applies to every link shown above.',
   ],
+  contactRefusal: [
+    'Không sửa được: người liên hệ chung này còn gắn với bất động sản đã lưu trữ mà bạn không được đọc. Nhờ quản lý hoặc quản trị viên; chưa có thay đổi nào được lưu.',
+    'Cannot edit: this shared contact is also linked to an archived property you cannot read. Ask a manager or admin; nothing was saved.',
+  ],
   wrongPerson: [
     'Nhầm người? Thay liên kết tại bất động sản này, không ghi đè người liên hệ chung.',
     'Wrong person? Replace this local link, not the shared identity.',
@@ -186,6 +190,22 @@ export function maintenanceText(locale: Locale) {
       values[locale === 'vi' ? 0 : 1],
     ]),
   ) as Record<CopyKey, string>;
+}
+export function maintenanceError(locale: Locale, code: string | null) {
+  const text = maintenanceText(locale);
+  return code === 'noChange'
+    ? text.noChange
+    : code === 'stale-edit'
+      ? text.stale
+      : code === 'conflict'
+        ? text.conflict
+        : code === 'invalid-input'
+          ? text.invalid
+          : code === 'explanation-without-price'
+            ? text.correctionExplanationNeedsPrice
+            : code === 'contact-refusal'
+              ? text.contactRefusal
+              : text.unavailable;
 }
 const values: Record<string, readonly [string, string]> = {
   property: ['Thông tin bất động sản', 'Property facts'],
