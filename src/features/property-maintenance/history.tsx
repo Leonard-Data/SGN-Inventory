@@ -306,3 +306,102 @@ export function PriceHistory({
     </section>
   );
 }
+export function PriceHistory({
+  propertyId,
+  locale,
+}: {
+  propertyId: string;
+  locale: Locale;
+}) {
+  const [cursor, setCursor] = useState<Cursor | null>(null);
+  const endpoint =
+    '/api/properties/' +
+    propertyId +
+    '/history?' +
+    new URLSearchParams({ prices: '1', ...cursor });
+  const { data, error, busy, surface, reload } =
+      useProtectedData<HistoryPage>(endpoint),
+    text = maintenanceText(locale);
+  const rows = (data?.events ?? []).flatMap((event) =>
+    priceChanges(event).map((row) => ({
+      ...row,
+      title:
+        row.field === 'sale_price_vnd'
+          ? text.priceSaleUpdated
+          : text.priceRentUpdated,
+    })),
+  );
+  return (
+    <section className="panel" data-od-id="panel-price-history">
+      <div className="panel-head">
+        <h2>{text.priceHistory}</h2>
+        <span className="panel-note">{text.priceHistoryNote}</span>
+      </div>
+      <div className="panel-body">
+        {error ? (
+          <div className="alert" data-tone="danger" role="alert">
+            <span>{text.priceHistoryFailed}</span>
+            <button className="btn btn-sm btn-ghost" onClick={reload}>
+              {text.refresh}
+            </button>
+          </div>
+        ) : null}
+        {busy ? <p role="status">{text.loading}</p> : null}
+        <div ref={surface} hidden={!data || busy}>
+          {data ? (
+            <>
+              {rows.length ? (
+                <ul className="price-list">
+                  {rows.map((row) => (
+                    <li className="price-row" key={row.key}>
+                      <time className="price-when" dateTime={row.occurredAt}>
+                        {vietnamDate(row.occurredAt)}
+                      </time>
+                      <span className="price-change">
+                        <span className="sr">{row.title}</span>
+                        {row.before ? (
+                          <>
+                            <del>{formatVnd(row.before, locale)}</del>{' '}
+                            <span aria-hidden="true">→</span>{' '}
+                          </>
+                        ) : null}
+                        <b>
+                          {row.after
+                            ? formatVnd(row.after, locale)
+                            : text.unknown}
+                        </b>
+                      </span>
+                      <span className="price-who" translate="no">
+                        {row.actorName}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>{text.priceHistoryEmpty}</p>
+              )}
+              <nav aria-label={text.priceHistory}>
+                {cursor ? (
+                  <button
+                    className="btn btn-sm btn-ghost"
+                    onClick={() => setCursor(null)}
+                  >
+                    {text.first}
+                  </button>
+                ) : null}
+                {data.nextCursor ? (
+                  <button
+                    className="btn btn-sm btn-ghost"
+                    onClick={() => setCursor(data.nextCursor)}
+                  >
+                    {text.more}
+                  </button>
+                ) : null}
+              </nav>
+            </>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  );
+}
