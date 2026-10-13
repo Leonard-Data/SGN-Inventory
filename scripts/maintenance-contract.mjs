@@ -582,8 +582,10 @@ export async function maintenanceContract({
         preview.properties.map((r) => r.id).sort(),
         [created, property].sort(),
       );
+      // Opened from another employee's property (SGN-002, created_by employees[1]) so the correction
+      // is only possible when contact-detail authority is separate from property-fact authority.
       await db.query(mutate, [
-        created,
+        other,
         'contact',
         shared,
         preview.revision,
@@ -756,7 +758,7 @@ export async function maintenanceContract({
       ]);
       const archivedRevision = await revision('properties', archivedParent);
       await asUser(0);
-      await fails('select public.contact_impact($1)', [shared], '42501');
+      await fails('select public.contact_impact($1)', [shared], 'PT403');
       await fails(
         'select public.maintain_property($1,$2,$3,$4,$5,$6)',
         [
@@ -768,6 +770,19 @@ export async function maintenanceContract({
           archivedRevision,
         ],
         '42501',
+      );
+      // Unarchived parent: only the affected-set boundary inside the operation can refuse this.
+      await fails(
+        'select public.maintain_property($1,$2,$3,$4,$5,$6)',
+        [
+          created,
+          'contact',
+          shared,
+          await revision('contacts', shared),
+          { display_name: 'forged' },
+          await revision('properties', created),
+        ],
+        'PT403',
       );
       await asUser(2);
     },

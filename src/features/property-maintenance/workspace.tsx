@@ -7,8 +7,9 @@ import type { PropertyDetail } from '@/features/properties/detail-data';
 import type { ContactDetail } from './data';
 import { MutationForm, RecordFields, AddressFields } from './forms';
 import { targetFields, type Target, type Changes } from './fields';
-import { maintenanceText, optionLabel } from './messages';
+import { maintenanceError, maintenanceText, optionLabel } from './messages';
 import { ContactPicker } from './contact-picker';
+import { failureRoute } from './refusal-rules';
 type Editor = {
   target: Target;
   targetId: string | null;
@@ -42,7 +43,7 @@ export function Maintenance({
   const [editor, setEditor] = useState<Editor | null>(null),
     [selected, setSelected] = useState(''),
     [contactBusy, setContactBusy] = useState(false),
-    [contactError, setContactError] = useState(false),
+    [contactError, setContactError] = useState<string | null>(null),
     [notice, setNotice] = useState(false);
   const controller = useRef<AbortController | null>(null);
   useEffect(() => () => controller.current?.abort(), []);
@@ -67,7 +68,7 @@ export function Maintenance({
     const abort = new AbortController();
     controller.current = abort;
     setContactBusy(true);
-    setContactError(false);
+    setContactError(null);
     try {
       const result = await api<ContactDetail>(
         '/api/contacts/' + id,
@@ -87,10 +88,13 @@ export function Maintenance({
       if (abort.signal.aborted) return;
       if (
         failure instanceof RequestError &&
-        (failure.status === 401 || failure.status === 403)
+        failureRoute(failure.status, failure.code) === 'denied'
       )
         onDenied(failure.status);
-      else setContactError(true);
+      else
+        setContactError(
+          failure instanceof RequestError ? failure.code : 'invalid-input',
+        );
     } finally {
       if (!abort.signal.aborted) setContactBusy(false);
     }
@@ -253,7 +257,9 @@ export function Maintenance({
           </details>
         ) : null}
         {contactBusy ? <p role="status">{text.loading}</p> : null}
-        {contactError ? <p role="alert">{text.unavailable}</p> : null}
+        {contactError ? (
+          <p role="alert">{maintenanceError(locale, contactError)}</p>
+        ) : null}
         {editor &&
         (editor.target === 'contact'
           ? canEditContact

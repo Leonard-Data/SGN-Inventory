@@ -12,6 +12,7 @@ export function databaseError(error: { code?: string } | null) {
   if (!error) return;
   const code = error.code;
   if (code === '42501') throw new ApiError(403, 'access-denied');
+  if (code === 'PT403') throw new ApiError(403, 'contact-refusal');
   if (code === 'PT409') throw new ApiError(409, 'stale-edit');
   if (code === '23505') throw new ApiError(409, 'conflict');
   if (
