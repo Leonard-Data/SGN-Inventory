@@ -19,6 +19,11 @@ export const summaryFixtures: PropertySummary[] = [
     floors: 3,
     direction: 'S',
     accessType: 'alley',
+    // The chronological inventory views carry the recorded entry date, its provenance and the
+    // database's Vietnam age; this fixture is a reliable legacy date.
+    entryOn: '2023-02-03',
+    entrySource: 'legacy',
+    ageDays: 1348,
     addresses: [
       {
         id: '21111111-1111-4111-8111-111111111111',
@@ -42,6 +47,10 @@ export const summaryFixtures: PropertySummary[] = [
     floors: 1,
     direction: 'NE',
     accessType: 'street',
+    // An explicit unknown entry date, shown apart from an invented or import-day date.
+    entryOn: null,
+    entrySource: 'unknown',
+    ageDays: null,
     addresses: [
       {
         id: '22222222-2222-4222-8222-222222222222',

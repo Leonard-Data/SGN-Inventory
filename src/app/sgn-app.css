@@ -429,7 +429,7 @@ button.sgn-nav-item { width: 100%; background: transparent; border: 0; text-alig
 }
 .seg-btn svg { width: 18px; height: 18px; }
 .seg-btn:hover { color: var(--fg); }
-.seg-btn[aria-pressed="true"] { background: var(--surface); color: var(--fg); font-weight: 600; box-shadow: var(--shadow-raise); }
+.seg-btn[aria-pressed="true"], .seg-btn[aria-current="true"] { background: var(--surface); color: var(--fg); font-weight: 600; box-shadow: var(--shadow-raise); }
 
 /* ── toolbar + search ───────────────────────────────────────────────────── */
 .toolbar { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
@@ -527,6 +527,8 @@ button.sgn-nav-item { width: 100%; background: transparent; border: 0; text-alig
 .card-price + .card-price { margin-top: -8px; font-size: var(--text-sm); color: var(--fg-2); }
 .card-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; margin-top: auto; padding-top: var(--space-3); border-top: 1px solid var(--border-soft); }
 .card-updated { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.card-entry { font-size: var(--text-xs); color: var(--muted); }
+.card-entry time { font-variant-numeric: tabular-nums; }
 .card-actions { display: flex; align-items: center; gap: var(--space-1); }
 .card-actions .btn { padding: 0 var(--space-3); }
 .property-list[data-view="list"] .property-card { flex-direction: row; align-items: stretch; }

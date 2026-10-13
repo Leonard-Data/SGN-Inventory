@@ -6,21 +6,28 @@ import { messages } from '@/i18n/messages';
 import type { PropertyPage } from './types';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { PropertyCard } from './property-card';
+import { validTrailToken, type InventoryOrder } from './age-cursor';
 
 export function Inventory({
   initialLocale,
   initialQuery,
   after,
   trail,
+  sort,
 }: {
   initialLocale: Locale;
   initialQuery: string;
   after: string | null;
   trail: string;
+  sort: InventoryOrder | null;
 }) {
   const endpoint =
     '/api/properties?' +
-    new URLSearchParams({ query: initialQuery, ...(after ? { after } : {}) });
+    new URLSearchParams({
+      query: initialQuery,
+      ...(sort ? { sort } : {}),
+      ...(after ? { after } : {}),
+    });
   const { employee, data, error, busy, surface, logout, clear, reload } =
     useProtectedData<PropertyPage>(endpoint);
   // From the sgn-locale cookie the page resolved server-side, so the language switch
@@ -36,9 +43,7 @@ export function Inventory({
     [clear],
   );
   const cursors = trail
-    ? trail
-        .split(',')
-        .filter((cursor) => cursor === '~' || /^[0-9a-f-]{36}$/i.test(cursor))
+    ? trail.split(',').filter((cursor) => validTrailToken(sort, cursor))
     : [];
   const previous = cursors[cursors.length - 1];
   function search(event: FormEvent<HTMLFormElement>) {
@@ -55,12 +60,28 @@ export function Inventory({
       '/properties?' +
       new URLSearchParams({
         query: initialQuery,
+        ...(sort ? { sort } : {}),
         ...(cursor && cursor !== '~' ? { after: cursor } : {}),
         ...(cursorTrail.length ? { trail: cursorTrail.join(',') } : {}),
       })
     );
   }
+  // Switching order starts a new page-one journey; the ordering never rewrites the search.
+  function orderHref(next: InventoryOrder | null) {
+    return (
+      '/properties?' +
+      new URLSearchParams({
+        query: initialQuery,
+        ...(next ? { sort: next } : {}),
+      })
+    );
+  }
   const resultLocation = href(after, cursors);
+  const orders: { value: InventoryOrder | null; label: string }[] = [
+    { value: null, label: text.sortDefault },
+    { value: 'oldest', label: text.sortOldest },
+    { value: 'newest', label: text.sortNewest },
+  ];
   return (
     <>
       <div className="page-head">
@@ -136,8 +157,22 @@ export function Inventory({
                 </svg>
               </button>
             </div>
+            {sort ? <input type="hidden" name="sort" value={sort} /> : null}
+            <div className="seg" role="group" aria-label={text.sortLabel}>
+              {orders.map((order) => (
+                <a
+                  key={order.value ?? 'default'}
+                  className="seg-btn"
+                  href={orderHref(order.value)}
+                  aria-current={sort === order.value ? 'true' : undefined}
+                >
+                  {order.label}
+                </a>
+              ))}
+            </div>
           </form>
           <p className="search-hint">{text.searchHint}</p>
+          {sort ? <p className="search-hint">{text.ageHint}</p> : null}
           {searchError ? (
             <p className="search-hint" role="alert">
               {text.queryTooLong}
@@ -236,6 +271,7 @@ export function Inventory({
                       locale={locale}
                       resultLocation={resultLocation}
                       onDenied={denyFiles}
+                      showEntry={Boolean(data.order)}
                     />
                   ))}
                 </div>
