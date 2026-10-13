@@ -32,14 +32,16 @@ function withPost(created: Comment, page: Comment[], more: boolean) {
   );
   return { rows, next: more ? cursorOf(rows.at(-1)) : null };
 }
-// A removal is terminal, so a response that predates it must never restore withdrawn text.
+// A removal is terminal and an accepted edit replaces the text, so a page snapshot that
+// predates either must never restore withdrawn or superseded text.
 function mergePage(current: Comment[], page: Comment[]): Comment[] {
   const local = new Map(current.map((row) => [row.id, row]));
   return page.map((row) => {
     const existing = local.get(row.id);
-    return existing && existing.removedAt !== null && row.removedAt === null
-      ? existing
-      : row;
+    if (!existing) return row;
+    if (existing.removedAt !== null && row.removedAt === null) return existing;
+    if (existing.editedAt !== null && row.editedAt === null) return existing;
+    return row;
   });
 }
 export function Discussion({
@@ -61,6 +63,8 @@ export function Discussion({
     headingId = useId(),
     fieldId = useId(),
     helpId = useId(),
+    editId = useId(),
+    editHintId = useId(),
     reasonId = useId(),
     reasonHintId = useId();
   const [comments, setComments] = useState<Comment[]>([]);
@@ -80,6 +84,15 @@ export function Discussion({
     null,
   );
   const [removeNotice, setRemoveNotice] = useState<string | null>(null);
+  // Author editing: the open editor, its unsent draft, the kept failure state and its notice.
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editAction, setEditAction] = useState<{
+    id: string;
+    code: string;
+  } | null>(null);
+  const [editNotice, setEditNotice] = useState<string | null>(null);
   const inFlight = useRef<AbortController | null>(null);
   const generation = useRef(0);
   // One submission key per draft: an ambiguous failure retries the original comment, a conflict
@@ -238,6 +251,93 @@ export function Discussion({
       setNext(merged.next);
     }
   }
+  // Opening the editor replaces the entry's text with the draft and clears the other actions,
+  // so one entry is never being edited, moderated and withdrawn at the same time.
+  function beginEdit(row: Comment) {
+    setEditing(row.id);
+    setEditDraft(row.body ?? '');
+    setEditAction(null);
+    setEditNotice(null);
+    setReasonFor(null);
+    setReason('');
+    setAction(null);
+  }
+  function cancelEdit() {
+    setEditing(null);
+    setEditDraft('');
+    setEditAction(null);
+  }
+  // An author edit is revision-checked against the text the editor opened. A failure keeps the
+  // unsent draft. A stale save is reconciled against the already committed text first, so a lost
+  // response after a successful edit is reported as the edit it was rather than as a conflict.
+  async function saveEdit(row: Comment) {
+    const value = editDraft.trim();
+    const length = [...value].length;
+    if (length < 1 || length > COMMENT_MAX_LENGTH) {
+      setEditAction({ id: row.id, code: 'invalid-input' });
+      return;
+    }
+    if (value === (row.body ?? '').trim()) {
+      setEditAction({ id: row.id, code: 'comment-unchanged' });
+      return;
+    }
+    setSavingEdit(true);
+    setEditAction(null);
+    setEditNotice(null);
+    let updated: Comment;
+    try {
+      updated = (
+        await api<{ comment: Comment }>(
+          '/api/properties/' + propertyId + '/comments/' + row.id,
+          { revision: row.revision, body: value },
+          undefined,
+          'PATCH',
+        )
+      ).comment;
+    } catch (problem) {
+      if (
+        problem instanceof RequestError &&
+        (problem.status === 401 || problem.status === 403)
+      ) {
+        onDenied(problem.status);
+        return;
+      }
+      const code =
+        problem instanceof RequestError ? problem.code : 'unavailable';
+      if (code === 'stale-comment') {
+        const page = await fetchPage(null).catch(() => null);
+        if (page) {
+          setComments((rows) => mergePage(rows, page.comments));
+          setNext(page.nextCursor);
+          setError(null);
+        }
+        const current = page?.comments.find((entry) => entry.id === row.id);
+        if (
+          current &&
+          current.removedAt === null &&
+          (current.body ?? '').trim() === value
+        ) {
+          setEditing(null);
+          setEditDraft('');
+          setEditNotice(text.commentEdited);
+          setSavingEdit(false);
+          return;
+        }
+      }
+      // The typed text stays in the editor and no success is claimed; refresh reconciles.
+      setEditAction({ id: row.id, code });
+      setSavingEdit(false);
+      return;
+    }
+    // The accepted response replaces the entry in place, so the edit never becomes a new post.
+    setComments((rows) =>
+      rows.map((entry) => (entry.id === updated.id ? updated : entry)),
+    );
+    setEditing(null);
+    setEditDraft('');
+    setEditNotice(text.commentEdited);
+    setSavingEdit(false);
+  }
   // Removal replaces the entry in place, so the marker keeps the original posting position.
   async function remove(row: Comment, kind: CommentRemovalKind) {
     if (removing) return;
@@ -284,6 +384,14 @@ export function Discussion({
         : code === 'access-denied' || code === 'unauthenticated'
           ? text.removalDenied
           : text.removalFailed;
+  const editMessage = (code: string) => {
+    if (code === 'comment-unchanged') return text.commentUnchanged;
+    if (code === 'invalid-input') return text.commentRequired;
+    if (code === 'stale-comment') return text.editStale;
+    if (code === 'access-denied' || code === 'unauthenticated')
+      return text.editDenied;
+    return text.editFailed;
+  };
   const loadingMore = busy || more;
   return (
     <section className="panel discussion" aria-labelledby={headingId}>
@@ -324,10 +432,12 @@ export function Discussion({
             .join('')
             .toUpperCase();
           const removed = row.removedAt !== null;
-          // Author withdrawal is the author's own control and is blocked on an archived
-          // Property; reasoned moderation stays available there for a reviewer.
+          const editingHere = editing === row.id;
+          // Author withdrawal and editing are the author's own controls and are blocked on an
+          // archived Property; reasoned moderation stays available there for a reviewer.
           const canWithdraw =
             !archived && employeeId !== null && employeeId === row.authorId;
+          const canEdit = canWithdraw && !removed;
           return (
             <li key={row.id}>
               <article className="comment">
@@ -343,18 +453,107 @@ export function Discussion({
                       {vietnamTimestamp(row.createdAt, locale)}
                     </time>{' '}
                     <span className="field-hint">({text.vietnamTime})</span>
+                    {!removed && row.editedAt !== null ? (
+                      <>
+                        {' '}
+                        <span
+                          className="comment-edited"
+                          title={
+                            vietnamTimestamp(row.editedAt, locale) ?? undefined
+                          }
+                        >
+                          ({text.commentEditedMarker})
+                        </span>
+                      </>
+                    ) : null}
                   </p>
                   {removed ? (
                     <p className="comment-body comment-removed">
                       {text.commentRemoved}
                     </p>
-                  ) : (
+                  ) : null}
+                  {/* An entry removed by another session while its editor was open keeps both the
+                      marker and the unsent draft, so the edit is never silently lost. */}
+                  {editingHere ? (
+                    <form
+                      className="comment-edit"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void saveEdit(row);
+                      }}
+                    >
+                      <div className="field">
+                        <label
+                          className="field-label"
+                          htmlFor={`${editId}-${row.id}`}
+                        >
+                          {text.editComment}
+                        </label>
+                        <textarea
+                          id={`${editId}-${row.id}`}
+                          className="textarea"
+                          rows={4}
+                          maxLength={COMMENT_MAX_LENGTH}
+                          value={editDraft}
+                          onChange={(event) => setEditDraft(event.target.value)}
+                          aria-describedby={`${editHintId}-${row.id}`}
+                          disabled={savingEdit}
+                          autoFocus
+                        />
+                      </div>
+                      <p className="field-hint" id={`${editHintId}-${row.id}`}>
+                        {text.editHint}{' '}
+                        <span translate="no">
+                          {[...editDraft.trim()].length}/{COMMENT_MAX_LENGTH}
+                        </span>
+                      </p>
+                      {editAction?.id === row.id ? (
+                        <p role="alert" className="field-error">
+                          {editMessage(editAction.code)}{' '}
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-ghost"
+                            onClick={refresh}
+                          >
+                            {text.refresh}
+                          </button>
+                        </p>
+                      ) : null}
+                      <div className="composer-foot">
+                        <button
+                          type="submit"
+                          className="btn btn-primary btn-sm"
+                          disabled={savingEdit}
+                        >
+                          {savingEdit ? text.savingComment : text.saveComment}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={cancelEdit}
+                          disabled={savingEdit}
+                        >
+                          {text.cancel}
+                        </button>
+                      </div>
+                    </form>
+                  ) : removed ? null : (
                     <p className="comment-body" translate="no">
                       {row.body}
                     </p>
                   )}
-                  {!removed && (canWithdraw || reviewer) ? (
+                  {!removed && !editingHere && (canWithdraw || reviewer) ? (
                     <div className="comment-actions">
+                      {canEdit ? (
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          onClick={() => beginEdit(row)}
+                          disabled={removing === row.id}
+                        >
+                          {text.editComment}
+                        </button>
+                      ) : null}
                       {canWithdraw ? (
                         <button
                           type="button"
@@ -461,6 +660,7 @@ export function Discussion({
         })}
       </ol>
       {!busy && !error && !comments.length ? <p>{text.noComments}</p> : null}
+      {editNotice ? <p role="status">{editNotice}</p> : null}
       {removeNotice ? <p role="status">{removeNotice}</p> : null}
       {next ? (
         <p>

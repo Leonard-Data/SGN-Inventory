@@ -10,6 +10,7 @@ import { maintenanceContract } from './maintenance-contract.mjs';
 import { correctionContract } from './correction-contract.mjs';
 import { commentsContract } from './comments-contract.mjs';
 import { commentRemovalContract } from './comment-removal-contract.mjs';
+import { commentEditContract } from './comment-edit-contract.mjs';
 import { companyActivityContract } from './company-activity-contract.mjs';
 import { myActivityContract } from './my-activity-contract.mjs';
 import { priceHistoryContract } from './price-history-contract.mjs';
@@ -581,6 +582,8 @@ await check('inactive owner disclosure denied',()=>fails('select public.reveal_o
 await commentsContract({db,asUser,check,fails,employees,property});
 // Ticket #45: accountable Property comment removal.
 await commentRemovalContract({db,asUser,check,fails,employees});
+// Ticket #46: author editing with retained revisions, composed with removal and posting retry.
+await commentEditContract({db,asUser,check,fails,employees});
 // Ticket #31: company employee-by-day activity for live manager/admin readers.
 await companyActivityContract({db,asUser,check,fails,employees});
 // Ticket #30: the employee's own activity over an explicit Vietnam date range.

@@ -24,7 +24,8 @@ function comment(row: unknown): Comment {
     row && typeof row === 'object' && !Array.isArray(row)
       ? (row as Record<string, unknown>)
       : {};
-  const removedAt = value.removed_at;
+  const removedAt = value.removed_at,
+    editedAt = value.edited_at;
   if (
     !uuid(value.id) ||
     !uuid(value.property_id) ||
@@ -34,8 +35,10 @@ function comment(row: unknown): Comment {
     typeof value.created_at !== 'string' ||
     !uuid(value.revision) ||
     (typeof removedAt !== 'string' && removedAt !== null) ||
+    (typeof editedAt !== 'string' && editedAt !== null) ||
     (value.body === null) !== (removedAt !== null) ||
-    (removedAt !== null && !timestamp.test(removedAt))
+    (removedAt !== null && !timestamp.test(removedAt)) ||
+    (editedAt !== null && !timestamp.test(editedAt))
   )
     throw new ApiError(503, 'unavailable');
   return {
@@ -47,6 +50,7 @@ function comment(row: unknown): Comment {
     createdAt: value.created_at,
     revision: value.revision,
     removedAt,
+    editedAt,
   };
 }
 
@@ -114,7 +118,46 @@ export async function postComment(
   return comment(data);
 }
 
-// Removal is the only mutation of a posted comment. The actor, time and retained evidence are
+// An author edit is revision-checked: the caller names the revision it saw, and a stale save is
+// refused instead of overwriting newer text. The retained before/after evidence is written by
+// the guarded RPC; this boundary only validates the request shape and the shared text rule.
+export async function editComment(
+  context: RouteContext,
+  id: string,
+  commentId: string,
+  body: Record<string, unknown>,
+): Promise<Comment> {
+  if (
+    !uuid(id) ||
+    !uuid(commentId) ||
+    !uuid(body.revision) ||
+    typeof body.body !== 'string' ||
+    Object.keys(body).some((key) => key !== 'revision' && key !== 'body')
+  )
+    throw new ApiError(400, 'invalid-input');
+  // Application boundary mirrors the database: the same trimmed 1–2000 characters as posting.
+  const text = body.body.trim();
+  const length = [...text].length;
+  if (length < 1 || length > COMMENT_MAX_LENGTH)
+    throw new ApiError(400, 'invalid-input');
+  const { data, error } = await context.client.rpc('edit_property_comment', {
+    p_property_id: id,
+    p_comment_id: commentId,
+    p_revision: body.revision,
+    p_body: text,
+  });
+  if (error) {
+    if (error.code === '42501') throw new ApiError(403, 'access-denied');
+    if (error.code === '23514') throw new ApiError(400, 'invalid-input');
+    if (error.code === 'PT400') throw new ApiError(409, 'comment-unchanged');
+    if (error.code === 'PT409' || error.code === '23505')
+      throw new ApiError(409, 'stale-comment');
+    throw new ApiError(503, 'unavailable');
+  }
+  return comment(data);
+}
+
+// Removal is the other mutation of a posted comment. The actor, time and retained evidence are
 // derived inside the guarded RPC; this boundary only validates the request shape.
 export async function removeComment(
   context: RouteContext,
