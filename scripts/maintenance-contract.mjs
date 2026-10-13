@@ -376,7 +376,7 @@ export async function maintenanceContract({
         preview.revision,
         { raw_phone_text: '0900 mới %_', phones: ['0900999999'] },
       ]);
-      for (const id of [created, property, other]) {
+      for (const id of [created, property]) {
         const event = (
           await db.query(
             "select actor_id,before_values,after_values from public.property_history where property_id=$1 and target='contact' and target_id=$2",
@@ -388,6 +388,15 @@ export async function maintenanceContract({
         assert.equal(event[0].before_values.raw_phone_text, '0900 123 456');
         assert.equal(event[0].after_values.raw_phone_text, '0900 mới %_');
       }
+      assert.equal(
+        (
+          await db.query(
+            "select id from public.property_history where property_id=$1 and target='contact' and target_id=$2",
+            [other, shared],
+          )
+        ).rows.length,
+        0,
+      );
       assert.equal(
         (
           await db.query(
@@ -492,6 +501,13 @@ export async function maintenanceContract({
   await check(
     'one primary link is replaced atomically and changed membership invalidates contact preview',
     async () => {
+      await db.query(mutate, [
+        created,
+        'link',
+        null,
+        await revision('properties', created),
+        { contact_id: shared, relation: 'owner' },
+      ]);
       const before = (
         await db.query('select public.contact_impact($1) as impact', [shared])
       ).rows[0].impact;
@@ -548,6 +564,19 @@ export async function maintenanceContract({
         ).rows[0].display_name,
         'Người chung',
       );
+      const cleanupLink = (
+        await db.query(
+          'select revision from public.property_contacts where property_id=$1 and contact_id=$2',
+          [created, shared],
+        )
+      ).rows[0];
+      await db.query(mutate, [
+        created,
+        'link',
+        shared,
+        cleanupLink.revision,
+        { remove: true },
+      ]);
     },
   );
   // Sales journey fixture: a shared contact linked to two of another employee's readable properties,
@@ -794,7 +823,7 @@ export async function maintenanceContract({
           await revision('contacts', unlinkedContact),
           { display_name: 'forged' },
         ],
-        '42501',
+        '23514',
       );
       await fails(
         'select public.contact_impact($1)',
