@@ -93,7 +93,7 @@ export function Maintenance({
         onDenied(failure.status);
       else
         setContactError(
-          failure instanceof RequestError ? failure.code : 'invalid-input',
+          failure instanceof RequestError ? failure.code : 'unavailable',
         );
     } finally {
       if (!abort.signal.aborted) setContactBusy(false);
