@@ -50,6 +50,9 @@ export async function employeeDeactivationContract({
     reserver: '95000000-0000-4000-8000-0000000000e6',
     linked: '95000000-0000-4000-8000-0000000000e7',
     unlinked: '95000000-0000-4000-8000-0000000000ea',
+    insertedActive: '95000000-0000-4000-8000-0000000000eb',
+    insertedLinked: '95000000-0000-4000-8000-0000000000ec',
+    insertedRole: '95000000-0000-4000-8000-0000000000ed',
   };
   const reservedProperty = '24000000-0000-4000-8000-000000000001';
   const pendingProperty = '24000000-0000-4000-8000-000000000002';
@@ -305,6 +308,21 @@ export async function employeeDeactivationContract({
     'direct employee lifecycle, sign-in link and role writes are denied',
     async () => {
       await fails(
+        "insert into public.employees(id,email,display_name,role,is_active) values($1,'insert-active@example.test','Inserted Active','sales',true)",
+        [staff.insertedActive],
+        '42501',
+      );
+      await fails(
+        "insert into public.employees(id,auth_user_id,email,display_name,is_active) values($1,$2,'insert-linked@example.test','Inserted Linked',false)",
+        [staff.insertedLinked, users.relinked],
+        '42501',
+      );
+      await fails(
+        "insert into public.employees(id,email,display_name,role,is_active) values($1,'insert-role@example.test','Inserted Role','sales',false)",
+        [staff.insertedRole],
+        '42501',
+      );
+      await fails(
         'update public.employees set is_active=false where id=$1',
         [staff.linked],
         '42501',
@@ -327,6 +345,15 @@ export async function employeeDeactivationContract({
           )
         ).rows[0],
         { is_active: true, auth_user_id: users.linked, role: 'sales' },
+      );
+      assert.equal(
+        (
+          await db.query(
+            'select count(*)::int as n from public.employees where id in ($1,$2,$3)',
+            [staff.insertedActive, staff.insertedLinked, staff.insertedRole],
+          )
+        ).rows[0].n,
+        0,
       );
     },
   );

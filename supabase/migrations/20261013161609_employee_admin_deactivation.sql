@@ -123,6 +123,13 @@ begin
     was_active_admin := old.role = 'admin' and old.is_active;
     is_active_admin := new.role = 'admin' and new.is_active;
     target_id := old.id;
+  elsif tg_op = 'INSERT' then
+    if current_user in ('anon','authenticated','service_role')
+      and (new.is_active or new.auth_user_id is not null or new.role is not null)
+    then
+      raise exception 'employee lifecycle, sign-in link and role changes use the guarded RPCs' using errcode = '42501';
+    end if;
+    return new;
   else
     return new;
   end if;
