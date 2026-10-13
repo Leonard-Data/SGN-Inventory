@@ -7,8 +7,11 @@ export const VENDOR_PAGE_SIZE = 30;
 export const VENDOR_QUERY_MAX_LENGTH = 120;
 
 export class VendorDirectoryError extends Error {
-  constructor(public readonly code: 'invalid-input') {
+  readonly code: 'invalid-input';
+
+  constructor(code: 'invalid-input') {
     super(code);
+    this.code = code;
   }
 }
 

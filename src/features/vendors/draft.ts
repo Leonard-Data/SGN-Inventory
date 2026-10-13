@@ -24,8 +24,11 @@ const draftKeys = [
 ] as const;
 
 export class VendorDraftError extends Error {
-  constructor(public readonly code: 'invalid-input') {
+  readonly code: 'invalid-input';
+
+  constructor(code: 'invalid-input') {
     super(code);
+    this.code = code;
   }
 }
 
