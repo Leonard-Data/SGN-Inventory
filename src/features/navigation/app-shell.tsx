@@ -64,6 +64,21 @@ const ICONS: Record<string, ReactNode> = {
       <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
     </svg>
   ),
+  people: (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M3.5 19.5c0-3 2.5-4.8 5.5-4.8s5.5 1.8 5.5 4.8" />
+      <path d="M16.4 5.7a3.2 3.2 0 0 1 0 6.2M17.9 19.5c0-2.1-.7-3.6-1.8-4.5" />
+    </svg>
+  ),
 };
 
 function initials(name: string) {
@@ -305,6 +320,7 @@ export function AppShell({
   if (pathname === '/properties') crumbs.push({ label: text.inventory });
   else if (pathname.startsWith('/properties/'))
     crumbs.push({ label: text.inventory, href: '/properties' });
+  else if (pathname.startsWith('/people')) crumbs.push({ label: text.people });
 
   return (
     <div className="sgn-app">

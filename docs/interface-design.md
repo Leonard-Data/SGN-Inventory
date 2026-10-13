@@ -182,14 +182,17 @@ Routes: `/reviews/corrections` (shipped as **Correction requests**: page-intro p
 ```
 Master (agreement) + detail (months/payments), reusing `.details` grid.
 
-### 5.6 `/people/employees` (new, admin)
+### 5.6 `/people/employees` (shipped: list only, admin)
 
 ```
-page-intro · [Invite employee]  (opens .maintenance disclosure: email, role)
-.data-table: name · email · role · status (active/inactive/invited) · last activity
-  row actions: [Activate|Deactivate] [Change role]
+page-intro (.example · h1 · .intro-copy)
+panel Employees → .data-table.stackable: name · email · role · access state
+  .panel-foot → .pagination (.page-info + .page-buttons > .pager-btn)
+  states: .panel-note[role=status] (loading) · .state-panel (empty) · .alert[data-tone=danger] (error)
 ```
-No per-employee route. Last-admin protection and "review approved locks before deactivation" surfaced as inline warnings.
+Shipped: the list reads existing employee identities from `GET /api/employees` and shows the recorded display name, email, role and access state (`Đang hoạt động` / `Đã tắt truy cập` / `Chưa liên kết đăng nhập`), at most 30 rows per page with a keyset cursor. An unlinked imported person is labelled not linked, never invited: the schema records no invitation. The rail renders the destination for admin only and the proxy refuses a direct visit by another role.
+
+Still planned, not shipped: the `[Invite employee]` disclosure, the last-activity column, the `[Activate|Deactivate]` and `[Change role]` row actions, last-admin protection and the "review approved locks before deactivation" warnings. No per-employee route.
 
 ### 5.7 `/people/contacts` (new, staff/manager/admin)
 
@@ -251,16 +254,16 @@ page-intro · [New category] / [New unit]
 - **D1 (tokens): resolved** — see §2 for what shipped.
 - **Badge tones: resolved** — `.badge` is the package's outline pill with `data-tone`; the mapping-status and record-status labels keep their localized text and were checked at 375/1039/1040/1440px.
 - **Shell refactor: resolved** — `src/features/employees/session-header.tsx` is deleted; the shell owns the crumbs, the language switch (persisted through `set_my_locale`, cookie-backed, re-rendered by the root layout) and the account menu.
-- **First tables:** still pending — no `<table>` shipped yet. Reviewer/queue lists stay as `.history-event` rows because each row expands to a decision form.
+- **Tables:** the company and personal activity reports and the employee list render `.data-table.stackable`; reviewer/queue lists still stay as `.history-event` rows because each row expands to a decision form.
 - **Locale propagation:** locale is a cookie + `set_my_locale` preference; the shell re-renders the route on change, so page components no longer own locale state (`applyLocale` was removed from `useProtectedData`).
 
 ### Shipped-state gaps (deliberate, not silent)
 
-- Navigation renders three groups: Inventory (`/properties` and `/properties/new`, every role), Reservations & Reviews (`/reviews/corrections`, every role — the queue reads the caller's own requests while only staff/manager/admin decide) and Reports (`/activity/me`, every role; `/activity/company`, manager/admin). The ADR's other three groups ship with their routes.
+- Navigation renders four groups: Inventory (`/properties` and `/properties/new`, every role), Reservations & Reviews (`/reviews/corrections`, every role — the queue reads the caller's own requests while only staff/manager/admin decide), People (`/people/employees`, admin) and Reports (`/activity/me`, every role; `/activity/company`, manager/admin). The ADR's other two groups (Rentals, Admin) ship with their routes.
 - The inventory results have **cards only**: the package's Cards/List/Table `.seg` switch and the ordering control are not implemented, and `.cell-plate` table thumbnails therefore have no consumer yet.
 - The card shows the record's existing fact set (code, mode, address, status). The prototype's card also prints area and price lines; adding them would be new data display beyond this restyle, so they were left out.
 - The record page has no Edit action (no edit route exists; editing stays the in-page maintenance disclosure).
-- The asking-price timeline (`.price-row`), the change timeline (`.timeline`/`.tl-item`) and the **Nhân sự & liên hệ** screen (employee accounts + contact book, `.directory-tabs`, `.cell-person`, `.sgn-avatar-sm`) are rendered in the design review route `/design/app-preview` from fictional fixtures: the app has no price-history feed and no directory endpoint, and the review route is where unused package vocabulary is inspectable. Their product routes (`/people/*`) and data contracts are separate, unauthorized work.
-- The personal activity report (#30) shipped at **`/activity/me`** rather than this document's planned `/reports/activity`, with its own acceptance evidence and API path (`/api/activity/me`), and the company employee-by-day report (#57) shipped at **`/activity/company`** rather than the planned `/reports/company` with API path (`/api/activity/company`); both routes were left where the features shipped and the rail's Reports group points at them. `/requests`, the rest of `/reviews/*`, `/rentals*`, `/people/*`, `/admin/*` remain unbuilt and are only described above.
+- The asking-price timeline (`.price-row`), the change timeline (`.timeline`/`.tl-item`) and the **Nhân sự & liên hệ** screen (employee accounts + contact book, `.directory-tabs`, `.cell-person`, `.sgn-avatar-sm`) are rendered in the design review route `/design/app-preview` from fictional fixtures: the app has no price-history feed and no contact-book endpoint, and the review route is where unused package vocabulary is inspectable. The employee list itself now ships separately (§5.6). Their remaining product routes (`/people/contacts`) and data contracts are separate, unauthorized work.
+- The personal activity report (#30) shipped at **`/activity/me`** rather than this document's planned `/reports/activity`, with its own acceptance evidence and API path (`/api/activity/me`), and the company employee-by-day report (#57) shipped at **`/activity/company`** rather than the planned `/reports/company` with API path (`/api/activity/company`); both routes were left where the features shipped and the rail's Reports group points at them. `/requests`, the rest of `/reviews/*`, `/rentals*`, `/people/contacts`, `/admin/*` remain unbuilt and are only described above.
 - The auth surfaces keep their own layout sheet (`.sgn-auth` + `sgn-auth.css`); they share the token layer and the control vocabulary but they are shell-free by design (ADR 0001).
 - **Not in scope:** no geographic map, no physical-visit UI, no threads/reactions/mentions, no dashboards beyond §5.9, and no archived-property exception beyond the existing reviewer read boundary and the reasoned manager/admin discussion removal in §5.2.

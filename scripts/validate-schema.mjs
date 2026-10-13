@@ -56,9 +56,11 @@ await check('all app tables have RLS',async()=>{
 });
 await asUser(null);
 await check('anonymous inventory denied',()=>fails('select * from public.properties',[],'42501'));
+await check('anonymous employee directory read denied',()=>fails('select * from public.employees',[],'42501'));
 await check('anonymous reservation RPC denied',()=>fails('select public.request_property_lock($1,$2)',[property,'Deal agreed with customer'],'42501'));
 await asUser(4);
 await check('inactive employee has no inventory',async()=>assert.equal((await db.query('select * from public.properties')).rows.length,0));
+await check('inactive employee directory read denied',async()=>assert.equal((await db.query('select * from public.employees')).rows.length,0));
 await check('inactive RPC denied',()=>fails('select public.request_property_lock($1,$2)',[property,'Deal agreed with customer'],'42501'));
 await asUser(0);
 await check('active salesperson can read inventory',async()=>assert.equal((await db.query('select * from public.properties')).rows.length,2));
@@ -66,6 +68,9 @@ await check('accent insensitive legacy address search',async()=>assert.equal((aw
 await check('salesperson cannot bypass revision RPC for another creator property',()=>fails("update public.properties set notes='change' where id=$1 returning id",[other],'42501'));
 await check('salesperson cannot mark property sold',()=>fails("update public.properties set status='sold' where id=$1",[property],'42501'));
 await check('salesperson cannot grant admin role',async()=>assert.equal((await db.query("update public.employees set role='admin' where id=$1 returning id",[employees[0]])).rows.length,0));
+// The admin employee list is an application-level surface; the employee rows stay readable to
+// every active employee because reservation, comment and history attribution read them.
+await check('active employee keeps the directory read used for business attribution',async()=>assert.equal((await db.query('select id from public.employees')).rows.length,employees.length));
 await check('salesperson cannot read import or audit tables',()=>fails('select * from private.audit_events',[],'42501'));
 const lock=(await db.query('select public.request_property_lock($1,$2) as id',[property,'Customer reached agreement; manager review needed'])).rows[0].id;
 await check('pending request does not reserve property',async()=>assert.equal((await db.query('select * from public.v_effective_property_locks')).rows.length,0));

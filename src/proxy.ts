@@ -5,15 +5,25 @@ import {
   type RouteContext,
 } from '@/lib/supabase/route';
 import { activeEmployee } from '@/features/employees/access';
+import { mayReadDirectory } from '@/features/employees/directory';
 import { messages } from '@/i18n/messages';
 export async function proxy(request: NextRequest) {
   let context: RouteContext | undefined;
   try {
     context = createRouteContext(request);
     await context.client.auth.getClaims();
-    if (request.nextUrl.pathname.startsWith('/properties')) {
+    const path = request.nextUrl.pathname;
+    if (path.startsWith('/properties') || path.startsWith('/people')) {
       try {
         const employee = await activeEmployee(context);
+        // The People section is admin-only in the rail and the same rule guards the
+        // route, so a direct visit is refused before the shell renders.
+        if (path.startsWith('/people') && !mayReadDirectory(employee.role))
+          return context.finish(
+            NextResponse.redirect(
+              new URL('/access-denied', context.environment.appUrl),
+            ),
+          );
         context.setLocale(employee.locale);
       } catch (error) {
         if (
@@ -45,6 +55,7 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     '/properties/:path*',
+    '/people/:path*',
     '/login',
     '/access-denied',
     '/recover',
