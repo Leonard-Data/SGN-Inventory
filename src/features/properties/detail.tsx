@@ -864,6 +864,59 @@ export function Detail({
               </div>
 
               <aside className="detail-rail">
+                <section
+                  className="panel contact-card"
+                  aria-labelledby="detail-contacts"
+                >
+                  <div className="panel-head">
+                    <h2 id="detail-contacts">{dt.contacts}</h2>
+                  </div>
+                  <div className="panel-body">
+                    {data.contacts.length ? (
+                      <div className="contact-card-list">
+                        {data.contacts.map((link) => (
+                          <article
+                            className="contact-card-item"
+                            key={link.contact_id}
+                          >
+                            <div className="record-head">
+                              <strong className="record-title" translate="no">
+                                {link.contacts?.display_name ?? text.unknown}
+                              </strong>
+                              <span
+                                className="badge badge-plain"
+                                data-tone={
+                                  link.relation === 'owner'
+                                    ? 'accent'
+                                    : 'neutral'
+                                }
+                              >
+                                {link.relation === 'owner'
+                                  ? dt.owner
+                                  : link.relation === 'broker' ||
+                                      link.relation === 'agent'
+                                    ? dt.agent
+                                    : link.relation === 'representative'
+                                      ? dt.representative
+                                      : label(locale, link.relation)}
+                              </span>
+                            </div>
+                            <p className="record-body num" translate="no">
+                              {link.contacts?.raw_phone_text ?? text.unknown}
+                            </p>
+                            {link.is_primary ? (
+                              <p className="record-meta">{dt.primary}</p>
+                            ) : null}
+                          </article>
+                        ))}
+                      </div>
+                    ) : (
+                      <p>{dt.noContacts}</p>
+                    )}
+                    <p className="field-hint">{text.ownerContactNote}</p>
+                  </div>
+                </section>
+
                 {employee ? (
                   <>
                     <History

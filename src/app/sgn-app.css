@@ -680,7 +680,17 @@ dialog.sgn-dialog::backdrop { background: color-mix(in oklab, var(--fg) 46%, tra
 .detail-sub { margin-top: var(--space-3); display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .detail-actions { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
 .detail-body { display: grid; grid-template-columns: minmax(0, 1fr) 344px; gap: var(--space-6); align-items: start; margin-top: var(--space-6); }
-.detail-rail { position: sticky; top: calc(var(--topbar-h) + var(--space-5)); display: flex; flex-direction: column; gap: var(--space-5); }
+  .detail-rail { position: sticky; top: calc(var(--topbar-h) + var(--space-5)); display: flex; flex-direction: column; gap: var(--space-5); }
+  .contact-card .panel-body { padding-block: var(--space-4); }
+  .contact-card-list { display: flex; flex-direction: column; gap: 0; }
+  .contact-card-item { padding-block: var(--space-3); border-bottom: 1px solid var(--border-soft); }
+  .contact-card-item:first-child { padding-top: 0; }
+  .contact-card-item:last-child { padding-bottom: 0; border-bottom: 0; }
+  .contact-card-item .record-head { align-items: flex-start; }
+  .contact-card-item .record-title { min-width: 0; overflow-wrap: anywhere; }
+  .contact-card-item .record-body { margin-top: var(--space-2); }
+  .contact-card .field-hint { margin-top: var(--space-4); }
+
 @media (max-width: 1180px) { .detail-body { grid-template-columns: minmax(0, 1fr); } .detail-rail { position: static; } }
 
 .tabs { display: flex; gap: var(--space-6); border-bottom: 1px solid var(--border); overflow-x: auto; }
@@ -745,8 +755,10 @@ dialog.sgn-dialog::backdrop { background: color-mix(in oklab, var(--fg) 46%, tra
 .tl-body { margin-top: 2px; font-size: var(--text-sm); color: var(--fg-2); }
 .tl-actor { margin-top: 4px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 
-.hist-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; padding: var(--space-3) 0; border-bottom: 1px solid var(--border-soft); }
-.hist-row:last-child { border-bottom: 0; }
+  .hist-row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; margin-left: 8px; padding: var(--space-4) 0 var(--space-4) var(--space-5); border-left: 1px solid var(--border); }
+  .hist-row::before { content: ''; position: absolute; top: calc(var(--space-4) + 4px); left: -5px; width: 9px; height: 9px; border: 2px solid var(--surface); border-radius: var(--radius-pill); background: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .hist-row:last-child { border-bottom: 0; }
+
 .hist-field { font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .hist-change { font-size: var(--text-sm); color: var(--fg-2); }
 .hist-change del { color: var(--muted); text-decoration: line-through; }
