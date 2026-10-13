@@ -4,7 +4,11 @@ import type { Locale } from '@/i18n/messages';
 import type { Employee } from '@/features/employees/types';
 import type { PropertyDetail } from '@/features/properties/detail-data';
 import { useProtectedData } from '@/features/employees/use-protected-data';
-import { api, RequestError } from '@/features/employees/api';
+import {
+  api,
+  isPropertyAccessFailure,
+  RequestError,
+} from '@/features/employees/api';
 import { BusinessValues } from '@/features/property-maintenance/history';
 import type { ContactDetail } from '@/features/property-maintenance/data';
 import {
@@ -24,12 +28,14 @@ function RequestActions({
   locale,
   onSaved,
   onDenied,
+  onInvalidate,
 }: {
   request: Correction;
   employee: Employee;
   locale: Locale;
   onSaved: () => void;
   onDenied: (status: number) => void;
+  onInvalidate?: () => void;
 }) {
   const [snapshot, setSnapshot] = useState(request),
     [busy, setBusy] = useState(false),
@@ -47,6 +53,10 @@ function RequestActions({
     staff = ['staff', 'manager', 'admin'].includes(employee.role);
   // previewContact() and decide('apply') both route through the shared refusal decision.
   function failure(error: unknown) {
+    if (isPropertyAccessFailure(error)) {
+      onInvalidate?.();
+      return;
+    }
     if (
       error instanceof RequestError &&
       failureRoute(error.status, error.code) === 'denied'
@@ -101,7 +111,14 @@ function RequestActions({
       const result = await api<{
           request: Correction;
           proposal: Correction['proposed_values'];
-        }>('/api/corrections/' + request.id, undefined, abort.signal),
+        }>(
+          '/api/corrections/' +
+            request.id +
+            '?propertyId=' +
+            encodeURIComponent(request.property_id),
+          undefined,
+          abort.signal,
+        ),
         detail = await api<PropertyDetail>(
           '/api/properties/' + result.request.property_id,
           undefined,
@@ -272,11 +289,13 @@ export function CorrectionQueue({
   locale,
   onDenied,
   onChanged,
+  onInvalidate,
 }: {
   propertyId?: string;
   locale: Locale;
   onDenied: (status: number) => void;
   onChanged?: () => void;
+  onInvalidate?: () => void;
 }) {
   const [after, setAfter] = useState<string | null>(null),
     endpoint =
@@ -292,17 +311,14 @@ export function CorrectionQueue({
       busy,
       surface,
       reload,
-    } = useProtectedData<CorrectionPage>(endpoint),
+    } = useProtectedData<CorrectionPage>(endpoint, undefined, onInvalidate),
     text = maintenanceText(locale);
   function changed() {
     void reload();
     onChanged?.();
   }
   return (
-    <section className="panel" id="correction-queue">
-      <div className="panel-head">
-        <h2 className="panel-title">{text.queue}</h2>
-      </div>
+    <section className="panel" id="correction-queue" aria-label={text.queue}>
       <div className="panel-body">
         {busy ? <p role="status">{text.loading}</p> : null}
         {error ? (
@@ -406,7 +422,12 @@ export function CorrectionQueue({
                             </time>
                           </p>
                           <p translate="no">{amendments[0].explanation}</p>
-                          <Amendments requestId={request.id} locale={locale} />
+                          <Amendments
+                            requestId={request.id}
+                            propertyId={request.property_id}
+                            locale={locale}
+                            onInvalidate={onInvalidate}
+                          />
                         </>
                       ) : null}
                       {request.outcome_at ? (
@@ -432,6 +453,7 @@ export function CorrectionQueue({
                           employee={sessionEmployee}
                           locale={locale}
                           onDenied={onDenied}
+                          onInvalidate={onInvalidate}
                           onSaved={changed}
                         />
                       ) : (

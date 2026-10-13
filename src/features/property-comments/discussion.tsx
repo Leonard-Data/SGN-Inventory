@@ -8,7 +8,11 @@ import {
   type FormEvent,
 } from 'react';
 import { messages, type Locale } from '@/i18n/messages';
-import { api, RequestError } from '@/features/employees/api';
+import {
+  api,
+  isPropertyAccessFailure,
+  RequestError,
+} from '@/features/employees/api';
 import { vietnamTimestamp } from '@/features/properties/format';
 import { COMMENT_MAX_LENGTH, COMMENT_REASON_MAX_LENGTH } from './types';
 import {
@@ -37,6 +41,7 @@ export function Discussion({
   employeeId,
   reviewer,
   onDenied,
+  onInvalidate,
 }: {
   propertyId: string;
   locale: Locale;
@@ -44,6 +49,7 @@ export function Discussion({
   employeeId: string | null;
   reviewer: boolean;
   onDenied: (status: number) => void;
+  onInvalidate?: () => void;
 }) {
   const text = messages[locale],
     headingId = useId(),
@@ -111,6 +117,10 @@ export function Discussion({
   );
   const failure = useCallback(
     (problem: unknown) => {
+      if (isPropertyAccessFailure(problem)) {
+        onInvalidate?.();
+        return;
+      }
       if (
         problem instanceof RequestError &&
         (problem.status === 401 || problem.status === 403)
@@ -125,7 +135,7 @@ export function Discussion({
         setError('invalid-input');
       else setError('unavailable');
     },
-    [onDenied],
+    [onDenied, onInvalidate],
   );
   // Every state update happens after an await, so mounting or refreshing never cascades a render.
   const load = useCallback(async () => {
@@ -140,7 +150,9 @@ export function Discussion({
               .catch((problem: unknown) => {
                 if (
                   problem instanceof RequestError &&
-                  (problem.status === 401 || problem.status === 403)
+                  (problem.status === 401 ||
+                    problem.status === 403 ||
+                    isPropertyAccessFailure(problem))
                 )
                   throw problem;
                 return null;
@@ -152,7 +164,9 @@ export function Discussion({
         (result) =>
           result.status === 'rejected' &&
           result.reason instanceof RequestError &&
-          (result.reason.status === 401 || result.reason.status === 403),
+          (result.reason.status === 401 ||
+            result.reason.status === 403 ||
+            isPropertyAccessFailure(result.reason)),
       );
       if (denied?.status === 'rejected') throw denied.reason;
       if (pageResult.status === 'rejected') throw pageResult.reason;

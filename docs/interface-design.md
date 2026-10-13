@@ -84,7 +84,7 @@ The contract is `src/app/sgn-app.css` — the ported design package. Compose the
 | Fields | `.field` > `.field-label-row` (`.field-req`), `.input`/`.select`/`.textarea`, `.field-unit`, `.check`, `.field-hint`, `.field-error` | one control set for every form |
 | Rows / detail | `.detail-head`, `.detail-sub`, `.detail-body`, `.detail-rail`, `.chips.head-chips`, `.facts` > `.fact` (`dt`/`dd`, `.is-unknown`), `.record` > `.record-head`/`.record-title`/`.record-body`/`.record-meta` | facts print `Chưa rõ` for unknown values, never a dash |
 | Files | `.doc-row`, `.doc-icon`, `.doc-name`, `.doc-meta`, `.doc-actions`, `.dropzone` | replaces the legacy file list |
-| History / price | `.timeline` > `.tl-item` (`.tl-time`, `.tl-title`, `.tl-body`, `.tl-actor`), `.hist-row` (`.hist-when`, `.hist-change`, `.hist-field`), `.price-series` (`.price-series-title`) > `.price-row` (`.price-when`, `.price-change`, `.price-note`, `.price-who`) | `property_history` events render through the history rows, each recorded value on one clipped line (`.history-comparison dd`) with the full text kept in the DOM and on its `title`; the record's recorded sale/rent series (#36) renders through the price rows |
+| History / price | `.timeline` > `.tl-item` (`.tl-time`, `.tl-title`, `.tl-body`, `.tl-actor`), `.hist-row` (`.hist-when`, `.hist-change`, `.hist-field`), `.price-series` (`.price-series-title`) > `.price-row` (`.price-when`, `.price-change`, `.price-note`, `.price-who`) | `property_history` events render through the history rows; the record's recorded sale/rent series (#36) renders through the price rows |
 | Comments | `.comment` (`.sgn-avatar` cell + body) > `.comment-author`, `.comment-meta`, `.comment-body`, `.comment-actions`, `.composer` > `.composer-foot` | 500-character contract unchanged |
 | States | `.state-panel` (+ `data-tone="danger"`, `.state-mark`, `.state-title`), `.busy-bar`, `.busy-line` + `.spinner`, `.skeleton`/`.sk-card`, `.alert` (+ `data-tone`), `.toast` | loading, empty, error and denial stay distinct; empty ≠ zero ≠ denied |
 | Lists / tables | `.data-table.stackable` (`[data-num]`, `data-label`), `.pagination` > `.page-info` + `.page-buttons` > `.pager-btn` | tables stack to label/value cards under 640px |
@@ -131,7 +131,7 @@ Shipped: the card cover is the site plate drawn from the record's own fields; a 
       .tabpanel "Tài liệu": panel Files → property-files Workspace (.doc-row vocabulary, cover, dropzone)
       .tabpanel "Thảo luận": Discussion → 30-item list newest-first, .composer, author edit and withdrawal with reasoned manager/admin removal (.comment-actions, .comment-edited marker, .comment-edit editor, .comment-removed marker, .comment-moderation)
     aside.detail-rail (sticky):
-      panel History    → maintenance history rows (.hist-row) whose before/after halves and label/value pairs stack in the rail (.detail-rail .history-comparison), one clipped line per recorded value
+      panel History    → maintenance history rows (.hist-row)
       page-view note, then panel Activity → today's own counts
   record action dialogs (siblings of .detail-body, content mounted only while open), opened from the action bar:
     dialog "Completed sale" → reviewer-only confirmation form (credited closer, actual Vietnam date, contract reference) or the recorded completion (.sale-completion/.sale-completion-recorded), manager/admin only
@@ -281,7 +281,7 @@ page-intro · [New category] / [New unit]
 
 - **i18n:** VI default + EN for every label, badge, control, empty/loading/error state and format. Shell/nav/global strings in `src/i18n/messages.ts`; page areas get feature-local files (e.g. `src/features/reviews/messages.ts`). Never translate source records; Vietnamese addresses, phone strings, VND and m² stay verbatim. Dates `dd/MM/yyyy`, times in `Asia/Ho_Chi_Minh`.
 - **Accessibility:** skip link; visible focus (`:focus-visible`); every input has a label; interactive hit areas ≥44px; status conveyed by text, not colour alone; `<details>` disclosure is keyboard-operable; drawer has a focus trap; tables use `<th scope>`.
-- **Responsive breakpoints (shipped):** 1039/1040px (rail → drawer; `--logo-size`, `--topbar-h` step down; `.detail-head`/`.detail-body` collapse), 720px (the language switch switches to its short form), 640px (content padding, `.property-list` to one column, `.facts`/`.price-row`/`.doc-row` stack, `.data-table` to stacked cards, dialogs widen to the viewport), 480px (history comparison stacks to one column, and its values stay one clipped line each at every width, so no history row overflows the page). Print hides the rail, topbar, scrim and toasts.
+- **Responsive breakpoints (shipped):** 1039/1040px (rail → drawer; `--logo-size`, `--topbar-h` step down; `.detail-head`/`.detail-body` collapse), 720px (the language switch switches to its short form), 640px (content padding, `.property-list` to one column, `.facts`/`.price-row`/`.doc-row` stack, `.data-table` to stacked cards, dialogs widen to the viewport), 480px (history comparison stacks). Print hides the rail, topbar, scrim and toasts.
 
 ## 8. Open decisions and flags
 

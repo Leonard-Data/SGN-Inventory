@@ -17,6 +17,10 @@ import {
   type Section,
 } from './sections';
 import { shouldAdoptFactsSnapshot } from './facts-snapshot';
+import {
+  canEditContactDetail,
+  canEditDetail,
+} from '@/features/properties/detail-actions';
 type Editor = {
   target: Target;
   targetId: string | null;
@@ -42,11 +46,10 @@ export function Maintenance({
     property = detail.property,
     staff = ['staff', 'manager', 'admin'].includes(employee.role),
     reviewer = ['manager', 'admin'].includes(employee.role),
-    canEdit =
-      !property.archived_at && (staff || property.created_by === employee.id),
+    canEdit = canEditDetail(employee, property),
     // Shared-contact detail correction is its own permission: any live employee on a readable
     // property, independent of property-fact authority. Links, creation and unlink stay staff-only.
-    canEditContact = !property.archived_at || reviewer;
+    canEditContact = canEditContactDetail(employee, property);
   const [section, setSection] = useState<Section>(DEFAULT_SECTION),
     [editor, setEditor] = useState<Editor | null>(null),
     [selected, setSelected] = useState(''),
@@ -169,10 +172,7 @@ export function Maintenance({
     contact: text.tabContacts,
   };
   return (
-    <section className="panel">
-      <div className="panel-head">
-        <h2>{text.editFacts}</h2>
-      </div>
+    <section className="panel" aria-label={text.editFacts}>
       <div className="panel-body">
         <p>{text.immediate}</p>
         {notice ? <p role="status">{text.saved}</p> : null}

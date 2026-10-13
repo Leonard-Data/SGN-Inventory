@@ -246,7 +246,7 @@ export async function historyPage(
     .eq('id', id)
     .maybeSingle();
   databaseError(parent.error);
-  if (!parent.data) throw new ApiError(404, 'not-found');
+  if (!parent.data) throw new ApiError(404, 'property-not-found');
   let request = context.client
     .from('property_history')
     .select('*')
@@ -304,7 +304,7 @@ export async function priceHistoryPage(
     .eq('id', id)
     .maybeSingle();
   databaseError(parent.error);
-  if (!parent.data) throw new ApiError(404, 'not-found');
+  if (!parent.data) throw new ApiError(404, 'property-not-found');
   let request = context.client
     .from('property_price_history')
     .select('id,actor_name,occurred_at,explanation,before_value,after_value')

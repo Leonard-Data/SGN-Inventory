@@ -10,7 +10,10 @@ import {
 } from 'react';
 import { label, messages, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
-import { RequestError } from '@/features/employees/api';
+import {
+  isPropertyAccessFailure,
+  RequestError,
+} from '@/features/employees/api';
 import { Workspace } from '@/features/property-files/workspace';
 import { CoverImage } from '@/features/property-files/cover-image';
 import { Plate } from './plate';
@@ -40,13 +43,19 @@ import { Reservation } from './reservation';
 import { SaleCompletion } from '@/features/sales/completion';
 import { detailMessages } from './messages';
 import { contactRows } from './contact-rows';
+import {
+  activeDetailAction,
+  activeDetailDisclosure,
+  canEditDetail,
+  canOpenEditDetail,
+  type DetailAction,
+} from './detail-actions';
 // The record screen groups its content the way the design package does: the record's own
 // facts, its documents and its discussion.
 const RECORD_TABS = ['overview', 'docs', 'comments'] as const;
 type RecordTab = (typeof RECORD_TABS)[number];
 function DetailActionDialog({
   title,
-  headTitle = false,
   closeLabel,
   children,
   open,
@@ -54,7 +63,6 @@ function DetailActionDialog({
   size = 'wide',
 }: {
   title: string;
-  headTitle?: boolean;
   closeLabel: string;
   children: ReactNode;
   open: boolean;
@@ -81,7 +89,7 @@ function DetailActionDialog({
     >
       <div className="sgn-dialog-panel">
         <div className="sgn-dialog-head">
-          {headTitle ? <h2>{title}</h2> : null}
+          <h2>{title}</h2>
           <button
             className="sgn-dialog-close"
             type="button"
@@ -154,17 +162,13 @@ export function Detail({
     },
     [id],
   );
-  const { employee, data, error, busy, surface, logout, clear, reload } =
-    useProtectedData(loadDetail);
   // The server layout and page both derive this from the sgn-locale cookie, which
   // set_my_locale, login and the request proxy keep equal to the saved preference, so
   // a language switch re-renders the body instead of leaving it on the fetched value.
   const locale = initialLocale;
   const text = messages[locale];
   const [tab, setTab] = useState<RecordTab>('overview');
-  const [actionDialog, setActionDialog] = useState<
-    'sale' | 'reservation' | 'edit' | 'correction' | 'requests' | null
-  >(null);
+  const [actionDialog, setActionDialog] = useState<DetailAction | null>(null);
   // Roving tabindex: the arrow keys move both focus and selection across the three tabs.
   function onTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
     const index = RECORD_TABS.indexOf(tab);
@@ -197,6 +201,7 @@ export function Detail({
   } | null>(null);
   const [disclosure, setDisclosure] = useState<{
     propertyId: string;
+    employeeId: string;
     value: OwnerContactDisclosure;
   } | null>(null);
   const [disclosureFailure, setDisclosureFailure] = useState<{
@@ -206,23 +211,70 @@ export function Detail({
   const [disclosureBusy, setDisclosureBusy] = useState<string | null>(null);
   // One retry reference per property mount: a lost response recovers the original access,
   // and a new property never reuses the previous key.
-  const disclosureKey = useRef<{ propertyId: string; key: string } | null>(
-    null,
-  );
+  const disclosureKey = useRef<{
+    propertyId: string;
+    employeeId: string;
+    key: string;
+  } | null>(null);
+  const disclosureGeneration = useRef(0);
+  const resetProtectedState = useCallback(() => {
+    disclosureGeneration.current += 1;
+    disclosureKey.current = null;
+    setActionDialog(null);
+    setActivity(null);
+    setDisclosure(null);
+    setDisclosureFailure(null);
+    setDisclosureBusy(null);
+  }, [
+    setActionDialog,
+    setActivity,
+    setDisclosure,
+    setDisclosureFailure,
+    setDisclosureBusy,
+  ]);
+  const { employee, data, error, busy, surface, logout, clear, reload } =
+    useProtectedData(loadDetail, resetProtectedState);
+  const recoverChildAfterInvalidation = useCallback(() => {
+    clear();
+    void reload();
+  }, [clear, reload]);
   // Disclosure is a deliberate action: no request runs on load, render or language switch.
   async function showOwnerContact() {
-    if (disclosureBusy === id) return;
-    if (!disclosureKey.current || disclosureKey.current.propertyId !== id)
-      disclosureKey.current = { propertyId: id, key: crypto.randomUUID() };
+    const currentEmployeeId = employee?.id;
+    if (!currentEmployeeId || disclosureBusy === id) return;
+    const requestGeneration = disclosureGeneration.current;
+    if (
+      !disclosureKey.current ||
+      disclosureKey.current.propertyId !== id ||
+      disclosureKey.current.employeeId !== currentEmployeeId
+    ) {
+      disclosureKey.current = {
+        propertyId: id,
+        employeeId: currentEmployeeId,
+        key: crypto.randomUUID(),
+      };
+    }
+    const request = disclosureKey.current;
+    if (!request) return;
     setDisclosureBusy(id);
     setDisclosureFailure(null);
     try {
-      const result = await revealOwnerContact(id, disclosureKey.current.key);
-      setDisclosure({ propertyId: id, value: result });
+      const result = await revealOwnerContact(id, request.key);
+      if (requestGeneration !== disclosureGeneration.current) return;
+      setDisclosure({
+        propertyId: id,
+        employeeId: currentEmployeeId,
+        value: result,
+      });
       // A committed credit re-reads today's report through the same abortable load, so the
       // post-credit read always wins over an in-flight pre-credit one.
       if (result.credited) setCreditTick((value) => value + 1);
     } catch (failure) {
+      if (requestGeneration !== disclosureGeneration.current) return;
+      if (isPropertyAccessFailure(failure)) {
+        recoverChildAfterInvalidation();
+        return;
+      }
       if (
         failure instanceof RequestError &&
         (failure.status === 401 || failure.status === 403)
@@ -238,7 +290,9 @@ export function Detail({
         code: failure instanceof RequestError ? failure.code : 'unavailable',
       });
     } finally {
-      setDisclosureBusy((current) => (current === id ? null : current));
+      if (requestGeneration === disclosureGeneration.current) {
+        setDisclosureBusy((current) => (current === id ? null : current));
+      }
     }
   }
   useEffect(() => {
@@ -277,7 +331,11 @@ export function Detail({
   const viewError = own?.viewError ?? false;
   const today = own?.today ?? null;
   const todayError = own?.todayError ?? false;
-  const ownerContact = disclosure?.propertyId === id ? disclosure.value : null;
+  const ownerContact = activeDetailDisclosure(
+    disclosure,
+    id,
+    employee?.id ?? null,
+  );
   const ownerBusy = disclosureBusy === id;
   const disclosureError =
     disclosureFailure?.propertyId === id ? disclosureFailure.code : null;
@@ -304,13 +362,13 @@ export function Detail({
     },
     [clear],
   );
-  const property = data?.property;
-  const canEdit =
-    !!employee &&
-    !!property &&
-    !property.archived_at &&
-    (employee.id === property.created_by ||
-      ['staff', 'manager', 'admin'].includes(employee.role));
+  const property = data?.property ?? null;
+  const canEdit = canEditDetail(employee, property);
+  const canOpenEdit = canOpenEditDetail(employee, property);
+  const activeActionDialog =
+    data && property
+      ? activeDetailAction(actionDialog, employee, property)
+      : null;
   const coverFileId = property?.cover_file_id ?? null;
   const numberFormat = useMemo(
     () => new Intl.NumberFormat(locale === 'vi' ? 'vi-VN' : 'en-GB'),
@@ -363,7 +421,13 @@ export function Detail({
               <button
                 className="btn btn-primary"
                 type="button"
-                onClick={() => setActionDialog('sale')}
+                onClick={() =>
+                  setActionDialog({
+                    tool: 'sale',
+                    forEmployee: employee,
+                    propertyId: property.id,
+                  })
+                }
               >
                 {text.completedSaleTitle}
               </button>
@@ -371,28 +435,54 @@ export function Detail({
             <button
               className="btn btn-sm btn-ghost"
               type="button"
-              onClick={() => setActionDialog('reservation')}
+              onClick={() =>
+                setActionDialog({
+                  tool: 'reservation',
+                  forEmployee: employee,
+                  propertyId: property.id,
+                })
+              }
             >
               {text.reservations}
             </button>
+            {canOpenEdit ? (
+              <button
+                className="btn btn-sm btn-ghost"
+                type="button"
+                onClick={() =>
+                  setActionDialog({
+                    tool: 'edit',
+                    forEmployee: employee,
+                    propertyId: property.id,
+                  })
+                }
+              >
+                {mt.editFacts}
+              </button>
+            ) : null}
             <button
               className="btn btn-sm btn-ghost"
               type="button"
-              onClick={() => setActionDialog('edit')}
-            >
-              {mt.editFacts}
-            </button>
-            <button
-              className="btn btn-sm btn-ghost"
-              type="button"
-              onClick={() => setActionDialog('correction')}
+              onClick={() =>
+                setActionDialog({
+                  tool: 'correction',
+                  forEmployee: employee,
+                  propertyId: property.id,
+                })
+              }
             >
               {text.navCorrections}
             </button>
             <button
               className="btn btn-sm btn-ghost"
               type="button"
-              onClick={() => setActionDialog('requests')}
+              onClick={() =>
+                setActionDialog({
+                  tool: 'requests',
+                  forEmployee: employee,
+                  propertyId: property.id,
+                })
+              }
             >
               {dt.myRequests}
             </button>
@@ -422,7 +512,7 @@ export function Detail({
             </svg>
           </span>
           <h3 className="state-title">
-            {error === 'not-found'
+            {['not-found', 'property-not-found'].includes(error)
               ? text.notFound
               : error === 'sign-out-failed'
                 ? text.signOutFailed
@@ -510,6 +600,7 @@ export function Detail({
                         fileId={coverFileId}
                         locale={locale}
                         onDenied={denyFiles}
+                        onInvalidate={recoverChildAfterInvalidation}
                       />
                     ) : (
                       <Plate
@@ -726,6 +817,7 @@ export function Detail({
                     }
                     propertyId={property.id}
                     locale={locale}
+                    onInvalidate={recoverChildAfterInvalidation}
                   />
 
                   {/* addresses */}
@@ -920,6 +1012,7 @@ export function Detail({
                     employeeId={employeeId ?? null}
                     archived={!!property.archived_at}
                     onDenied={denyFiles}
+                    onInvalidate={recoverChildAfterInvalidation}
                     canEdit={canEdit}
                     coverFileId={coverFileId}
                     onCoverChanged={reload}
@@ -943,6 +1036,7 @@ export function Detail({
                       employee?.role === 'manager' || employee?.role === 'admin'
                     }
                     onDenied={denyFiles}
+                    onInvalidate={recoverChildAfterInvalidation}
                   />
                 </section>
               </div>
@@ -1011,6 +1105,7 @@ export function Detail({
                       }
                       propertyId={property.id}
                       locale={locale}
+                      onInvalidate={recoverChildAfterInvalidation}
                     />
                   </>
                 ) : null}
@@ -1109,7 +1204,7 @@ export function Detail({
               <>
                 {employee.role === 'manager' || employee.role === 'admin' ? (
                   <DetailActionDialog
-                    open={actionDialog === 'sale'}
+                    open={activeActionDialog === 'sale'}
                     onClose={() => setActionDialog(null)}
                     title={text.completedSaleTitle}
                     closeLabel={text.close}
@@ -1120,12 +1215,13 @@ export function Detail({
                       locale={locale}
                       employeeId={employee.id}
                       onDenied={denyFiles}
+                      onInvalidate={recoverChildAfterInvalidation}
                       onSaved={changed}
                     />
                   </DetailActionDialog>
                 ) : null}
                 <DetailActionDialog
-                  open={actionDialog === 'reservation'}
+                  open={activeActionDialog === 'reservation'}
                   onClose={() => setActionDialog(null)}
                   title={text.reservations}
                   size="default"
@@ -1139,10 +1235,11 @@ export function Detail({
                     archived={!!property.archived_at}
                     employeeId={employee.id}
                     onDenied={denyFiles}
+                    onInvalidate={recoverChildAfterInvalidation}
                   />
                 </DetailActionDialog>
                 <DetailActionDialog
-                  open={actionDialog === 'edit'}
+                  open={activeActionDialog === 'edit'}
                   onClose={() => setActionDialog(null)}
                   title={mt.editFacts}
                   closeLabel={text.close}
@@ -1157,10 +1254,9 @@ export function Detail({
                   />
                 </DetailActionDialog>
                 <DetailActionDialog
-                  open={actionDialog === 'correction'}
+                  open={activeActionDialog === 'correction'}
                   onClose={() => setActionDialog(null)}
                   title={text.navCorrections}
-                  headTitle
                   closeLabel={text.close}
                 >
                   <CorrectionReport
@@ -1173,7 +1269,7 @@ export function Detail({
                   />
                 </DetailActionDialog>
                 <DetailActionDialog
-                  open={actionDialog === 'requests'}
+                  open={activeActionDialog === 'requests'}
                   onClose={() => setActionDialog(null)}
                   title={mt.queue}
                   closeLabel={text.close}
@@ -1184,6 +1280,7 @@ export function Detail({
                     locale={locale}
                     onDenied={denyFiles}
                     onChanged={() => void changed()}
+                    onInvalidate={recoverChildAfterInvalidation}
                   />
                 </DetailActionDialog>
               </>
