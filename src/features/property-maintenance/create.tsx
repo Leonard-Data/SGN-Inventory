@@ -50,10 +50,7 @@ export function CreateProperty({
     }
   }
   return (
-    <details className="panel maintenance" open>
-      <summary className="panel-head">
-        <span className="panel-title">{text.create}</span>
-      </summary>
+    <section className="panel maintenance">
       <div className="panel-body">
         <p>{text.immediate}</p>
         <form onSubmit={submit}>
@@ -88,6 +85,6 @@ export function CreateProperty({
         </form>
         <p className="search-hint">{messages[locale].legalNote}</p>
       </div>
-    </details>
+    </section>
   );
 }

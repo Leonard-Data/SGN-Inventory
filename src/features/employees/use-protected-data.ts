@@ -2,7 +2,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Employee } from './types';
 import { api, RequestError } from './api';
-import { loadProtected } from './protected-load';
+import {
+  loadProtected,
+  refocusAction,
+  renderedSession,
+} from './protected-load';
 
 export function useProtectedData<T>(
   source: string | ((signal: AbortSignal) => Promise<T>),
@@ -15,9 +19,9 @@ export function useProtectedData<T>(
   const controller = useRef<AbortController | null>(null);
   const surfaceElement = useRef<HTMLDivElement | null>(null);
   const renderedFor = useRef<string | null>(null);
-  // True while the surface is concealed with no successful read behind it: only then
-  // does a window focus have to read the data again before showing anything.
-  const concealed = useRef(false);
+  // True while a read will publish or clear the surface: that read decides what
+  // the surface shows, so a window focus during it has nothing to do.
+  const reading = useRef(false);
   const bindSurface = useCallback((element: HTMLDivElement | null) => {
     surfaceElement.current = element;
   }, []);
@@ -27,7 +31,7 @@ export function useProtectedData<T>(
   }, []);
   const conceal = useCallback(() => {
     invalidate();
-    concealed.current = true;
+    reading.current = false;
     if (surfaceElement.current) surfaceElement.current.hidden = true;
   }, [invalidate]);
   const clear = useCallback(() => {
@@ -38,9 +42,8 @@ export function useProtectedData<T>(
   }, [conceal]);
   const load = useCallback(async () => {
     invalidate();
-    // A read is in flight and decides what the surface shows, so it is no longer a
-    // concealed surface waiting for one.
-    concealed.current = false;
+    // The read that just started decides what the surface shows.
+    reading.current = true;
     const version = generation.current;
     const abort = new AbortController();
     controller.current = abort;
@@ -51,7 +54,6 @@ export function useProtectedData<T>(
           signal: abort.signal,
           renderedFor: renderedFor.current,
           onIdentityChange: () => {
-            concealed.current = true;
             if (surfaceElement.current) surfaceElement.current.hidden = true;
             renderedFor.current = null;
             setData(null);
@@ -61,12 +63,11 @@ export function useProtectedData<T>(
       if (version !== generation.current) return;
       setEmployee(sessionEmployee);
       setData(result);
-      renderedFor.current = sessionEmployee.id;
+      renderedFor.current = renderedSession(sessionEmployee);
       setError(null);
       if (surfaceElement.current) surfaceElement.current.hidden = false;
     } catch (failure) {
       if (version !== generation.current || abort.signal.aborted) return;
-      concealed.current = true;
       renderedFor.current = null;
       setData(null);
       setEmployee(null);
@@ -81,7 +82,10 @@ export function useProtectedData<T>(
       }
       setError(failure instanceof RequestError ? failure.code : 'unavailable');
     } finally {
-      if (version === generation.current) setBusy(false);
+      if (version === generation.current) {
+        reading.current = false;
+        setBusy(false);
+      }
     }
   }, [source, invalidate]);
   const reload = useCallback(() => {
@@ -90,13 +94,16 @@ export function useProtectedData<T>(
     return load();
   }, [load]);
   // A visible surface is still valid, so a window focus rechecks live membership
-  // (docs/database-contract.md) without reading the data it already shows.
+  // and authority (docs/database-contract.md) without reading the data it shows.
   const revalidate = useCallback(async () => {
     // Nothing has been published for this surface yet, so the read in flight owns it.
     if (!renderedFor.current) return;
     try {
       const session = await api<{ employee: Employee }>('/api/session');
-      if (session.employee.id !== renderedFor.current) void reload();
+      if (renderedSession(session.employee) !== renderedFor.current) {
+        conceal();
+        void reload();
+      }
     } catch (failure) {
       if (
         failure instanceof RequestError &&
@@ -112,15 +119,13 @@ export function useProtectedData<T>(
       // again, clearing what is displayed when that read fails too.
       void reload();
     }
-  }, [clear, reload]);
+  }, [clear, conceal, reload]);
   useEffect(() => {
     void load();
     const focus = () => {
-      if (concealed.current) {
-        void reload();
-      } else {
-        void revalidate();
-      }
+      const action = refocusAction(renderedFor.current, reading.current);
+      if (action === 'reload') void reload();
+      else if (action === 'recheck') void revalidate();
     };
     const hide = () => {
       clear();

@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadProtected } from './protected-load.ts';
+import {
+  loadProtected,
+  refocusAction,
+  renderedSession,
+} from './protected-load.ts';
 import { RequestError } from './api.ts';
 import type { Employee } from './types.ts';
 
@@ -16,6 +20,12 @@ const sales: Employee = {
   role: 'sales',
   locale: 'vi',
 };
+const manager: Employee = {
+  id: 'emp-manager',
+  displayName: 'Manager',
+  role: 'manager',
+  locale: 'vi',
+};
 const archived = { property: { id: 'archived-1' } };
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
@@ -29,7 +39,7 @@ test('same-identity reload keeps the rendered snapshot without concealing', asyn
   const result = await loadProtected({
     source: async () => archived,
     signal: new AbortController().signal,
-    renderedFor: reviewer.id,
+    renderedFor: renderedSession(reviewer),
     onIdentityChange: () => {
       events.push('conceal');
     },
@@ -50,7 +60,7 @@ test('an ordinary employee replacing a reviewer conceals the archived snapshot b
       return source.promise;
     },
     signal: new AbortController().signal,
-    renderedFor: reviewer.id,
+    renderedFor: renderedSession(reviewer),
     onIdentityChange: () => {
       events.push('conceal');
       assert.equal(settled, false);
@@ -65,6 +75,33 @@ test('an ordinary employee replacing a reviewer conceals the archived snapshot b
   assert.equal(settled, false);
   source.resolve(archived);
   assert.deepEqual(await pending, { employee: sales, data: archived });
+});
+
+test('the same employee with a different role conceals the manager snapshot before its data is published', async (t) => {
+  const session = Promise.withResolvers<Response>();
+  const source = Promise.withResolvers<typeof archived>();
+  const events: string[] = [];
+  t.mock.method(globalThis, 'fetch', async () => session.promise);
+  const pending = loadProtected({
+    source: () => {
+      events.push('source-requested');
+      return source.promise;
+    },
+    signal: new AbortController().signal,
+    renderedFor: renderedSession(manager),
+    onIdentityChange: () => {
+      events.push('conceal');
+    },
+  });
+  await flush();
+  session.resolve(Response.json({ employee: { ...manager, role: 'sales' } }));
+  await flush();
+  assert.deepEqual(events, ['source-requested', 'conceal']);
+  source.resolve(archived);
+  assert.deepEqual(await pending, {
+    employee: { ...manager, role: 'sales' },
+    data: archived,
+  });
 });
 
 test('no rendered identity yet still conceals before publishing', async (t) => {
@@ -93,7 +130,7 @@ test('a denied session rejects without publishing or concealing', async (t) => {
     loadProtected({
       source: async () => archived,
       signal: new AbortController().signal,
-      renderedFor: reviewer.id,
+      renderedFor: renderedSession(reviewer),
       onIdentityChange: () => {
         concealed += 1;
       },
@@ -102,4 +139,10 @@ test('a denied session rejects without publishing or concealing', async (t) => {
       failure instanceof RequestError && failure.status === 403,
   );
   assert.equal(concealed, 0);
+});
+
+test('a read in flight owns the surface, a displayed session is rechecked and a cleared one is read again', () => {
+  assert.equal(refocusAction(null, true), 'none');
+  assert.equal(refocusAction(renderedSession(reviewer), false), 'recheck');
+  assert.equal(refocusAction(null, false), 'reload');
 });

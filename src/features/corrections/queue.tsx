@@ -270,14 +270,11 @@ function RequestActions({
 }
 export function CorrectionQueue({
   propertyId,
-  employee,
   locale,
   onDenied,
   onChanged,
 }: {
   propertyId?: string;
-  // The queue reads its own session; a caller that already has the viewer passes it.
-  employee?: Employee;
   locale: Locale;
   onDenied: (status: number) => void;
   onChanged?: () => void;
@@ -297,7 +294,6 @@ export function CorrectionQueue({
       surface,
       reload,
     } = useProtectedData<CorrectionPage>(endpoint),
-    viewer = employee ?? sessionEmployee,
     text = maintenanceText(locale);
   function changed() {
     void reload();
@@ -319,7 +315,7 @@ export function CorrectionQueue({
           </div>
         ) : null}
         <div ref={surface} hidden={!data || busy}>
-          {data && viewer ? (
+          {data && sessionEmployee ? (
             <>
               {data.requests.length ? (
                 data.requests.map((request) => {
@@ -434,7 +430,7 @@ export function CorrectionQueue({
                       {request.status === 'open' ? (
                         <RequestActions
                           request={request}
-                          employee={viewer}
+                          employee={sessionEmployee}
                           locale={locale}
                           onDenied={onDenied}
                           onSaved={changed}
