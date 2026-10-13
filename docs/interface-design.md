@@ -184,17 +184,21 @@ Routes: `/reviews/corrections` (shipped as **Correction requests**: page-intro p
 ```
 Master (agreement) + detail (months/payments), reusing `.details` grid.
 
-### 5.6 `/people/employees` (shipped: list only, admin)
+### 5.6 `/people/employees` (shipped: list and guarded deactivation, admin)
 
 ```
 page-intro (.example · h1 · .intro-copy)
-panel Employees → .data-table.stackable: name · email · role · access state
+panel Employees → .data-table.stackable: name · email · role · access state · actions
+  access badge + recorded action badge (pending / reconciliation required / confirmed)
+  [Deactivate access] · [Reconcile sign-in block] → .deactivation-panel
+    target identity · recorded action state · outstanding reservations (effective/pending + expiry)
+    release-or-expiry note · finite provider-ban note · [Confirm deactivation]/[Retry] · [Close]
   .panel-foot → .pagination (.page-info + .page-buttons > .pager-btn)
   states: .panel-note[role=status] (loading) · .state-panel (empty) · .alert[data-tone=danger] (error)
 ```
-Shipped: the list reads existing employee identities from `GET /api/employees` and shows the recorded display name, email, role and access state (`Đang hoạt động` / `Đã tắt truy cập` / `Chưa liên kết đăng nhập`), at most 30 rows per page with a keyset cursor. An unlinked imported person is labelled not linked, never invited: the schema records no invitation. The rail renders the destination for admin only and the proxy refuses a direct visit by another role.
+Shipped: the list reads existing employee identities from `GET /api/employees` and shows the recorded display name, email, role and access state (`Đang hoạt động` / `Đã tắt truy cập` / `Chưa liên kết đăng nhập`), at most 30 rows per page with a keyset cursor. An unlinked imported person is labelled not linked, never invited: the schema records no invitation. The rail renders the destination for admin only and the proxy refuses a direct visit by another role. A live admin confirms deactivation from the row: membership is disabled first, the exact Auth sign-in block is confirmed through the server-only adapter, and the recorded `provider_pending` / `provider_failed` / `completed` state is shown next to the access badge so a disabled membership is never presented as a completed deactivation. The panel lists the departing employee's outstanding reservations with their expiries and states that release or expiry stays with the existing claimant, reviewer and expiry rules; no reservation is transferred or rewritten, and the finite provider ban is described with its renewal rule rather than as infinite. While the provider step is pending or failed, an admin can reopen the row and retry the same action.
 
-Still planned, not shipped: the `[Invite employee]` disclosure, the last-activity column, the `[Activate|Deactivate]` and `[Change role]` row actions, last-admin protection and the "review approved locks before deactivation" warnings. No per-employee route.
+Still planned, not shipped: the `[Invite employee]` disclosure, the last-activity column, the `[Activate]` and `[Change role]` row actions and any per-employee route.
 
 ### 5.7 `/people/contacts` (new, staff/manager/admin)
 

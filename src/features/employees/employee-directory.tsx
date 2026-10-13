@@ -1,11 +1,24 @@
 'use client';
+import { Fragment, useState } from 'react';
 import { messages, label, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
-import type { DirectoryPage, EmployeeAccess } from './directory';
+import { EmployeeDeactivationPanel } from './employee-deactivation';
+import type {
+  DirectoryDeactivation,
+  DirectoryPage,
+  EmployeeAccess,
+} from './directory';
+
+// A refused protected read leaves this surface; the panel uses the same rule as the read
+// that owns the list.
+function redirectDenied(status: number) {
+  window.location.replace(status === 403 ? '/access-denied' : '/login');
+}
 
 // People → Employees (#65): the admin employee list every later lifecycle control acts
 // from. It reads recorded identities through /api/employees; the shell provides the rail,
-// topbar and skip link. Loading, empty, error and denial stay distinct states.
+// topbar and skip link. Loading, empty, error and denial stay distinct states. Issue #66
+// adds the guarded deactivation control and the truthful recorded operation state.
 export function EmployeeDirectory({
   initialLocale,
   after,
@@ -15,8 +28,16 @@ export function EmployeeDirectory({
 }) {
   const endpoint =
     '/api/employees' + (after ? '?after=' + encodeURIComponent(after) : '');
-  const { data, error, busy, surface, logout, reload } =
-    useProtectedData<DirectoryPage>(endpoint);
+  const {
+    employee: actor,
+    data,
+    error,
+    busy,
+    surface,
+    logout,
+    reload,
+  } = useProtectedData<DirectoryPage>(endpoint);
+  const [openId, setOpenId] = useState<string | null>(null);
   // The sgn-locale cookie is the rendered locale; the shell keeps it equal to the saved
   // preference.
   const locale = initialLocale;
@@ -30,6 +51,16 @@ export function EmployeeDirectory({
     active: 'success',
     inactive: 'muted',
     unlinked: 'neutral',
+  };
+  const deactivationLabel: Record<DirectoryDeactivation['state'], string> = {
+    provider_pending: text.employeeDeactivatePendingLabel,
+    provider_failed: text.employeeDeactivateReconciliationLabel,
+    completed: text.employeeDeactivateConfirmedLabel,
+  };
+  const deactivationTone: Record<DirectoryDeactivation['state'], string> = {
+    provider_pending: 'muted',
+    provider_failed: 'danger',
+    completed: 'success',
   };
   return (
     <>
@@ -97,28 +128,79 @@ export function EmployeeDirectory({
                         <th scope="col">{text.email}</th>
                         <th scope="col">{text.employeeRole}</th>
                         <th scope="col">{text.employeeAccess}</th>
+                        <th scope="col">{text.employeeActions}</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {data.employees.map((employee) => (
-                        <tr key={employee.id}>
-                          <th scope="row" data-label={text.employeeName}>
-                            {employee.displayName}
-                          </th>
-                          <td data-label={text.email}>{employee.email}</td>
-                          <td data-label={text.employeeRole}>
-                            {label(locale, employee.role)}
-                          </td>
-                          <td data-label={text.employeeAccess}>
-                            <span
-                              className="badge"
-                              data-tone={accessTone[employee.access]}
-                            >
-                              {accessLabel[employee.access]}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
+                      {data.employees.map((employee) => {
+                        const state = employee.deactivation;
+                        const resumable =
+                          state?.state === 'provider_pending' ||
+                          state?.state === 'provider_failed';
+                        return (
+                          <Fragment key={employee.id}>
+                            <tr>
+                              <th scope="row" data-label={text.employeeName}>
+                                {employee.displayName}
+                              </th>
+                              <td data-label={text.email}>{employee.email}</td>
+                              <td data-label={text.employeeRole}>
+                                {label(locale, employee.role)}
+                              </td>
+                              <td data-label={text.employeeAccess}>
+                                <span
+                                  className="badge"
+                                  data-tone={accessTone[employee.access]}
+                                >
+                                  {accessLabel[employee.access]}
+                                </span>
+                                {state ? (
+                                  <span
+                                    className="badge"
+                                    data-tone={deactivationTone[state.state]}
+                                  >
+                                    {deactivationLabel[state.state]}
+                                  </span>
+                                ) : null}
+                              </td>
+                              <td data-label={text.employeeActions}>
+                                {employee.access === 'active' || resumable ? (
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-ghost"
+                                    aria-expanded={openId === employee.id}
+                                    onClick={() =>
+                                      setOpenId(
+                                        openId === employee.id
+                                          ? null
+                                          : employee.id,
+                                      )
+                                    }
+                                  >
+                                    {resumable
+                                      ? text.employeeDeactivateReconcile
+                                      : text.employeeDeactivate}
+                                  </button>
+                                ) : null}
+                              </td>
+                            </tr>
+                            {openId === employee.id ? (
+                              <tr>
+                                <td colSpan={5}>
+                                  <EmployeeDeactivationPanel
+                                    employee={employee}
+                                    actorRole={actor?.role ?? ''}
+                                    locale={locale}
+                                    onChanged={reload}
+                                    onDenied={redirectDenied}
+                                    onClose={() => setOpenId(null)}
+                                  />
+                                </td>
+                              </tr>
+                            ) : null}
+                          </Fragment>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

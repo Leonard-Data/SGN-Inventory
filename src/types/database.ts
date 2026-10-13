@@ -411,6 +411,81 @@ export type Database = {
         };
         Relationships: [];
       };
+      employee_admin_operations: {
+        Row: {
+          actor_id: string;
+          completed_at: string | null;
+          created_at: string;
+          employee_id: string;
+          id: string;
+          idempotency_key: string;
+          kind: string;
+          membership_disabled_at: string;
+          provider_attempted_at: string | null;
+          provider_ban_until: string | null;
+          provider_detail: string | null;
+          provider_outcome: string | null;
+          provider_reference: string | null;
+          provider_user_id: string | null;
+          revision: number;
+          state: string;
+          updated_at: string;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [
+          {
+            foreignKeyName: 'employee_admin_operations_actor_id_fkey';
+            columns: ['actor_id'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'employee_admin_operations_employee_id_fkey';
+            columns: ['employee_id'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      employee_admin_events: {
+        Row: {
+          action: string;
+          actor_id: string;
+          created_at: string;
+          detail: string | null;
+          employee_id: string;
+          id: string;
+          operation_id: string;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [
+          {
+            foreignKeyName: 'employee_admin_events_actor_id_fkey';
+            columns: ['actor_id'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'employee_admin_events_employee_id_fkey';
+            columns: ['employee_id'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'employee_admin_events_operation_id_fkey';
+            columns: ['operation_id'];
+            isOneToOne: false;
+            referencedRelation: 'employee_admin_operations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       lock_events: {
         Row: {
           action: string;
@@ -1650,6 +1725,23 @@ export type Database = {
       };
     };
     Functions: {
+      begin_employee_deactivation: {
+        Args: { p_employee_id: string; p_key: string };
+        Returns: Json;
+      };
+      record_employee_deactivation_result: {
+        Args: {
+          p_operation_id: string;
+          p_revision: number;
+          p_actor_id: string;
+          p_auth_user_id: string;
+          p_outcome: string;
+          p_provider_reference?: string | null;
+          p_detail?: string | null;
+          p_ban_until?: string | null;
+        };
+        Returns: Json;
+      };
       create_property: {
         Args: { p_mode: string; p_facts: Json; p_address: Json };
         Returns: string;
