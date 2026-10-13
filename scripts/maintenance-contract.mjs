@@ -649,6 +649,55 @@ export async function maintenanceContract({
   await db.exec('reset role');
   await db.query("select set_config('request.jwt.claim.sub','',false)");
   await check(
+    'live deactivation removes the shared-contact correction authority of an existing session',
+    async () => {
+      const before = (
+        await db.query(
+          'select display_name,revision from public.contacts where id=$1',
+          [shared],
+        )
+      ).rows[0];
+      await asUser(0);
+      await db.exec('reset role');
+      await db.query(
+        'update public.employees set is_active=false where id=$1',
+        [employees[0]],
+      );
+      await db.exec('set role authenticated');
+      try {
+        await fails('select public.contact_impact($1)', [shared], '42501');
+        await fails(
+          mutate,
+          [
+            created,
+            'contact',
+            shared,
+            before.revision,
+            { display_name: 'forged after deactivation' },
+          ],
+          '42501',
+        );
+      } finally {
+        await db.exec('reset role');
+        await db.query(
+          'update public.employees set is_active=true where id=$1',
+          [employees[0]],
+        );
+      }
+      assert.deepEqual(
+        (
+          await db.query(
+            'select display_name,revision from public.contacts where id=$1',
+            [shared],
+          )
+        ).rows[0],
+        before,
+      );
+    },
+  );
+  await db.exec('reset role');
+  await db.query("select set_config('request.jwt.claim.sub','',false)");
+  await check(
     'an injected history failure rolls back the shared-contact correction',
     async () => {
       const current = (
