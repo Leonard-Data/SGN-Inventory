@@ -8,10 +8,12 @@ import { api, RequestError } from '@/features/employees/api';
 import { BusinessValues } from '@/features/property-maintenance/history';
 import type { ContactDetail } from '@/features/property-maintenance/data';
 import {
+  maintenanceError,
   maintenanceText,
   optionLabel,
   requestStatusLabel,
 } from '@/features/property-maintenance/messages';
+import { failureRoute } from '@/features/property-maintenance/refusal-rules';
 import { vietnamTimestamp } from '@/features/properties/format';
 import { CorrectionDraft } from './draft';
 import { Amendments } from './amendments';
@@ -43,10 +45,11 @@ function RequestActions({
   useEffect(() => () => controller.current?.abort(), []);
   const text = maintenanceText(locale),
     staff = ['staff', 'manager', 'admin'].includes(employee.role);
+  // previewContact() and decide('apply') both route through the shared refusal decision.
   function failure(error: unknown) {
     if (
       error instanceof RequestError &&
-      (error.status === 401 || error.status === 403)
+      failureRoute(error.status, error.code) === 'denied'
     ) {
       onDenied(error.status);
       return;
@@ -215,11 +218,7 @@ function RequestActions({
       {busy ? <p role="status">{text.saving}</p> : null}
       {error ? (
         <p role="alert">
-          {error === 'stale-edit'
-            ? text.stale
-            : error === 'invalid-input'
-              ? text.invalid
-              : text.unavailable}{' '}
+          {maintenanceError(locale, error)}{' '}
           <a
             href={'/properties/' + request.property_id}
             target="_blank"
