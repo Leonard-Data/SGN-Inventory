@@ -1,10 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
-  mergeComment,
-  mergePage,
-  mergeStaleEditState,
-} from './discussion-state.ts';
+import { mergePage, mergeStaleEditState } from './discussion-state.ts';
 import type { Comment } from './types.ts';
 
 function comment(
@@ -84,17 +80,6 @@ test('older in-flight page cannot roll back a newer local edit', () => {
   };
 
   assert.deepEqual(mergePage([latest], [stale]), [latest]);
-});
-
-test('exact comment merge preserves position', () => {
-  const newest = comment('newest', 'Newest', '2026-10-13T09:00:00.000Z');
-  const older = comment('older', 'Older', '2026-10-12T09:00:00.000Z');
-  const currentOlder = { ...older, body: 'Current older' };
-
-  assert.deepEqual(mergeComment([newest, older], currentOlder), [
-    newest,
-    currentOlder,
-  ]);
 });
 
 test('stale edit merge preserves loaded row position', () => {

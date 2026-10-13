@@ -334,9 +334,20 @@ export async function commentEditContract({
         await fails(
           edit,
           [archived, archivedComment, revision, `Sửa lưu trữ ${actor}`],
-          '42501',
+          'PT403',
         );
       }
+      await asUser(1);
+      await fails(
+        edit,
+        [
+          archived,
+          '24000000-0000-4000-8000-00000000dead',
+          revision,
+          'Không lộ bình luận lưu trữ',
+        ],
+        'PT403',
+      );
       await asAdmin();
       assert.equal(
         (await own(archivedComment)).body,
