@@ -1993,6 +1993,27 @@ await openDiscussion(discussion, secondary);
     400,
     'A malformed comment identity is rejected',
   );
+  // The path Property scopes the edit: the same comment through another Property's URL is not
+  // reachable, so a hand-built request cannot rewrite it through the wrong path.
+  const mismatched = await session.request(
+    '/api/properties/' + second.id + '/comments/' + target.id,
+    { body: 'Sai bất động sản', revision: target.revision },
+  );
+  assert.equal(
+    mismatched.status,
+    404,
+    'A comment is not editable through another Property path',
+  );
+  assert.equal(mismatched.body.error, 'not-found');
+  assert.equal(
+    (
+      await session.request(
+        '/api/properties/' + discussion.id + '/comments/' + target.id,
+      )
+    ).body.comments.find((row) => row.id === target.id)?.body,
+    target.body,
+    'The mismatched path did not rewrite the comment',
+  );
   const staleEdit = await editRoute({
     body: 'Sửa với bản cũ',
     revision: randomUUID(),
@@ -2027,6 +2048,7 @@ await openDiscussion(discussion, secondary);
       recovered: recovered.status,
       conflict: conflict.body.error,
       editedMarker: target.editedAt !== null,
+      mismatch: mismatched.body.error,
       staleEdit: staleEdit.body.error,
       staleCurrent: staleEdit.body.comment?.revision === target.revision,
     },

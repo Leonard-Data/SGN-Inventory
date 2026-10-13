@@ -113,6 +113,17 @@ export async function editComment(
   const length = [...text].length;
   if (length < 1 || length > COMMENT_MAX_LENGTH)
     throw new ApiError(400, 'invalid-input');
+  // The path Property scopes the write: a readable comment that belongs to another Property is
+  // refused here, so a mismatched URL never rewrites it and never returns its content. A comment
+  // the caller cannot read is left to the guarded RPC's own archive/author refusal.
+  const scoped = await context.client
+    .from('property_comments')
+    .select('property_id')
+    .eq('id', commentId)
+    .maybeSingle();
+  if (scoped.error) throw new ApiError(503, 'unavailable');
+  if (scoped.data && scoped.data.property_id !== id)
+    throw new ApiError(404, 'not-found');
   const { data, error } = await context.client.rpc('edit_property_comment', {
     p_comment_id: commentId,
     p_body: text,

@@ -897,6 +897,131 @@ export async function commentsContract({
       assert.equal((await own(firstId)).body, thirdEdit.body);
     },
   );
+  // The removal slice ships in its own migration and the edit migration applies after it, so the
+  // two paths are exercised together on one comment: the edit evidence, the withdrawal, the
+  // terminal state and the replay of the original validated submission.
+  const remove =
+    'select public.remove_property_comment($1,$2,$3,$4,$5) as removed';
+  const removalEvidence = async (id) =>
+    (
+      await db.query(
+        'select * from public.property_comment_removals where comment_id=$1',
+        [id],
+      )
+    ).rows[0];
+  await check(
+    'an author edit and a removal compose on one comment without erasing either version',
+    async () => {
+      const originalBody = 'Nội dung gốc để gỡ';
+      const key = '21000000-0000-4000-8000-000000000110';
+      await asUser(1);
+      const original = (
+        await db.query(post, [secondProperty, '  ' + originalBody + '  ', key])
+      ).rows[0].created;
+      assert.equal(
+        original.body,
+        originalBody,
+        'posting trims the stored text',
+      );
+      const edited = (
+        await db.query(edit, [
+          original.id,
+          'Bản sửa trước khi gỡ',
+          original.revision,
+        ])
+      ).rows[0].edited;
+      assert.equal(edited.body, 'Bản sửa trước khi gỡ');
+      assert.ok(edited.edited_at, 'a committed edit records its server time');
+      assert.equal(
+        edited.removed_at,
+        null,
+        'a live comment carries no removal marker',
+      );
+      const liveRow = (
+        await db.query(list, [secondProperty, null, null, 30])
+      ).rows.find((row) => row.id === original.id);
+      assert.equal(liveRow.body, edited.body);
+      assert.ok(liveRow.edited_at, 'the reader page states the edit marker');
+      assert.equal(liveRow.removed_at, null);
+      const removed = (
+        await db.query(remove, [
+          secondProperty,
+          original.id,
+          edited.revision,
+          'author',
+          null,
+        ])
+      ).rows[0].removed;
+      assert.equal(removed.body, null);
+      assert.ok(removed.removed_at, 'the withdrawal records its server time');
+      assert.notEqual(removed.revision, edited.revision);
+      const withdrawnRow = (
+        await db.query(list, [secondProperty, null, null, 30])
+      ).rows.find((row) => row.id === original.id);
+      assert.equal(withdrawnRow.body, null);
+      assert.ok(
+        withdrawnRow.removed_at,
+        'the reader page states the removal marker',
+      );
+      // The withdrawn text is not editable and the removal is terminal through every path.
+      await fails(
+        edit,
+        [original.id, 'Sửa bản đã gỡ', removed.revision],
+        'PT409',
+      );
+      await fails(
+        remove,
+        [secondProperty, original.id, removed.revision, 'author', null],
+        'PT409',
+      );
+      await asAdmin();
+      await fails(
+        "update public.property_comments set body='khôi phục', revision=gen_random_uuid() where id=$1",
+        [original.id],
+        '23514',
+      );
+      await fails(
+        'delete from public.property_comments where id=$1',
+        [original.id],
+        '23514',
+      );
+      // Both versions survive: the original submission and the text the reader no longer sees.
+      const retained = await revisions(original.id);
+      assert.equal(retained.length, 1);
+      assert.equal(retained[0].before_body, originalBody);
+      assert.equal(retained[0].after_body, 'Bản sửa trước khi gỡ');
+      assert.equal(
+        (await removalEvidence(original.id)).body,
+        'Bản sửa trước khi gỡ',
+        'the removal retains the text that was current when it was accepted',
+      );
+      assert.equal(
+        (await removalEvidence(original.id)).original_revision,
+        edited.revision,
+      );
+      await asUser(1);
+      assert.equal(
+        await removalEvidence(original.id),
+        undefined,
+        'the ordinary author reads no removal evidence',
+      );
+      // Replay converges on the original validated submission, never on the latest edited text.
+      const before = await count(secondProperty);
+      const replayed = (
+        await db.query(post, [secondProperty, '  ' + originalBody + '  ', key])
+      ).rows[0].created;
+      assert.equal(replayed.id, original.id);
+      assert.equal(
+        replayed.body,
+        null,
+        'recovery never returns withdrawn text',
+      );
+      assert.ok(replayed.removed_at);
+      assert.equal(replayed.revision, removed.revision);
+      await fails(post, [secondProperty, 'Bản sửa trước khi gỡ', key], '23505');
+      assert.equal(await count(secondProperty), before);
+    },
+  );
   await asAdmin();
   await db.query("select set_config('request.jwt.claim.sub','',false)");
   return colleagueProperty;

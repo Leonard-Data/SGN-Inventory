@@ -117,11 +117,15 @@ _Avoid_: Pending lock, permanent property lock
 ### Discussion
 
 **Property comment**:
-A plain-text message an active employee posts to a property's shared flat discussion. Its author identity, property, posting time and position are retained from creation; only its own author may later correct the text in place through a guarded edit that keeps every earlier version.
+A plain-text message an active employee posts to a property's shared flat discussion. Its author identity, property, posting time and position are retained from creation; only its own author may later correct the text in place through a guarded edit that keeps every earlier version, and removal withdraws its text while keeping the record.
 _Avoid_: Note, activity entry, private message
 
+**Comment removal**:
+The one-way withdrawal of a Property comment's text. An author may remove their own current comment on an unarchived property without a reason; an active manager or admin may remove any current comment with a required moderation reason, including on an archived property, where author removal is blocked. The current discussion shows a removal marker instead of the text, and the original text, author, removing actor, time and reason are retained for manager/admin review.
+_Avoid_: Delete, edit, permanent erasure, comment restoration
+
 **Property discussion**:
-The newest-first shared list of a property's Property comments, readable and postable by any active employee who can read the property without holding property-edit authority. Posting to an archived property is denied for every role, and only manager/admin read archived discussion.
+The newest-first shared list of a property's Property comments, readable and postable by any active employee who can read the property without holding property-edit authority. A removed comment stays in place as a marker without its text. Posting to an archived property is denied for every role, and only manager/admin read archived discussion.
 _Avoid_: Chat, live feed, moderation queue
 
 **Submission key**:
@@ -129,7 +133,7 @@ An employee-scoped key identifying one comment submission, so an interrupted or 
 _Avoid_: Draft identity, temporary ID
 
 **Comment edit**:
-An author's correction of their own current Property comment while the property is unarchived. It changes only the displayed text and its revision; the comment keeps its identity, author, property and posting time and position, and readers see an edited marker. A stale expected revision is rejected instead of merged.
+An author's correction of their own current Property comment while the property is unarchived. It changes only the displayed text and its revision; the comment keeps its identity, author, property and posting time and position, and readers see an edited marker. A stale expected revision is rejected instead of merged, and a removed comment is never editable again.
 _Avoid_: New comment, re-post, moderation, rewrite
 
 **Retained comment revision**:

@@ -1,8 +1,10 @@
 -- Ticket #46: a comment author corrects their own current Property comment. The edit appends
 -- retained before/after evidence instead of overwriting, the current text carries an edited
 -- marker, and a stale expected revision is rejected rather than silently merged. Reader access
--- to preceding versions stays reviewer-only; removal, moderation and history browsing are later
--- slices.
+-- to preceding versions stays reviewer-only; application history browsing remains a later slice.
+-- This migration is timestamped after the delivered removal slice and composes with it: one
+-- guard accepts an author edit or a one-way removal, the reader page states both current markers
+-- and posting-key replay compares against the original validated submission.
 begin;
 
 -- Latest edit time only; the original posting time and position never move. Null while the
@@ -53,39 +55,52 @@ create policy comment_revisions_read on public.property_comment_revisions for se
   )
 );
 
--- The original guard protected identity, association and posting time by rejecting every update.
--- An author edit keeps all three, so the guard now allows an owner-held update (never a client
--- role) that changes only the text, its new revision and the edited marker.
+-- One guard for both delivered slices. Removal accepts only the one-way withdrawal that nulls
+-- the text and sets the removal marker; the author edit keeps the text and leaves that marker
+-- null. Both keep identity, association, posting time and a changed revision, run owner-held
+-- (never as a client role), and leave a removed comment terminal.
 create or replace function private.guard_comment_original() returns trigger language plpgsql security invoker set search_path = '' as $$
 begin
-  if tg_op = 'DELETE' then
-    raise exception 'comment removal is not part of this slice' using errcode = '23514';
-  end if;
-  if current_user in ('anon','authenticated','service_role') then
-    raise exception 'use the comment RPC' using errcode = '42501';
-  end if;
-  if tg_op = 'UPDATE' then
+  if tg_op = 'INSERT' then
+    if current_user in ('anon','authenticated','service_role') then
+      raise exception 'use the comment RPC' using errcode = '42501';
+    end if;
+  elsif tg_op = 'UPDATE' then
+    if current_user in ('anon','authenticated','service_role') then
+      raise exception 'comment text uses the guarded RPC' using errcode = '42501';
+    end if;
+    if old.removed_at is not null then
+      raise exception 'removed comments are terminal' using errcode = '23514';
+    end if;
     if new.id is distinct from old.id
       or new.property_id is distinct from old.property_id
       or new.author_id is distinct from old.author_id
       or new.author_name is distinct from old.author_name
       or new.created_at is distinct from old.created_at
-      or new.idempotency_key is distinct from old.idempotency_key then
+      or new.idempotency_key is distinct from old.idempotency_key
+      or new.revision is not distinct from old.revision then
       raise exception 'comment identity, association and posting time are immutable' using errcode = '23514';
     end if;
-    if new.body is not distinct from old.body or new.revision is not distinct from old.revision then
-      raise exception 'an edit must change its text and revision' using errcode = '23514';
+    if new.removed_at is null then
+      if new.body is null or new.body is not distinct from old.body then
+        raise exception 'an edit must change its text' using errcode = '23514';
+      end if;
+      if new.body <> private.trim_unicode(new.body) or length(new.body) not between 1 and 2000 then
+        raise exception 'edited text must be 1 to 2000 characters' using errcode = '23514';
+      end if;
+    elsif new.body is not null then
+      raise exception 'a removal withdraws the comment text' using errcode = '23514';
     end if;
-    if new.body <> private.trim_unicode(new.body) or length(new.body) not between 1 and 2000 then
-      raise exception 'edited text must be 1 to 2000 characters' using errcode = '23514';
-    end if;
+  else
+    raise exception 'comments are withdrawn, never deleted' using errcode = '23514';
   end if;
   return new;
 end;
 $$;
 
 -- Author edit for the comment's current version. Membership, parent-Property archive state and
--- the current revision are rechecked from live state at commit.
+-- the current revision are rechecked from live state at commit, and a withdrawn comment stays
+-- ineligible because its text now lives only in retained evidence.
 create function private.edit_property_comment(p_comment_id uuid,p_body text,p_expected_revision uuid) returns jsonb
 language plpgsql security definer set search_path = '' as $$
 declare
@@ -116,6 +131,7 @@ begin
   if not found then raise exception 'comment not found' using errcode = '23514'; end if;
   -- Property-edit authority is irrelevant here: only the comment's own author may rewrite it.
   if comment.author_id <> me then raise exception 'only the author may edit this comment' using errcode = '42501'; end if;
+  if comment.removed_at is not null then raise exception 'removed comment; reload current state' using errcode = 'PT409'; end if;
   -- PT409 is a PostgREST custom status code, so a stale edit returns 409 immediately and is
   -- never retried as a serialization failure.
   if comment.revision <> p_expected_revision then raise exception 'stale comment edit; reload current text' using errcode = 'PT409'; end if;
@@ -129,7 +145,7 @@ begin
   return jsonb_build_object(
     'id',updated.id,'property_id',updated.property_id,'author_id',updated.author_id,
     'author_name',updated.author_name,'body',updated.body,'created_at',updated.created_at,
-    'revision',updated.revision,'edited_at',updated.edited_at);
+    'revision',updated.revision,'removed_at',updated.removed_at,'edited_at',updated.edited_at);
 end;
 $$;
 revoke all on function private.edit_property_comment(uuid,text,uuid) from public,anon,authenticated;
@@ -142,8 +158,9 @@ $$;
 revoke all on function public.edit_property_comment(uuid,text,uuid) from public,anon,authenticated;
 grant execute on function public.edit_property_comment(uuid,text,uuid) to authenticated;
 
--- Posting key replay now compares against the original validated submission. After an edit the
--- current body differs, so compare with the earliest retained `before_body` when one exists.
+-- Posting key replay compares against the original validated submission rather than the latest
+-- edited text: the earliest retained before-text, the surviving current text, or the text the
+-- removal slice retained once the current text was withdrawn.
 create or replace function private.post_property_comment(p_property_id uuid,p_body text,p_key uuid) returns jsonb
 language plpgsql security definer set search_path = '' as $$
 declare
@@ -175,10 +192,14 @@ begin
     -- Recovery converges on the original identity; conflicting reuse is rejected. The
     -- archive and access checks above already ran, so recovery is not a later route in.
     select * into existing from public.property_comments where author_id = me and idempotency_key = p_key;
+    if existing.id is null or existing.property_id <> p_property_id then
+      raise exception 'submission key reused with a different comment' using errcode = '23505';
+    end if;
     select coalesce(
       (select r.before_body from public.property_comment_revisions r where r.comment_id = existing.id order by r.sequence limit 1),
-      existing.body) into original_body;
-    if existing.id is null or existing.property_id <> p_property_id or original_body <> text_body then
+      existing.body,
+      (select r.body from public.property_comment_removals r where r.comment_id = existing.id)) into original_body;
+    if original_body is distinct from text_body then
       raise exception 'submission key reused with a different comment' using errcode = '23505';
     end if;
     created := existing;
@@ -186,12 +207,13 @@ begin
   return jsonb_build_object(
     'id',created.id,'property_id',created.property_id,'author_id',created.author_id,
     'author_name',created.author_name,'body',created.body,'created_at',created.created_at,
-    'revision',created.revision,'edited_at',created.edited_at);
+    'revision',created.revision,'removed_at',created.removed_at,'edited_at',created.edited_at);
 end;
 $$;
 
--- The read page adds the edited marker only; preceding versions never appear in a reader's row.
--- The return type changes, so the existing function must be dropped and recreated.
+-- The read page states the current edit and removal markers only; preceding versions never
+-- appear in a reader's row. The return type changes, so the existing function must be dropped
+-- and recreated.
 drop function public.list_property_comments(uuid,timestamptz,uuid,integer);
 create function public.list_property_comments(
   p_property_id uuid,
@@ -206,9 +228,10 @@ create function public.list_property_comments(
   body text,
   created_at timestamptz,
   revision uuid,
+  removed_at timestamptz,
   edited_at timestamptz
 ) language sql stable security invoker set search_path = '' as $$
-  select c.id, c.property_id, c.author_id, c.author_name, c.body, c.created_at, c.revision, c.edited_at
+  select c.id, c.property_id, c.author_id, c.author_name, c.body, c.created_at, c.revision, c.removed_at, c.edited_at
   from public.property_comments c
   where c.property_id = p_property_id
     and (
