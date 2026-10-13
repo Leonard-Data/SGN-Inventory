@@ -28,8 +28,14 @@ concurrency:
 
 jobs:
   quality:
-    # Activate only after projects, credentials and protection gates are configured.
-    if: vars.CD_ENABLED == 'true'
+    # One activation switch per stage: CD_DEV_ENABLED alone can never start a
+    # production run and CD_PROD_ENABLED alone can never start a development
+    # release. Activate each stage only after projects, credentials and
+    # protection gates are configured; CD_PROD_ENABLED is deliberately left
+    # unset until staging acceptance and a separate production release decision.
+    if: >-
+      (inputs.stage == 'dev' && vars.CD_DEV_ENABLED == 'true') ||
+      ((inputs.stage == 'prod' || github.event_name == 'push') && vars.CD_PROD_ENABLED == 'true')
     uses: ./.github/workflows/ci.yml
   # Database changes land before the application that depends on them. The
   # guard-and-push sequence is defined once in migration.yml; a failed migration
@@ -45,7 +51,11 @@ jobs:
     secrets: inherit
   deploy:
     needs: migrate
-    if: (inputs.stage == 'dev' && github.ref == 'refs/heads/develop') || ((inputs.stage == 'prod' || github.event_name == 'push') && github.ref == 'refs/heads/main')
+    # Stage branch, stage switch and host project must all agree; the stage
+    # switch is repeated here so a mistyped trigger guard cannot publish.
+    if: >-
+      (inputs.stage == 'dev' && github.ref == 'refs/heads/develop' && vars.CD_DEV_ENABLED == 'true') ||
+      ((inputs.stage == 'prod' || github.event_name == 'push') && github.ref == 'refs/heads/main' && vars.CD_PROD_ENABLED == 'true')
     environment:
       name: ${{ inputs.stage || 'prod' }}
       url: ${{ steps.publish.outputs.url }}
@@ -75,6 +85,10 @@ jobs:
       - name: Install pinned npm
         run: npm install --global npm@11.13.0
       - run: npm ci
+      - name: Verify stage activation before cloud contact
+        env:
+          SGN_CD_KIND: ${{ inputs.stage || 'prod' }}
+        run: node scripts/release-guard.mjs activation
       - name: Verify isolated release configuration before cloud contact
         run: node scripts/release-guard.mjs configuration
       # Both targets use their isolated project's Production environment.

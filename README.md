@@ -9,7 +9,7 @@ The first release is a shared property inventory: search addresses and character
 
 Start with [CONTEXT.md](CONTEXT.md), then [docs/architecture.md](docs/architecture.md), [docs/schema.md](docs/schema.md) and [docs/migration-plan.md](docs/migration-plan.md). [docs/database-contract.md](docs/database-contract.md) is the application/agent API contract. [AGENTS.md](AGENTS.md) and [CLAUDE.md](CLAUDE.md) guide coding agents.
 
-For engineering setup, start with [docs/setup.md](docs/setup.md) and [docs/development.md](docs/development.md): pinned stack, coding conventions, source layout, Windows/POSIX setup, hooks, CI, dev-only pull request previews and production from the default branch. Delivery stays inactive until the external protection/configuration checklist is complete and `CD_ENABLED=true` is set.
+For engineering setup, start with [docs/setup.md](docs/setup.md) and [docs/development.md](docs/development.md): pinned stack, coding conventions, source layout, Windows/POSIX setup, hooks, CI, dev-only pull request previews and production from the default branch. Preview and development delivery stays inactive until the external protection/configuration checklist is complete and the stage-scoped `CD_PREVIEW_ENABLED` and `CD_DEV_ENABLED` switches are set; production delivery additionally waits for staging acceptance and a separate `CD_PROD_ENABLED` production release decision.
 
 ## Included work
 

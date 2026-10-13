@@ -1,11 +1,43 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  cdActivation,
   releaseTarget,
   releaseConfiguration,
   releasePendingMigrations,
   verifyPulledConfiguration,
 } from './release-guard.mjs';
+
+test('stage activation never leaks across delivery kinds', () => {
+  // Every kind is off until its own switch is set, so an unconfigured
+  // repository can start no preview, development or production release.
+  for (const kind of ['preview', 'dev', 'prod']) {
+    assert.equal(cdActivation(kind, {}), false);
+  }
+  assert.equal(cdActivation('preview', { CD_PREVIEW_ENABLED: 'true' }), true);
+  assert.equal(cdActivation('dev', { CD_DEV_ENABLED: 'true' }), true);
+  assert.equal(cdActivation('prod', { CD_PROD_ENABLED: 'true' }), true);
+  // Enabling preview or development delivery can never enable production, and
+  // the production switch can never start a development release.
+  assert.equal(cdActivation('prod', { CD_DEV_ENABLED: 'true' }), false);
+  assert.equal(cdActivation('prod', { CD_PREVIEW_ENABLED: 'true' }), false);
+  assert.equal(cdActivation('dev', { CD_PREVIEW_ENABLED: 'true' }), false);
+  assert.equal(
+    cdActivation('prod', {
+      CD_PREVIEW_ENABLED: 'true',
+      CD_DEV_ENABLED: 'true',
+    }),
+    false,
+  );
+  // Only the exact literal enables a kind; a near-miss value stays off.
+  for (const value of ['TRUE', 'yes', '1', 'true ']) {
+    assert.equal(cdActivation('dev', { CD_DEV_ENABLED: value }), false);
+  }
+  assert.throws(
+    () => cdActivation('staging', { CD_DEV_ENABLED: 'true' }),
+    /known CD activation kind/,
+  );
+});
 
 const dev = {
   SGN_ENV: 'dev',

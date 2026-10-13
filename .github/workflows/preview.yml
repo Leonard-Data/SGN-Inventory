@@ -12,11 +12,17 @@ concurrency:
 
 jobs:
   quality:
-    # Never execute fork code with deployment secrets, or use pull_request_target.
-    if: vars.CD_ENABLED == 'true' && github.event.pull_request.head.repo.full_name == github.repository
+    # One activation switch per delivery kind: the preview switch never starts a
+    # development or production release. Never execute fork code with deployment
+    # secrets, or use pull_request_target.
+    if: >-
+      vars.CD_PREVIEW_ENABLED == 'true' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     uses: ./.github/workflows/ci.yml
   deploy:
     needs: quality
+    # Repeated so a mistyped trigger guard cannot reach the dev project.
+    if: vars.CD_PREVIEW_ENABLED == 'true'
     environment:
       name: preview
       url: ${{ steps.publish.outputs.url }}
@@ -51,6 +57,10 @@ jobs:
       - name: Install pinned npm
         run: npm install --global npm@11.13.0
       - run: npm ci
+      - name: Verify preview activation before cloud contact
+        env:
+          SGN_CD_KIND: preview
+        run: node scripts/release-guard.mjs activation
       - name: Verify dev-only preview configuration before cloud contact
         run: node scripts/release-guard.mjs configuration
       - run: npx --no-install vercel pull --yes --environment=preview --git-branch="$PR_BRANCH"
