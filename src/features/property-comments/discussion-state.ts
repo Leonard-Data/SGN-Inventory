@@ -21,18 +21,44 @@ export function mergePage(current: Comment[], page: Comment[]): Comment[] {
     const existing = local.get(row.id);
     if (!existing) return row;
     if (existing.removedAt !== null && row.removedAt === null) return existing;
-    if (existing.editedAt !== null && row.editedAt === null) return existing;
+    if (
+      existing.editedAt !== null &&
+      (row.editedAt === null ||
+        Date.parse(row.editedAt) < Date.parse(existing.editedAt))
+    )
+      return existing;
     return row;
   });
 }
 
-export function mergePageKeepingComment(
+export function mergeComment(current: Comment[], comment: Comment): Comment[] {
+  let found = false;
+  const rows = current.map((row) => {
+    if (row.id !== comment.id) return row;
+    found = true;
+    return comment;
+  });
+  return found ? rows : [...rows, comment];
+}
+
+export function mergeStaleEditState(
   current: Comment[],
   page: Comment[],
   commentId: string,
+  comment: Comment | null,
 ): Comment[] {
-  const merged = mergePage(current, page);
-  if (merged.some((row) => row.id === commentId)) return merged;
+  const pageRows = mergePage(current, page);
+  const incoming = new Map(pageRows.map((row) => [row.id, row]));
+  if (comment) incoming.set(comment.id, comment);
+  const seen = new Set<string>();
+  const rows = current.map((row) => {
+    const next = incoming.get(row.id) ?? row;
+    seen.add(row.id);
+    return next;
+  });
+  const fresh = pageRows.filter((row) => !seen.has(row.id));
+  if (comment && !seen.has(comment.id)) return [...fresh, ...rows, comment];
+  if (rows.some((row) => row.id === commentId)) return [...fresh, ...rows];
   const existing = current.find((row) => row.id === commentId);
-  return existing ? [...merged, existing] : merged;
+  return existing ? [...fresh, ...rows, existing] : [...fresh, ...rows];
 }

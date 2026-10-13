@@ -1,7 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { objectBody, runRoute } from '@/lib/supabase/route';
 import { activeEmployee } from '@/features/employees/access';
-import { editComment } from '@/features/property-comments/data';
+import { editComment, exactComment } from '@/features/property-comments/data';
+
+export function GET(
+  request: NextRequest,
+  route: { params: Promise<{ id: string; commentId: string }> },
+) {
+  return runRoute(request, async (context) => {
+    await activeEmployee(context);
+    const { id, commentId } = await route.params;
+    return NextResponse.json({
+      comment: await exactComment(context, id, commentId),
+    });
+  });
+}
 
 export function PATCH(
   request: NextRequest,
