@@ -64,6 +64,10 @@ _Avoid_: Contact inferred from sheet position
 A shared named party whose contact details may be used by several properties. Its relationship to each property is recorded separately as a property contact link.
 _Avoid_: Property-specific phone record
 
+**Shared-contact detail correction**:
+A correction of the identity details of an existing linked Contact by any Active employee who can read the property it was opened from. It commits immediately and appears in the change history of every Property linked at that moment, and it is separate from Property-fact authority: it does not create, link, unlink or merge contacts.
+_Avoid_: Property-fact edit, contact creation, approval
+
 **Record verification**:
 An assessment of the accuracy of property facts and contact relationships, distinct from reservation approval. It is not a prerequisite for saving or displaying ordinary inventory changes and does not establish legal ownership.
 _Avoid_: Legal approval, address verification

@@ -7,7 +7,8 @@
 | Read internal inventory, addresses, contacts/files and employee directory | Yes | Yes | Yes | Yes |
 | Create property / request reservation | Yes | Yes | Yes | Yes |
 | Edit property/address | Own unarchived | All unarchived | All unarchived | All unarchived |
-| Maintain contact records | No | Yes | Yes | Yes |
+| Correct an existing linked shared-contact detail | Yes | Yes | Yes | Yes |
+| Create contacts, change relationship/primary markers or unlink | No | Yes | Yes | Yes |
 | Submit correction request | Yes | Yes | Yes | Yes |
 | Process/reject correction requests | No | Yes | Yes | Yes |
 | Record own page view / owner-contact access | Yes | Yes | Yes | Yes |

@@ -550,24 +550,148 @@ export async function maintenanceContract({
       );
     },
   );
+  // Sales journey fixture: a shared contact linked to two of another employee's readable properties,
+  // plus an unlinked identity that stays outside the settled linked-detail permission.
+  await db.query(mutate, [
+    created,
+    'link',
+    null,
+    await revision('properties', created),
+    { contact_id: shared, relation: 'owner', is_primary: true },
+  ]);
+  await db.query(mutate, [
+    property,
+    'link',
+    null,
+    await revision('properties', property),
+    { contact_id: shared, relation: 'broker' },
+  ]);
+  const unlinkedContact = (
+    await db.query('select public.create_contact($1) as id', [
+      { display_name: 'Unlinked person' },
+    ])
+  ).rows[0].id;
   await asUser(0);
   await check(
-    'sales contact creation, contact correction and link mutations remain denied',
+    'any Active employee corrects a shared linked contact with attributable history on every linked property',
     async () => {
-      await fails(
-        'select public.create_contact($1)',
-        [{ display_name: 'forged' }],
-        '42501',
+      const preview = (
+        await db.query('select public.contact_impact($1) as impact', [shared])
+      ).rows[0].impact;
+      assert.deepEqual(
+        preview.properties.map((r) => r.id).sort(),
+        [created, property].sort(),
       );
+      await db.query(mutate, [
+        created,
+        'contact',
+        shared,
+        preview.revision,
+        {
+          display_name: 'Người chung đính chính',
+          raw_phone_text: '0900 %_ mới',
+        },
+      ]);
+      assert.deepEqual(
+        (
+          await db.query(
+            'select display_name,raw_phone_text from public.contacts where id=$1',
+            [shared],
+          )
+        ).rows[0],
+        {
+          display_name: 'Người chung đính chính',
+          raw_phone_text: '0900 %_ mới',
+        },
+      );
+      for (const id of [created, property]) {
+        const event = (
+          await db.query(
+            "select actor_id,before_values,after_values from public.property_history where property_id=$1 and target='contact' and target_id=$2 order by occurred_at desc limit 1",
+            [id, shared],
+          )
+        ).rows[0];
+        assert.equal(event.actor_id, employees[0]);
+        assert.equal(event.before_values.display_name, 'Người chung');
+        assert.equal(event.after_values.display_name, 'Người chung đính chính');
+      }
       await fails(
         mutate,
         [
           created,
           'contact',
           shared,
-          await revision('contacts', shared),
-          { display_name: 'forged' },
+          preview.revision,
+          { display_name: 'stale' },
         ],
+        'PT409',
+      );
+      const historyCount = async () =>
+        (
+          await db.query(
+            "select count(*)::int as n from public.property_history where target='contact' and target_id=$1",
+            [shared],
+          )
+        ).rows[0].n;
+      const committed = await historyCount();
+      await db.query(mutate, [
+        property,
+        'contact',
+        shared,
+        await revision('contacts', shared),
+        { display_name: 'Người chung đính chính' },
+      ]);
+      assert.equal(await historyCount(), committed);
+    },
+  );
+  await db.exec('reset role');
+  await db.query("select set_config('request.jwt.claim.sub','',false)");
+  await check(
+    'an injected history failure rolls back the shared-contact correction',
+    async () => {
+      const current = (
+        await db.query(
+          'select display_name,revision from public.contacts where id=$1',
+          [shared],
+        )
+      ).rows[0];
+      await db.exec(
+        "create function private.fixture_fail_contact_history() returns trigger language plpgsql as $$ begin raise exception 'synthetic history failure' using errcode='23514'; end $$; create trigger fixture_fail_contact_history before insert on public.property_history for each row execute function private.fixture_fail_contact_history();",
+      );
+      await asUser(0);
+      await fails(
+        mutate,
+        [
+          created,
+          'contact',
+          shared,
+          current.revision,
+          { display_name: 'không được lưu' },
+        ],
+        '23514',
+      );
+      assert.deepEqual(
+        (
+          await db.query(
+            'select display_name,revision from public.contacts where id=$1',
+            [shared],
+          )
+        ).rows[0],
+        current,
+      );
+      await db.exec('reset role');
+      await db.exec(
+        'drop trigger fixture_fail_contact_history on public.property_history;drop function private.fixture_fail_contact_history();',
+      );
+    },
+  );
+  await asUser(0);
+  await check(
+    'sales creation, link, unlink and unlinked-contact correction remain denied',
+    async () => {
+      await fails(
+        'select public.create_contact($1)',
+        [{ display_name: 'forged' }],
         '42501',
       );
       await fails(
@@ -581,6 +705,71 @@ export async function maintenanceContract({
         ],
         '42501',
       );
+      const link = (
+        await db.query(
+          'select revision from public.property_contacts where property_id=$1 and contact_id=$2',
+          [created, shared],
+        )
+      ).rows[0];
+      await fails(
+        mutate,
+        [created, 'link', shared, link.revision, { remove: true }],
+        '42501',
+      );
+      await fails(
+        mutate,
+        [
+          created,
+          'contact',
+          unlinkedContact,
+          await revision('contacts', unlinkedContact),
+          { display_name: 'forged' },
+        ],
+        '42501',
+      );
+    },
+  );
+  await asUser(2);
+  await check(
+    'a shared contact linked to an archived property denies an ordinary employee the preview and the correction',
+    async () => {
+      const archivedParent = (
+        await db.query('select public.create_property($1,$2,$3) as id', [
+          'sale',
+          {},
+          { format: 'legacy', address_text: 'Synthetic archived parent' },
+        ])
+      ).rows[0].id;
+      await db.query(mutate, [
+        archivedParent,
+        'link',
+        null,
+        await revision('properties', archivedParent),
+        { contact_id: shared, relation: 'owner' },
+      ]);
+      await db.query(mutate, [
+        archivedParent,
+        'property',
+        archivedParent,
+        await revision('properties', archivedParent),
+        { archived_at: new Date().toISOString() },
+      ]);
+      const archivedRevision = await revision('properties', archivedParent);
+      await asUser(0);
+      await fails('select public.contact_impact($1)', [shared], '42501');
+      await fails(
+        'select public.maintain_property($1,$2,$3,$4,$5,$6)',
+        [
+          archivedParent,
+          'contact',
+          shared,
+          await revision('contacts', shared),
+          { display_name: 'forged' },
+          archivedRevision,
+        ],
+        '42501',
+      );
+      await asUser(2);
     },
   );
   await asUser(2);
