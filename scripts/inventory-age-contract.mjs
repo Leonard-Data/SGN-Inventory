@@ -448,7 +448,11 @@ export async function inventoryAgeContract({
         rows.map((row) => row.id),
         [negotiating],
       );
-      assert.equal((await ageRows('oldest', 'x'.repeat(121))).length, 0);
+      await fails(
+        'select * from public.list_inventory_by_age($1::text,$2::text)',
+        ['oldest', 'x'.repeat(121)],
+        '22023',
+      );
     },
   );
   await check(
@@ -478,8 +482,13 @@ export async function inventoryAgeContract({
   );
   await asUser(4);
   await check(
-    'inactive identity reads no inventory instead of a fabricated list',
-    async () => assert.equal((await ageRows('oldest', 'agefix')).length, 0),
+    'inactive identity inventory age read denied',
+    () =>
+      fails(
+        'select * from public.list_inventory_by_age($1::text,$2::text)',
+        ['oldest', 'agefix'],
+        '42501',
+      ),
   );
   await asOwner();
 }

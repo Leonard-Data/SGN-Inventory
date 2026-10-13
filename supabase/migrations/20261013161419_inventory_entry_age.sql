@@ -87,6 +87,8 @@ returns table(id uuid,property_code text,listing_mode text,status text,cover_fil
 language plpgsql stable security invoker set search_path='' as $$
 declare page_size integer;
 begin
+  if private.employee_id() is null then raise exception 'active employee required' using errcode='42501'; end if;
+  if length(coalesce(p_query,'')) > 120 then raise exception 'invalid inventory query' using errcode='22023'; end if;
   if p_direction is null or p_direction not in ('oldest','newest') then
     raise exception 'invalid inventory ordering' using errcode='22023';
   end if;
@@ -109,7 +111,6 @@ begin
       (now() at time zone 'Asia/Ho_Chi_Minh')::date as vn_today
     from public.properties p cross join search s
     where p.archived_at is null and p.status in ('available','negotiating')
-      and length(coalesce(p_query,'')) <= 120
       and (coalesce(btrim(p_query),'') = '' or p.property_code ilike s.code_pattern escape E'\\'
         or exists (select 1 from public.property_addresses a where a.property_id = p.id
           and a.search_text like s.address_pattern escape E'\\'))
