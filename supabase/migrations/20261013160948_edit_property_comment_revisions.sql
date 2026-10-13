@@ -123,7 +123,6 @@ create function private.edit_property_comment(
 declare
   me uuid := private.employee_id();
   text_body text := private.trim_unicode(p_body);
-  prop_id uuid;
   archived timestamptz;
   actor text;
   comment public.property_comments;
@@ -137,25 +136,21 @@ begin
   if text_body is null or length(text_body) not between 1 and 2000 then
     raise exception 'comment text must be 1 to 2000 characters' using errcode = '23514';
   end if;
-  -- The comment's own parent is authoritative; the caller's Property is only a routing check.
-  select c.property_id into prop_id from public.property_comments c where c.id = p_comment_id;
-  if prop_id is null or prop_id <> p_property_id then
-    raise exception 'comment not found' using errcode = '23514';
-  end if;
   -- Lock the parent Property first so a concurrent archive serializes here, and read the
   -- archive state under that lock rather than trusting the pre-lock snapshot.
-  select p.archived_at into archived from public.properties p where p.id = prop_id for update;
+  select p.archived_at into archived from public.properties p where p.id = p_property_id for update;
   if not found then raise exception 'property not found' using errcode = '23514'; end if;
-  select * into comment from public.property_comments where id = p_comment_id for update;
+  if archived is not null then
+    raise exception 'archived property blocks author edits' using errcode = 'PT403';
+  end if;
+  -- The comment's own parent is authoritative; the caller's Property is only a routing check.
+  select * into comment from public.property_comments where id = p_comment_id and property_id = p_property_id for update;
   if comment.id is null then raise exception 'comment not found' using errcode = '23514'; end if;
   -- Live authority is checked before state, so an unauthorized caller learns nothing about a
   -- comment it could not already read. Only the author may edit; property-edit authority and
   -- manager/admin role grant nothing here.
   if comment.author_id <> me then
     raise exception 'only the author may edit this comment' using errcode = '42501';
-  end if;
-  if archived is not null then
-    raise exception 'archived property blocks author edits' using errcode = '42501';
   end if;
   if comment.removed_at is not null then
     raise exception 'removed comments cannot be edited' using errcode = 'PT409';

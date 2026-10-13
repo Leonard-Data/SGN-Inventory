@@ -31,16 +31,6 @@ export function mergePage(current: Comment[], page: Comment[]): Comment[] {
   });
 }
 
-export function mergeComment(current: Comment[], comment: Comment): Comment[] {
-  let found = false;
-  const rows = current.map((row) => {
-    if (row.id !== comment.id) return row;
-    found = true;
-    return comment;
-  });
-  return found ? rows : [...rows, comment];
-}
-
 export function mergeStaleEditState(
   current: Comment[],
   page: Comment[],

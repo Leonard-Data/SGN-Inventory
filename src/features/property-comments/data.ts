@@ -167,6 +167,7 @@ export async function editComment(
   });
   if (error) {
     if (error.code === '42501') throw new ApiError(403, 'access-denied');
+    if (error.code === 'PT403') throw new ApiError(409, 'access-denied');
     if (error.code === '23514') throw new ApiError(400, 'invalid-input');
     if (error.code === 'PT400') throw new ApiError(409, 'comment-unchanged');
     if (error.code === 'PT409' || error.code === '23505')
