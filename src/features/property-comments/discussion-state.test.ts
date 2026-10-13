@@ -116,6 +116,23 @@ test('equal edited timestamp does not replace local edited state', () => {
   assert.deepEqual(mergePage([latest], [equal]), [latest]);
 });
 
+test('incoming removal marker replaces locally edited text', () => {
+  const latest = comment(
+    'edited',
+    'Edited text',
+    '2026-10-12T09:00:00.000Z',
+    '2026-10-13T10:00:00.123456Z',
+  );
+  const removed = {
+    ...latest,
+    body: null,
+    revision: 'edited-revision-removed',
+    removedAt: '2026-10-13T11:00:00.000Z',
+  };
+
+  assert.deepEqual(mergePage([latest], [removed]), [removed]);
+});
+
 test('stale edit merge preserves loaded row position', () => {
   const newest = comment('newest', 'Newest', '2026-10-13T09:00:00.000Z');
   const middle = comment('middle', 'Middle', '2026-10-12T09:00:00.000Z');
