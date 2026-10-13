@@ -6,7 +6,7 @@ import type { Locale } from '@/i18n/messages';
 import { messages } from '@/i18n/messages';
 import { formChanges, targetFields } from './fields';
 import { AddressFields, RecordFields } from './forms';
-import { maintenanceText } from './messages';
+import { maintenanceText, optionLabel } from './messages';
 export function CreateProperty({
   locale,
   onDenied,
@@ -50,15 +50,15 @@ export function CreateProperty({
     }
   }
   return (
-    <details className="panel maintenance">
-      <summary className="panel-head">
-        <span className="panel-title">{text.create}</span>
-      </summary>
+    <section className="panel maintenance">
       <div className="panel-body">
         <p>{text.immediate}</p>
         <form onSubmit={submit}>
-          <fieldset disabled={busy} className="stack-4">
-            <legend>{text.create}</legend>
+          <fieldset
+            disabled={busy}
+            className="stack-4"
+            aria-label={optionLabel(locale, 'property')}
+          >
             <p>{text.optional}</p>
             <RecordFields
               locale={locale}
@@ -88,6 +88,6 @@ export function CreateProperty({
         </form>
         <p className="search-hint">{messages[locale].legalNote}</p>
       </div>
-    </details>
+    </section>
   );
 }

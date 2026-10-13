@@ -814,7 +814,6 @@ export function Detail({
                       <CorrectionQueue
                         key={'requests' + property.id + refreshTick}
                         propertyId={property.id}
-                        employee={employee}
                         locale={locale}
                         onDenied={denyFiles}
                         onChanged={() => void changed()}

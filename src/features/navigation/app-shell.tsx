@@ -24,6 +24,33 @@ const ICONS: Record<string, ReactNode> = {
       <path d="M20.5 20.5 16.7 16.7" />
     </svg>
   ),
+  plus: (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  ),
+  inbox: (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 12h5l2 3h4l2-3h5" />
+      <path d="M6 4h12l3 8v8H3v-8l3-8z" />
+    </svg>
+  ),
   chart: (
     <svg
       viewBox="0 0 24 24"
@@ -269,6 +296,11 @@ export function AppShell({
   }, [drawer]);
 
   const groups = employee ? visibleNavGroups(employee.role) : [];
+  // A nested destination matches its own rail item exactly; the section item keeps
+  // its highlight only when no item matches the path exactly (/properties/new).
+  const exactNavPath = groups.some((group) =>
+    group.items.some((item) => item.href === pathname),
+  );
   const crumbs: { label: string; href?: string }[] = [];
   if (pathname === '/properties') crumbs.push({ label: text.inventory });
   else if (pathname.startsWith('/properties/'))
@@ -305,7 +337,7 @@ export function AppShell({
                   onClick={() => setDrawer(false)}
                   aria-current={
                     pathname === item.href ||
-                    pathname.startsWith(`${item.href}/`)
+                    (!exactNavPath && pathname.startsWith(`${item.href}/`))
                       ? 'page'
                       : undefined
                   }

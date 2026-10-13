@@ -6,8 +6,6 @@ import { messages } from '@/i18n/messages';
 import type { PropertyPage } from './types';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { PropertyCard } from './property-card';
-import { CreateProperty } from '@/features/property-maintenance/create';
-import { CorrectionQueue } from '@/features/corrections/queue';
 
 export function Inventory({
   initialLocale,
@@ -270,17 +268,6 @@ export function Inventory({
                   ) : null}
                 </span>
               </nav>
-
-              {employee ? (
-                <>
-                  <CreateProperty locale={locale} onDenied={denyFiles} />
-                  <CorrectionQueue
-                    employee={employee}
-                    locale={locale}
-                    onDenied={denyFiles}
-                  />
-                </>
-              ) : null}
             </>
           ) : null}
         </div>
