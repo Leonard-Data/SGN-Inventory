@@ -396,14 +396,17 @@ function browser(session, cdpPort, args) {
     timeout: 120000,
     env: {
       ...process.env,
-      CHROME_DEVTOOLS_AXI_SESSION: session,
+      // The run stamp keeps every run's sessions distinct: chrome-devtools-axi
+      // persists a bridge per session name, so a fixed name would connect a later
+      // run to the previous run's bridge and its dead browser.
+      CHROME_DEVTOOLS_AXI_SESSION: `${session}-${runStamp}`,
       CHROME_DEVTOOLS_AXI_AUTO_CONNECT: '0',
       CHROME_DEVTOOLS_AXI_BROWSER_URL: `http://127.0.0.1:${cdpPort}`,
       CHROME_DEVTOOLS_AXI_MCP_SERVER_URL: '',
       CHROME_DEVTOOLS_AXI_BRIDGE_TIMEOUT_MS: '180000',
     },
   });
-  const diagnostic = (result.stderr ?? '')
+  const diagnostic = `${result.stdout ?? ''}\n${result.stderr ?? ''}`
     .split('\n')
     .filter((line) => /^(error|code):/.test(line.trim()))
     .join(' | ')
@@ -1160,6 +1163,11 @@ try {
   observed('sign-out clears the list and Back exposes none of it');
 
   // Denial as rendered: anonymous and the unlinked/inactive identities never reach the list.
+  // The first navigation binds the session on a URL that does not redirect:
+  // chrome-devtools-axi records the page it created by matching the requested URL, and a
+  // redirect (this page's /people/employees -> /login) leaves the session without a
+  // selected page, failing the next call with `No page is currently selected`.
+  browser('sgn65-alt', 9335, ['open', `${appUrl}/login`]);
   browser('sgn65-alt', 9335, ['open', `${appUrl}/people/employees`]);
   await waitFor('sgn65-alt', 9335, `() => location.pathname === '/login'`);
   const anonymousView = evaluate(
