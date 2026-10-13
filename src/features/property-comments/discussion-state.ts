@@ -21,6 +21,7 @@ export function mergePage(current: Comment[], page: Comment[]): Comment[] {
     const existing = local.get(row.id);
     if (!existing) return row;
     if (existing.removedAt !== null && row.removedAt === null) return existing;
+    if (row.removedAt !== null) return row;
     if (
       existing.editedAt !== null &&
       (row.editedAt === null ||
