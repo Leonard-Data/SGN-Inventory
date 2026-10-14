@@ -4,7 +4,7 @@
 
 `npm run test:schema` executes every migration in `supabase/migrations/` in embedded PostgreSQL (PGlite) with the real unaccent/pg_trgm extensions. It creates mock Supabase Auth/Storage schemas and fixture employee accounts. It checks real database grants, RLS, workflow state and data constraints; it does not emulate HTTP APIs.
 
-Results are in `validation-results.json`. Covered behaviors include anonymous/inactive denial, property edit restrictions, denied privilege escalation, accent-insensitive search, reservation approval and conflict, self approval/visit denial, activity retry, Vietnam dates, effective expiry/release, private staging/audit access and registered private-file access.
+Results are in `validation-results.json`. Covered behaviors include anonymous/inactive denial, property edit restrictions, denied privilege escalation, accent-insensitive search, reservation approval and conflict, self approval/visit denial, activity retry, Vietnam dates, effective expiry/release, private staging/audit access, registered private-file access, and the seeded Vietnamese province/commune reference catalog (official codes and leading zeros, parent hierarchy with no orphan wards, upstream group counts, active-employee read, idempotent re-application, and the address picker/verification/analytics paths that consume it).
 
 Python preparation tests validate source-sensitive unit conversions, datetime assumptions, phone preservation/normalization and exclusion of credentials. `prepare_workbook.py` was also run against the complete uploaded workbook. It reads without modifying the original; the delivered report is sanitized.
 
@@ -282,14 +282,14 @@ Disclosed limits of this round: the stand-in answers Auth/Data API calls with fi
 
 Scope: [confirmed maintenance plan](delivery-plan.md#confirmed-property-contact-and-address-maintenance-plan) and [confirmed planned contract](database-contract.md#confirmed-property-contact-and-address-maintenance-decisions). These are planned acceptance gates for the confirmed scope, not executed results or authorization to provision staging. Use sanitized fixtures, real Supabase Auth/Data API/RLS, the actual VI/EN browser interface and independent connections for contention.
 
-Prepare distinct active sales/staff/manager/admin identities, an inactive and an unlinked identity, own/shared/archived properties, a contact shared by several properties, immutable legacy source text, current candidates and evidence-backed verified current addresses. Official-unit test fixtures must not be represented as a production catalog.
+Prepare distinct active sales/staff/manager/admin identities, an inactive and an unlinked identity, own/shared/archived properties, a contact shared by several properties, immutable legacy source text, current candidates and evidence-backed verified current addresses. The embedded suite applies the real seeded national catalog; schema-only TEST-* fixture units must not be represented as that production catalog in any hosted environment.
 
 | Scenario | Required observation |
 | --- | --- |
 | Create with listing mode and a known legacy address, without price/dimensions/contact | One property receives a stable unique code; initial address and history commit with it; unknown facts remain unknown; the record is immediately searchable without maintenance approval |
 | Blank/missing required address or listing mode; invalid typed values | Localized validation and database guards reject invalid input; no partial property/address/history state remains |
 | Fail the initial address/history operation after beginning creation | Entire creation rolls back; no addressless orphan property or misleading success |
-| Create with raw current address while catalogs lack matching units | Save unverified without district or guessed ward; later verification requires valid reviewed unit data/evidence |
+| Create with raw current address without choosing catalog units | Save unverified without district or guessed ward; later verification requires valid reviewed unit data/evidence |
 | Sales edits own property versus another employee's property | Own unarchived edit succeeds immediately; cross-owner write is denied, including direct API attempts; denied writes leave no data change |
 | Staff edits a shared property's price or facts | Corrected values appear in fresh search/detail reads; property history shows actor, time and before/after; no approval queue is created |
 | Sales attempts property-fact, address, mapping, contact creation/link maintenance or optional verified designation | Denied under database authorization, even if UI controls are bypassed; sales can submit a correction request instead |

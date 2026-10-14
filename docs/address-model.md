@@ -4,7 +4,7 @@
 
 Decision 19/2025/QĐ-TTg provides the official province and commune code lists effective from 1 July 2025. The two-tier administrative model operates from that date. District labels are therefore retained for historical addresses and search, while current structured entry uses province/city and commune/ward. The HCMC reorganization in Resolution 1685/NQ-UBTVQH15 includes partial ward transfers. A ward-name substitution alone cannot resolve every property. See official links in `sources.md`.
 
-This is an application data model derived from those sources. It does not establish legal title or alter a document's original address. Catalog ingestion must check for subsequent official changes rather than treating the 2025 list as permanently current.
+This is an application data model derived from those sources. It does not establish legal title or alter a document's original address. Catalog ingestion must check for subsequent official changes rather than treating the 2025 list as permanently current. The seeded reference catalog below is pinned to a later upstream revision, so check for changes after that revision before ingesting any newer release.
 
 ## Entry and display rules
 
@@ -39,7 +39,15 @@ Version records hold official text codes, names, parents, validity dates and sou
 5. Save the current address with verified unit IDs and the date on which those units apply. The database validates levels, parents, date validity and absence of district.
 6. Retain the legacy address. For a later change, retain the previous current row as nonprimary before adding a replacement within one transaction.
 
-No national catalog or blanket old→new mapping is seeded by this package. Complete verified HCMC data first because all nonblank city labels in the property sheet are HCMC. Do not assume every physical location is correct merely because that column says HCMC.
+Complete verified HCMC data first because all nonblank city labels in the property sheet are HCMC. Do not assume every physical location is correct merely because that column says HCMC.
+
+### Seeded reference catalog
+
+Migration `20261014075435_vietnamese_admin_units_reference.sql` seeds the national two-tier catalog into `admin_unit_versions` from the pinned [vietnamese-provinces-database v5.2.0](https://github.com/thanglequoc/vietnamese-provinces-database/tree/v5.2.0) PostgreSQL release (tag commit `62b1abdfe39625289c37a58ef6678e9db3d37f84`): 34 province/city rows and 3321 ward/commune/island-special-region rows, each carrying the official numeric code, the province → commune parent link, `valid_from = 2025-07-01` (the two-tier baseline) and the data's source URL. Codes, names and hierarchy are upstream verbatim; `name_vi` is the upstream `full_name`, with the one upstream record whose `full_name` had a lowercased type prefix (`06325`) taking the upstream canonical type label.
+
+The catalog is a reference list, not a property-level verification. Selecting a province and commune from it does not establish a property's current address; a manager/admin still records evidence before `mapping_status = 'verified'`. The seed is idempotent and never rewrites a recorded address string.
+
+Not seeded by this package: any district-level catalog (the upstream two-tier release carries none, so the delivered legacy district picker stays empty — use the free-text `district_text` label for a historical district), any old→new crosswalk or blanket mapping, and any HCMC-specific transition. Crosswalks remain reviewed evidence under the verification workflow above.
 
 ## Analytics and search
 

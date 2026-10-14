@@ -2,7 +2,7 @@
 
 ## Delivery boundary
 
-The schema migrations and preparation tool are executable. Rental/localization extension is in migration 4; existing data has no reliable tenancy terms or payment history, so these require new user input. Destination promotion ETL, official address catalogs, source attachment retrieval, real Auth onboarding, UI and production cutover remain implementation work. GitHub addition was approved on 10 October 2026 and is blocked only by missing repository write access. No live Supabase or Vercel resource has been changed.
+The schema migrations and preparation tool are executable. Rental/localization extension is in migration 4; existing data has no reliable tenancy terms or payment history, so these require new user input. Destination promotion ETL, HCMC legacy/current address crosswalks, source attachment retrieval, real Auth onboarding, UI and production cutover remain implementation work. The national two-tier province/commune catalog is already seeded (Phase 3). GitHub addition was approved on 10 October 2026 and is blocked only by missing repository write access. No live Supabase or Vercel resource has been changed.
 
 ## Phase 1 — Review and environment setup
 
@@ -28,7 +28,7 @@ Acceptance: every nonempty source row accounted for; credentials absent; raw fil
 1. Resolve the 23 missing property IDs and the one duplicated nonblank ID before affected rows are promoted. Give each confirmed real property a canonical UUID and a human-readable unique SGN code.
 2. Populate `private.property_source_map` for every reviewed source key and alias. Do not reuse a duplicated source key for two properties; use batch/sheet/row-specific reviewed keys until ambiguity is resolved.
 3. Review the 17 employee rows, normalize emails, verify unique identity, propose roles from the source labels, and leave them inactive until invitations are accepted and Auth account IDs are linked.
-4. Build the official HCMC legacy/current unit catalog with source dates and links; validate code strings, parents, overlapping validity and subsequent policy updates. Review crosswalks and identify whole vs partial transitions.
+4. The national two-tier province/commune catalog is seeded by `20261014075435_vietnamese_admin_units_reference.sql` from the pinned upstream v5.2.0 release (34 provinces/cities, 3321 wards/communes/special regions, official codes and parent links, `valid_from = 2025-07-01`). Remaining here: build and review the HCMC legacy/current crosswalks with source dates and links (no district catalog or blanket mapping is seeded); validate code strings, parents, overlapping validity and subsequent policy updates, and identify whole vs partial transitions.
 
 Acceptance: unresolved mappings remain isolated; no row-number-based aliases; employee authority is explicitly reviewed.
 
