@@ -251,7 +251,7 @@ footnote: historical rankings can change after cancellation/correction
 ```
 Three separate rankings, no composite score; no geographic map (per the confirmed analytics plan).
 
-Shipped for issue #38: the completed-sales ranking alone is delivered at `/reports/completed-sales` — a manager/admin rail entry with the validated Vietnam range filter, tied ranks, an explicit total and the separate unknown-attribution note; the reviewer-only confirmation form lives on the property detail beside the reservation panel rather than as a `/reviews/sale-completions` queue, and the province and completed-rental panels above remain planned, while the owner-contact activity ranking ships on the company report below (#34).
+Shipped for issue #38: the completed-sales ranking alone is delivered at `/reports/completed-sales` — a manager/admin rail entry with the validated Vietnam range filter, tied ranks, an explicit total and the separate unknown-attribution note; the reviewer-only confirmation form lives on the property detail beside the reservation panel rather than as a `/reviews/sale-completions` queue, and the province and completed-rental panels above remain planned, while the owner-contact activity ranking ships on the delivered company-activity report at `/activity/company` (see the shipped-route note below, #34).
 
 ### 5.10 `/admin/categories` · `/admin/units` (new, admin)
 
