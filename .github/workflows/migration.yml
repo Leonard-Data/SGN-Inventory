@@ -50,11 +50,16 @@ jobs:
       - run: npx --no-install supabase link --project-ref "$SUPABASE_PROJECT_REF"
       - name: List pending migrations without applying
         run: |
-          npx --no-install supabase db push --linked --dry-run --skip-vault --output-format json > "$RUNNER_TEMP/pending.json"
+          # --include-all is deliberate: a branch ticket migration can be
+          # versioned before migrations already applied on the stage. The
+          # reviewed path must list it so a verify-only release still fails,
+          # and apply it rather than refuse or silently omit it. Recorded
+          # migration versions are never renamed or repaired.
+          npx --no-install supabase db push --linked --dry-run --skip-vault --include-all --output-format json > "$RUNNER_TEMP/pending.json"
           cat "$RUNNER_TEMP/pending.json"
       - name: Apply the reviewed pending migrations
         if: inputs.apply
-        run: npx --no-install supabase db push --linked --skip-vault --yes
+        run: npx --no-install supabase db push --linked --skip-vault --include-all --yes
       - name: Fail while migrations remain pending
         if: ${{ !inputs.apply }}
         run: node scripts/release-guard.mjs pending "$RUNNER_TEMP/pending.json"

@@ -40,6 +40,16 @@ function timestampKey(value: string): string {
   return match ? `${match[1]}.${(match[2] ?? '').padEnd(6, '0')}` : value;
 }
 
+// list_property_comments orders by created_at desc, id desc; the client list must match it so a
+// page row restored by a stale reconciliation lands at its posting position, not at the front.
+function byServerOrder(left: Comment, right: Comment): number {
+  const a = timestampKey(left.createdAt),
+    b = timestampKey(right.createdAt);
+  if (a !== b) return a < b ? 1 : -1;
+  if (left.id === right.id) return 0;
+  return left.id < right.id ? 1 : -1;
+}
+
 export function mergeStaleEditState(
   current: Comment[],
   page: Comment[],
@@ -57,21 +67,17 @@ export function mergeStaleEditState(
   }
   const seen = new Set<string>();
   const rows = current.map((row) => {
-    const next = incoming.get(row.id) ?? row;
     seen.add(row.id);
-    return next;
+    return incoming.get(row.id) ?? row;
   });
-  const fresh = pageRows
-    .filter((row) => !seen.has(row.id))
-    .map((row) => incoming.get(row.id) ?? row);
-  if (
-    comment &&
-    mergedComment &&
-    !seen.has(comment.id) &&
-    !fresh.some((row) => row.id === comment.id)
-  )
-    return [...fresh, ...rows, mergedComment];
-  return [...fresh, ...rows];
+  for (const row of pageRows) {
+    if (seen.has(row.id)) continue;
+    seen.add(row.id);
+    rows.push(incoming.get(row.id) ?? row);
+  }
+  if (comment && mergedComment && !seen.has(comment.id))
+    rows.push(mergedComment);
+  return rows.sort(byServerOrder);
 }
 
 export function retainEditTarget(

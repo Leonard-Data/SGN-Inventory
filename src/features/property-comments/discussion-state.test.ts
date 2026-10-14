@@ -203,6 +203,17 @@ test('stale edit merge preserves loaded row position', () => {
   );
 });
 
+test('restored page row keeps its server position on a stale refresh', () => {
+  const newest = comment('newest', 'Newest', '2026-10-13T09:00:00.000Z');
+  const middle = comment('middle', 'Middle', '2026-10-12T09:00:00.000Z');
+  const older = comment('older', 'Older', '2026-10-11T09:00:00.000Z');
+
+  assert.deepEqual(
+    mergeStaleEditState([newest, older], [newest, middle, older], null),
+    [newest, middle, older],
+  );
+});
+
 test('editor refresh keeps loaded older-page rows without an exact result', () => {
   const newest = comment('newest', 'Newest', '2026-10-13T09:00:00.000Z');
   const older = comment('older', 'Draft owner', '2026-10-12T09:00:00.000Z');
