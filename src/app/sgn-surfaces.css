@@ -51,12 +51,31 @@
 }
 
 /* The package draws the discussion comment row and its composer, but not the removal
-   marker or the moderator reason form this application adds inside a comment. Both stay
-   on package tokens: the marker reuses the muted secondary-text treatment, the form the
-   warm panel surface, and the moderation composer foot leads with its controls. */
+   marker, the edited marker or the editor/moderator reason form this application adds
+   inside a comment. All stay on package tokens: the markers reuse the muted
+   secondary-text treatment, the forms the warm panel surface, and their composer foot
+   leads with its controls. */
 .comment-removed {
   font-style: italic;
   color: var(--muted);
+}
+.comment-edited {
+  font-style: italic;
+  text-transform: none;
+  color: var(--muted);
+}
+.comment-edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding: var(--space-4);
+  background: var(--surface-warm);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+}
+.comment-edit .composer-foot {
+  justify-content: flex-start;
 }
 .comment-moderation {
   display: flex;

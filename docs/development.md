@@ -51,6 +51,8 @@ src/
   features/property-maintenance/ # Create/edit maintenance, address/contact forms, history
   features/corrections/        # Correction submission, queue and amendment rendering
   features/property-comments/  # Shared Property discussion, submission-key recovery, paging and comment removal
+  features/vendors/            # Vendor directory reads, guarded create and one optional contact block
+  features/sales/              # Sale completion confirmation, completed-sale ranking and boundary rules
   i18n/messages.ts             # Equivalent typed VI/EN journey dictionaries
   lib/supabase/route.ts         # User-scoped SSR cookies/cache/input boundary
   types/database.ts            # Generated from the live dev public schema
@@ -65,6 +67,10 @@ scripts/
   correction-contract.mjs       # Embedded correction-workflow regressions
   comments-contract.mjs         # Embedded discussion role/validation/retry/paging regressions
   comment-removal-contract.mjs  # Embedded removal authority, retention and terminal-state regressions
+  vendor-contract.mjs           # Embedded vendor authority, validation, retry and paging regressions
+  vendor-acceptance.mjs         # Hosted vendor directory acceptance (executed 14 October 2026)
+  sale-completion-contract.mjs   # Embedded sale-completion authority, atomicity, retry and ranking regressions
+  sale-completion-acceptance.mjs # Written real browser/Supabase sale-completion acceptance (not yet executed here)
   employee-access-acceptance.mjs # Real app/browser/Auth/RLS dev fixture acceptance
   auth-visual-compare.mjs        # Exact-viewport auth design comparison vs preserved prototype
   prepare_workbook.py           # Existing private, dry-run preparation
@@ -76,7 +82,7 @@ supabase/
 .husky/pre-commit
 ```
 
-Create additional feature directories only for approved backlog work. Employee access, read-only inventory, private files and issue #7 maintenance/corrections are implemented; the shared Property discussion (#44) has its development-project acceptance executed, with staging/production and keyboard-only/360px mobile gates still unexecuted; issue #45's comment removal and moderation is implemented on that discussion, with its hosted acceptance executed at application head `45f356a` ([testing.md](testing.md#ticket-45-removal-acceptance-executed-13-october-2026)); staging/production and keyboard-only/360px mobile gates remain unexecuted; issue #18's reservation request and independent decision is implemented on the property detail, with its acceptance evidence and remaining gates in [testing.md](testing.md#reservation-acceptance-ticket-18); rental and remaining UI work is tracked in [delivery-plan.md](delivery-plan.md). The real-mailbox recovery gate prevents claiming completed issue #1 acceptance.
+Create additional feature directories only for approved backlog work. Employee access, read-only inventory, private files and issue #7 maintenance/corrections are implemented; the shared Property discussion (#44) has its development-project acceptance executed, with staging/production and keyboard-only/360px mobile gates still unexecuted; issue #45's comment removal and moderation is implemented on that discussion, with its hosted acceptance executed at application head `45f356a` ([testing.md](testing.md#ticket-45-removal-acceptance-executed-13-october-2026)); staging/production and keyboard-only/360px mobile gates remain unexecuted; issue #18's reservation request and independent decision is implemented on the property detail, with its acceptance evidence and remaining gates in [testing.md](testing.md#reservation-acceptance-ticket-18); issue #38's independently confirmed sale completion and completed-sale ranking is implemented on the property detail and `/reports/completed-sales`, with embedded/unit regressions and a written but unexecuted real-browser acceptance harness ([testing.md](testing.md#sale-completion-acceptance-issue-38)); issue #65's admin employee list is implemented with its hosted acceptance harness written but not yet executed, and issue #73's vendor directory is implemented with its hosted acceptance executed at the reviewed head `2a1d69c` ([testing.md](testing.md#vendor-directory-acceptance-issue-73)); rental and remaining UI work is tracked in [delivery-plan.md](delivery-plan.md). The real-mailbox recovery gate prevents claiming completed issue #1 acceptance.
 
 - `src/app/`: route composition, presentation, narrow validated Server Actions/Route Handlers. No direct inventory SQL/query orchestration in rendering.
 - `src/features/<feature>/`: validation, feature data access, domain results and workflow operations; keep feature-specific rendering beside the feature when useful. Export a small Interface, not every internal helper.

@@ -52,6 +52,10 @@ _Avoid_: Incorrect address, current address
 A separate address under the applicable province/city and commune/ward structure, without a district. Its presence alone does not establish that its mapping is verified.
 _Avoid_: Translated address, automatically converted address
 
+**Administrative-unit reference catalog**:
+The seeded official province/city and commune/ward list carrying official codes, parent links and one half-open validity window per official name from the pinned upstream dataset. It is a reference list for selection and hierarchy validation, not a property's verified address; a renamed unit reports the name in force on the address date.
+_Avoid_: Verified address, property-level mapping
+
 **Address search**:
 A match of a literal, accent-insensitive contiguous fragment against recorded addresses; `%` and `_` are ordinary characters.
 _Avoid_: Fuzzy search, automatic ward mapping
@@ -100,6 +104,20 @@ _Avoid_: Market valuation, price list, achieved price, projected price
 An optional retained note an authorized editor attaches to a recorded price correction. It stays with the revision it explains and never replaces the mistaken value, deletes earlier history or creates an approval step.
 _Avoid_: Approval reason, price justification, replacement value
 
+### Vendors
+
+**Vendor**:
+A company the inventory works with, recorded as its own directory identity and distinct from an owner, broker, contact or employee. Every active employee may read recorded vendors; only staff, manager and admin roles add them. This slice records the company and its contact block only: no property link, edit, procurement or payment record.
+_Avoid_: Supplier contact, owner type, broker record
+
+**Vendor contact block**:
+The one optional set of recorded contact details belonging to a vendor: contact name, phone strings, email, raw address/source text and notes. Each detail is independently known or unknown, and an unknown detail is never filled with an invented default.
+_Avoid_: Required contact, inferred phone, normalized address
+
+**Vendor submission key**:
+An employee-scoped key identifying one vendor creation, so an interrupted or ambiguous create retries the same company identity instead of recording another; reusing it with different details is refused.
+_Avoid_: Draft identity, duplicate check
+
 ### Activity and reservations
 
 **Page view**:
@@ -134,23 +152,55 @@ _Avoid_: Effective reservation
 An approved, unexpired property reservation identifying the claimant for commission attribution, not a commission amount or payout.
 _Avoid_: Pending lock, permanent property lock
 
+**Credited closer**:
+The one employee explicitly credited with a completed sale. A reviewer selects that employee during confirmation; the property creator, updater, reservation claimant or recorded status never infers it.
+_Avoid_: Deal owner, auto-attributed employee
+
+**Sale completion**:
+A reviewed logical record that one actual completed sale happened: its property, credited closer, actual Vietnam completion date, contract/reference, confirmer and recording time. It marks the property sold and closes its outstanding reservations without rewriting their attribution. An imported or manually set sold status, an approved reservation and a pending claim are not sale completions.
+_Avoid_: Sold flag, general transaction, commission record
+
+**Completed-sale ranking**:
+The manager/admin list of effective sale completions grouped by credited closer over a validated Vietnam period, with equal totals sharing a rank and genuinely unknown legacy attribution shown separately rather than assigned to a guessed employee.
+_Avoid_: Commission ranking, composite performance score
+
+**Unknown sale attribution**:
+A property recorded as sold that has no effective sale completion, so no employee is credited. It is counted separately from the ranking and never becomes an invented closer.
+_Avoid_: Unassigned sale, ownerless deal
+
+**Reservation release**:
+The audited closure of a pending or approved reservation with a meaningful reason, retaining the original claimant, request reason and every recorded event. It resolves a conflicting claimant before a sale completion; it is neither a completion nor a transfer of attribution.
+_Avoid_: Reassignment, deletion of a claim
+
 ### Discussion
 
 **Property comment**:
-A plain-text message an active employee posts to a property's shared flat discussion. Its author identity, text and posting time are retained from creation; a comment is never edited, and removal withdraws its text while keeping the record.
+A plain-text message an active employee posts to a property's shared flat discussion. Its author identity and posting time are retained from creation; its author may replace the current text under a revision check, which retains every prior version and marks the entry as edited, and removal withdraws its text while keeping the record.
 _Avoid_: Note, activity entry, private message
 
+**Comment edit**:
+An author's revision-checked replacement of their own current Property comment on an unarchived property. It keeps the comment identity, author and posting position, changes only the live text, and retains the preceding text as reviewer-only evidence.
+_Avoid_: Rewrite, overwrite, new comment
+
+**Comment revision**:
+One retained version of a Property comment's text, identified by its edit ordinal. The earliest retained text is the original validated submission, and only an active manager or admin with current property access can read a prior version.
+_Avoid_: Draft, replaced comment
+
 **Comment removal**:
-The one-way withdrawal of a Property comment's text. An author may remove their own current comment on an unarchived property without a reason; an active manager or admin may remove any current comment with a required moderation reason, including on an archived property, where author removal is blocked. The current discussion shows a removal marker instead of the text, and the original text, author, removing actor, time and reason are retained for manager/admin review.
+The one-way withdrawal of a Property comment's text. An author may remove their own current comment on an unarchived property without a reason; an active manager or admin may remove any current comment with a required moderation reason, including on an archived property, where author removal is blocked. The current discussion shows a removal marker instead of the text, and the text current at removal, author, removing actor, time and reason are retained for manager/admin review. A removed comment can no longer be edited.
 _Avoid_: Delete, edit, permanent erasure, comment restoration
 
 **Property discussion**:
-The newest-first shared list of a property's Property comments, readable and postable by any active employee who can read the property without holding property-edit authority. A removed comment stays in place as a marker without its text. Posting to an archived property is denied for every role, and only manager/admin read archived discussion.
+The newest-first shared list of a property's Property comments, readable and postable by any active employee who can read the property without holding property-edit authority. A removed comment stays in place as a marker without its text, and an edited comment shows its current text with an edited marker. Posting to an archived property is denied for every role, and only manager/admin read archived discussion.
 _Avoid_: Chat, live feed, moderation queue
 
 **Submission key**:
-An employee-scoped key identifying one comment submission, so an interrupted or ambiguous post retries the same original comment instead of creating another. Reusing it with different property or text is rejected.
+An employee-scoped key identifying one comment submission, so an interrupted or ambiguous post retries the same original comment instead of creating another. Reusing it with a different property, or with text other than the original validated submission, is rejected, including after the comment has been edited.
 _Avoid_: Draft identity, temporary ID
+
+**Comment edit key**:
+An employee-scoped key identifying one author edit operation. Retrying the same comment, opening revision and validated replacement text recovers that accepted operation without adding another retained version; another use is rejected.
+_Avoid_: Comment revision, submission key
 
 
 ### Property files

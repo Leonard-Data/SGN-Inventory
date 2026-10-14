@@ -5,6 +5,8 @@
 | Capability | Sales | Staff | Manager | Admin |
 | --- | --- | --- | --- | --- |
 | Read internal inventory, addresses, contacts/files and employee directory | Yes | Yes | Yes | Yes |
+| Read the vendor directory | Yes | Yes | Yes | Yes |
+| Create/maintain vendors | No | Yes | Yes | Yes |
 | Create property / request reservation | Yes | Yes | Yes | Yes |
 | Edit property/address | Own unarchived | All unarchived | All unarchived | All unarchived |
 | Correct an existing linked shared-contact detail | Yes | Yes | Yes | Yes |
@@ -14,7 +16,9 @@
 | Record own page view / owner-contact access | Yes | Yes | Yes | Yes |
 | Read daily activity | Own | Own | All | All |
 | Approve/reject lock | No | No | Another employee only | Another employee only |
-| Set legal/review state; sold/rented arrives with issue #32 sale transition | No | No | Yes | Yes |
+| Set legal/review state | No | No | Yes | Yes |
+| Confirm a completed sale (another employee's credit) | No | No | Yes | Yes |
+| Read the completed-sale ranking | No | No | Yes | Yes |
 | Manage employee activation/roles and catalogs | No | No | No | Yes |
 | Open the admin employee list (`/people/employees`) | No | No | No | Yes |
 | Read area/employee analytics | No | No | Yes | Yes |
@@ -33,11 +37,13 @@ stateDiagram-v2
   Pending --> Expired: 48-hour expiry
   Approved --> Released: Owner or reviewer releases
   Approved --> Expired: Approved term ends
+  Pending --> ClosedBySale: Confirmed sale completion
+  Approved --> ClosedBySale: Confirmed sale completion
 ```
 
 A rejected/released/expired request is terminal; a later claim is a new request. Approved is effective only while `expires_at > now()`. Pending requests are visible for review and do not reserve the property. Competing pending requests are allowed; approval serializes on the property row, then checks the partial unique index. The database forbids self approval, even for admins.
 
-Reviewers inspect the deal reason, customer agreement evidence and claimant, then record a decision reason. The reference/evidence links are commission-attribution evidence only. Advertised sale price is not an agreed deal value or a commission basis. Selling/renting an inventory record is outside ordinary maintenance; the sold/rented transition arrives with the independent sale transition (issue #32) and does not record a payment.
+Reviewers inspect the deal reason, customer agreement evidence and claimant, then record a decision reason. The reference/evidence links are commission-attribution evidence only. Advertised sale price is not an agreed deal value or a commission basis. Selling an inventory record is not ordinary maintenance: an eligible manager/admin other than the credited employee confirms an actual completed sale — property, explicitly selected credited closer, actual Vietnam completion date and contract reference — which marks the property sold and closes open reservations as `closed_by_sale` with retained claimant and events. An activated rental blocks it; an effective reservation of another employee must be resolved through the audited release first. The completion is the only route to a sold state, and `sold`/`rented` flags, approved reservations and pending claims alone never earn completion credit.
 
 Each transition writes a lock event and an audit snapshot. Expired rows are cleaned lazily when a reservation RPC operates on the same property. Dashboards always use effective locks, so expiry is correct even before cleanup. A scheduled sweeper is optional; if added, acquire the property lock first and append expiry events. Do not let a stale approved row block an approval without expiring it within the same transaction.
 

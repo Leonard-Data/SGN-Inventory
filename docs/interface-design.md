@@ -61,7 +61,7 @@ The shell replaces the per-page `SessionHeader`. Locale switch and sign-out move
 | Inventory | Search (`/properties`); New property (`/properties/new`, shipped) | all |
 | Reservations & Reviews | My requests (`/requests`); Reviews hub (`/reviews/…`, corrections shipped) | all; queues per role |
 | Rentals | Agreements (`/rentals`) | staff, manager, admin |
-| People | Employees (`/people/employees`); Contacts (`/people/contacts`) | admin; staff/manager/admin |
+| People | Employees (`/people/employees`, shipped: list only, admin); Vendors (`/people/vendors`, shipped, all roles); Contacts (`/people/contacts`) | admin; all; staff/manager/admin |
 | Reports | My activity (`/activity/me`, shipped); Company (`/activity/company`, shipped) | all; manager/admin |
 | Admin | Categories (`/admin/categories`); Units (`/admin/units`) | admin |
 
@@ -89,7 +89,7 @@ The contract is `src/app/sgn-app.css` — the ported design package. Compose the
 | States | `.state-panel` (+ `data-tone="danger"`, `.state-mark`, `.state-title`), `.busy-bar`, `.busy-line` + `.spinner`, `.skeleton`/`.sk-card`, `.alert` (+ `data-tone`), `.toast` | loading, empty, error and denial stay distinct; empty ≠ zero ≠ denied |
 | Lists / tables | `.data-table.stackable` (`[data-num]`, `data-label`), `.pagination` > `.page-info` + `.page-buttons` > `.pager-btn` | tables stack to label/value cards under 640px |
 | Dialogs | `.sgn-dialog` > `.sgn-dialog-panel`/`.sgn-dialog-head`/`.sgn-dialog-body`/`.sgn-dialog-foot` | native `<dialog>`: focus trap and Escape come from the platform |
-| Repo-only surfaces | `.maintenance*` (disclosures, inline editors), `.history-event`, `.history-comparison`, `.history-field`, `.owner-disclosure`, `.owner-phone`, `.reservation*` (`.reservation-effective`, `.reservation-pending`, `.reservation-request`), `.proposal-choices`, `.contact-choices`, `.eyebrow` (auth), `.comment-removed` and `.comment-moderation` (extensions to the comment row) | `globals.css` + `sgn-surfaces.css`; package tokens only |
+| Repo-only surfaces | `.maintenance*` (disclosures, inline editors), `.history-event`, `.history-comparison`, `.history-field`, `.owner-disclosure`, `.owner-phone`, `.reservation*` (`.reservation-effective`, `.reservation-pending`, `.reservation-request`), `.proposal-choices`, `.contact-choices`, `.eyebrow` (auth), `.comment-removed`, `.comment-edited`, `.comment-edit` and `.comment-moderation` (extensions to the comment row), `.vendor-note` and `.data-table .is-unknown` (vendor record) | `globals.css` + `sgn-surfaces.css`; package tokens only |
 
 ## 5. Page layouts
 
@@ -126,11 +126,12 @@ Shipped: the card cover is the site plate drawn from the record's own fields; a 
         panel Price history → two .price-series groups (sale asking price / monthly asking rent) of .price-row (.price-when, .price-change, .price-note, .price-who), newest-first with per-series paging
         panel Addresses  → .record rows + mapping .badge, .addrNote policy line
         panel Contacts   → .record rows + owner-contact disclosure (.owner-disclosure/.owner-phone)
-        panel Reservation→ effective/pending states (.reservation-effective/.reservation-pending) + request and decision forms
+        panel Completed sale → reviewer-only confirmation form (credited closer, actual Vietnam date, contract reference) or the recorded completion (.sale-completion/.sale-completion-recorded), manager/admin only
+        panel Reservation→ effective/pending states (.reservation-effective/.reservation-pending) + request and decision forms; a manager/admin also gets the reasoned release control on an effective reservation
         panel Maintenance→ in-page maintenance workspace (revision-checked)
         panel Corrections→ report + role-scoped queue
       .tabpanel "Tài liệu": panel Files → property-files Workspace (.doc-row vocabulary, cover, dropzone)
-      .tabpanel "Thảo luận": Discussion → 30-item list newest-first, .composer, author withdrawal and reasoned manager/admin removal (.comment-actions, .comment-removed marker, .comment-moderation); editing is not shipped
+      .tabpanel "Thảo luận": Discussion → 30-item list newest-first, .composer, author edit and withdrawal with reasoned manager/admin removal (.comment-actions, .comment-edited marker, .comment-edit editor, .comment-removed marker, .comment-moderation)
     aside.detail-rail (sticky):
       panel History    → maintenance history rows (.hist-row)
       page-view note, then panel Activity → today's own counts
@@ -163,7 +164,7 @@ queue rows: .history-event — subject link · claimant/actor · dates · eviden
   expanding row reveals decision form: [reason textarea] [Approve] [Reject]
 pagination
 ```
-Routes: `/reviews/corrections` (shipped as **Correction requests**: page-intro plus the correction queue, guarded by its own protected read — every active employee reads their own requests, and staff/manager/admin decide them), `/reviews/reservations`, `/reviews/visits`, `/reviews/rental-activation`, `/reviews/sale-completions`, `/reviews/closure-corrections`. Same layout shell; each queue is its own route and guard. `/reviews` redirects to the first permitted queue.
+Routes: `/reviews/corrections` (shipped as **Correction requests**: page-intro plus the correction queue, guarded by its own protected read — every active employee reads their own requests, and staff/manager/admin decide them), `/reviews/reservations`, `/reviews/visits`, `/reviews/rental-activation`, `/reviews/sale-completions`, `/reviews/closure-corrections`. Same layout shell; each queue is its own route and guard. `/reviews` redirects to the first permitted queue. Issue #38 ships the sale confirmation interaction on the property detail instead of the planned `/reviews/sale-completions` queue; that queue remains unbuilt.
 
 ### 5.5 `/rentals` + `/rentals/[id]` (new)
 
@@ -194,6 +195,21 @@ panel Employees → .data-table.stackable: name · email · role · access state
 Shipped: the list reads existing employee identities from `GET /api/employees` and shows the recorded display name, email, role and access state (`Đang hoạt động` / `Đã tắt truy cập` / `Chưa liên kết đăng nhập`), at most 30 rows per page with a keyset cursor. An unlinked imported person is labelled not linked, never invited: the schema records no invitation. The rail renders the destination for admin only and the proxy refuses a direct visit by another role.
 
 Still planned, not shipped: the `[Invite employee]` disclosure, the last-activity column, the `[Activate|Deactivate]` and `[Change role]` row actions, last-admin protection and the "review approved locks before deactivation" warnings. No per-employee route.
+
+### 5.6b `/people/vendors` + `/people/vendors/[id]` (shipped, issue #73)
+
+```
+page-intro (.example · h1 · .intro-copy)
+panel search: .toolbar > .search > .input + .search-btn, .search-hint
+panel [Record a vendor] (staff/manager/admin only): .field × 6 → company name (required),
+  contact name, phone lines, email, address/source text, notes; .form-foot submit
+panel Vendor directory → .data-table.stackable: company (row link) · contact · phones · email
+  .panel-foot → .pagination (.page-info + .page-buttons > .pager-btn)
+  states: .panel-note[role=status] (loading) · .state-panel (empty / no match) · .alert[data-tone=danger] (error)
+detail: quiet back link · .detail-head · panel .facts (recorded contact block; unknown details
+  read as unknown, never a dash)
+```
+Shipped: `GET /api/vendors` serves the newest-first bounded directory through `list_vendors` (at most 30 rows, keyset cursor pair); `POST /api/vendors` creates one company through the guarded `create_vendor` operation for a live staff/manager/admin, keeping the draft and the submission key on failure; `GET /api/vendors/[id]` reads one recorded identity. Every active role sees the People → Vendors destination; only maintainers see the create panel, and the route and database refuse the mutation independently. Detail has no edit control in this slice.
 
 ### 5.7 `/people/contacts` (new, staff/manager/admin)
 
@@ -230,6 +246,8 @@ footnote: historical rankings can change after cancellation/correction
 ```
 Three separate rankings, no composite score; no geographic map (per the confirmed analytics plan).
 
+Shipped for issue #38: the completed-sales ranking alone is delivered at `/reports/completed-sales` — a manager/admin rail entry with the validated Vietnam range filter, tied ranks, an explicit total and the separate unknown-attribution note; the reviewer-only confirmation form lives on the property detail beside the reservation panel rather than as a `/reviews/sale-completions` queue, and the province, completed-rental and owner-contact-activity panels above remain planned.
+
 ### 5.10 `/admin/categories` · `/admin/units` (new, admin)
 
 ```
@@ -260,7 +278,7 @@ page-intro · [New category] / [New unit]
 
 ### Shipped-state gaps (deliberate, not silent)
 
-- Navigation renders four groups: Inventory (`/properties` and `/properties/new`, every role), Reservations & Reviews (`/reviews/corrections`, every role — the queue reads the caller's own requests while only staff/manager/admin decide), People (`/people/employees`, admin) and Reports (`/activity/me`, every role; `/activity/company`, manager/admin). The ADR's other two groups (Rentals, Admin) ship with their routes.
+- Navigation renders four groups: Inventory (`/properties` and `/properties/new`, every role), Reservations & Reviews (`/reviews/corrections`, every role — the queue reads the caller's own requests while only staff/manager/admin decide), People (`/people/employees`, admin) and Reports (`/activity/me`, every role; `/activity/company` and `/reports/completed-sales`, manager/admin). The ADR's other two groups (Rentals, Admin) ship with their routes.
 - The inventory results have **cards only**: the package's Cards/List/Table `.seg` switch and the ordering control are not implemented, and `.cell-plate` table thumbnails therefore have no consumer yet.
 - The card shows the record's existing fact set (code, mode, address, status). The prototype's card also prints area and price lines; adding them would be new data display beyond this restyle, so they were left out.
 - The record page has no Edit action (no edit route exists; editing stays the in-page maintenance disclosure).

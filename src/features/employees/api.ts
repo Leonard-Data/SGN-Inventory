@@ -11,6 +11,7 @@ export async function api<T>(
   path: string,
   body?: object,
   signal?: AbortSignal,
+  method: 'POST' | 'PATCH' = 'POST',
 ): Promise<T> {
   const response = await fetch(path, {
     cache: 'no-store',
@@ -18,7 +19,7 @@ export async function api<T>(
     signal,
     ...(body
       ? {
-          method: 'POST',
+          method,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
         }
