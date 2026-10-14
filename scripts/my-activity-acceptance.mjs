@@ -20,8 +20,10 @@
 // starts `next start` and never rebuilds, so the rendered markup matches the reviewed commit.
 //
 // The dev env supplies the publishable application settings; the owner config supplies the
-// database URL and owner capability. Both are read as data only and are never printed, shell
-// sourced, or passed in argv/logs.
+// database URL and owner capability. Both are read as data only. The owner URL is passed to
+// the Supabase CLI without its password for the fixture statements and the password is
+// supplied through the environment, so no credential appears in argv; captured CLI output is
+// redacted.
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { openSync } from 'node:fs';
@@ -30,6 +32,7 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
 import { readEnvironment } from '../src/lib/environment.ts';
+import { createOwnerSql } from './owner-sql.mjs';
 
 const devEnvPath = process.env.SGN_ACCEPTANCE_DEV_ENV;
 const ownerPath = process.env.SGN_ACCEPTANCE_OWNER;
@@ -90,6 +93,14 @@ await fs.mkdir(workdir, { recursive: true });
 const admin = createClient(environment.supabaseUrl, owner.authAdminKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
+// Employee rows are provisioned and changed over the owner SQL connection: the lifecycle
+// guard refuses direct client writes, and the guarded administration operation is not a
+// fixture-management API.
+assert.ok(owner.dbUrl, 'The owner config needs the owner SQL connection');
+function sqlText(value) {
+  return "'" + String(value).replace(/'/g, "''") + "'";
+}
+const ownerSql = createOwnerSql(owner.dbUrl);
 const observations = [];
 function observed(name, details = {}) {
   observations.push({ name, ...details });
@@ -127,8 +138,13 @@ async function retryThrown(label, work, attempts = 4) {
   }
 }
 async function updateEmployee(id, patch) {
-  return retryResult('employee-update', () =>
-    admin.from('employees').update(patch).eq('id', id),
+  const sets = [];
+  if ('role' in patch) sets.push(`role=${sqlText(patch.role)}`);
+  if ('is_active' in patch)
+    sets.push(`is_active=${patch.is_active ? 'true' : 'false'}`);
+  assert.ok(sets.length, 'Unsupported employee patch');
+  ownerSql(
+    `update public.employees set ${sets.join(',')} where id=${sqlText(id)} returning id`,
   );
 }
 // A retry reuses the original employee-scoped key, so a lost response converges on the
@@ -196,10 +212,9 @@ async function removeFixtures(manifest) {
       admin.from('activity_events').delete().in('employee_id', employeeIds),
     );
     assert.equal(events.error, null, 'remove fixture activity');
-    const employees = await retryResult('remove fixture employees', () =>
-      admin.from('employees').delete().in('id', employeeIds),
+    ownerSql(
+      `delete from public.employees where id in (${employeeIds.map(sqlText).join(',')})`,
     );
-    assert.equal(employees.error, null, 'remove fixture employees');
   }
   const users = [
     ...fixtures.map((identity) => identity.userId),
@@ -230,17 +245,11 @@ async function createFixtures() {
     assert.equal(created.error, null, `create auth user ${name}`);
     const userId = created.data.user.id;
     const employeeId = crypto.randomUUID();
-    const inserted = await retryResult(`create employee ${name}`, () =>
-      admin.from('employees').insert({
-        id: employeeId,
-        auth_user_id: userId,
-        email,
-        display_name: `${namespace} ${name}`,
-        role,
-        is_active: active,
-      }),
+    const inserted = ownerSql(
+      'insert into public.employees(id,auth_user_id,email,display_name,role,is_active) values ' +
+        `(${sqlText(employeeId)}::uuid,${sqlText(userId)}::uuid,${sqlText(email)},${sqlText(`${namespace} ${name}`)},${sqlText(role)},${active}) returning id`,
     );
-    assert.equal(inserted.error, null, `create employee ${name}`);
+    assert.equal(inserted.length, 1, `create employee ${name}`);
     manifest.identities[name] = {
       userId,
       employeeId,

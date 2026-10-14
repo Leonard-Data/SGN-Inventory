@@ -19,7 +19,7 @@ Two visual vocabularies existed before this work:
 
 Both define `--muted` and `--danger` with different values. The newer, deliberate baseline is the auth system (tokens, fonts, a visual-compare harness); the inventory sheet predates it and has no radii/spacing tokens.
 
-**Decision (shipped):** the *Saigon New House* design package is the visual baseline and is ported verbatim: `src/app/app.css` is its token layer (declared at `:root`, so every surface including `.sgn-auth` inherits one palette, one type ramp, one radius set, one spacing scale) and `src/app/sgn-app.css` is its app layer, which owns the shared class vocabulary. The package's `assets/sgn-app.css` is byte-identical to the port except for the one documented adaptation — its runtime Google Fonts request is replaced by the `next/font` variables this application already self-hosts. Inventory, detail, maintenance and files no longer carry their own values: the legacy blocks the package also defines were deleted from `globals.css`. Control vocabulary is single: the auth screens were renamed from their `sgn-`-prefixed mirror onto the reference names (`.btn*`, `.field`, `.input`, `.lang-switch`, `.logo-tile`, `.auth-panel`) with `scripts/auth-visual-compare.mjs` as the check.
+**Decision (shipped):** the *Saigon New House* design package is the visual baseline and is ported verbatim: `src/app/app.css` is its token layer (declared at `:root`, so every surface including `.sgn-auth` inherits one palette, one type ramp, one radius set, one spacing scale) and `src/app/sgn-app.css` is its app layer, which owns the shared class vocabulary. The package's `assets/sgn-app.css` is byte-identical to the port except for the documented adaptations — its runtime Google Fonts request is replaced by the `next/font` variables this application already self-hosts, and the chronological inventory work (#37) adds the repo-only `.card-entry` line and extends `.seg-btn` with the `[aria-current="true"]` selected state (§5.1). Inventory, detail, maintenance and files no longer carry their own values: the legacy blocks the package also defines were deleted from `globals.css`. Control vocabulary is single: the auth screens were renamed from their `sgn-`-prefixed mirror onto the reference names (`.btn*`, `.field`, `.input`, `.lang-switch`, `.logo-tile`, `.auth-panel`) with `scripts/auth-visual-compare.mjs` as the check.
 
 **Rejected:** leaving `globals.css` in place with a third token set for the shell — two greens, two body fonts and two badge colours in one product, and a guaranteed later migration.
 
@@ -75,9 +75,9 @@ The contract is `src/app/sgn-app.css` — the ported design package. Compose the
 | --- | --- | --- |
 | Content region | `.sgn-content` (the shell's `<main id="main-content">`) | `--content-max` 1280px, `--gutter-x` padding; the page renders inside it and owns no `<main>` |
 | Page head | `.page-head` > `.page-intro` (`.example` eyebrow, `h1`, `.intro-copy`) + `.page-actions` | one accent action per viewport |
-| Toolbar / search | `.toolbar`, `.search` > `.input` + `.search-btn`, `.search-hint`, `.chips` > `.chip` | filters as chips; the package's `.seg` view switch is unused (the app renders cards only) |
+| Toolbar / search | `.toolbar`, `.search` > `.input` + `.search-btn`, `.search-hint`, `.chips` > `.chip`, `.seg` > `.seg-btn[aria-current="true"]` | filters as chips; the package's `.seg` Cards/List/Table view switch is unused (the app renders cards only); `.seg` renders the chronological order control (Default / Oldest first / Newest first) |
 | Card / section | `.panel` > `.panel-head` (`.panel-title`, `.panel-note`) / `.panel-body` / `.panel-foot` | white, `--radius-lg`, hairline border |
-| Property card | `.property-card` inside `.property-list[data-view="cards"]` > `.cover` + `.card-body`/`.card-meta`/`.card-address`/`.card-foot`/`.card-actions` | the cover holds the plate, or a stored photograph |
+| Property card | `.property-card` inside `.property-list[data-view="cards"]` > `.cover` + `.card-body`/`.card-meta`/`.card-address`/`.card-entry`/`.card-foot`/`.card-actions` | the cover holds the plate, or a stored photograph; `.card-entry` (repo-only, added in `sgn-app.css`) shows the original entry date, legacy marker and Vietnam age in the chronological views, or the explicit unknown date and unknown age |
 | Site plate | `.cover > svg.plate.plate-card`/`.plate-bare`/`.plate-hero`, `.plate-*` internals | one scale per record; repo-only placeholder text comes from the component |
 | Status pill | `.badge` + `data-tone="neutral\|muted\|success\|warn\|danger\|accent"` | the localized label carries the meaning; the tone dot never replaces it |
 | Buttons | `.btn`, `.btn-primary`, `.btn-secondary`, `.btn-ghost`, `.btn-danger`, `.btn-sm`, `.btn-block`, `.is-loading` | the auth screens use the same classes |
@@ -89,7 +89,7 @@ The contract is `src/app/sgn-app.css` — the ported design package. Compose the
 | States | `.state-panel` (+ `data-tone="danger"`, `.state-mark`, `.state-title`), `.busy-bar`, `.busy-line` + `.spinner`, `.skeleton`/`.sk-card`, `.alert` (+ `data-tone`), `.toast` | loading, empty, error and denial stay distinct; empty ≠ zero ≠ denied |
 | Lists / tables | `.data-table.stackable` (`[data-num]`, `data-label`), `.pagination` > `.page-info` + `.page-buttons` > `.pager-btn` | tables stack to label/value cards under 640px |
 | Dialogs | `.sgn-dialog` > `.sgn-dialog-panel`/`.sgn-dialog-head`/`.sgn-dialog-body`/`.sgn-dialog-foot` | native `<dialog>`: focus trap and Escape come from the platform |
-| Repo-only surfaces | `.maintenance*` (disclosures, inline editors), `.history-event`, `.history-comparison`, `.history-field`, `.owner-disclosure`, `.owner-phone`, `.reservation*` (`.reservation-effective`, `.reservation-pending`, `.reservation-request`), `.proposal-choices`, `.contact-choices`, `.eyebrow` (auth), `.comment-removed`, `.comment-edited`, `.comment-edit` and `.comment-moderation` (extensions to the comment row), `.vendor-note` and `.data-table .is-unknown` (vendor record) | `globals.css` + `sgn-surfaces.css`; package tokens only |
+| Repo-only surfaces | `.maintenance*` (disclosures, inline editors), `.history-event`, `.history-comparison`, `.history-field`, `.owner-disclosure`, `.owner-phone`, `.reservation*` (`.reservation-effective`, `.reservation-pending`, `.reservation-request`), `.proposal-choices`, `.contact-choices`, `.eyebrow` (auth), `.comment-removed`, `.comment-edited`, `.comment-edit` and `.comment-moderation` (extensions to the comment row), `.vendor-note` and `.data-table .is-unknown` (vendor record), and `.card-entry` (the chronological card line) | `globals.css` + `sgn-surfaces.css`, except `.card-entry` in `sgn-app.css`; package tokens only |
 
 ## 5. Page layouts
 
@@ -100,15 +100,16 @@ All page bodies render inside the shell `main` region; `SessionHeader` is gone f
 ```
 .sgn-content
   .page-head:  .page-intro (.example · h1 · .intro-copy)   |  .page-actions [ Company activity ] (manager/admin)
-  .toolbar > .search > .input + .search-btn, .search-hint
+  .toolbar (form) > .search > .input + .search-btn · .seg > .seg-btn[aria-current] (Default · Oldest first · Newest first)
+  .search-hint rows (search rules; the chronological scope and unknown-date placement when an order is active)
   .chips > .chip (applied conditions) · .result-line in .row-between
   .property-list[data-view="cards"] > .property-card × N
       .cover > Plate(card)  |  stored cover photograph
-      .card-body: .card-meta (code · mode) · .card-address > a · .card-foot > .badge[data-tone]
+      .card-body: .card-meta (code · mode) · .card-address > a · .card-entry (original entry date · legacy marker · Vietnam age, or unknown date · unknown age) · .card-foot > .badge[data-tone]
   .pagination > .page-info + .page-buttons > .pager-btn
   states: .busy-line (loading) · .state-panel (empty) · .state-panel[data-tone="danger"] (error)
 ```
-Shipped: the card cover is the site plate drawn from the record's own fields; a stored cover photograph wins; a record with no areas keeps the plate's muted placeholder. The package's `.seg` Cards/List/Table switch is **not** implemented (the app renders cards only) and the ordering control is not implemented — both are open items, not silent omissions. The two panels that used to sit under the results — the create-property form and the correction queue — moved to their own destinations (`/properties/new`, `/reviews/corrections`); `/properties` keeps search, results and pagination.
+Shipped: the card cover is the site plate drawn from the record's own fields; a stored cover photograph wins; a record with no areas keeps the plate's muted placeholder. The package's `.seg` Cards/List/Table switch is **not** implemented (the app renders cards only); `.seg` instead renders the chronological Default/Oldest first/Newest first control, which starts a new page-one journey without rewriting the search, and the active order adds the `.card-entry` line to each card. The Cards/List/Table switch remains an open item, not a silent omission. The two panels that used to sit under the results — the create-property form and the correction queue — moved to their own destinations (`/properties/new`, `/reviews/corrections`); `/properties` keeps search, results and pagination.
 
 ### 5.2 `/properties/[id]` — Detail *(shipped, minus the items noted)*
 
@@ -184,17 +185,21 @@ Routes: `/reviews/corrections` (shipped as **Correction requests**: page-intro p
 ```
 Master (agreement) + detail (months/payments), reusing `.details` grid.
 
-### 5.6 `/people/employees` (shipped: list only, admin)
+### 5.6 `/people/employees` (shipped: list and guarded deactivation, admin)
 
 ```
 page-intro (.example · h1 · .intro-copy)
-panel Employees → .data-table.stackable: name · email · role · access state
+panel Employees → .data-table.stackable: name · email · role · access state · actions
+  access badge + recorded action badge (pending / reconciliation required / confirmed)
+  [Deactivate access] · [Reconcile sign-in block] → .deactivation-panel
+    target identity · recorded action state · outstanding reservations (effective/pending + expiry)
+    release-or-expiry note · finite provider-ban note · [Confirm deactivation]/[Retry] · [Close]
   .panel-foot → .pagination (.page-info + .page-buttons > .pager-btn)
   states: .panel-note[role=status] (loading) · .state-panel (empty) · .alert[data-tone=danger] (error)
 ```
-Shipped: the list reads existing employee identities from `GET /api/employees` and shows the recorded display name, email, role and access state (`Đang hoạt động` / `Đã tắt truy cập` / `Chưa liên kết đăng nhập`), at most 30 rows per page with a keyset cursor. An unlinked imported person is labelled not linked, never invited: the schema records no invitation. The rail renders the destination for admin only and the proxy refuses a direct visit by another role.
+Shipped: the list reads existing employee identities from `GET /api/employees` and shows the recorded display name, email, role and access state (`Đang hoạt động` / `Đã tắt truy cập` / `Chưa liên kết đăng nhập`), at most 30 rows per page with a keyset cursor. An unlinked imported person is labelled not linked, never invited: the schema records no invitation. The rail renders the destination for admin only and the proxy refuses a direct visit by another role. A live admin confirms deactivation from the row: membership is disabled first, the exact Auth sign-in block is confirmed through the server-only adapter, and the recorded `provider_pending` / `provider_failed` / `completed` state is shown next to the access badge so a disabled membership is never presented as a completed deactivation. The panel lists the departing employee's outstanding reservations with their expiries and states that release or expiry stays with the existing claimant, reviewer and expiry rules; no reservation is transferred or rewritten, and the finite provider ban is described with its renewal rule rather than as infinite. While the provider step is pending or failed, an admin can reopen the row and retry the same action.
 
-Still planned, not shipped: the `[Invite employee]` disclosure, the last-activity column, the `[Activate|Deactivate]` and `[Change role]` row actions, last-admin protection and the "review approved locks before deactivation" warnings. No per-employee route.
+Still planned, not shipped: the `[Invite employee]` disclosure, the last-activity column, the `[Activate]` and `[Change role]` row actions and any per-employee route.
 
 ### 5.6b `/people/vendors` + `/people/vendors/[id]` (shipped, issue #73)
 
@@ -279,8 +284,8 @@ page-intro · [New category] / [New unit]
 ### Shipped-state gaps (deliberate, not silent)
 
 - Navigation renders four groups: Inventory (`/properties` and `/properties/new`, every role), Reservations & Reviews (`/reviews/corrections`, every role — the queue reads the caller's own requests while only staff/manager/admin decide), People (`/people/employees`, admin) and Reports (`/activity/me`, every role; `/activity/company` and `/reports/completed-sales`, manager/admin). The ADR's other two groups (Rentals, Admin) ship with their routes.
-- The inventory results have **cards only**: the package's Cards/List/Table `.seg` switch and the ordering control are not implemented, and `.cell-plate` table thumbnails therefore have no consumer yet.
-- The card shows the record's existing fact set (code, mode, address, status). The prototype's card also prints area and price lines; adding them would be new data display beyond this restyle, so they were left out.
+- The inventory results have **cards only**: the package's Cards/List/Table `.seg` switch is not implemented, so `.cell-plate` table thumbnails have no consumer yet; `.seg` renders the chronological oldest/newest ordering control (#37) instead.
+- The card shows the record's existing fact set (code, mode, address, status), plus the original inventory entry date, legacy marker and Vietnam age in the chronological views (#37), or the explicit unknown date and unknown age. The prototype's card also prints area and price lines; adding them would be new data display beyond this restyle, so they were left out.
 - The record page has no Edit action (no edit route exists; editing stays the in-page maintenance disclosure).
 - The change timeline (`.timeline`/`.tl-item`) and the **Nhân sự & liên hệ** screen (employee accounts + contact book, `.directory-tabs`, `.cell-person`, `.sgn-avatar-sm`) are rendered in the design review route `/design/app-preview` from fictional fixtures: the app has no contact-book endpoint, and the review route is where that unused vocabulary is inspectable. The asking-price timeline (`.price-row`) now ships on the record from the recorded sale/rent series (#36); the employee list ships separately (§5.6). The remaining product route (`/people/contacts`) and its data contract are separate, unauthorized work.
 - The personal activity report (#30) shipped at **`/activity/me`** rather than this document's planned `/reports/activity`, with its own acceptance evidence and API path (`/api/activity/me`), and the company employee-by-day report (#57) shipped at **`/activity/company`** rather than the planned `/reports/company` with API path (`/api/activity/company`); both routes were left where the features shipped and the rail's Reports group points at them. Issue #34 added the owner-contact activity ranking to that shipped report as the `# · employee · owner-contact properties` table above the daily history, read through `employee_owner_contact_ranking` behind the same endpoint, range filter and denial states; the planned Province activity, completed-sales and completed-rental rankings remain unbuilt. `/requests`, the rest of `/reviews/*`, `/rentals*`, `/people/contacts`, `/admin/*` remain unbuilt and are only described above.

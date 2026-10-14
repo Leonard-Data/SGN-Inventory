@@ -293,7 +293,14 @@ export async function rankingContract({ db, asUser, check, fails, employees }) {
     manager,
   ]);
 
+  // `retained` is the seeded admin seat, and it is the only active admin here. The guarded
+  // employee admin state (issue #66/#98) refuses deactivating the last active admin, so lend
+  // the admin role to the otherwise idle staff seat for this case only, and give it back once
+  // `retained` is active again. Nothing else about the case changes.
   await asOwner();
+  await db.query("update public.employees set role='admin' where id=$1", [
+    silent,
+  ]);
   await db.query('update public.employees set is_active=false where id=$1', [
     retained,
   ]);
@@ -315,6 +322,10 @@ export async function rankingContract({ db, asUser, check, fails, employees }) {
   await asOwner();
   await db.query('update public.employees set is_active=true where id=$1', [
     retained,
+  ]);
+  // `retained` is the active admin again, so the lent role can return to its seeded seat.
+  await db.query("update public.employees set role='staff' where id=$1", [
+    silent,
   ]);
 
   await asOwner();

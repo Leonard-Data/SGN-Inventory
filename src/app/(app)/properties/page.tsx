@@ -3,7 +3,12 @@ import { Inventory } from '@/features/properties/inventory';
 export default async function Properties({
   searchParams,
 }: {
-  searchParams: Promise<{ query?: string; after?: string; trail?: string }>;
+  searchParams: Promise<{
+    query?: string;
+    after?: string;
+    trail?: string;
+    sort?: string;
+  }>;
 }) {
   const params = await searchParams;
   const locale =
@@ -14,6 +19,9 @@ export default async function Properties({
       initialQuery={params.query ?? ''}
       after={params.after ?? null}
       trail={params.trail ?? ''}
+      // The supplied ordering passes through unchanged so the read rejects an unknown value
+      // instead of silently browsing by UUID.
+      sort={params.sort ?? null}
     />
   );
 }

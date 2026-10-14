@@ -30,6 +30,26 @@ _Avoid_: Invited employee, deleted employee
 The employee's preferred Vietnamese or English interface language. It is independent of the language of addresses, source records and signed documents.
 _Avoid_: Record language
 
+**Employee deactivation**:
+The controlled disabling of a linked employee's company inventory access, completed only after the exact sign-in block is confirmed by the sign-in provider. Membership is disabled first and an unconfirmed provider result stays a reconciliation state, not a completed deactivation.
+_Avoid_: Access patching, account deletion
+
+**Administration operation**:
+The durable, revision-checked record of one employee administration action, carrying the target, the acting admin, the submission key and the provider reconciliation state. It is retained evidence and is never rewritten or deleted.
+_Avoid_: Audit entry, activation flag
+
+**Deactivation reconciliation**:
+The recorded pending or failed provider step of an administration operation whose sign-in block is not confirmed. Access stays disabled and any currently authorized admin may resume the original operation without rewriting its attribution.
+_Avoid_: Successful deactivation, restored access
+
+**Provider sign-in block**:
+The finite ban applied to the exact linked sign-in identity through the server-only provider adapter, confirmed by the provider's own expiry. It is not an infinite state, it does not delete the identity or the employee record, and renewal requires an explicit reconciliation.
+_Avoid_: Account removal, permanent ban
+
+**Last active admin**:
+The final active employee holding the admin role. The database refuses any deactivation, demotion, unlink or removal that would leave none, including through a direct write.
+_Avoid_: Owner account, sole administrator
+
 ### Properties, addresses and contacts
 
 **Property**:
@@ -104,6 +124,18 @@ _Avoid_: Market valuation, price list, achieved price, projected price
 An optional retained note an authorized editor attaches to a recorded price correction. It stays with the revision it explains and never replaces the mistaken value, deletes earlier history or creates an approval step.
 _Avoid_: Approval reason, price justification, replacement value
 
+**Inventory entry date**:
+The recorded original date a property entered the company inventory, preserved from a reliable legacy source date or recorded when a genuinely new property identity is created. It is not the record's creation, update or import time.
+_Avoid_: Import day, created timestamp
+
+**Unknown inventory entry date**:
+An inventory record whose original entry date is not reliably recorded. It is an explicit known gap: it keeps its place in chronological lists after the dated records and has no invented or ranked age.
+_Avoid_: Oldest record, guessed date
+
+**Inventory age**:
+The number of Vietnam business days from a property's Inventory entry date to today, shown in the chronological inventory views. It does not reset when a property is relisted, repriced, corrected or otherwise updated.
+_Avoid_: Listing age, update age
+
 ### Vendors
 
 **Vendor**:
@@ -171,6 +203,10 @@ _Avoid_: Unassigned sale, ownerless deal
 **Reservation release**:
 The audited closure of a pending or approved reservation with a meaningful reason, retaining the original claimant, request reason and every recorded event. It resolves a conflicting claimant before a sale completion; it is neither a completion nor a transfer of attribution.
 _Avoid_: Reassignment, deletion of a claim
+
+**Outstanding reservation**:
+An employee's effective reservation or pending reservation request that is still open. Employee deactivation makes it visible but never releases, transfers or rewrites it; only the existing claimant/reviewer release or expiry closes it.
+_Avoid_: Automatic transfer, reassignment
 
 ### Discussion
 

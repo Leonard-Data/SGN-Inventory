@@ -48,6 +48,19 @@ const vi = {
   searchHint:
     'Nhập một đoạn địa chỉ liền nhau; không cần dấu. % và _ là ký tự thường, không phải ký tự đại diện.',
   queryTooLong: 'Địa chỉ tìm kiếm tối đa 120 ký tự.',
+  sortLabel: 'Thứ tự theo ngày nhập kho',
+  sortDefault: 'Mặc định',
+  sortOldest: 'Cũ nhất trước',
+  sortNewest: 'Mới nhất trước',
+  ageHint:
+    'Chỉ gồm hồ sơ đang chào hoặc đang thương lượng, chưa lưu trữ. Thứ tự dùng ngày nhập kho gốc, không đổi khi cập nhật, đổi giá hoặc đăng lại. Hồ sơ chưa xác định ngày nhập kho được liệt kê sau cùng, không bị ẩn.',
+  entryDate: 'Ngày nhập kho gốc',
+  entryDateUnknown: 'Chưa xác định',
+  entryDateLegacy: 'Theo hồ sơ gốc',
+  entrySourceRecorded: 'Ghi nhận khi tạo hồ sơ',
+  entryAge: 'ngày trong kho',
+  entryAgeOne: 'ngày trong kho',
+  entryAgeUnknown: 'Tuổi kho chưa xác định',
   propertyCode: 'Mã bất động sản',
   details: 'Chi tiết bất động sản',
   back: 'Về kết quả',
@@ -249,6 +262,45 @@ const vi = {
   employeeAccessActive: 'Đang hoạt động',
   employeeAccessInactive: 'Đã tắt truy cập',
   employeeAccessUnlinked: 'Chưa liên kết đăng nhập',
+  // Employee deactivation (issue #66).
+  employeeActions: 'Thao tác',
+  employeeDeactivate: 'Tắt quyền truy cập',
+  employeeDeactivateTarget: 'Nhân viên',
+  employeeDeactivateNote:
+    'Thao tác này tắt quyền truy cập nội bộ trước, sau đó xác nhận chặn đăng nhập của đúng tài khoản. Hồ sơ, lịch sử và công việc vẫn giữ nguyên.',
+  employeeDeactivateConfirm: 'Xác nhận tắt quyền truy cập',
+  employeeDeactivateReconcile: 'Đối soát chặn đăng nhập',
+  employeeDeactivateState: 'Trạng thái thao tác',
+  employeeDeactivateOutstanding: 'Đặt chỗ đang mở',
+  employeeDeactivateNoOutstanding:
+    'Không có yêu cầu đặt chỗ hoặc đặt chỗ hiệu lực nào đang mở.',
+  employeeDeactivateReservationEffective: 'Đặt chỗ đã duyệt',
+  employeeDeactivateReservationPending: 'Yêu cầu đang chờ',
+  employeeDeactivateReservationExpires: 'Hết hạn',
+  employeeDeactivateReservationNote:
+    'Việc giải phóng hoặc hết hạn vẫn theo đúng người yêu cầu, người duyệt và thời hạn hiện có; hệ thống không tự chuyển hay đổi người được ghi nhận.',
+  employeeDeactivatePendingLabel: 'Đang chờ xác nhận chặn đăng nhập',
+  employeeDeactivateReconciliationLabel: 'Cần đối soát chặn đăng nhập',
+  employeeDeactivateConfirmedLabel: 'Đã xác nhận chặn đăng nhập',
+  employeeDeactivateBanNote:
+    'Chặn đăng nhập có thời hạn do nhà cung cấp xác nhận (khoảng 100 năm) và chỉ được gia hạn bằng một lần đối soát rõ ràng; đây không phải trạng thái vô hạn.',
+  employeeDeactivateSuccess:
+    'Đã tắt quyền truy cập và xác nhận chặn đăng nhập.',
+  employeeDeactivatePending:
+    'Đã tắt quyền truy cập; chặn đăng nhập chưa được xác nhận.',
+  employeeDeactivateFailed:
+    'Thao tác chưa hoàn tất. Quyền truy cập vẫn bị tắt và trạng thái đã ghi vẫn được giữ nguyên.',
+  employeeDeactivateLastAdmin:
+    'Không thể tắt quyền truy cập của quản trị viên đang hoạt động cuối cùng.',
+  employeeDeactivateNotDeactivable:
+    'Nhân viên này không còn có thể tắt quyền truy cập (chưa liên kết đăng nhập hoặc đã tắt).',
+  employeeDeactivateConflict:
+    'Mã thao tác đã được dùng cho một hành động khác. Hãy mở lại mục này.',
+  employeeDeactivateStale:
+    'Trạng thái thao tác đã thay đổi. Hãy tải lại trước khi thử lại.',
+  employeeDeactivateProviderUnavailable:
+    'Máy chủ chưa có cấu hình xác nhận chặn đăng nhập. Quyền truy cập đã bị tắt; hãy thử lại sau khi cấu hình được khôi phục.',
+  employeeDeactivateLoadFailed: 'Không thể tải trạng thái tắt quyền truy cập.',
   // People → Vendors (#73): the company directory and its one bounded create.
   vendorsLink: 'Nhà cung cấp',
   vendorDirectory: 'Danh sách nhà cung cấp',
@@ -474,6 +526,19 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     searchHint:
       'Enter a contiguous address fragment; accents are optional. % and _ are literal characters, not wildcards.',
     queryTooLong: 'Search addresses must be at most 120 characters.',
+    sortLabel: 'Original entry date order',
+    sortDefault: 'Default',
+    sortOldest: 'Oldest first',
+    sortNewest: 'Newest first',
+    ageHint:
+      'Available and negotiating unarchived inventory only. Order uses the original inventory entry date and does not change on update, price edit or relisting. Records with an unknown entry date are listed last, never hidden.',
+    entryDate: 'Original inventory entry date',
+    entryDateUnknown: 'Unknown',
+    entryDateLegacy: 'From the legacy record',
+    entrySourceRecorded: 'Recorded when the record was created',
+    entryAge: 'days in inventory',
+    entryAgeOne: 'day in inventory',
+    entryAgeUnknown: 'Inventory age unknown',
     propertyCode: 'Property code',
     details: 'Property details',
     back: 'Back to results',
@@ -660,6 +725,44 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     employeeAccessActive: 'Active',
     employeeAccessInactive: 'Access disabled',
     employeeAccessUnlinked: 'Not linked to sign-in',
+    // Employee deactivation (issue #66).
+    employeeActions: 'Actions',
+    employeeDeactivate: 'Deactivate access',
+    employeeDeactivateTarget: 'Employee',
+    employeeDeactivateNote:
+      'This disables internal membership first, then confirms the sign-in block for the exact account. Record, history and work stay attributed to the person.',
+    employeeDeactivateConfirm: 'Confirm deactivation',
+    employeeDeactivateReconcile: 'Reconcile sign-in block',
+    employeeDeactivateState: 'Action state',
+    employeeDeactivateOutstanding: 'Outstanding reservations',
+    employeeDeactivateNoOutstanding: 'No open requests or reservations.',
+    employeeDeactivateReservationEffective: 'Approved reservation',
+    employeeDeactivateReservationPending: 'Pending request',
+    employeeDeactivateReservationExpires: 'Expires',
+    employeeDeactivateReservationNote:
+      'Release or expiry stays with the existing claimant, reviewer and expiry rules; the system never transfers or rewrites the recorded claimant.',
+    employeeDeactivatePendingLabel: 'Sign-in block confirmation pending',
+    employeeDeactivateReconciliationLabel:
+      'Sign-in block reconciliation required',
+    employeeDeactivateConfirmedLabel: 'Sign-in block confirmed',
+    employeeDeactivateBanNote:
+      'The provider confirms a finite sign-in ban (about 100 years); it is renewed only by an explicit reconciliation and is not an infinite state.',
+    employeeDeactivateSuccess:
+      'Access disabled and the sign-in block was confirmed.',
+    employeeDeactivatePending:
+      'Access is disabled; the sign-in block is not confirmed yet.',
+    employeeDeactivateFailed:
+      'The action did not complete. Access stays disabled and the recorded state is unchanged.',
+    employeeDeactivateLastAdmin: 'The last active admin cannot be deactivated.',
+    employeeDeactivateNotDeactivable:
+      'This employee can no longer be deactivated (no linked sign-in or already inactive).',
+    employeeDeactivateConflict:
+      'This action key was already used for a different action. Reopen this entry.',
+    employeeDeactivateStale:
+      'The action state changed. Reload before retrying.',
+    employeeDeactivateProviderUnavailable:
+      'The server has no sign-in confirmation configuration. Access is disabled; retry after configuration is restored.',
+    employeeDeactivateLoadFailed: 'Deactivation state did not load.',
     // People → Vendors (#73): the company directory and its one bounded create.
     vendorsLink: 'Vendors',
     vendorDirectory: 'Vendor directory',
