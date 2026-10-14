@@ -246,6 +246,22 @@ async function cleanup() {
   }
   await persistManifest();
 }
+let interrupted = false;
+async function handleSignal(signal) {
+  if (interrupted) {
+    process.exit(1);
+  }
+  interrupted = true;
+  console.error(`Received ${signal}; restoring paused admins before exit`);
+  try {
+    await restorePausedAdmins();
+  } catch (error) {
+    console.error(`Could not restore paused admins: ${error.message}`);
+  }
+  process.exit(signal === 'SIGINT' ? 130 : 143);
+}
+process.on('SIGINT', () => handleSignal('SIGINT'));
+process.on('SIGTERM', () => handleSignal('SIGTERM'));
 
 try {
   await createFixtures();

@@ -6,16 +6,26 @@ import { spawnSync } from 'node:child_process';
 // argv. The CLI emits a bare rows array to an ordinary operator shell and a
 // `{boundary,rows,warning}` envelope in agent mode; both shapes are accepted.
 export function createOwnerSql(dbUrl) {
-  let target = dbUrl;
-  let password = '';
+  let parsed;
   try {
-    const parsed = new URL(dbUrl);
-    if (parsed.password) password = decodeURIComponent(parsed.password);
-    parsed.password = '';
-    target = parsed.toString();
+    parsed = new URL(dbUrl);
   } catch {
-    target = dbUrl;
+    throw new Error(
+      'The owner SQL connection must be a valid Postgres connection URL',
+    );
   }
+  let password = '';
+  if (parsed.password) {
+    try {
+      password = decodeURIComponent(parsed.password);
+    } catch {
+      throw new Error(
+        'The owner SQL connection password must be percent-encoded',
+      );
+    }
+  }
+  parsed.password = '';
+  const target = parsed.toString();
   const redact = (text) => {
     let clean = text.split(dbUrl).join('[redacted connection string]');
     if (target !== dbUrl)
