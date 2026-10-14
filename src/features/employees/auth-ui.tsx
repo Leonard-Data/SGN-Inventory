@@ -60,9 +60,9 @@ export function buttonClass(
   options: { block?: boolean; loading?: boolean } = {},
 ): string {
   return [
-    'sgn-btn',
-    variant === 'primary' ? 'sgn-btn-primary' : 'sgn-btn-secondary',
-    options.block ? 'sgn-btn-block' : '',
+    'btn',
+    variant === 'primary' ? 'btn-primary' : 'btn-secondary',
+    options.block ? 'btn-block' : '',
     options.loading ? 'is-loading' : '',
   ]
     .filter(Boolean)
@@ -82,10 +82,10 @@ export function LanguageSwitch({
 }) {
   const text = messages[locale];
   return (
-    <div className="sgn-lang-switch" role="group" aria-label={label}>
+    <div className="lang-switch" role="group" aria-label={label}>
       <button
         type="button"
-        className="sgn-lang-btn"
+        className="lang-btn"
         lang="vi"
         aria-pressed={locale === 'vi'}
         aria-label={text.switchToVi}
@@ -96,7 +96,7 @@ export function LanguageSwitch({
       </button>
       <button
         type="button"
-        className="sgn-lang-btn"
+        className="lang-btn"
         lang="en"
         aria-pressed={locale === 'en'}
         aria-label={text.switchToEn}
@@ -111,7 +111,7 @@ export function LanguageSwitch({
 
 export function FieldError({ id, message }: { id: string; message: string }) {
   return (
-    <p className="sgn-field-error" id={id} hidden={!message}>
+    <p className="field-error" id={id} hidden={!message}>
       {message ? (
         <>
           <AlertIcon />
@@ -154,14 +154,14 @@ export function TextField({
   placeholder?: string;
 }) {
   return (
-    <div className={'sgn-field' + (invalid ? ' is-invalid' : '')}>
+    <div className={'field' + (invalid ? ' is-invalid' : '')}>
       <label htmlFor={id}>{label}</label>
-      <span className="sgn-input-wrap">
+      <span className="input-wrap">
         <input
           id={id}
           name={name}
           ref={inputRef}
-          className="sgn-input"
+          className="input"
           type={type}
           inputMode={type === 'email' ? 'email' : undefined}
           autoComplete={autoComplete}
@@ -224,16 +224,16 @@ export function PasswordField({
   const text = messages[locale];
   const described = [errorId, describedBy].filter(Boolean).join(' ');
   return (
-    <div className={'sgn-field' + (invalid ? ' is-invalid' : '')}>
-      <div className="sgn-label-row">
+    <div className={'field' + (invalid ? ' is-invalid' : '')}>
+      <div className="field-label-row">
         <label htmlFor={id}>{label}</label>
       </div>
-      <span className="sgn-input-wrap has-reveal">
+      <span className="input-wrap has-reveal">
         <input
           id={id}
           name={name}
           ref={inputRef}
-          className="sgn-input"
+          className="input"
           type={shown ? 'text' : 'password'}
           autoComplete={autoComplete}
           maxLength={maxLength}
@@ -250,7 +250,7 @@ export function PasswordField({
         />
         <button
           type="button"
-          className="sgn-reveal"
+          className="reveal"
           aria-pressed={shown}
           aria-label={shown ? text.hidePassword : text.showPassword}
           onClick={() => {
@@ -281,28 +281,28 @@ export function PasswordStrength({
   return (
     <>
       <div
-        className="sgn-strength"
+        className="strength"
         data-level={evaluation.level}
         aria-hidden="true"
       >
-        <div className="sgn-strength-head">
+        <div className="strength-head">
           <span>{text.strength}</span>
-          <span className="sgn-strength-label">
+          <span className="strength-label">
             {verdictKey ? text[verdictKey] : '—'}
           </span>
         </div>
-        <div className="sgn-strength-track">
-          <span className="sgn-strength-seg" />
-          <span className="sgn-strength-seg" />
-          <span className="sgn-strength-seg" />
-          <span className="sgn-strength-seg" />
+        <div className="strength-track">
+          <span className="strength-seg" />
+          <span className="strength-seg" />
+          <span className="strength-seg" />
+          <span className="strength-seg" />
         </div>
       </div>
-      <ul className="sgn-rules" id={rulesId}>
+      <ul className="rules" id={rulesId}>
         {passwordRules.map((rule) => (
           <li
             key={rule.key}
-            className={'sgn-rule' + (evaluation.met[rule.key] ? ' is-met' : '')}
+            className={'rule' + (evaluation.met[rule.key] ? ' is-met' : '')}
           >
             <span>{text[rule.label]}</span>
           </li>
@@ -326,18 +326,18 @@ export function Stepper({
     { n: 3, label: text.stepDone },
   ];
   return (
-    <ol className="sgn-stepper">
+    <ol className="stepper">
       {steps.map((step) => (
         <li
           key={step.n}
           className={
-            'sgn-step' +
+            'step' +
             (step.n < current ? ' is-done' : '') +
             (step.n === current ? ' is-active' : '')
           }
           aria-current={step.n === current ? 'step' : undefined}
         >
-          <b className="sgn-num">{String(step.n).padStart(2, '0')}</b>
+          <b className="num">{String(step.n).padStart(2, '0')}</b>
           <span>{step.label}</span>
         </li>
       ))}
@@ -361,7 +361,7 @@ export function StatusAlert({
   const role = tone === 'error' ? 'alert' : 'status';
   return (
     <p
-      className={'sgn-status' + (tone === 'error' ? ' sgn-status-error' : '')}
+      className={'form-status' + (tone === 'error' ? ' form-status-error' : '')}
       id={id}
       role={role}
       aria-live={live}

@@ -75,7 +75,9 @@ export function MutationForm({
     <form onSubmit={submit}>
       <fieldset disabled={busy}>{children}</fieldset>
       {error ? <p role="alert">{message}</p> : null}
-      <button disabled={busy}>{busy ? text.saving : text.save}</button>
+      <button className="btn btn-sm btn-primary" disabled={busy}>
+        {busy ? text.saving : text.save}
+      </button>
     </form>
   );
 }
@@ -101,11 +103,14 @@ export function RecordFields({
         ? ''
         : String(value);
     return (
-      <label key={name} htmlFor={id}>
-        {text}
+      <div className="field" key={name}>
+        <label className="field-label" htmlFor={id}>
+          {text}
+        </label>
         {field.kind === 'boolean' ? (
           <select
             id={id}
+            className="select"
             name={name}
             defaultValue={value === true ? 'true' : 'false'}
           >
@@ -115,6 +120,7 @@ export function RecordFields({
         ) : field.options ? (
           <select
             id={id}
+            className="select"
             name={name}
             defaultValue={initial}
             required={field.required}
@@ -143,6 +149,7 @@ export function RecordFields({
           ].includes(name) ? (
           <textarea
             id={id}
+            className="textarea"
             name={name}
             rows={3}
             defaultValue={initial}
@@ -152,6 +159,7 @@ export function RecordFields({
         ) : (
           <input
             id={id}
+            className="input"
             name={name}
             type={field.kind === 'date' ? 'date' : 'text'}
             inputMode={
@@ -166,7 +174,7 @@ export function RecordFields({
             required={field.required}
           />
         )}
-      </label>
+      </div>
     );
   });
 }
@@ -215,10 +223,13 @@ function UnitPicker({
   }, [level, parent, onDenied]);
   const text = maintenanceText(locale);
   return (
-    <label htmlFor={id}>
-      {fields[name]![locale]}
+    <div className="field">
+      <label className="field-label" htmlFor={id}>
+        {fields[name]![locale]}
+      </label>
       <select
         id={id}
+        className="select"
         name={name}
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -234,7 +245,7 @@ function UnitPicker({
         ))}
       </select>
       {error ? <span role="alert">{text.unavailable}</span> : null}
-    </label>
+    </div>
   );
 }
 export function AddressFields({
@@ -260,10 +271,13 @@ export function AddressFields({
       {variant === 'address' ? (
         <>
           <p>{text.preserveSource}</p>
-          <label htmlFor={id}>
-            {fields.format![locale]}
+          <div className="field">
+            <label className="field-label" htmlFor={id}>
+              {fields.format![locale]}
+            </label>
             <select
               id={id}
+              className="select"
               name="format"
               required
               value={format}
@@ -283,7 +297,7 @@ export function AddressFields({
               <option value="legacy">{optionLabel(locale, 'legacy')}</option>
               <option value="current">{optionLabel(locale, 'current')}</option>
             </select>
-          </label>
+          </div>
           <p>{text.rawCurrent}</p>
           <RecordFields
             locale={locale}

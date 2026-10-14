@@ -4,14 +4,56 @@ import { parseEnv } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { readEnvironment } from '../src/lib/environment.ts';
 
+// Stage-scoped activation. Exactly one repository variable owns each delivery
+// kind, and a kind is enabled only by its own switch, so setting the preview or
+// development switch can never enable a production run (or the reverse). Absent
+// and non-literal values stay off, so every kind is disabled by default.
+const CD_ACTIVATION_SWITCH = {
+  preview: 'CD_PREVIEW_ENABLED',
+  dev: 'CD_DEV_ENABLED',
+  prod: 'CD_PROD_ENABLED',
+};
+
+export function cdActivation(kind, values) {
+  assert.ok(
+    Object.hasOwn(CD_ACTIVATION_SWITCH, kind),
+    'Use a known CD activation kind',
+  );
+  return values[CD_ACTIVATION_SWITCH[kind]] === 'true';
+}
+
 export function releaseTarget(values) {
   const stage = values.SGN_ENV;
   assert.ok(stage === 'dev' || stage === 'prod', 'Select dev or prod');
-  assert.equal(
-    values.GITHUB_REF,
-    stage === 'prod' ? 'refs/heads/main' : 'refs/heads/develop',
-    'Release must run on the trusted stage branch',
-  );
+  if (values.VERCEL_TARGET === 'preview') {
+    assert.equal(stage, 'dev', 'Previews must use dev resources');
+    assert.equal(
+      values.GITHUB_EVENT_NAME,
+      'pull_request',
+      'Preview requires a pull request',
+    );
+    assert.match(
+      values.GITHUB_REF ?? '',
+      /^refs\/pull\/[1-9]\d*\/merge$/,
+      'Preview requires a pull request merge ref',
+    );
+    assert.ok(values.GITHUB_REPOSITORY, 'Configure repository identity');
+    assert.equal(
+      values.GITHUB_HEAD_REPOSITORY,
+      values.GITHUB_REPOSITORY,
+      'Fork previews cannot receive deployment credentials',
+    );
+  } else {
+    assert.ok(
+      !values.VERCEL_TARGET || values.VERCEL_TARGET === 'production',
+      'Unknown Vercel target',
+    );
+    assert.equal(
+      values.GITHUB_REF,
+      stage === 'prod' ? 'refs/heads/main' : 'refs/heads/develop',
+      'Release must run on the trusted stage branch',
+    );
+  }
   const dev = values.DEV_SUPABASE_PROJECT_REF;
   const prod = values.PROD_SUPABASE_PROJECT_REF;
   assert.match(dev ?? '', /^[a-z]{20}$/, 'Configure dev Supabase project ref');
@@ -78,6 +120,27 @@ export function verifyPulledConfiguration(values, project, pulled) {
   readEnvironment(pulled, values.SUPABASE_PROJECT_REF);
 }
 
+// A verify-only run must never pass while the database is behind the commit it
+// is releasing, so the dry run has to prove it is up to date before the release
+// proceeds. The payload is the pinned CLI's `--output-format json` dry-run result.
+export function releasePendingMigrations(dryRun) {
+  assert.equal(
+    dryRun?.dryRun,
+    true,
+    'Pending migrations must come from a migration dry run',
+  );
+  assert.ok(
+    Array.isArray(dryRun.migrations),
+    'Migration dry run must list its pending migrations',
+  );
+  assert.equal(
+    dryRun.migrations.length,
+    0,
+    'Pending migrations must be applied before the application release',
+  );
+  return { pending: dryRun.migrations };
+}
+
 if (
   process.argv[1] &&
   import.meta.url === pathToFileURL(process.argv[1]).href
@@ -86,13 +149,25 @@ if (
     const command = process.argv[2];
     if (command === 'target') {
       releaseTarget(process.env);
+    } else if (command === 'activation') {
+      assert.ok(
+        cdActivation(process.env.SGN_CD_KIND, process.env),
+        'CD is not activated for this stage',
+      );
     } else if (command === 'configuration') {
       releaseConfiguration(process.env);
     } else if (command === 'pulled') {
       verifyPulledConfiguration(
         process.env,
         JSON.parse(await readFile('.vercel/project.json', 'utf8')),
-        parseEnv(await readFile('.vercel/.env.production.local', 'utf8')),
+        parseEnv(
+          await readFile(
+            process.env.VERCEL_TARGET === 'preview'
+              ? '.vercel/.env.preview.local'
+              : '.vercel/.env.production.local',
+            'utf8',
+          ),
+        ),
       );
     } else if (command === 'smoke') {
       const { stage } = releaseConfiguration(process.env);
@@ -118,14 +193,20 @@ if (
         { status: 'ok', stage },
         'Deployment stage mismatch',
       );
+    } else if (command === 'pending') {
+      releasePendingMigrations(
+        JSON.parse(await readFile(process.argv[3], 'utf8')),
+      );
     } else {
-      throw new Error('Use target, configuration, pulled, or smoke');
+      throw new Error(
+        'Use target, activation, configuration, pending, pulled, or smoke',
+      );
     }
     console.log(`Release ${command} check passed`);
   } catch {
     // Assertions may contain compared key values; never print their payloads.
     console.error(
-      'Release check failed: verify branch, stage, project IDs, configuration and deployment health.',
+      'Release check failed: verify stage activation, branch, stage, project IDs, configuration, pending migrations and deployment health.',
     );
     process.exitCode = 1;
   }

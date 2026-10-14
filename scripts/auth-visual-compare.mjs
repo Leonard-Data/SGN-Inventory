@@ -28,6 +28,17 @@ const REFERENCE = path.resolve(
   process.env.REFERENCE_HTML ?? 'docs/design/sgn-auth.reference.html',
 );
 const OUT = process.env.OUT_DIR ?? path.join(tmpdir(), 'sgn-auth-evidence');
+// 'auth' compares the canonical authentication surfaces (default). 'applied'
+// compares the shared application surfaces — shell, inventory cards, panels,
+// controls — against the design package's own applied reference, which must be
+// named through REFERENCE_HTML because it lives outside this repository.
+const PROFILE = process.env.PROFILE ?? 'auth';
+if (PROFILE === 'applied' && !process.env.REFERENCE_HTML) {
+  console.error(
+    'PROFILE=applied needs REFERENCE_HTML pointing at the design package applied reference.',
+  );
+  process.exit(2);
+}
 const WIDTHS = (process.env.WIDTHS ?? '375,1040,1039,1440')
   .split(',')
   .map((value) => Number(value.trim()))
@@ -81,29 +92,100 @@ const refInside = {
 };
 const appSelectors = {
   shell: '.sgn-auth',
-  rail: '.sgn-rail',
-  tile: '.sgn-logo-tile',
-  panel: '.sgn-panel',
-  card: '.sgn-card',
-  h1: '.sgn-card h1',
-  input: '.sgn-input',
-  btn: '.sgn-btn-primary',
-  secondary: '.sgn-btn-secondary',
-  eyebrow: '.sgn-eyebrow',
-  lead: '.sgn-lead',
-  field: '.sgn-field',
-  error: '.sgn-field-error',
-  check: '.sgn-check',
-  link: '.sgn-link',
-  langBar: '.sgn-lang-switch',
-  langBtn: '.sgn-lang-btn[aria-pressed="true"]',
-  stepper: '.sgn-stepper',
-  step: '.sgn-step',
-  strength: '.sgn-strength',
-  rule: '.sgn-rule',
-  foot: '.sgn-panel-foot',
+  rail: '.brand-rail',
+  tile: '.logo-tile',
+  panel: '.auth-panel',
+  card: '.auth-card',
+  h1: '.auth-card h1',
+  input: '.input',
+  btn: '.btn-primary',
+  secondary: '.btn-secondary',
+  eyebrow: '.auth-card .eyebrow',
+  lead: '.auth-card .lead',
+  field: '.field',
+  error: '.field-error',
+  check: '.check',
+  link: '.link',
+  langBar: '.lang-switch',
+  langBtn: '.lang-btn[aria-pressed="true"]',
+  stepper: '.stepper',
+  step: '.step',
+  strength: '.strength',
+  rule: '.rule',
+  foot: '.panel-foot',
   skip: '.sgn-skip',
 };
+
+// Both sides of the applied comparison use the same class vocabulary (that is
+// the point of the design system), so one selector map serves the reference and
+// the application. Only style properties are compared here: the two sides carry
+// different fixture content, so box sizes are not a defect signal, while a
+// wrong colour, radius, spacing, type ramp or grid template is.
+const appliedSelectors = {
+  shell: '.sgn-app',
+  sidebar: '.sgn-sidebar',
+  lockup: '.sgn-lockup',
+  navItem: '.sgn-nav-item',
+  topbar: '.sgn-topbar',
+  langBar: '.lang-switch',
+  langBtn: '.lang-btn[aria-pressed="true"]',
+  content: '.sgn-content',
+  pageIntro: '.page-intro h1',
+  eyebrow: '.eyebrow',
+  search: '.search',
+  searchBtn: '.search-btn',
+  card: '.property-card',
+  cover: '.property-card .cover',
+  plate: '.plate-sheet',
+  badge: '.badge[data-tone="neutral"]',
+  panel: '.panel',
+  panelHead: '.panel-head h2',
+  btn: '.btn-primary',
+  secondary: '.btn-secondary',
+  table: '.data-table',
+  tableHead: '.data-table th',
+  pagination: '.pagination',
+  state: '.state-panel',
+};
+
+const appliedMetricsExpression = `(sel) => {
+  const q = (s) => (s ? document.querySelector(s) : null);
+  const pick = (el, props) => {
+    const c = el ? getComputedStyle(el) : null;
+    if (!c) return null;
+    const o = {};
+    for (const p of props) o[p] = c.getPropertyValue(p);
+    return o;
+  };
+  const TEXT = ['font-family','font-size','font-weight','line-height','letter-spacing','color'];
+  return {
+    fonts: document.fonts.status,
+    shell: pick(q(sel.shell), ['display','grid-template-columns','background-color','min-height']),
+    sidebar: pick(q(sel.sidebar), ['background-color','color','padding','overflow-y']),
+    lockup: pick(q(sel.lockup), ['display','align-items','gap','padding']),
+    navItem: pick(q(sel.navItem), ['min-height','border-radius','font-size','font-weight','color','background-color','padding']),
+    topbar: pick(q(sel.topbar), ['min-height','padding-left','padding-right','border-bottom-color','background-color','position']),
+    langBar: pick(q(sel.langBar), ['background-color','border-radius','border-color','padding']),
+    langBtn: pick(q(sel.langBtn), ['min-height','border-radius','font-size','font-weight','color','background-color']),
+    content: pick(q(sel.content), ['max-width','padding-top','padding-left','padding-right','margin-left','margin-right']),
+    pageIntro: pick(q(sel.pageIntro), TEXT.concat(['margin-top'])),
+    eyebrow: pick(q(sel.eyebrow), ['font-family','font-size','letter-spacing','text-transform','color']),
+    search: pick(q(sel.search), ['display','min-height','border-color','border-radius','background-color','padding']),
+    searchBtn: pick(q(sel.searchBtn), ['min-height','border-radius','background-color','color','font-weight']),
+    card: pick(q(sel.card), ['display','border-radius','border-color','background-color','overflow']),
+    cover: pick(q(sel.cover), ['aspect-ratio','background-color','border-bottom-color']),
+    plate: pick(q(sel.plate), ['background-color','border-radius','width','height']),
+    badge: pick(q(sel.badge), ['display','min-height','border-radius','font-size','font-weight','letter-spacing','color','border-color','padding']),
+    panel: pick(q(sel.panel), ['background-color','border-color','border-radius','padding','box-shadow']),
+    panelHead: pick(q(sel.panelHead), TEXT),
+    btn: pick(q(sel.btn), ['min-height','padding-left','border-radius','background-color','color','font-size','font-weight']),
+    secondary: pick(q(sel.secondary), ['min-height','border-color','background-color','color']),
+    table: pick(q(sel.table), ['width','border-collapse','font-size']),
+    tableHead: pick(q(sel.tableHead), ['font-family','font-size','letter-spacing','text-transform','color']),
+    pagination: pick(q(sel.pagination), ['display','align-items','gap','margin-top']),
+    state: pick(q(sel.state), ['background-color','border-color','border-radius','padding','text-align']),
+  };
+}`;
 
 // Keys resolved against the view element itself; the rest resolve against the
 // visible step form inside that view.
@@ -161,7 +243,7 @@ const metricsExpression = `(sel) => {
   };
 }`;
 
-const surfaces = [
+const authSurfaces = [
   {
     name: 'sign-in',
     appPath: '/login',
@@ -221,6 +303,24 @@ const surfaces = [
     ],
   },
 ];
+
+// The applied profile compares the shared surfaces at one width-independent
+// route. The review route renders the shell, the inventory composition and the
+// record panels from fixtures, so it needs no session and no database.
+const appliedSurfaces = [
+  {
+    name: 'applied',
+    appPath: '/design/app-preview',
+    refUrl: refUrl,
+    refHash: '',
+    refScope: 'body',
+    refFormScope: 'body',
+    refSteps: [],
+    appCookies: [],
+  },
+];
+
+const surfaces = PROFILE === 'applied' ? appliedSurfaces : authSurfaces;
 
 async function runRefStep(send, step) {
   if (step === 'lang-vi' || step === 'lang-en') {
@@ -388,7 +488,9 @@ try {
           }
         }
         const url =
-          variant === 'ref' ? refUrl + surface.refHash : BASE + surface.appPath;
+          variant === 'ref'
+            ? (surface.refUrl ?? refUrl) + (surface.refHash ?? '')
+            : BASE + surface.appPath;
         const loaded = once('Page.loadEventFired');
         await send('Page.navigate', { url });
         await loaded;
@@ -401,12 +503,16 @@ try {
           awaitPromise: true,
         });
         await delay(200);
-        const measured = await send('Runtime.evaluate', {
-          expression: `(${metricsExpression})(${JSON.stringify(
-            variant === 'ref'
+        const expression =
+          PROFILE === 'applied' ? appliedMetricsExpression : metricsExpression;
+        const selectors =
+          PROFILE === 'applied'
+            ? appliedSelectors
+            : variant === 'ref'
               ? refSelectors(surface.refScope, surface.refFormScope)
-              : appSelectors,
-          )})`,
+              : appSelectors;
+        const measured = await send('Runtime.evaluate', {
+          expression: `(${expression})(${JSON.stringify(selectors)})`,
           returnByValue: true,
         });
         const metrics = measured.result.value;

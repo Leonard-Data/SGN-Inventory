@@ -1,0 +1,84 @@
+name: Preview application
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    # One activation switch per delivery kind: the preview switch never starts a
+    # development or production release. Never execute fork code with deployment
+    # secrets, or use pull_request_target.
+    if: >-
+      vars.CD_PREVIEW_ENABLED == 'true' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    uses: ./.github/workflows/ci.yml
+  deploy:
+    needs: quality
+    # Repeated so a mistyped trigger guard cannot reach the dev project.
+    if: vars.CD_PREVIEW_ENABLED == 'true'
+    environment:
+      name: preview
+      url: ${{ steps.publish.outputs.url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      HUSKY: '0'
+      SGN_ENV: dev
+      # The activation guard reads its switch from the process environment, so
+      # the job must export the preview switch it already gates on.
+      CD_PREVIEW_ENABLED: ${{ vars.CD_PREVIEW_ENABLED }}
+      VERCEL_TARGET: preview
+      GITHUB_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+      PR_BRANCH: ${{ github.head_ref }}
+      DEV_SUPABASE_PROJECT_REF: ${{ vars.DEV_SUPABASE_PROJECT_REF }}
+      PROD_SUPABASE_PROJECT_REF: ${{ vars.PROD_SUPABASE_PROJECT_REF }}
+      DEV_VERCEL_PROJECT_ID: ${{ vars.DEV_VERCEL_PROJECT_ID }}
+      PROD_VERCEL_PROJECT_ID: ${{ vars.PROD_VERCEL_PROJECT_ID }}
+      SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+      EXPECTED_SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install pinned npm
+        run: npm install --global npm@11.13.0
+      - run: npm ci
+      - name: Verify preview activation before cloud contact
+        env:
+          SGN_CD_KIND: preview
+        run: node scripts/release-guard.mjs activation
+      - name: Verify dev-only preview configuration before cloud contact
+        run: node scripts/release-guard.mjs configuration
+      - run: npx --no-install vercel pull --yes --environment=preview --git-branch="$PR_BRANCH"
+      - name: Verify downloaded project and variables before building
+        run: node scripts/release-guard.mjs pulled
+      - run: npx --no-install vercel build --target=preview
+      - name: Deploy exact preview build
+        id: publish
+        shell: bash
+        run: |
+          url=$(npx --no-install vercel deploy --prebuilt --target=preview --yes)
+          printf 'DEPLOYMENT_URL=%s\n' "$url" >> "$GITHUB_ENV"
+          printf 'url=%s\n' "$url" >> "$GITHUB_OUTPUT"
+          printf '### Pull request preview\n\n%s\n' "$url" >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify deployed preview configuration
+        env:
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: node scripts/release-guard.mjs smoke

@@ -2,7 +2,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Employee } from './types';
 import { api, RequestError } from './api';
-import { loadProtected } from './protected-load';
+import {
+  loadProtected,
+  refocusAction,
+  renderedSession,
+} from './protected-load';
 
 export function useProtectedData<T>(
   source: string | ((signal: AbortSignal) => Promise<T>),
@@ -15,11 +19,9 @@ export function useProtectedData<T>(
   const controller = useRef<AbortController | null>(null);
   const surfaceElement = useRef<HTMLDivElement | null>(null);
   const renderedFor = useRef<string | null>(null);
-  const savedLocale = useRef<{
-    employeeId: string;
-    locale: Employee['locale'];
-    revision: number;
-  } | null>(null);
+  // True while a read will publish or clear the surface: that read decides what
+  // the surface shows, so a window focus during it has nothing to do.
+  const reading = useRef(false);
   const bindSurface = useCallback((element: HTMLDivElement | null) => {
     surfaceElement.current = element;
   }, []);
@@ -29,6 +31,7 @@ export function useProtectedData<T>(
   }, []);
   const conceal = useCallback(() => {
     invalidate();
+    reading.current = false;
     if (surfaceElement.current) surfaceElement.current.hidden = true;
   }, [invalidate]);
   const clear = useCallback(() => {
@@ -39,8 +42,9 @@ export function useProtectedData<T>(
   }, [conceal]);
   const load = useCallback(async () => {
     invalidate();
+    // The read that just started decides what the surface shows.
+    reading.current = true;
     const version = generation.current;
-    const localeRevision = savedLocale.current?.revision ?? 0;
     const abort = new AbortController();
     controller.current = abort;
     try {
@@ -57,18 +61,10 @@ export function useProtectedData<T>(
           },
         });
       if (version !== generation.current) return;
-      const latest = savedLocale.current;
-      const active =
-        latest &&
-        latest.revision !== localeRevision &&
-        latest.employeeId === sessionEmployee.id
-          ? { ...sessionEmployee, locale: latest.locale }
-          : sessionEmployee;
-      setEmployee(active);
+      setEmployee(sessionEmployee);
       setData(result);
-      renderedFor.current = active.id;
+      renderedFor.current = renderedSession(sessionEmployee);
       setError(null);
-      document.documentElement.lang = active.locale;
       if (surfaceElement.current) surfaceElement.current.hidden = false;
     } catch (failure) {
       if (version !== generation.current || abort.signal.aborted) return;
@@ -86,7 +82,10 @@ export function useProtectedData<T>(
       }
       setError(failure instanceof RequestError ? failure.code : 'unavailable');
     } finally {
-      if (version === generation.current) setBusy(false);
+      if (version === generation.current) {
+        reading.current = false;
+        setBusy(false);
+      }
     }
   }, [source, invalidate]);
   const reload = useCallback(() => {
@@ -94,10 +93,39 @@ export function useProtectedData<T>(
     setError(null);
     return load();
   }, [load]);
+  // A visible surface is still valid, so a window focus rechecks live membership
+  // and authority (docs/database-contract.md) without reading the data it shows.
+  const revalidate = useCallback(async () => {
+    // Nothing has been published for this surface yet, so the read in flight owns it.
+    if (!renderedFor.current) return;
+    try {
+      const session = await api<{ employee: Employee }>('/api/session');
+      if (renderedSession(session.employee) !== renderedFor.current) {
+        conceal();
+        void reload();
+      }
+    } catch (failure) {
+      if (
+        failure instanceof RequestError &&
+        (failure.status === 401 || failure.status === 403)
+      ) {
+        clear();
+        window.location.replace(
+          failure.status === 403 ? '/access-denied' : '/login',
+        );
+        return;
+      }
+      // An inconclusive check keeps the established focus failure behaviour: read
+      // again, clearing what is displayed when that read fails too.
+      void reload();
+    }
+  }, [clear, conceal, reload]);
   useEffect(() => {
     void load();
     const focus = () => {
-      void reload();
+      const action = refocusAction(renderedFor.current, reading.current);
+      if (action === 'reload') void reload();
+      else if (action === 'recheck') void revalidate();
     };
     const hide = () => {
       clear();
@@ -120,7 +148,7 @@ export function useProtectedData<T>(
       window.removeEventListener('pagehide', hide);
       window.removeEventListener('pageshow', show);
     };
-  }, [load, reload, clear, conceal]);
+  }, [load, reload, clear, conceal, revalidate]);
   async function logout() {
     clear();
     setBusy(true);
@@ -135,17 +163,6 @@ export function useProtectedData<T>(
       setBusy(false);
     }
   }
-  function applyLocale(locale: Employee['locale'], employeeId: string) {
-    savedLocale.current = {
-      locale,
-      employeeId,
-      revision: (savedLocale.current?.revision ?? 0) + 1,
-    };
-    setEmployee((current) =>
-      current?.id === employeeId ? { ...current, locale } : current,
-    );
-    document.documentElement.lang = locale;
-  }
   return {
     employee,
     data,
@@ -155,6 +172,5 @@ export function useProtectedData<T>(
     clear,
     reload,
     logout,
-    applyLocale,
   };
 }

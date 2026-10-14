@@ -45,7 +45,24 @@ export function readEnvironment(
   }
 
   const supabaseUrl = origin('NEXT_PUBLIC_SUPABASE_URL');
-  const appUrl = origin('NEXT_PUBLIC_APP_URL');
+  let appUrl = origin('NEXT_PUBLIC_APP_URL');
+  // Preview redirects/recovery must stay on this deployment, not the stable dev
+  // site. Only use Vercel's server-supplied hostname, never a request Host header.
+  // Local/prebuilt builds do not yet have a deployment URL.
+  if (values.VERCEL_ENV === 'preview') {
+    if (stage !== 'dev')
+      throw new Error('Vercel previews must use dev configuration');
+    if (values.VERCEL_URL) {
+      if (
+        !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.vercel\.app$/.test(
+          values.VERCEL_URL,
+        )
+      ) {
+        throw new Error('VERCEL_URL must be a Vercel deployment hostname');
+      }
+      appUrl = new URL(`https://${values.VERCEL_URL}`);
+    }
+  }
   if (
     expectedProjectRef &&
     (!/^[a-z]{20}$/.test(expectedProjectRef) ||

@@ -1,5 +1,7 @@
-name: Deploy application
+name: Release application and database
 on:
+  push:
+    branches: [main] # Repository default branch; update guards if it is renamed.
   workflow_dispatch:
     inputs:
       stage:
@@ -8,26 +10,64 @@ on:
         default: dev
         type: choice
         options: [dev, prod]
+      migration:
+        description: >-
+          apply = apply the reviewed pending migrations before this release
+          (default); verify = never write, and fail while migrations are pending
+        required: true
+        default: apply
+        type: choice
+        options: [apply, verify]
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ inputs.stage }}
+  group: release-${{ inputs.stage || 'prod' }}
   cancel-in-progress: false
 
 jobs:
   quality:
+    # One activation switch per stage: CD_DEV_ENABLED alone can never start a
+    # production run and CD_PROD_ENABLED alone can never start a development
+    # release. Activate each stage only after projects, credentials and
+    # protection gates are configured; CD_PROD_ENABLED is deliberately left
+    # unset until staging acceptance and a separate production release decision.
+    if: >-
+      (inputs.stage == 'dev' && vars.CD_DEV_ENABLED == 'true') ||
+      ((inputs.stage == 'prod' || github.event_name == 'push') && vars.CD_PROD_ENABLED == 'true')
     uses: ./.github/workflows/ci.yml
-  deploy:
+  # Database changes land before the application that depends on them. The
+  # guard-and-push sequence is defined once in migration.yml; a failed migration
+  # fails the run and the deploy job below is skipped, never continued. The
+  # stage environment gate therefore covers the migrations and the upload together.
+  migrate:
     needs: quality
-    if: (inputs.stage == 'dev' && github.ref == 'refs/heads/develop') || (inputs.stage == 'prod' && github.ref == 'refs/heads/main')
-    environment: ${{ inputs.stage }}
+    uses: ./.github/workflows/migration.yml
+    with:
+      stage: ${{ inputs.stage || 'prod' }}
+      # A merge authorizes application delivery, not new database writes.
+      apply: ${{ github.event_name == 'workflow_dispatch' && inputs.migration == 'apply' }}
+    secrets: inherit
+  deploy:
+    needs: migrate
+    # Stage branch, stage switch and host project must all agree; the stage
+    # switch is repeated here so a mistyped trigger guard cannot publish.
+    if: >-
+      (inputs.stage == 'dev' && github.ref == 'refs/heads/develop' && vars.CD_DEV_ENABLED == 'true') ||
+      ((inputs.stage == 'prod' || github.event_name == 'push') && github.ref == 'refs/heads/main' && vars.CD_PROD_ENABLED == 'true')
+    environment:
+      name: ${{ inputs.stage || 'prod' }}
+      url: ${{ steps.publish.outputs.url }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       HUSKY: '0'
-      SGN_ENV: ${{ inputs.stage }}
+      SGN_ENV: ${{ inputs.stage || 'prod' }}
+      # The activation guard reads the selected stage's switch from the process
+      # environment, so this shared job exports both stage switches it gates on.
+      CD_DEV_ENABLED: ${{ vars.CD_DEV_ENABLED }}
+      CD_PROD_ENABLED: ${{ vars.CD_PROD_ENABLED }}
       DEV_SUPABASE_PROJECT_REF: ${{ vars.DEV_SUPABASE_PROJECT_REF }}
       PROD_SUPABASE_PROJECT_REF: ${{ vars.PROD_SUPABASE_PROJECT_REF }}
       DEV_VERCEL_PROJECT_ID: ${{ vars.DEV_VERCEL_PROJECT_ID }}
@@ -47,20 +87,27 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - name: Install pinned npm
-        run: npm install --global npm@11.14.1
+        run: npm install --global npm@11.13.0
       - run: npm ci
+      - name: Verify stage activation before cloud contact
+        env:
+          SGN_CD_KIND: ${{ inputs.stage || 'prod' }}
+        run: node scripts/release-guard.mjs activation
       - name: Verify isolated release configuration before cloud contact
         run: node scripts/release-guard.mjs configuration
       # Both targets use their isolated project's Production environment.
-      - run: npx --no-install vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+      - run: npx --no-install vercel pull --yes --environment=production
       - name: Verify downloaded project and variables before building
         run: node scripts/release-guard.mjs pulled
-      - run: npx --no-install vercel build --prod --token="$VERCEL_TOKEN"
+      - run: npx --no-install vercel build --prod
       - name: Deploy exact stage build
+        id: publish
         shell: bash
         run: |
-          url=$(npx --no-install vercel deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN")
+          url=$(npx --no-install vercel deploy --prebuilt --prod --yes)
           printf 'DEPLOYMENT_URL=%s\n' "$url" >> "$GITHUB_ENV"
+          printf 'url=%s\n' "$url" >> "$GITHUB_OUTPUT"
+          printf '### Application deployment\n\n%s\n' "$url" >> "$GITHUB_STEP_SUMMARY"
       - name: Verify deployed stage health
         env:
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}

@@ -144,6 +144,7 @@ function expectedToday(row, locale) {
     row.business_day.split('-').reverse().join('/'),
     format.format(Number(row.page_view_events)),
     format.format(Number(row.distinct_properties_viewed)),
+    format.format(Number(row.owner_contact_properties)),
   ];
 }
 function completedApi(route, session = primary) {
@@ -414,7 +415,7 @@ try {
     'P0001',
   );
   observed(
-    'reviewer-only archived detail/page view and rejected archived physical visit',
+    'reviewer-only archived detail/page view and retired physical-visit submission',
   );
   for (const name of ['inactive', 'unlinked']) {
     const denied = new ApplicationSession();
@@ -525,7 +526,7 @@ try {
   assert.equal(opens.length, 1);
   assert.equal(opens[0].kind, 'page_view');
   waitUntil(
-    "() => document.querySelectorAll('section[aria-labelledby=today-activity] dd').length === 3",
+    "() => document.querySelectorAll('section[aria-labelledby=today-activity] dd').length === 4",
   );
   assert.ok(screen().text.includes('Hoạt động hôm nay của tôi'));
   const todayReport = await active.rpc('my_today_activity');
@@ -686,11 +687,13 @@ try {
   assert.deepEqual(Object.keys(independentToday.body).sort(), [
     'businessDay',
     'distinctPropertiesViewed',
+    'ownerContactProperties',
     'pageViewEvents',
   ]);
   assert.equal(independentToday.body.businessDay, todayRow.business_day);
   assert.ok(Number.isInteger(independentToday.body.pageViewEvents));
   assert.ok(Number.isInteger(independentToday.body.distinctPropertiesViewed));
+  assert.ok(Number.isInteger(independentToday.body.ownerContactProperties));
   assert.ok(
     independentToday.body.distinctPropertiesViewed <=
       independentToday.body.pageViewEvents,
@@ -714,7 +717,7 @@ try {
   );
   assert.ok(!screen().text.includes('Chưa ghi nhận được lượt xem'));
   waitUntil(
-    "() => document.querySelectorAll('section[aria-labelledby=today-activity] dd').length === 3",
+    "() => document.querySelectorAll('section[aria-labelledby=today-activity] dd').length === 4",
   );
   const reviewerReport = await operator.rpc('my_today_activity');
   assert.equal(

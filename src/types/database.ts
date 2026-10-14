@@ -32,6 +32,41 @@ export type Database = {
         Update: never;
         Relationships: [];
       };
+      property_comment_removals: {
+        Row: {
+          author_id: string;
+          author_name: string;
+          body: string;
+          comment_id: string;
+          original_created_at: string;
+          original_revision: string;
+          property_id: string;
+          removal_kind: string;
+          removal_reason: string | null;
+          removed_actor_name: string;
+          removed_at: string;
+          removed_by: string;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      property_comments: {
+        Row: {
+          author_id: string;
+          author_name: string;
+          body: string | null;
+          created_at: string;
+          id: string;
+          idempotency_key: string;
+          property_id: string;
+          removed_at: string | null;
+          revision: string;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
       correction_requests: {
         Row: {
           id: string;
@@ -1300,11 +1335,10 @@ export type Database = {
       v_employee_daily_activity: {
         Row: {
           business_day: string | null;
-          confirmed_properties_visited: number | null;
           distinct_properties_viewed: number | null;
           employee_id: string | null;
+          owner_contact_properties: number | null;
           page_view_events: number | null;
-          pending_visits: number | null;
         };
         Relationships: [
           {
@@ -1617,13 +1651,66 @@ export type Database = {
           name: string;
         }[];
       };
+      list_property_comments: {
+        Args: {
+          p_before_created_at?: string;
+          p_before_id?: string;
+          p_limit?: number;
+          p_property_id: string;
+        };
+        Returns: {
+          author_id: string;
+          author_name: string;
+          body: string | null;
+          created_at: string;
+          id: string;
+          property_id: string;
+          removed_at: string | null;
+          revision: string;
+        }[];
+      };
+      company_employee_daily_activity: {
+        Args: { p_from: string; p_to: string };
+        Returns: {
+          business_day: string;
+          distinct_properties_viewed: number;
+          employee_id: string;
+          employee_name: string;
+          owner_contact_properties: number;
+          page_view_events: number;
+        }[];
+      };
+      my_daily_activity: {
+        Args: { p_from: string; p_to: string };
+        Returns: {
+          business_day: string;
+          distinct_properties_viewed: number;
+          owner_contact_properties: number;
+          page_view_events: number;
+        }[];
+      };
       my_today_activity: {
         Args: never;
         Returns: {
           business_day: string;
           distinct_properties_viewed: number;
+          owner_contact_properties: number;
           page_view_events: number;
         }[];
+      };
+      post_property_comment: {
+        Args: { p_body: string; p_key: string; p_property_id: string };
+        Returns: Json;
+      };
+      remove_property_comment: {
+        Args: {
+          p_comment_id: string;
+          p_kind: string;
+          p_property_id: string;
+          p_reason?: string;
+          p_revision: string;
+        };
+        Returns: Json;
       };
       record_property_activity: {
         Args: {
@@ -1673,9 +1760,9 @@ export type Database = {
         };
         Returns: string;
       };
-      review_property_visit: {
-        Args: { p_confirm: boolean; p_event_id: string };
-        Returns: undefined;
+      reveal_owner_contact: {
+        Args: { p_key: string; p_property_id: string };
+        Returns: Json;
       };
       search_properties: {
         Args: {

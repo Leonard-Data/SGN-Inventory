@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
-select plan(15);
+select plan(19);
 select ok(not has_table_privilege('anon','public.properties','SELECT'),'anonymous inventory select revoked');
 select ok(not has_table_privilege('authenticated','public.property_locks','UPDATE'),'direct lock mutation revoked');
 select ok(not has_table_privilege('authenticated','public.activity_events','INSERT'),'direct activity insertion revoked');
@@ -18,5 +18,9 @@ select ok(not has_table_privilege('authenticated','public.document_categories','
 select ok(not has_table_privilege('authenticated','public.document_categories','DELETE'),'direct category deletion revoked');
 select ok(exists(select 1 from public.document_categories where id = 'ffffffff-ffff-ffff-ffff-ffffffffffff'),'built-in Other category exists');
 select ok((select bool_and(created_by is null) from public.document_categories where builtin is not null),'system-seeded categories have null created_by');
+select ok(not has_table_privilege('anon','public.property_comments','SELECT'),'anonymous discussion select revoked');
+select ok(not has_table_privilege('authenticated','public.property_comments','INSERT'),'direct comment insertion revoked');
+select ok(not has_table_privilege('authenticated','public.property_comments','UPDATE') and not has_table_privilege('authenticated','public.property_comments','DELETE'),'direct comment mutation revoked');
+select ok(exists(select 1 from pg_indexes where schemaname='public' and indexname='property_comments_author_id_idempotency_key_key'),'one comment identity per employee submission key exists');
 select * from finish();
 rollback;

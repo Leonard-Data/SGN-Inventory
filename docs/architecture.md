@@ -2,7 +2,7 @@
 
 ## Business outcome
 
-Sales can quickly find a property, identify a valid contact, inspect its characteristics and documents, and request a reservation when a deal is agreed. Independent review prevents incorrect commission-attribution claims. Management can inspect inventory by area, confirmed visits by day reservations by employee, rental occupancy per month and confirmed rent balances.
+Sales can quickly find a property, identify a valid contact, inspect its characteristics and documents, and request a reservation when a deal is agreed. Independent review prevents incorrect commission-attribution claims. Management can inspect inventory by area, employee activity by Vietnam day, rental occupancy per month and confirmed rent balances.
 
 ## Components
 
@@ -33,9 +33,9 @@ The Postgres → Storage line represents authorization through registered file m
 1. Login/invitation and account recovery.
 2. Inventory: search both addresses, mode, type, access, price, area, status; 30 rows/page, maximum 50.
 3. Property detail: old/current address badges, characteristics, owner/broker contacts, private documents, effective reservation and request action.
-4. My activity: unique properties viewed, pending visits and confirmed visits per Vietnam day.
+4. My activity: page views, unique properties viewed and owner-contact properties per Vietnam day.
 5. My reservations: pending, approved, rejected, released and expired requests.
-6. Review queue (manager/admin): requests and submitted visits, evidence, claimant, dates and decision reasons.
+6. Review queue (manager/admin): requests, evidence, claimant, dates and decision reasons.
 7. Administration: employees and roles, inventory by verified current area/legacy district, effective locks by employee, unresolved address records.
 
 ## Architecture decisions
@@ -55,7 +55,7 @@ The Postgres → Storage line represents authorization through registered file m
 
 ## Hosting and environments
 
-Use two logical stages, `dev` and `prod`, with a separate Supabase project and isolated Vercel project per stage. Both host the same Next.js application; local development and optional previews use dev credentials and sanitized fixtures only. Explicit GitHub environment-gated workflows replace automatic Vercel Git deployments. The isolated hosting projects also prevent Vercel's first-deployment Production behavior from selecting production data for dev. Set regions near users after checking availability. Local/CI Node is pinned to `24.14.0`; Vercel uses `24.x`. See [setup.md](setup.md) and [development.md](development.md).
+Use two logical stages, `dev` and `prod`, with a separate Supabase project and isolated Vercel project per stage. Both host the same Next.js application; local development and PR previews use dev credentials and sanitized fixtures only. GitHub environment-gated workflows publish PR previews and stage releases after per-stage activation (`CD_PREVIEW_ENABLED`, `CD_DEV_ENABLED`, `CD_PROD_ENABLED`; each off by default and unable to start another stage's run); native Vercel Git deployments remain disabled. Production pushes verify schema readiness without applying migrations; database writes remain explicitly authorized. The isolated hosting projects also prevent Vercel's first-deployment Production behavior from selecting production data for dev. Set regions near users after checking availability. Local/CI Node is pinned to `24.14.0`; Vercel uses `24.x`. See [setup.md](setup.md) and [development.md](development.md).
 
 Set Auth site URL and exact allowed callback URLs per environment. Disable public and anonymous signup; invite users through an admin-only server operation. A privileged server key is only needed for Auth administration and must not be the default inventory data client.
 

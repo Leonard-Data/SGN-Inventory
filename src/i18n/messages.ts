@@ -2,6 +2,8 @@ export type Locale = 'vi' | 'en';
 const vi = {
   title: 'SGN Inventory',
   inventory: 'Kho bất động sản',
+  reports: 'Báo cáo',
+  reservationsReviews: 'Đặt chỗ & Duyệt',
   login: 'Đăng nhập',
   email: 'Email',
   password: 'Mật khẩu',
@@ -88,6 +90,18 @@ const vi = {
   broker: 'Môi giới',
   representative: 'Đại diện',
   primary: 'Liên hệ chính',
+  showOwnerContact: 'Hiện liên hệ chủ nhà',
+  ownerContactMissing: 'Chưa ghi nhận liên hệ chủ nhà cho bất động sản này.',
+  ownerPhoneMissing: 'Liên hệ chủ nhà được ghi nhận chưa có số điện thoại.',
+  ownerContactFailed:
+    'Chưa hiện được liên hệ chủ nhà. Thử lại dùng lại lượt ghi nhận này, không tạo thêm.',
+  ownerContactKeyConflict: 'Lượt ghi nhận này đã dùng cho bất động sản khác.',
+  ownerContactUnavailable:
+    'Đã ghi nhận lượt mở liên hệ chủ nhà; hiện chưa có số để hiển thị.',
+  call: 'Gọi',
+  callUnavailable: 'Số đã ghi không đủ để quay số.',
+  ownerContactNote:
+    'Chỉ hiện sau khi bạn chọn. Mở liên hệ chủ nhà không phải cuộc gọi đã kết nối và không phải lượt thăm bất động sản.',
   noCurrent: 'Chưa có địa chỉ mới được ghi nhận.',
   pageViewFailed:
     'Chưa ghi nhận được lượt xem. Thử lại không tạo lượt xem trùng.',
@@ -97,7 +111,63 @@ const vi = {
   todayDay: 'Ngày (giờ Việt Nam)',
   todayPageViews: 'Lượt xem trang',
   todayProperties: 'Bất động sản đã xem',
+  todayOwnerContacts: 'Bất động sản đã xem liên hệ chủ nhà',
   todayActivityFailed: 'Chưa tải được hoạt động hôm nay.',
+  companyActivity: 'Hoạt động của nhân viên theo ngày',
+  companyActivityLink: 'Báo cáo hoạt động công ty',
+  backToInventory: 'Về kho bất động sản',
+  filterFrom: 'Từ ngày',
+  filterTo: 'Đến ngày',
+  applyFilter: 'Xem báo cáo',
+  invalidRange:
+    'Khoảng ngày không hợp lệ. Ngày bắt đầu không được sau ngày kết thúc và tối đa 366 ngày.',
+  rangeTooLarge:
+    'Khoảng ngày {from} – {to} vượt giới hạn 1.000 dòng của báo cáo (giới hạn = số nhân viên đang hoạt động × số ngày). Hãy thu hẹp khoảng ngày.',
+  todaySummary: 'Tổng hợp hôm nay',
+  companyHistory: 'Lịch sử theo ngày',
+  companyEmployee: 'Nhân viên',
+  companyActivityNote:
+    'Lượt truy cập liên hệ chủ nhà là số bất động sản mà mỗi nhân viên đã mở liên hệ chủ nhà trong ngày (giờ Việt Nam): không phải điểm danh, giờ làm việc, cuộc gọi đã kết nối hay lượt thăm bất động sản.',
+  noEmployees: 'Chưa có nhân viên đang hoạt động.',
+  myActivity: 'Hoạt động của tôi',
+  myActivityLink: 'Hoạt động của tôi',
+  myActivityNote:
+    'Các số liệu này chỉ tính hoạt động của chính bạn: lượt xem trang, số bất động sản đã xem và số bất động sản bạn đã mở liên hệ chủ nhà trong ngày (giờ Việt Nam). Không phải điểm danh, giờ làm việc, cuộc gọi đã kết nối hay lượt thăm bất động sản.',
+  myActivityEmpty:
+    'Không có hoạt động nào được ghi nhận trong khoảng đã chọn. Mỗi ngày vẫn hiển thị với giá trị 0.',
+  discussion: 'Thảo luận bất động sản',
+  addComment: 'Bình luận',
+  commentHint: 'Viết bình luận chung cho bất động sản này. Tối đa 2.000 ký tự.',
+  postComment: 'Gửi bình luận',
+  posting: 'Đang gửi…',
+  commentRequired: 'Vui lòng nhập từ 1 đến 2.000 ký tự.',
+  commentTooLong: 'Bình luận tối đa 2.000 ký tự.',
+  commentPosted: 'Đã gửi bình luận.',
+  commentPostFailed:
+    'Chưa gửi được bình luận. Bản nháp được giữ lại; gửi lại sẽ không tạo bình luận trùng.',
+  commentConflict:
+    'Khóa gửi này đã được ghi với nội dung khác. Hãy làm mới để xem bình luận đã ghi.',
+  commentPostRemoved:
+    'Bình luận đã được gỡ trước đó. Nội dung đã nhập được giữ lại; gửi lại sẽ tạo bình luận mới.',
+  noComments: 'Chưa có bình luận nào.',
+  moreComments: 'Xem bình luận cũ hơn',
+  removeComment: 'Gỡ bình luận',
+  moderateComment: 'Gỡ kèm lý do',
+  confirmRemove: 'Xác nhận gỡ',
+  removing: 'Đang gỡ…',
+  cancel: 'Huỷ',
+  commentRemoved: 'Bình luận đã được gỡ.',
+  removalReason: 'Lý do kiểm duyệt',
+  removalReasonHint:
+    'Bắt buộc. Lý do được lưu lại cho quản lý và quản trị viên.',
+  removalReasonRequired: 'Vui lòng nhập lý do kiểm duyệt.',
+  removalStale:
+    'Bình luận đã thay đổi hoặc đã bị gỡ. Hãy làm mới để xem trạng thái hiện tại.',
+  removalFailed: 'Chưa gỡ được bình luận. Nội dung đã nhập được giữ lại.',
+  removalDenied:
+    'Chưa gỡ được bình luận. Quyền truy cập hoặc trạng thái lưu trữ của bất động sản đã thay đổi; hãy làm mới để xem trạng thái hiện tại.',
+  refresh: 'Làm mới',
+  vietnamTime: 'giờ Việt Nam',
   savedLocaleFailed:
     'Không lưu được ngôn ngữ. Ngôn ngữ hiện tại được giữ nguyên.',
   recovery: 'Quên mật khẩu?',
@@ -133,6 +203,32 @@ const vi = {
   brandLede: 'Truy cập dành riêng cho nhân viên được cấp quyền.',
   brandMeta: 'Saigon New House · Truy cập nội bộ',
   footNote: 'Saigon New House · Hệ thống nội bộ',
+  // Application shell (ADR 0001): rail, topbar, account menu.
+  openMenu: 'Mở menu điều hướng',
+  breadcrumb: 'Đường dẫn',
+  close: 'Đóng',
+  navSearch: 'Tìm kiếm',
+  navNewProperty: 'Thêm bất động sản',
+  navCorrections: 'Yêu cầu đính chính',
+  sales: 'Kinh doanh',
+  staff: 'Nhân viên',
+  manager: 'Quản lý',
+  admin: 'Quản trị viên',
+  // People → Employees (#65): the admin employee list.
+  people: 'Nhân sự',
+  employeesLink: 'Nhân viên',
+  employeeDirectory: 'Danh sách nhân viên',
+  employeeDirectoryNote:
+    'Các danh tính nhân viên đã được ghi nhận. “Chưa liên kết đăng nhập” nghĩa là chưa có tài khoản đăng nhập nào được liên kết: hệ thống không ghi nhận lời mời, nên trạng thái này không phải là “đã mời”.',
+  employeeDirectoryEmpty: 'Chưa có danh tính nhân viên nào được ghi nhận.',
+  employeeDirectoryFailed: 'Không thể tải danh sách nhân viên.',
+  employeePageInfo: 'Trang này: {n} nhân viên',
+  employeeName: 'Họ tên',
+  employeeRole: 'Vai trò',
+  employeeAccess: 'Trạng thái truy cập',
+  employeeAccessActive: 'Đang hoạt động',
+  employeeAccessInactive: 'Đã tắt truy cập',
+  employeeAccessUnlinked: 'Chưa liên kết đăng nhập',
   languageName: 'Ngôn ngữ / Language',
   switchToVi: 'Chuyển sang tiếng Việt',
   switchToEn: 'Switch to English',
@@ -169,12 +265,51 @@ const vi = {
   strengthGood: 'Tốt',
   strengthStrong: 'Mạnh',
   stepBack: 'Quay lại',
+  reservations: 'Đặt chỗ',
+  reservationEffective: 'Đã có đặt chỗ hiệu lực',
+  reservationClaimant: 'Người đặt chỗ',
+  reservationExpires: 'Hết hạn',
+  reservationPending: 'Yêu cầu của bạn đang chờ duyệt',
+  reservationRequestedAt: 'Gửi lúc',
+  reservationPendingExpires: 'Yêu cầu hết hạn',
+  reservationPendingNote:
+    'Yêu cầu đang chờ không giữ bất động sản cho đến khi được duyệt.',
+  reservationArchived: 'Hồ sơ lưu trữ không nhận yêu cầu đặt chỗ mới.',
+  reservationReason: 'Lý do đặt chỗ',
+  reservationReasonHint: 'Từ 10 đến 2.000 ký tự.',
+  reservationReasonRequired: 'Vui lòng nhập lý do từ 10 đến 2.000 ký tự.',
+  submitReservation: 'Gửi yêu cầu đặt chỗ',
+  reservationRequested:
+    'Đã gửi yêu cầu. Bất động sản chưa được đặt chỗ cho đến khi quản lý hoặc quản trị viên duyệt.',
+  reservationRequestFailed: 'Chưa gửi được yêu cầu đặt chỗ. Vui lòng thử lại.',
+  reservationRequests: 'Yêu cầu đang chờ duyệt',
+  reservationNoRequests: 'Không có yêu cầu nào đang chờ.',
+  reservationDecisionReason: 'Lý do quyết định',
+  reservationDays: 'Số ngày hiệu lực (1–30)',
+  reservationApprove: 'Duyệt đặt chỗ',
+  reservationReject: 'Từ chối yêu cầu',
+  reservationApproved: 'Đã duyệt đặt chỗ.',
+  reservationRejected: 'Đã từ chối yêu cầu.',
+  reservationDecisionFailed: 'Chưa ghi được quyết định. Vui lòng thử lại.',
+  reservationConflict:
+    'Đã có xung đột đặt chỗ. Trạng thái mới nhất đang được hiển thị.',
+  reservationUnavailable: 'Bất động sản này không còn khả dụng để đặt chỗ.',
+  reservationNotProceeding:
+    'Yêu cầu đặt chỗ này không thể tiếp tục hoặc được quyết định.',
+  reservationSelfApproval: 'Bạn không thể tự duyệt yêu cầu của mình.',
+  reservationLoadFailed: 'Không tải được tình trạng đặt chỗ.',
+  reservationNote:
+    'Chỉ đặt chỗ đã được duyệt và còn hiệu lực mới giữ bất động sản.',
 };
+export type MessageKey = keyof typeof vi;
+
 export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
   vi,
   en: {
     title: 'SGN Inventory',
     inventory: 'Property inventory',
+    reports: 'Reports',
+    reservationsReviews: 'Reservations & Reviews',
     login: 'Sign in',
     email: 'Email',
     password: 'Password',
@@ -261,6 +396,19 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     broker: 'Broker',
     representative: 'Representative',
     primary: 'Primary contact',
+    showOwnerContact: 'Show owner contact',
+    ownerContactMissing: 'No owner contact is recorded for this property.',
+    ownerPhoneMissing: 'The recorded owner contact has no phone number.',
+    ownerContactFailed:
+      'Owner contact could not be revealed. Retrying reuses this recorded access without adding another.',
+    ownerContactKeyConflict:
+      'This access reference was already used for another property.',
+    ownerContactUnavailable:
+      'Owner-contact access was recorded; no owner phone is currently recorded.',
+    call: 'Call',
+    callUnavailable: 'The recorded number is not dialable.',
+    ownerContactNote:
+      'Shown only after you choose. Revealing an owner contact is not a connected call and not a physical visit.',
     noCurrent: 'No current address recorded.',
     pageViewFailed:
       'Page view not recorded. Retrying will not create a duplicate.',
@@ -270,7 +418,64 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     todayDay: 'Day (Vietnam time)',
     todayPageViews: 'Page views',
     todayProperties: 'Distinct properties viewed',
+    todayOwnerContacts: 'Owner-contact properties',
     todayActivityFailed: "Today's activity could not be loaded.",
+    companyActivity: 'Employee activity by day',
+    companyActivityLink: 'Company activity report',
+    backToInventory: 'Back to inventory',
+    filterFrom: 'From date',
+    filterTo: 'To date',
+    applyFilter: 'View report',
+    invalidRange:
+      'That date range is not valid. The start date must not be after the end date, and the range may cover at most 366 days.',
+    rangeTooLarge:
+      "The range {from} – {to} exceeds the report's 1,000-row limit (the limit is active employees × days). Narrow the date range.",
+    todaySummary: "Today's summary",
+    companyHistory: 'History by day',
+    companyEmployee: 'Employee',
+    companyActivityNote:
+      'Owner-contact access is the number of properties whose owner contact each employee opened that Vietnam day: not attendance, work hours, connected calls or physical visits.',
+    noEmployees: 'No active employees.',
+    myActivity: 'My activity',
+    myActivityLink: 'My activity',
+    myActivityNote:
+      'These figures cover your own activity only: page views, distinct properties viewed and the number of properties whose owner contact you opened that Vietnam day. Not attendance, work hours, connected calls or physical visits.',
+    myActivityEmpty:
+      'No activity was recorded in the selected period. Every day still appears with zero values.',
+    discussion: 'Property discussion',
+    addComment: 'Comment',
+    commentHint:
+      'Write a shared comment about this property. Up to 2,000 characters.',
+    postComment: 'Post comment',
+    posting: 'Posting…',
+    commentRequired: 'Enter 1 to 2,000 characters.',
+    commentTooLong: 'Comments are limited to 2,000 characters.',
+    commentPosted: 'Comment posted.',
+    commentPostFailed:
+      'Comment not posted. Your draft is kept; retrying does not create a duplicate.',
+    commentConflict:
+      'This submission key already recorded different text. Refresh to see the recorded comment.',
+    commentPostRemoved:
+      'That comment was already removed. Your text is kept; posting again creates a new comment.',
+    noComments: 'No comments yet.',
+    moreComments: 'More comments',
+    removeComment: 'Remove',
+    moderateComment: 'Remove with reason',
+    confirmRemove: 'Confirm removal',
+    removing: 'Removing…',
+    cancel: 'Cancel',
+    commentRemoved: 'Comment removed.',
+    removalReason: 'Moderation reason',
+    removalReasonHint:
+      'Required. The reason is retained for managers and admins.',
+    removalReasonRequired: 'Enter a moderation reason.',
+    removalStale:
+      'This comment changed or was already removed. Refresh to see the current state.',
+    removalFailed: 'Comment not removed. What you entered is kept.',
+    removalDenied:
+      'Comment not removed. Access or the Property archived state changed; refresh to see the current state.',
+    refresh: 'Refresh',
+    vietnamTime: 'Vietnam time',
     savedLocaleFailed:
       'Unable to save language. The current language is unchanged.',
     recovery: 'Forgot password?',
@@ -289,6 +494,32 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     passwordUpdated: 'Password changed. Sign in again.',
     updated: 'Updated',
     sessionEnded: 'Your session has ended.',
+    // Application shell (ADR 0001): rail, topbar, account menu.
+    openMenu: 'Open navigation menu',
+    breadcrumb: 'Breadcrumb',
+    close: 'Close',
+    navSearch: 'Search',
+    navNewProperty: 'Create property',
+    navCorrections: 'Correction requests',
+    sales: 'Sales',
+    staff: 'Staff',
+    manager: 'Manager',
+    admin: 'Administrator',
+    // People → Employees (#65): the admin employee list.
+    people: 'People',
+    employeesLink: 'Employees',
+    employeeDirectory: 'Employee list',
+    employeeDirectoryNote:
+      'Recorded employee identities. “Not linked to sign-in” means no sign-in account is linked: the system records no invitation, so it is not shown as invited.',
+    employeeDirectoryEmpty: 'No employee identities are recorded.',
+    employeeDirectoryFailed: 'The employee list could not be loaded.',
+    employeePageInfo: 'This page: {n} employees',
+    employeeName: 'Name',
+    employeeRole: 'Role',
+    employeeAccess: 'Access',
+    employeeAccessActive: 'Active',
+    employeeAccessInactive: 'Access disabled',
+    employeeAccessUnlinked: 'Not linked to sign-in',
     signInHelp:
       'Access is limited to invited staff whose account has been activated.',
     north: 'North',
@@ -343,6 +574,44 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     strengthGood: 'Good',
     strengthStrong: 'Strong',
     stepBack: 'Back',
+    reservations: 'Reservations',
+    reservationEffective: 'Effective reservation',
+    reservationClaimant: 'Claimant',
+    reservationExpires: 'Expires',
+    reservationPending: 'Your request is pending review',
+    reservationRequestedAt: 'Requested',
+    reservationPendingExpires: 'Request expires',
+    reservationPendingNote:
+      'A pending request does not hold the property until it is approved.',
+    reservationArchived: 'Archived records accept no new reservation request.',
+    reservationReason: 'Reservation reason',
+    reservationReasonHint: 'Between 10 and 2,000 characters.',
+    reservationReasonRequired:
+      'Enter a reason between 10 and 2,000 characters.',
+    submitReservation: 'Submit reservation request',
+    reservationRequested:
+      'Request submitted. The property is not reserved until a manager or admin approves it.',
+    reservationRequestFailed:
+      'The reservation request was not submitted. Try again.',
+    reservationRequests: 'Pending requests',
+    reservationNoRequests: 'No pending requests.',
+    reservationDecisionReason: 'Decision reason',
+    reservationDays: 'Effective days (1–30)',
+    reservationApprove: 'Approve reservation',
+    reservationReject: 'Reject request',
+    reservationApproved: 'Reservation approved.',
+    reservationRejected: 'Request rejected.',
+    reservationDecisionFailed: 'The decision was not recorded. Try again.',
+    reservationConflict:
+      'A reservation conflict occurred. The latest state is shown.',
+    reservationUnavailable:
+      'This property is no longer available for reservation.',
+    reservationNotProceeding:
+      'This reservation request can no longer proceed or be decided.',
+    reservationSelfApproval: 'You cannot decide your own request.',
+    reservationLoadFailed: 'Reservation state did not load.',
+    reservationNote:
+      'Only an approved, unexpired reservation holds the property.',
   },
 };
 export function label(

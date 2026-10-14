@@ -23,7 +23,12 @@ export function formatDecimal(value: string, locale: Locale): string {
     (fraction ? (locale === 'vi' ? ',' : '.') + fraction : '')
   );
 }
-export function vietnamTimestamp(value: string, locale: Locale): string {
+export function vietnamTimestamp(
+  value: string | null | undefined,
+  locale: Locale,
+): string | null {
+  const date = parseDate(value);
+  if (!date) return null;
   return new Intl.DateTimeFormat(locale === 'vi' ? 'vi-VN' : 'en-GB', {
     timeZone: 'Asia/Ho_Chi_Minh',
     day: '2-digit',
@@ -33,11 +38,29 @@ export function vietnamTimestamp(value: string, locale: Locale): string {
     minute: '2-digit',
     second: '2-digit',
     hourCycle: 'h23',
-  }).format(new Date(value));
+  }).format(date);
 }
-export function vietnamDate(value: string): string {
-  const parts = dateFormat.formatToParts(new Date(value));
+// A recorded date is optional in this domain (an address may carry no effective date,
+// and imported rows may have none), so the formatters report "no value" instead of
+// throwing on an unparseable one: the caller renders the unknown marker.
+function parseDate(value: string | null | undefined): Date | null {
+  const date = new Date(value ?? '');
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+export function vietnamDate(value: string | null | undefined): string | null {
+  const date = parseDate(value);
+  if (!date) return null;
+  const parts = dateFormat.formatToParts(date);
   return ['day', 'month', 'year']
     .map((type) => parts.find((part) => part.type === type)!.value)
     .join('/');
+}
+// Only a recorded entry that looks like one plausible number becomes a dialer link; two
+// numbers or masked text must not be concatenated into a fabricated dial target.
+export function dialableNumber(phone: string): string | null {
+  const trimmed = phone.trim();
+  if (!/^\+?[0-9\s().-]+$/.test(trimmed)) return null;
+  const dialable = trimmed.replace(/[^\d+]/g, '');
+  const digits = (dialable.match(/\d/g) ?? []).length;
+  return digits >= 8 && digits <= 15 ? dialable : null;
 }

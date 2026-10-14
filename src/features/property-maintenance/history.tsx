@@ -86,65 +86,84 @@ export function History({
       useProtectedData<HistoryPage>(endpoint),
     text = maintenanceText(locale);
   return (
-    <section className="panel maintenance">
-      <h2>{text.history}</h2>
-      {busy ? <p role="status">{text.loading}</p> : null}
-      {error ? (
-        <p role="alert">
-          {text.unavailable} <button onClick={reload}>{text.refresh}</button>
-        </p>
-      ) : null}
-      <div ref={surface} hidden={!data || busy}>
-        {data ? (
-          <>
-            {data.events.length ? (
-              data.events.map((event) => (
-                <article className="history-event" key={event.id}>
-                  <h3>{optionLabel(locale, event.target)}</h3>
-                  <p>
-                    {text.actor}: <span translate="no">{event.actor_name}</span>{' '}
-                    ·{' '}
-                    <time dateTime={event.occurred_at}>
-                      {vietnamTimestamp(event.occurred_at, locale)}
-                    </time>{' '}
-                    ({text.time})
-                  </p>
-                  <div className="history-comparison">
-                    <section>
-                      <h4>{text.before}</h4>
-                      <BusinessValues
-                        values={event.before_values}
-                        locale={locale}
-                      />
-                    </section>
-                    <section>
-                      <h4>{text.after}</h4>
-                      <BusinessValues
-                        values={event.after_values}
-                        locale={locale}
-                      />
-                    </section>
-                  </div>
-                  {event.explanation ? (
-                    <p translate="no">{event.explanation}</p>
-                  ) : null}
-                </article>
-              ))
-            ) : (
-              <p>{text.emptyHistory}</p>
-            )}
-            <nav aria-label={text.history}>
-              {cursor ? (
-                <button onClick={() => setCursor(null)}>{text.first}</button>
-              ) : null}
-              {data.nextCursor ? (
-                <button onClick={() => setCursor(data.nextCursor)}>
-                  {text.more}
-                </button>
-              ) : null}
-            </nav>
-          </>
+    <section className="panel">
+      <div className="panel-head">
+        <h2>{text.history}</h2>
+      </div>
+      <div className="panel-body">
+        {busy ? <p role="status">{text.loading}</p> : null}
+        {error ? (
+          <div className="alert" data-tone="danger" role="alert">
+            <span>{text.unavailable}</span>
+            <button className="btn btn-sm btn-ghost" onClick={reload}>
+              {text.refresh}
+            </button>
+          </div>
         ) : null}
+        <div ref={surface} hidden={!data || busy}>
+          {data ? (
+            <>
+              {data.events.length ? (
+                data.events.map((event) => (
+                  <article className="hist-row" key={event.id}>
+                    <h3 className="hist-field">
+                      {optionLabel(locale, event.target)}
+                    </h3>
+                    <p className="hist-when">
+                      {text.actor}:{' '}
+                      <span translate="no">{event.actor_name}</span> ·{' '}
+                      <time dateTime={event.occurred_at}>
+                        {vietnamTimestamp(event.occurred_at, locale)}
+                      </time>{' '}
+                      ({text.time})
+                    </p>
+                    <div className="history-comparison">
+                      <section>
+                        <h4>{text.before}</h4>
+                        <BusinessValues
+                          values={event.before_values}
+                          locale={locale}
+                        />
+                      </section>
+                      <section>
+                        <h4>{text.after}</h4>
+                        <BusinessValues
+                          values={event.after_values}
+                          locale={locale}
+                        />
+                      </section>
+                    </div>
+                    {event.explanation ? (
+                      <p className="hist-change" translate="no">
+                        {event.explanation}
+                      </p>
+                    ) : null}
+                  </article>
+                ))
+              ) : (
+                <p>{text.emptyHistory}</p>
+              )}
+              <nav aria-label={text.history}>
+                {cursor ? (
+                  <button
+                    className="btn btn-sm btn-ghost"
+                    onClick={() => setCursor(null)}
+                  >
+                    {text.first}
+                  </button>
+                ) : null}
+                {data.nextCursor ? (
+                  <button
+                    className="btn btn-sm btn-ghost"
+                    onClick={() => setCursor(data.nextCursor)}
+                  >
+                    {text.more}
+                  </button>
+                ) : null}
+              </nav>
+            </>
+          ) : null}
+        </div>
       </div>
     </section>
   );

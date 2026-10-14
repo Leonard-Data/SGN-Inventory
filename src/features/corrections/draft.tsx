@@ -174,10 +174,13 @@ export function CorrectionDraft({
           {request ? (
             <p>{optionLabel(locale, target)}</p>
           ) : (
-            <label htmlFor={id + '-target'}>
-              {text.target}
+            <div className="field">
+              <label className="field-label" htmlFor={id + '-target'}>
+                {text.target}
+              </label>
               <select
                 id={id + '-target'}
+                className="select"
                 value={token}
                 onChange={(event) => {
                   setToken(event.target.value);
@@ -215,13 +218,16 @@ export function CorrectionDraft({
                   {text.newTarget} ({optionLabel(locale, 'link')})
                 </option>
               </select>
-            </label>
+            </div>
           )}
           {!request ? (
-            <label htmlFor={id + '-category'}>
-              {text.issueCategory}
+            <div className="field">
+              <label className="field-label" htmlFor={id + '-category'}>
+                {text.issueCategory}
+              </label>
               <select
                 id={id + '-category'}
+                className="select"
                 name="category"
                 defaultValue="incorrect"
               >
@@ -231,24 +237,27 @@ export function CorrectionDraft({
                   </option>
                 ))}
               </select>
-            </label>
+            </div>
           ) : null}
-          <label htmlFor={id + '-explanation'}>
-            {text.issueExplanation}
+          <div className="field">
+            <label className="field-label" htmlFor={id + '-explanation'}>
+              {text.issueExplanation}
+            </label>
             <textarea
               id={id + '-explanation'}
+              className="textarea"
               name="explanation"
               minLength={10}
               maxLength={2000}
               rows={3}
               required
             />
-          </label>
-          <details>
+          </div>
+          <details className="maintenance">
             <summary>{text.replacement}</summary>
             <div className="proposal-choices">
               {available.map((name) => (
-                <label key={name}>
+                <label key={name} className="check">
                   <input
                     type="checkbox"
                     checked={selected.includes(name)}
@@ -289,10 +298,11 @@ export function CorrectionDraft({
           href={'/properties/' + property.id}
           target="_blank"
           rel="noopener noreferrer"
+          className="link"
         >
           {text.current}
         </a>
-        <button disabled={busy || !observed}>
+        <button className="btn btn-sm btn-primary" disabled={busy || !observed}>
           {busy ? text.saving : request ? text.amend : text.submit}
         </button>
         {target === 'link' && selected.includes('contact_id') ? (

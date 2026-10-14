@@ -24,6 +24,10 @@ erDiagram
   PROPERTIES ||--o{ CORRECTION_REQUESTS : concerns
   EMPLOYEES ||--o{ CORRECTION_REQUESTS : requests
   CORRECTION_REQUESTS ||--o{ CORRECTION_AMENDMENTS : amends
+  PROPERTIES ||--o{ PROPERTY_COMMENTS : discusses
+  EMPLOYEES ||--o{ PROPERTY_COMMENTS : posts
+  PROPERTY_COMMENTS ||--o| PROPERTY_COMMENT_REMOVALS : retains
+  EMPLOYEES ||--o{ PROPERTY_COMMENT_REMOVALS : removes
 ```
 
 ## Business tables
@@ -42,9 +46,11 @@ erDiagram
 | `correction_amendments` | UUID, request/requester FKs, explanation, proposed/observed JSON, revision, created time | Append-only; preserves the original submission instead of rewriting it |
 | `property_files` | UUID, property FK, historical legacy type, one category FK, independent document/photo purpose, private bucket, immutable object path/name/MIME/count/hash/uploader, upload state, paired technical-validation time/object identity, historical review attribution | No direct authenticated metadata writes; registration and attested completion preserve identity; ready files are shared privately without human review; pending recovery remains uploader-only on unarchived parents; only uploader/current editor corrects category, without changing content or readiness |
 | `document_categories` | UUID, trimmed accented name, optional known builtin marker, nullable creator and creation time | Active employees read/create-or-reuse company categories; normalized case/Unicode-edge uniqueness preserves accents; Other is the localized default; custom names remain verbatim; no rename/delete/merge/multiple tags |
-| `activity_events` | UUID, employee/property FK, page_view/site_visit, occurred/recorded timestamps, generated Vietnam day, source, idempotency key, visit decision | No direct client DML; one key per employee; only confirmed visits count as physical visit KPI; page_view has no visit status |
+| `activity_events` | UUID, employee/property FK, page_view/owner_contact_access/site_visit, occurred/recorded timestamps, generated Vietnam day, source, idempotency key, retained visit decision | No direct client DML; one key per employee; owner-contact access counts one distinct property per employee/Vietnam day; new `site_visit` submission and confirmation are retired while retained rows keep their state; page_view and owner_contact_access have no visit status |
 | `property_locks` | UUID, property/claimant, reason, optional evidence, attribution reference, lifecycle state, expiry, independent decision | One approved row per property; one pending request per property/employee; effective reservation additionally requires future expiry |
 | `lock_events` | Identity key, lock FK, actor, action, reason, timestamp | Append-only client access; all approved/rejected/released/expired transitions retain trace |
+| `property_comments` | UUID, property/author FKs, author display name retained at posting time, original text (null once removed), server posting time, `revision`, `removed_at`, employee-scoped `idempotency_key` | No direct client writes: `select`-only grant, `anon` excluded, and a trigger rejects client inserts, every ordinary update and every delete; text is trimmed Unicode of 1–2000 characters; author identity, text and posting time stay immutable; text is null exactly when `removed_at` is set, so a removed entry is a marker |
+| `property_comment_removals` | One row per removed comment: comment/property/author FKs, retained author name, retained original text, original posting time and revision, removing actor and retained actor name, removal time, `author`/`moderation` kind and mandatory moderation reason | Reviewer-only `select` under RLS; no client insert/update/delete; the guard trigger keeps the retained evidence immutable and non-expiring; the current discussion projection never exposes it |
 
 `properties`, `property_addresses`, `contacts` and `property_contacts` each carry a `revision` UUID that guards stale maintenance saves. Issue #7's maintenance RPCs, correction lifecycle and history rules are in [maintenance-contract.md](maintenance-contract.md).
 
@@ -97,7 +103,7 @@ Rental agreements, monthly dues and manual receipt/refund tracking are included.
 - Address GIN trigram index on accent-normalized text from both formats. Property code has a unique B-tree index. Very short substring searches can scan more records; inspect plans before adding another index.
 - Daily activity indexed by employee/day/kind; reservation expiry indexed only for open states.
 - Approved-reservation uniqueness is a partial index over state, not a time-dependent predicate. Workflow RPCs expire stale state while holding the property row lock.
-- Analytic views use invoker security and base-table RLS. Area counts join only primary address rows and the single effective lock, avoiding contact/file multiplication. `public.my_today_activity()` is an invoker report over `activity_events` scoped to the caller's own employee for the database Vietnam day, so a reviewer's wider activity read never widens it.
+- Analytic views use invoker security and base-table RLS. Area counts join only primary address rows and the single effective lock, avoiding contact/file multiplication. `public.my_today_activity()` is an invoker report over `activity_events` scoped to the caller's own employee for the database Vietnam day, reporting Page views, distinct properties viewed and the owner-contact distinct-property count, so a reviewer's wider activity read never widens it. `public.company_employee_daily_activity(from,to)` is a manager/admin-only invoker wrapper over a private definer that rechecks the live role and returns the same three metrics for every active employee on every requested Vietnam day, with explicit zeros where no grouped event row exists. `public.my_daily_activity(from,to)` is the own-employee scope of `my_today_activity()` extended across every requested Vietnam day, again with no employee parameter, with explicit zeros for requested days that have no grouped event row.
 - No persisted daily totals or separate lock boolean: derive these to avoid drift. Introduce summary tables only after measurement justifies them.
 
 ## Change boundaries

@@ -82,11 +82,11 @@ export default function AuthPreviewPage() {
 
       <h2 className={styles.heading}>Shell composition · sign in</h2>
       <AuthShell locale={locale} onLocaleChange={setLocale}>
-        <section className="sgn-card" aria-labelledby="preview-signin">
-          <p className="sgn-eyebrow">{text.brandMeta}</p>
+        <section className="auth-card" aria-labelledby="preview-signin">
+          <p className="eyebrow">{text.brandMeta}</p>
           <h1 id="preview-signin">{text.login}</h1>
-          <p className="sgn-lead">{text.signInHelp}</p>
-          <form className="sgn-form" onSubmit={(e) => e.preventDefault()}>
+          <p className="lead">{text.signInHelp}</p>
+          <form className="auth-form" onSubmit={(e) => e.preventDefault()}>
             <TextField
               id="preview-email"
               name="preview-email"
@@ -107,16 +107,12 @@ export default function AuthPreviewPage() {
               autoComplete="off"
               placeholder="••••••••"
             />
-            <div className="sgn-row">
-              <label className="sgn-check" htmlFor="preview-remember">
+            <div className="row-between">
+              <label className="check" htmlFor="preview-remember">
                 <input type="checkbox" id="preview-remember" defaultChecked />
                 <span>{text.remember}</span>
               </label>
-              <a
-                className="sgn-link"
-                href="#"
-                onClick={(e) => e.preventDefault()}
-              >
+              <a className="link" href="#" onClick={(e) => e.preventDefault()}>
                 {text.recovery}
               </a>
             </div>
@@ -124,20 +120,20 @@ export default function AuthPreviewPage() {
               type="button"
               className={buttonClass('primary', { block: true })}
             >
-              <span className="sgn-btn-label">{text.login}</span>
+              <span className="btn-label">{text.login}</span>
             </button>
           </form>
-          <p className="sgn-note">{text.accountNote}</p>
+          <p className="form-note">{text.accountNote}</p>
         </section>
       </AuthShell>
 
       <h2 className={styles.heading}>Recovery composition · new password</h2>
-      <section className="sgn-card" aria-labelledby="preview-recovery">
+      <section className="auth-card" aria-labelledby="preview-recovery">
         <Stepper locale={locale} current={2} />
-        <p className="sgn-eyebrow">{text.recoveryEyebrow}</p>
+        <p className="eyebrow">{text.recoveryEyebrow}</p>
         <h1 id="preview-recovery">{text.resetTitle}</h1>
-        <p className="sgn-lead">{text.resetInstructions}</p>
-        <form className="sgn-form" onSubmit={(e) => e.preventDefault()}>
+        <p className="lead">{text.resetInstructions}</p>
+        <form className="auth-form" onSubmit={(e) => e.preventDefault()}>
           <PasswordField
             id="preview-new-password"
             name="preview-new-password"
@@ -169,13 +165,13 @@ export default function AuthPreviewPage() {
             type="button"
             className={buttonClass('primary', { block: true })}
           >
-            <span className="sgn-btn-label">{text.updatePassword}</span>
+            <span className="btn-label">{text.updatePassword}</span>
           </button>
           <button
             type="button"
             className={buttonClass('secondary', { block: true })}
           >
-            <span className="sgn-btn-label">{text.stepBack}</span>
+            <span className="btn-label">{text.stepBack}</span>
           </button>
         </form>
       </section>
@@ -215,7 +211,7 @@ export default function AuthPreviewPage() {
               type="button"
               className={buttonClass('primary', { block: true })}
             >
-              <span className="sgn-btn-label">{text.login}</span>
+              <span className="btn-label">{text.login}</span>
             </button>
             <button
               type="button"
@@ -223,26 +219,22 @@ export default function AuthPreviewPage() {
               aria-busy="true"
               aria-disabled="true"
             >
-              <span className="sgn-btn-label">{text.signingIn}</span>
+              <span className="btn-label">{text.signingIn}</span>
             </button>
             <button
               type="button"
               className={buttonClass('secondary', { block: true })}
             >
-              <span className="sgn-btn-label">{text.stepBack}</span>
+              <span className="btn-label">{text.stepBack}</span>
             </button>
             <button
               type="button"
               className={buttonClass('secondary', { block: true })}
               aria-disabled="true"
             >
-              <span className="sgn-btn-label">{text.stepBack}</span>
+              <span className="btn-label">{text.stepBack}</span>
             </button>
-            <a
-              className="sgn-link"
-              href="#"
-              onClick={(e) => e.preventDefault()}
-            >
+            <a className="link" href="#" onClick={(e) => e.preventDefault()}>
               {text.recovery}
             </a>
           </div>
@@ -280,7 +272,7 @@ export default function AuthPreviewPage() {
         <div className={styles.card}>
           <p className={styles.cardTitle}>Completion panel</p>
           <div className={styles.stack}>
-            <span className="sgn-done-mark">
+            <span className="done-mark">
               <svg
                 viewBox="0 0 24 24"
                 fill="none"
@@ -291,13 +283,13 @@ export default function AuthPreviewPage() {
                 <path d="m5 12.5 4.5 4.5L19 7" />
               </svg>
             </span>
-            <div className="sgn-actions">
+            <div className="actions">
               <a
                 className={buttonClass('primary', { block: true })}
                 href="#"
                 onClick={(e) => e.preventDefault()}
               >
-                <span className="sgn-btn-label">{text.login}</span>
+                <span className="btn-label">{text.login}</span>
               </a>
             </div>
           </div>

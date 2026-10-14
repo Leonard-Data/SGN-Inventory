@@ -5,6 +5,7 @@ import {
   formatDecimal,
   vietnamDate,
   vietnamTimestamp,
+  dialableNumber,
 } from './format.ts';
 
 test('whole VND remains exact beyond JavaScript safe integer precision', () => {
@@ -25,10 +26,18 @@ test('whole VND remains exact beyond JavaScript safe integer precision', () => {
 test('decimal dimensions remain exact and history instants show Vietnam time', () => {
   assert.equal(formatDecimal('1234567890.50', 'vi'), '1.234.567.890,50');
   assert.equal(formatDecimal('1234567890.50', 'en'), '1,234,567,890.50');
-  assert.match(
-    vietnamTimestamp('2026-10-09T17:05:00Z', 'en'),
-    /10\/10\/2026.*00:05/,
-  );
+  const stamp = vietnamTimestamp('2026-10-09T17:05:00Z', 'en');
+  assert.ok(stamp);
+  assert.match(stamp, /10\/10\/2026.*00:05/);
+});
+test('an absent or unparseable recorded date reports no value instead of throwing', () => {
+  // A nullable recorded date (an address with no effective date, an imported row)
+  // must reach the unknown marker, not crash the page that renders it.
+  for (const value of [null, undefined, '', 'not a date'])
+    assert.equal(vietnamDate(value), null);
+  assert.equal(vietnamTimestamp(null, 'vi'), null);
+  assert.equal(vietnamTimestamp('', 'en'), null);
+  assert.equal(vietnamDate('2026-10-09'), '09/10/2026');
 });
 test('money rejects noncanonical decimal and scientific notation', () => {
   for (const value of ['1.5', '1e3', '-1', ''])
@@ -37,4 +46,15 @@ test('money rejects noncanonical decimal and scientific notation', () => {
 test('Vietnam dates cross midnight at UTC 17:00 regardless of the device zone', () => {
   assert.equal(vietnamDate('2026-10-09T16:59:59Z'), '09/10/2026');
   assert.equal(vietnamDate('2026-10-09T17:00:00Z'), '10/10/2026');
+});
+test('only a single plausible recorded number becomes a Call link', () => {
+  assert.equal(dialableNumber('+84 90 123 4567'), '+84901234567');
+  assert.equal(dialableNumber('(028) 3822 1234'), '02838221234');
+  assert.equal(dialableNumber('12'), null);
+  assert.equal(dialableNumber('chưa có số'), null);
+  // Masked text and two numbers must never be concatenated into a fabricated dial target.
+  assert.equal(dialableNumber('***789'), null);
+  assert.equal(dialableNumber('0901234567 - 0341234567'), null);
+  assert.equal(dialableNumber('+84900000291 / +84900000292'), null);
+  assert.equal(dialableNumber(''), null);
 });

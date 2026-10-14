@@ -10,11 +10,12 @@
 | Maintain contact records | No | Yes | Yes | Yes |
 | Submit correction request | Yes | Yes | Yes | Yes |
 | Process/reject correction requests | No | Yes | Yes | Yes |
-| Record own page view / visit | Yes | Yes | Yes | Yes |
+| Record own page view / owner-contact access | Yes | Yes | Yes | Yes |
 | Read daily activity | Own | Own | All | All |
-| Approve/reject lock or confirm visit | No | No | Another employee only | Another employee only |
+| Approve/reject lock | No | No | Another employee only | Another employee only |
 | Set legal/review state; sold/rented arrives with issue #32 sale transition | No | No | Yes | Yes |
 | Manage employee activation/roles and catalogs | No | No | No | Yes |
+| Open the admin employee list (`/people/employees`) | No | No | No | Yes |
 | Read area/employee analytics | No | No | Yes | Yes |
 | Read staging/audit directly through API | No | No | No | No |
 
@@ -47,12 +48,11 @@ Deactivation is immediate for subsequent RLS/RPC requests. Review the departing 
 | --- | --- | --- |
 | Page view events | Every logged detail-open event | Interaction count; reloads can increase it |
 | Distinct properties viewed | Unique property UUIDs per employee/Vietnam day | Better inventory activity measure |
-| Pending site visits | Submitted site visits awaiting independent confirmation | Claims, not completed KPI |
-| Confirmed properties visited | Distinct confirmed site-visit property UUIDs per employee/Vietnam day | Physical visit KPI for the MVP |
+| Owner-contact properties | Distinct properties whose recorded owner phone was deliberately disclosed per employee/Vietnam day | Disclosure count; not calls, owners or physical visits |
 
-Legacy `clicks` is imported as `page_view`/`legacy_click`. It never becomes `site_visit` merely because the sheet contains “Ngày xem”. New events use the server time of submission, with an employee-scoped UUID retry key. The MVP does not support backdated visits; if needed later, distinguish occurred time from submission time and implement review controls.
+Legacy `clicks` is imported as `page_view`/`legacy_click`. It never becomes `site_visit` merely because the sheet contains “Ngày xem”. New events use the server time of submission, with an employee-scoped UUID retry key. Physical-visit submission and confirmation are retired; retained `site_visit` rows keep their original attribution, day and status, and the MVP still supports no backdated visits.
 
-The daily view has rows only for days with recorded events. Admin reporting must left-join a Vietnam date calendar and employees to show zero-activity days. “Active employee” on a day means at least one tracked view or confirmed visit according to the displayed metric; it is not proof of attendance, employment hours or GPS presence.
+The daily view has rows only for days with recorded events. Reporting over a selected range crosses a Vietnam date calendar — the caller's own personal report and company admin reporting for every currently active employee — so requested days with no events appear as explicit zeros; a deactivated employee's historical events are not listed there. “Active employee” on a day means at least one tracked view or owner-contact access according to the displayed metric; it is not proof of attendance, employment hours or GPS presence.
 
 ## Rental and localization extension
 

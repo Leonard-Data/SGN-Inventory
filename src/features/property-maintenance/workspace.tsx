@@ -108,249 +108,267 @@ export function Maintenance({
     await onSaved();
   }
   return (
-    <section className="panel maintenance">
-      <h2>{text.editFacts}</h2>
-      <p>{text.immediate}</p>
-      {notice ? <p role="status">{text.saved}</p> : null}
-      {canEdit ? (
-        <>
-          <div className="maintenance-actions">
-            <button
-              onClick={() =>
-                open('property', property.id, property.revision, property)
-              }
-            >
-              {text.editFacts}
-            </button>
-            <button
-              onClick={() =>
-                open('address', null, property.revision, { is_primary: true })
-              }
-            >
-              {text.newAddress}
-            </button>
-          </div>
-          {detail.addresses.map((address) => (
-            <div className="maintenance-address" key={address.id}>
-              <p translate="no">{address.address_text}</p>
-              <p>
-                {optionLabel(locale, address.format)} ·{' '}
-                {optionLabel(locale, address.mapping_status)}
-                {address.is_primary ? ' · ' + text.primary : ''}
-              </p>
+    <section className="panel">
+      <div className="panel-head">
+        <h2>{text.editFacts}</h2>
+      </div>
+      <div className="panel-body">
+        <p>{text.immediate}</p>
+        {notice ? <p role="status">{text.saved}</p> : null}
+        {canEdit ? (
+          <>
+            <div className="maintenance-actions">
               <button
+                className="btn btn-sm"
                 onClick={() =>
-                  open('address', address.id, address.revision, address)
+                  open('property', property.id, property.revision, property)
                 }
               >
-                {text.correctAddress}
+                {text.editFacts}
               </button>
-              {reviewer && address.format === 'current' ? (
-                <button
-                  onClick={() =>
-                    open('mapping', address.id, address.revision, address)
-                  }
-                >
-                  {text.mapping}
-                </button>
-              ) : null}
+              <button
+                className="btn btn-sm"
+                onClick={() =>
+                  open('address', null, property.revision, { is_primary: true })
+                }
+              >
+                {text.newAddress}
+              </button>
             </div>
-          ))}
-          {staff ? (
-            <>
-              <h3>{text.contacts}</h3>
-              <p>{text.wrongPerson}</p>
-              <button
-                onClick={() =>
-                  open('link', null, property.revision, {
-                    relation: 'unknown',
-                    is_primary: false,
-                  })
-                }
-              >
-                {text.link}
-              </button>
-              {detail.contacts.map((link) => (
-                <div key={link.contact_id}>
-                  <h4 translate="no">
-                    {link.contacts?.display_name ?? text.unknown}
-                  </h4>
-                  <div className="maintenance-actions">
+            {detail.addresses.map((address) => (
+              <div className="record" key={address.id}>
+                <p className="record-body" translate="no">
+                  {address.address_text}
+                </p>
+                <p className="record-meta">
+                  {optionLabel(locale, address.format)} ·{' '}
+                  {optionLabel(locale, address.mapping_status)}
+                  {address.is_primary ? ' · ' + text.primary : ''}
+                </p>
+                <span className="record-actions">
+                  <button
+                    className="btn btn-sm btn-ghost"
+                    onClick={() =>
+                      open('address', address.id, address.revision, address)
+                    }
+                  >
+                    {text.correctAddress}
+                  </button>
+                  {reviewer && address.format === 'current' ? (
                     <button
-                      onClick={() => contact(link.contact_id)}
-                      disabled={contactBusy}
-                    >
-                      {text.contactEdit}
-                    </button>
-                    <button
+                      className="btn btn-sm btn-ghost"
                       onClick={() =>
-                        open('link', link.contact_id, link.revision, link)
+                        open('mapping', address.id, address.revision, address)
                       }
                     >
-                      {text.link}
+                      {text.mapping}
                     </button>
-                    <button
-                      onClick={() =>
-                        open('link', link.contact_id, link.revision, {
-                          ...link,
-                          remove: false,
-                        })
-                      }
-                    >
-                      {text.unlink}
-                    </button>
-                  </div>
-                </div>
-              ))}
-              <details>
-                <summary>{text.newContact}</summary>
-                <MutationForm
-                  locale={locale}
-                  target="contact"
-                  save={(changes) =>
-                    api<{ id: string }>('/api/contacts', { changes })
+                  ) : null}
+                </span>
+              </div>
+            ))}
+            {staff ? (
+              <>
+                <h3>{text.contacts}</h3>
+                <p>{text.wrongPerson}</p>
+                <button
+                  className="btn btn-sm"
+                  onClick={() =>
+                    open('link', null, property.revision, {
+                      relation: 'unknown',
+                      is_primary: false,
+                    })
                   }
-                  onSaved={async () => {
-                    setNotice(true);
-                    await onSaved();
-                  }}
-                  onDenied={onDenied}
                 >
-                  <p>{text.wrongPerson}</p>
+                  {text.link}
+                </button>
+                {detail.contacts.map((link) => (
+                  <div className="record" key={link.contact_id}>
+                    <h4 className="record-title" translate="no">
+                      {link.contacts?.display_name ?? text.unknown}
+                    </h4>
+                    <span className="record-actions">
+                      <button
+                        className="btn btn-sm btn-ghost"
+                        onClick={() => contact(link.contact_id)}
+                        disabled={contactBusy}
+                      >
+                        {text.contactEdit}
+                      </button>
+                      <button
+                        className="btn btn-sm btn-ghost"
+                        onClick={() =>
+                          open('link', link.contact_id, link.revision, link)
+                        }
+                      >
+                        {text.link}
+                      </button>
+                      <button
+                        className="btn btn-sm btn-ghost"
+                        onClick={() =>
+                          open('link', link.contact_id, link.revision, {
+                            ...link,
+                            remove: false,
+                          })
+                        }
+                      >
+                        {text.unlink}
+                      </button>
+                    </span>
+                  </div>
+                ))}
+                <details className="maintenance">
+                  <summary>{text.newContact}</summary>
+                  <MutationForm
+                    locale={locale}
+                    target="contact"
+                    save={(changes) =>
+                      api<{ id: string }>('/api/contacts', { changes })
+                    }
+                    onSaved={async () => {
+                      setNotice(true);
+                      await onSaved();
+                    }}
+                    onDenied={onDenied}
+                  >
+                    <p>{text.wrongPerson}</p>
+                    <RecordFields
+                      locale={locale}
+                      names={targetFields.contact}
+                      values={{ contact_type: 'unknown' }}
+                    />
+                  </MutationForm>
+                </details>
+              </>
+            ) : null}
+          </>
+        ) : null}
+        {contactBusy ? <p role="status">{text.loading}</p> : null}
+        {contactError ? <p role="alert">{text.unavailable}</p> : null}
+        {editor &&
+        canEdit &&
+        (editor.target === 'mapping'
+          ? reviewer
+          : ['contact', 'link'].includes(editor.target)
+            ? staff
+            : true) ? (
+          <div key={editor.target + editor.targetId + editor.revision}>
+            <h3>{optionLabel(locale, editor.target)}</h3>
+            <p>{text.optional}</p>
+            <a
+              href={'/properties/' + property.id}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="link"
+            >
+              {text.current}
+            </a>
+            {editor.target === 'link' &&
+            !Object.hasOwn(editor.values, 'remove') ? (
+              <ContactPicker
+                locale={locale}
+                selected={selected}
+                onSelected={setSelected}
+                onDenied={onDenied}
+              />
+            ) : null}
+            <MutationForm
+              locale={locale}
+              target={editor.target}
+              values={editor.values}
+              save={save}
+              onSaved={saved}
+              onDenied={onDenied}
+            >
+              {editor.target === 'property' ? (
+                <RecordFields
+                  locale={locale}
+                  values={editor.values}
+                  names={targetFields.property.filter(
+                    (k) =>
+                      k !== 'status' ||
+                      !['sold', 'rented'].includes(
+                        String(editor.values.status),
+                      ),
+                  )}
+                />
+              ) : null}
+              {editor.target === 'address' || editor.target === 'mapping' ? (
+                <AddressFields
+                  locale={locale}
+                  values={editor.values}
+                  onDenied={onDenied}
+                  variant={editor.target}
+                />
+              ) : null}
+              {editor.target === 'contact' ? (
+                <>
+                  <h4>{text.contactImpact}</h4>
+                  <ul>
+                    {editor.impact?.properties.map((p) => (
+                      <li key={p.id}>
+                        <a
+                          href={'/properties/' + p.id}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          translate="no"
+                          className="link"
+                        >
+                          {p.property_code}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                  <label className="check">
+                    <input type="checkbox" required />
+                    {text.confirmImpact}
+                  </label>
                   <RecordFields
                     locale={locale}
                     names={targetFields.contact}
-                    values={{ contact_type: 'unknown' }}
-                  />
-                </MutationForm>
-              </details>
-            </>
-          ) : null}
-        </>
-      ) : null}
-      {contactBusy ? <p role="status">{text.loading}</p> : null}
-      {contactError ? <p role="alert">{text.unavailable}</p> : null}
-      {editor &&
-      canEdit &&
-      (editor.target === 'mapping'
-        ? reviewer
-        : ['contact', 'link'].includes(editor.target)
-          ? staff
-          : true) ? (
-        <div
-          className="maintenance-editor"
-          key={editor.target + editor.targetId + editor.revision}
-        >
-          <h3>{optionLabel(locale, editor.target)}</h3>
-          <p>{text.optional}</p>
-          <a
-            href={'/properties/' + property.id}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {text.current}
-          </a>
-          {editor.target === 'link' &&
-          !Object.hasOwn(editor.values, 'remove') ? (
-            <ContactPicker
-              locale={locale}
-              selected={selected}
-              onSelected={setSelected}
-              onDenied={onDenied}
-            />
-          ) : null}
-          <MutationForm
-            locale={locale}
-            target={editor.target}
-            values={editor.values}
-            save={save}
-            onSaved={saved}
-            onDenied={onDenied}
-          >
-            {editor.target === 'property' ? (
-              <RecordFields
-                locale={locale}
-                values={editor.values}
-                names={targetFields.property.filter(
-                  (k) =>
-                    k !== 'status' ||
-                    !['sold', 'rented'].includes(String(editor.values.status)),
-                )}
-              />
-            ) : null}
-            {editor.target === 'address' || editor.target === 'mapping' ? (
-              <AddressFields
-                locale={locale}
-                values={editor.values}
-                onDenied={onDenied}
-                variant={editor.target}
-              />
-            ) : null}
-            {editor.target === 'contact' ? (
-              <>
-                <h4>{text.contactImpact}</h4>
-                <ul>
-                  {editor.impact?.properties.map((p) => (
-                    <li key={p.id}>
-                      <a
-                        href={'/properties/' + p.id}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        translate="no"
-                      >
-                        {p.property_code}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-                <label>
-                  <input type="checkbox" required />
-                  {text.confirmImpact}
-                </label>
-                <RecordFields
-                  locale={locale}
-                  names={targetFields.contact}
-                  values={editor.values}
-                />
-              </>
-            ) : null}
-            {editor.target === 'link' ? (
-              Object.hasOwn(editor.values, 'remove') ? (
-                <>
-                  <p>{text.unlinkConfirm}</p>
-                  <label>
-                    <input
-                      name="remove"
-                      type="checkbox"
-                      value="true"
-                      required
-                    />
-                    {text.unlink}
-                  </label>
-                </>
-              ) : (
-                <>
-                  <input type="hidden" name="contact_id" value={selected} />
-                  <RecordFields
-                    locale={locale}
-                    names={['relation', 'is_primary']}
                     values={editor.values}
                   />
                 </>
-              )
-            ) : null}
-          </MutationForm>
-          <button
-            onClick={() => {
-              controller.current?.abort();
-              setContactBusy(false);
-              setEditor(null);
-            }}
-          >
-            {text.cancel}
-          </button>
-        </div>
-      ) : null}
+              ) : null}
+              {editor.target === 'link' ? (
+                Object.hasOwn(editor.values, 'remove') ? (
+                  <>
+                    <p>{text.unlinkConfirm}</p>
+                    <label className="check">
+                      <input
+                        name="remove"
+                        type="checkbox"
+                        value="true"
+                        required
+                      />
+                      {text.unlink}
+                    </label>
+                  </>
+                ) : (
+                  <>
+                    <input type="hidden" name="contact_id" value={selected} />
+                    <RecordFields
+                      locale={locale}
+                      names={['relation', 'is_primary']}
+                      values={editor.values}
+                    />
+                  </>
+                )
+              ) : null}
+            </MutationForm>
+            <button
+              className="btn btn-sm btn-ghost"
+              onClick={() => {
+                controller.current?.abort();
+                setContactBusy(false);
+                setEditor(null);
+              }}
+            >
+              {text.cancel}
+            </button>
+          </div>
+        ) : null}
+      </div>
     </section>
   );
 }

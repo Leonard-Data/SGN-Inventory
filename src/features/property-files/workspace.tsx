@@ -489,298 +489,363 @@ export function Workspace({
 
   return (
     <section className="panel" aria-label={fileText.files}>
-      <h2>{fileText.files}</h2>
-      {!archived && employeeId ? (
-        <fieldset disabled={uploading || creatingCategory || busy}>
-          <legend>{fileText.purpose}</legend>
-          <label>
-            <input
-              type="radio"
-              name="file-purpose"
-              checked={purpose === 'document'}
-              onChange={() => setPurpose('document')}
-            />
-            {fileText.document}
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="file-purpose"
-              checked={purpose === 'photo'}
-              onChange={() => setPurpose('photo')}
-            />
-            {fileText.photo}
-          </label>
-          <div>
-            <label htmlFor={'category-' + propertyId}>
-              {fileText.category}
-            </label>
-            <select
-              id={'category-' + propertyId}
-              value={selectedCategoryId}
-              onChange={(e) => {
-                if (e.target.value === '__new__') {
-                  setShowNewCategory(true);
-                } else {
-                  setSelectedCategoryId(e.target.value);
-                  setShowNewCategory(false);
-                }
-              }}
-            >
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {categoryName(cat.id)}
-                </option>
-              ))}
-              <option value="__new__">{fileText.newCategory}</option>
-            </select>
-          </div>
-          {showNewCategory ? (
-            <div>
-              <label htmlFor={'new-category-' + propertyId}>
-                {fileText.categoryName}
-              </label>
+      <div className="panel-head">
+        <h2>{fileText.files}</h2>
+      </div>
+      <div className="panel-body">
+        {!archived && employeeId ? (
+          <fieldset
+            className="dropzone"
+            disabled={uploading || creatingCategory || busy}
+          >
+            <legend className="sr">{fileText.purpose}</legend>
+            <label className="check">
               <input
-                id={'new-category-' + propertyId}
-                type="text"
-                value={newCategoryName}
-                onChange={(e) => setNewCategoryName(e.target.value)}
-                disabled={creatingCategory}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    void handleCreateCategory();
+                type="radio"
+                name="file-purpose"
+                checked={purpose === 'document'}
+                onChange={() => setPurpose('document')}
+              />
+              {fileText.document}
+            </label>
+            <label className="check">
+              <input
+                type="radio"
+                name="file-purpose"
+                checked={purpose === 'photo'}
+                onChange={() => setPurpose('photo')}
+              />
+              {fileText.photo}
+            </label>
+            <div className="field">
+              <label className="field-label" htmlFor={'category-' + propertyId}>
+                {fileText.category}
+              </label>
+              <select
+                id={'category-' + propertyId}
+                className="select"
+                value={selectedCategoryId}
+                onChange={(e) => {
+                  if (e.target.value === '__new__') {
+                    setShowNewCategory(true);
+                  } else {
+                    setSelectedCategoryId(e.target.value);
+                    setShowNewCategory(false);
                   }
                 }}
-              />
-              <button
-                type="button"
-                disabled={creatingCategory || !newCategoryName.trim()}
-                onClick={() => void handleCreateCategory()}
               >
-                {fileText.createCategory}
-              </button>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {categoryName(cat.id)}
+                  </option>
+                ))}
+                <option value="__new__">{fileText.newCategory}</option>
+              </select>
             </div>
-          ) : null}
-          <label htmlFor={'files-' + propertyId}>{fileText.selectFiles}</label>
-          <input
-            id={'files-' + propertyId}
-            type="file"
-            multiple
-            accept="application/pdf,image/jpeg,image/png,image/webp"
-            aria-describedby={'upload-note-' + propertyId}
-            onChange={(event) => void selected(event)}
-          />
-          <p id={'upload-note-' + propertyId} className="muted">
-            {fileText.uploadNote}
-          </p>
-        </fieldset>
-      ) : null}
-      {uploads.length ? (
-        <ul aria-live="polite">
-          {uploads.map((upload) => (
-            <li key={upload.id}>
-              <span translate="no">{upload.filename}</span>
-              {' — '}
-              {fileText[upload.state]}
-              {upload.error ? (
-                <p role="alert">
-                  {fileText.errors[upload.error] ?? text.unavailable}
-                </p>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {!archived && recoverable.length ? (
-        <section aria-label={fileText.recovery}>
-          <h3>{fileText.recovery}</h3>
-          <p>{fileText.recoveryNote}</p>
-          <ul>
-            {recoverable.map((attempt) => (
-              <li key={attempt.file.id}>
-                <span translate="no">{attempt.file.original_filename}</span>
-                <p>{fileText[attempt.objectState]}</p>
-                {attempt.objectState === 'absent' ? (
-                  <label>
-                    {fileText.reselect}
-                    <input
-                      type="file"
-                      disabled={uploading}
-                      onChange={(event) => void selected(event, attempt)}
-                    />
-                  </label>
-                ) : attempt.objectState === 'present' ? (
-                  <button
-                    disabled={uploading}
-                    onClick={() => void retry(attempt)}
-                  >
-                    {fileText.retryValidation}
-                  </button>
-                ) : attempt.objectState === 'unknown' ? (
-                  <button
-                    disabled={uploading}
-                    onClick={() => setRevision((value) => value + 1)}
-                  >
-                    {text.retry}
-                  </button>
+            {showNewCategory ? (
+              <div className="field">
+                <label
+                  className="field-label"
+                  htmlFor={'new-category-' + propertyId}
+                >
+                  {fileText.categoryName}
+                </label>
+                <input
+                  id={'new-category-' + propertyId}
+                  className="input"
+                  type="text"
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  disabled={creatingCategory}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      void handleCreateCategory();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  disabled={creatingCategory || !newCategoryName.trim()}
+                  onClick={() => void handleCreateCategory()}
+                >
+                  {fileText.createCategory}
+                </button>
+              </div>
+            ) : null}
+            <div className="field">
+              <label className="field-label" htmlFor={'files-' + propertyId}>
+                {fileText.selectFiles}
+              </label>
+              <input
+                id={'files-' + propertyId}
+                type="file"
+                multiple
+                accept="application/pdf,image/jpeg,image/png,image/webp"
+                aria-describedby={'upload-note-' + propertyId}
+                onChange={(event) => void selected(event)}
+              />
+            </div>
+            <p id={'upload-note-' + propertyId} className="field-hint">
+              {fileText.uploadNote}
+            </p>
+          </fieldset>
+        ) : null}
+        {uploads.length ? (
+          <ul aria-live="polite">
+            {uploads.map((upload) => (
+              <li key={upload.id}>
+                <span translate="no">{upload.filename}</span>
+                {' — '}
+                {fileText[upload.state]}
+                {upload.error ? (
+                  <p role="alert">
+                    {fileText.errors[upload.error] ?? text.unavailable}
+                  </p>
                 ) : null}
-                <p className="muted">{fileText.replacementNote}</p>
               </li>
             ))}
           </ul>
-        </section>
-      ) : null}
-      <section className="cover-section" aria-label={fileText.cover}>
-        <h3>{fileText.cover}</h3>
-        <CoverImage
-          propertyId={propertyId}
-          fileId={coverFileId}
-          locale={locale}
-          onDenied={onDenied}
-        />
-        {canEdit && !archived && coverFileId ? (
-          <button
-            type="button"
-            disabled={coverBusy || checkingPhoto !== null}
-            onClick={() => void changeCover(null)}
-          >
-            {coverBusy ? fileText.changingCover : fileText.clearCover}
-          </button>
         ) : null}
-        {coverError ? (
-          <p role="alert">{fileText.errors[coverError] ?? text.unavailable}</p>
-        ) : null}
-      </section>
-      {busy ? <p role="status">{text.loading}</p> : null}
-      {error ? (
-        <p role="alert">
-          {fileText.errors[error] ?? text.unavailable}{' '}
-          <button
-            disabled={uploading}
-            onClick={() => setRevision((value) => value + 1)}
-          >
-            {text.retry}
-          </button>
-        </p>
-      ) : null}
-      {!busy && !error && !files.length ? <p>{fileText.noFiles}</p> : null}
-      {!busy ? (
-        <ul className="file-list">
-          {files.map((file) => (
-            <li key={file.id} className="file-row">
-              <span className="file-name" translate="no">
-                {file.original_filename}
-              </span>{' '}
-              <span className="badge">{categoryName(file.category_id)}</span>{' '}
-              <span className="badge">
-                {file.purpose === 'photo' ? fileText.photo : fileText.document}
-              </span>{' '}
-              <button
-                type="button"
-                disabled={signing !== null}
-                onClick={() => void open(file.id, false)}
-              >
-                {signing === file.id ? fileText.signingFile : fileText.open}
-              </button>{' '}
-              <button
-                type="button"
-                disabled={signing !== null}
-                onClick={() => void open(file.id, true)}
-              >
-                {fileText.download}
-              </button>
-              {canEdit && !archived && file.purpose === 'photo' ? (
-                file.validated_at && file.validated_object_id ? (
-                  coverFileId === file.id ? (
-                    <span className="badge">{fileText.selectedCover}</span>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={coverBusy || checkingPhoto !== null}
-                      onClick={() => void changeCover(file.id)}
-                    >
-                      {coverBusy
-                        ? fileText.changingCover
-                        : coverFileId
-                          ? fileText.replaceCover
-                          : fileText.setCover}
-                    </button>
-                  )
-                ) : (
-                  <button
-                    type="button"
-                    disabled={coverBusy || checkingPhoto !== null}
-                    onClick={() => void checkPhoto(file.id)}
-                  >
-                    {checkingPhoto === file.id
-                      ? fileText.validating
-                      : fileText.checkPhoto}
-                  </button>
-                )
-              ) : null}
-              {!archived && (canEdit || file.uploaded_by === employeeId) ? (
-                editingFileId === file.id ? (
-                  <div>
-                    <label htmlFor={'edit-category-' + file.id}>
-                      {fileText.category}
+        {!archived && recoverable.length ? (
+          <section aria-label={fileText.recovery}>
+            <h3>{fileText.recovery}</h3>
+            <p>{fileText.recoveryNote}</p>
+            <ul>
+              {recoverable.map((attempt) => (
+                <li key={attempt.file.id}>
+                  <span translate="no">{attempt.file.original_filename}</span>
+                  <p>{fileText[attempt.objectState]}</p>
+                  {attempt.objectState === 'absent' ? (
+                    <label>
+                      {fileText.reselect}
+                      <input
+                        type="file"
+                        disabled={uploading}
+                        onChange={(event) => void selected(event, attempt)}
+                      />
                     </label>
-                    <select
-                      id={'edit-category-' + file.id}
-                      value={editingCategoryId}
-                      disabled={categoryBusy}
-                      onChange={(event) =>
-                        setEditingCategoryId(event.target.value)
-                      }
-                    >
-                      {categories.map((category) => (
-                        <option key={category.id} value={category.id}>
-                          {categoryName(category.id)}
-                        </option>
-                      ))}
-                    </select>
+                  ) : attempt.objectState === 'present' ? (
                     <button
-                      type="button"
-                      disabled={categoryBusy || !editingCategoryId}
-                      onClick={() => void changeCategory(file.id)}
+                      className="btn btn-sm btn-ghost"
+                      disabled={uploading}
+                      onClick={() => void retry(attempt)}
                     >
-                      {categoryBusy ? fileText.savingCategory : fileText.save}
+                      {fileText.retryValidation}
                     </button>
+                  ) : attempt.objectState === 'unknown' ? (
                     <button
-                      type="button"
-                      disabled={categoryBusy}
-                      onClick={() => {
-                        setEditingFileId(null);
-                        setCategoryError(null);
-                      }}
+                      className="btn btn-sm btn-ghost"
+                      disabled={uploading}
+                      onClick={() => setRevision((value) => value + 1)}
                     >
-                      {fileText.cancel}
+                      {text.retry}
                     </button>
-                    {categoryError ? (
-                      <p role="alert">
-                        {fileText.errors[categoryError] ?? text.unavailable}
-                      </p>
-                    ) : null}
-                  </div>
-                ) : (
+                  ) : null}
+                  <p className="field-hint">{fileText.replacementNote}</p>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+        <section className="cover-section" aria-label={fileText.cover}>
+          <h3>{fileText.cover}</h3>
+          <CoverImage
+            propertyId={propertyId}
+            fileId={coverFileId}
+            locale={locale}
+            onDenied={onDenied}
+          />
+          {canEdit && !archived && coverFileId ? (
+            <button
+              type="button"
+              className="btn btn-sm btn-ghost"
+              disabled={coverBusy || checkingPhoto !== null}
+              onClick={() => void changeCover(null)}
+            >
+              {coverBusy ? fileText.changingCover : fileText.clearCover}
+            </button>
+          ) : null}
+          {coverError ? (
+            <p role="alert">
+              {fileText.errors[coverError] ?? text.unavailable}
+            </p>
+          ) : null}
+        </section>
+        {busy ? <p role="status">{text.loading}</p> : null}
+        {error ? (
+          <p role="alert">
+            {fileText.errors[error] ?? text.unavailable}{' '}
+            <button
+              className="btn btn-sm btn-ghost"
+              disabled={uploading}
+              onClick={() => setRevision((value) => value + 1)}
+            >
+              {text.retry}
+            </button>
+          </p>
+        ) : null}
+        {!busy && !error && !files.length ? <p>{fileText.noFiles}</p> : null}
+        {!busy ? (
+          <ul className="file-list">
+            {files.map((file) => (
+              <li key={file.id} className="doc-row">
+                <span className="doc-icon" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    width="20"
+                    height="20"
+                  >
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                  </svg>
+                </span>
+                <span>
+                  <span className="doc-name" translate="no">
+                    {file.original_filename}
+                  </span>
+                  <span className="doc-meta">
+                    <span className="badge" data-tone="neutral">
+                      {categoryName(file.category_id)}
+                    </span>
+                    <span className="badge" data-tone="neutral">
+                      {file.purpose === 'photo'
+                        ? fileText.photo
+                        : fileText.document}
+                    </span>
+                  </span>
+                </span>
+                <span className="doc-actions">
                   <button
                     type="button"
-                    disabled={categoryBusy}
-                    onClick={() => {
-                      setEditingFileId(file.id);
-                      setEditingCategoryId(file.category_id);
-                      setCategoryError(null);
-                    }}
+                    className="btn btn-sm btn-ghost"
+                    disabled={signing !== null}
+                    onClick={() => void open(file.id, false)}
                   >
-                    {fileText.changeCategory}
+                    {signing === file.id ? fileText.signingFile : fileText.open}
                   </button>
-                )
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      <p className="muted">{fileText.availabilityNote}</p>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-ghost"
+                    disabled={signing !== null}
+                    onClick={() => void open(file.id, true)}
+                  >
+                    {fileText.download}
+                  </button>
+                  {canEdit && !archived && file.purpose === 'photo' ? (
+                    file.validated_at && file.validated_object_id ? (
+                      coverFileId === file.id ? (
+                        <span className="badge" data-tone="success">
+                          {fileText.selectedCover}
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          disabled={coverBusy || checkingPhoto !== null}
+                          onClick={() => void changeCover(file.id)}
+                        >
+                          {coverBusy
+                            ? fileText.changingCover
+                            : coverFileId
+                              ? fileText.replaceCover
+                              : fileText.setCover}
+                        </button>
+                      )
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-ghost"
+                        disabled={coverBusy || checkingPhoto !== null}
+                        onClick={() => void checkPhoto(file.id)}
+                      >
+                        {checkingPhoto === file.id
+                          ? fileText.validating
+                          : fileText.checkPhoto}
+                      </button>
+                    )
+                  ) : null}
+                  {!archived && (canEdit || file.uploaded_by === employeeId) ? (
+                    editingFileId === file.id ? (
+                      <div className="field">
+                        <label
+                          className="field-label"
+                          htmlFor={'edit-category-' + file.id}
+                        >
+                          {fileText.category}
+                        </label>
+                        <select
+                          id={'edit-category-' + file.id}
+                          className="select"
+                          value={editingCategoryId}
+                          disabled={categoryBusy}
+                          onChange={(event) =>
+                            setEditingCategoryId(event.target.value)
+                          }
+                        >
+                          {categories.map((category) => (
+                            <option key={category.id} value={category.id}>
+                              {categoryName(category.id)}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          disabled={categoryBusy || !editingCategoryId}
+                          onClick={() => void changeCategory(file.id)}
+                        >
+                          {categoryBusy
+                            ? fileText.savingCategory
+                            : fileText.save}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          disabled={categoryBusy}
+                          onClick={() => {
+                            setEditingFileId(null);
+                            setCategoryError(null);
+                          }}
+                        >
+                          {fileText.cancel}
+                        </button>
+                        {categoryError ? (
+                          <p role="alert">
+                            {fileText.errors[categoryError] ?? text.unavailable}
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-ghost"
+                        disabled={categoryBusy}
+                        onClick={() => {
+                          setEditingFileId(file.id);
+                          setEditingCategoryId(file.category_id);
+                          setCategoryError(null);
+                        }}
+                      >
+                        {fileText.changeCategory}
+                      </button>
+                    )
+                  ) : null}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        <p className="field-hint">{fileText.availabilityNote}</p>
+      </div>
     </section>
   );
 }

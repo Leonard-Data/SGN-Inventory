@@ -34,9 +34,9 @@ Read `CONTEXT.md` and `docs/database-contract.md` before changing the project. T
 - Public RPC wrappers are invoker functions. Do not add a public definer function to bypass an access error.
 - No direct client writes to `property_locks`, `lock_events`, `activity_events`, `properties`, `property_addresses`, `contacts` or `property_contacts`. Use documented RPCs.
 - Lock transitions acquire the parent property row `FOR UPDATE` before the lock row; keep this order everywhere. Preserve the partial unique index for one approved reservation.
-- Never allow self approval or self visit confirmation. Database enforcement is required even when UI controls are hidden.
+- Never allow self approval. Database enforcement is required even when UI controls are hidden.
 - Effective lock = approved AND expiry after current time. Pending requests do not reserve. Do not build a second lock boolean on properties.
-- Distinguish page views from confirmed physical visits; calculate Vietnam business day in the database.
+- Distinguish page views and owner-contact access from confirmed physical visits; calculate Vietnam business day in the database.
 - Preserve typed VND, m², phone strings and source text. Rental monthly dues and manual receipt/refund records are in scope; commission calculations, payouts, payment gateway integration and general accounting remain out of scope.
 - Never overwrite original legacy addresses or auto-map partial ward transitions. Current addresses must not contain district fields.
 - Do not silently change source relationships, drop unmatched rows or use sheet positions as foreign keys.

@@ -138,9 +138,9 @@ export function RecoveryScreen({
 
   return (
     <AuthShell locale={locale} onLocaleChange={setLocale}>
-      <section className="sgn-card" aria-labelledby="recovery-title">
+      <section className="auth-card" aria-labelledby="recovery-title">
         <Stepper locale={locale} current={current as 1 | 2 | 3} />
-        <p className="sgn-eyebrow">{text.recoveryEyebrow}</p>
+        <p className="eyebrow">{text.recoveryEyebrow}</p>
         <h1 id="recovery-title">
           {done
             ? text.passwordDoneTitle
@@ -148,7 +148,7 @@ export function RecoveryScreen({
               ? text.recoveryTitle
               : text.resetTitle}
         </h1>
-        <p className="sgn-lead">
+        <p className="lead">
           {done
             ? text.passwordUpdated
             : mode === 'request'
@@ -158,25 +158,25 @@ export function RecoveryScreen({
 
         {mode === 'request' ? (
           sent ? (
-            <div className="sgn-form">
+            <div className="auth-form">
               <StatusAlert tone="success">{text.recoverySent}</StatusAlert>
               <button
                 type="button"
                 className={buttonClass('secondary', { block: true })}
                 onClick={() => setSent(false)}
               >
-                <span className="sgn-btn-label">{text.stepBack}</span>
+                <span className="btn-label">{text.stepBack}</span>
               </button>
               <a
                 className={buttonClass('primary', { block: true })}
                 href={'/login?lang=' + locale}
               >
-                <span className="sgn-btn-label">{text.login}</span>
+                <span className="btn-label">{text.login}</span>
               </a>
             </div>
           ) : (
             <form
-              className="sgn-form"
+              className="auth-form"
               method="post"
               action="/api/auth/recover"
               noValidate
@@ -212,7 +212,7 @@ export function RecoveryScreen({
                 aria-busy={busy}
                 aria-disabled={busy}
               >
-                <span className="sgn-btn-label">
+                <span className="btn-label">
                   {busy ? text.recoverySending : text.sendRecovery}
                 </span>
               </button>
@@ -220,7 +220,7 @@ export function RecoveryScreen({
                 className={buttonClass('secondary', { block: true })}
                 href={'/login?lang=' + locale}
               >
-                <span className="sgn-btn-label">{text.login}</span>
+                <span className="btn-label">{text.login}</span>
               </a>
               {formError ? (
                 <StatusAlert tone="error" innerRef={errorSurface}>
@@ -230,7 +230,7 @@ export function RecoveryScreen({
             </form>
           )
         ) : invalid ? (
-          <div className="sgn-form">
+          <div className="auth-form">
             <StatusAlert tone="error" innerRef={errorSurface}>
               {text.recoveryInvalid}
             </StatusAlert>
@@ -238,18 +238,18 @@ export function RecoveryScreen({
               className={buttonClass('primary', { block: true })}
               href={'/recover?lang=' + locale}
             >
-              <span className="sgn-btn-label">{text.sendRecovery}</span>
+              <span className="btn-label">{text.sendRecovery}</span>
             </a>
             <a
               className={buttonClass('secondary', { block: true })}
               href={'/login?lang=' + locale}
             >
-              <span className="sgn-btn-label">{text.login}</span>
+              <span className="btn-label">{text.login}</span>
             </a>
           </div>
         ) : done ? (
-          <div className="sgn-form">
-            <span className="sgn-done-mark">
+          <div className="auth-form">
+            <span className="done-mark">
               <svg
                 viewBox="0 0 24 24"
                 fill="none"
@@ -260,18 +260,18 @@ export function RecoveryScreen({
                 <path d="m5 12.5 4.5 4.5L19 7" />
               </svg>
             </span>
-            <div className="sgn-actions">
+            <div className="actions">
               <a
                 className={buttonClass('primary', { block: true })}
                 href={'/login?lang=' + locale}
               >
-                <span className="sgn-btn-label">{text.login}</span>
+                <span className="btn-label">{text.login}</span>
               </a>
             </div>
           </div>
         ) : (
           <form
-            className="sgn-form"
+            className="auth-form"
             method="post"
             action="/api/auth/password"
             noValidate
@@ -328,7 +328,7 @@ export function RecoveryScreen({
               aria-busy={busy}
               aria-disabled={busy}
             >
-              <span className="sgn-btn-label">
+              <span className="btn-label">
                 {busy ? text.resetUpdating : text.updatePassword}
               </span>
             </button>
@@ -336,7 +336,7 @@ export function RecoveryScreen({
               className={buttonClass('secondary', { block: true })}
               href={'/recover?lang=' + locale}
             >
-              <span className="sgn-btn-label">{text.stepBack}</span>
+              <span className="btn-label">{text.stepBack}</span>
             </a>
             {formError ? (
               <StatusAlert tone="error" innerRef={errorSurface}>

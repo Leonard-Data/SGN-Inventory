@@ -2,7 +2,7 @@
 
 ## Stack and depth
 
-One Next.js App Router application, TypeScript, React, plain CSS, Supabase Postgres/Auth/private Storage and Vercel. npm is the only JavaScript package manager. Node `24.14.0` and npm `11.14.1` are the reproducible local/CI baseline; Vercel uses Node `24.x`. The project minimum is stricter than the original Node 22+ requirement.
+One Next.js App Router application, TypeScript, React, plain CSS, Supabase Postgres/Auth/private Storage and Vercel. npm is the only JavaScript package manager. Node `24.14.0` and npm `11.13.0` are the reproducible local/CI baseline; Vercel uses Node `24.x`. The project minimum is stricter than the original Node 22+ requirement.
 
 | Tool                             | Exact dependency                                 |
 | -------------------------------- | ------------------------------------------------ |
@@ -17,7 +17,7 @@ One Next.js App Router application, TypeScript, React, plain CSS, Supabase Postg
 
 `package.json` and `package-lock.json` are authoritative. Install with `npm ci`. Commit both when updating dependencies; never use an unpinned `npx ...@latest` in automation. ESLint 9 is intentional: the selected Next lint plugins do not all declare ESLint 10 support. Verify official documentation and peer requirements before upgrades.
 
-All three GitHub workflows install pinned npm `11.14.1` after `setup-node` and before `npm ci`; selecting Node `24.14.0` alone supplies npm `11.9.0`, which the strict package engine correctly rejects. Keep the bootstrap version aligned with the package toolchain.
+Every workflow job that installs dependencies bootstraps pinned npm `11.13.0` after `setup-node` and before `npm ci`; selecting Node `24.14.0` alone supplies npm `11.9.0`, which the strict package engine correctly rejects. Keep the bootstrap version aligned with the package toolchain.
 
 Maintenance caveat: npm marks ESLint `9.39.5` unsupported. It is retained for the selected Next plugins' declared compatibility, not treated as a long-term supported choice. Upgrade lint tooling when the complete plugin set supports a maintained major; do not hide peer conflicts with force/legacy-peer-deps. Python requirements also pin `et-xmlfile` and `tzdata` so Windows setup does not depend on a missing system IANA timezone database.
 
@@ -50,6 +50,7 @@ src/
   features/property-files/     # Private file read workspace, types, signed URLs
   features/property-maintenance/ # Create/edit maintenance, address/contact forms, history
   features/corrections/        # Correction submission, queue and amendment rendering
+  features/property-comments/  # Shared Property discussion, submission-key recovery, paging and comment removal
   i18n/messages.ts             # Equivalent typed VI/EN journey dictionaries
   lib/supabase/route.ts         # User-scoped SSR cookies/cache/input boundary
   types/database.ts            # Generated from the live dev public schema
@@ -57,11 +58,13 @@ src/
   lib/environment.test.ts      # Configuration invariants
 scripts/
   check-environment.mjs         # Operator-facing configuration check
-  release-guard.mjs             # Branch/project isolation and release smoke
+  release-guard.mjs             # Branch/project isolation, pending migrations and release smoke
   release-guard.test.mjs        # Cross-stage regression risks
   validate-schema.mjs           # Existing embedded SQL assertions
   maintenance-contract.mjs      # Embedded maintenance/history regressions
   correction-contract.mjs       # Embedded correction-workflow regressions
+  comments-contract.mjs         # Embedded discussion role/validation/retry/paging regressions
+  comment-removal-contract.mjs  # Embedded removal authority, retention and terminal-state regressions
   employee-access-acceptance.mjs # Real app/browser/Auth/RLS dev fixture acceptance
   auth-visual-compare.mjs        # Exact-viewport auth design comparison vs preserved prototype
   prepare_workbook.py           # Existing private, dry-run preparation
@@ -69,11 +72,11 @@ scripts/
 supabase/
   migrations/                  # Physical schema authority
   tests/                       # Real local Supabase structural checks
-.github/workflows/             # CI; explicit app and database release
+.github/workflows/             # CI; gated PR previews, main production, explicit DB changes
 .husky/pre-commit
 ```
 
-Create additional feature directories only for approved backlog work. Employee access, read-only inventory, private files and issue #7 maintenance/corrections are implemented; reservation, rental and remaining UI work is tracked in [delivery-plan.md](delivery-plan.md). The real-mailbox recovery gate prevents claiming completed issue #1 acceptance.
+Create additional feature directories only for approved backlog work. Employee access, read-only inventory, private files and issue #7 maintenance/corrections are implemented; the shared Property discussion (#44) has its development-project acceptance executed, with staging/production and keyboard-only/360px mobile gates still unexecuted; issue #45's comment removal and moderation is implemented on that discussion, with its hosted acceptance executed at application head `45f356a` ([testing.md](testing.md#ticket-45-removal-acceptance-executed-13-october-2026)); staging/production and keyboard-only/360px mobile gates remain unexecuted; issue #18's reservation request and independent decision is implemented on the property detail, with its acceptance evidence and remaining gates in [testing.md](testing.md#reservation-acceptance-ticket-18); rental and remaining UI work is tracked in [delivery-plan.md](delivery-plan.md). The real-mailbox recovery gate prevents claiming completed issue #1 acceptance.
 
 - `src/app/`: route composition, presentation, narrow validated Server Actions/Route Handlers. No direct inventory SQL/query orchestration in rendering.
 - `src/features/<feature>/`: validation, feature data access, domain results and workflow operations; keep feature-specific rendering beside the feature when useful. Export a small Interface, not every internal helper.
@@ -104,7 +107,7 @@ Read [CONTEXT.md](../CONTEXT.md), [database-contract.md](database-contract.md) a
 
 ## Checks and contribution flow
 
-1. Branch from `develop` for feature work; use descriptive `feat/...`, `fix/...` or `chore/...` names. Pull requests target `develop`; reviewed releases merge to `main`. No direct production pushes.
+1. Branch from `develop` for feature work; use descriptive `feat/...`, `fix/...` or `chore/...` names. Pull requests target `develop`; reviewed releases merge to `main`. No direct production pushes. Once the external protection/configuration gates in [setup.md](setup.md) exist and the stage-scoped switches are set, same-repository PRs receive dev-only Vercel previews under `CD_PREVIEW_ENABLED`, a `develop`/`stage=dev` dispatch releases the stable dev review site under `CD_DEV_ENABLED`, and `main` releases production under `CD_PROD_ENABLED` after CI and a verify-only database check. Every switch is off by default and no stage's switch can start another stage's run; `CD_PROD_ENABLED` stays unset until staging acceptance and a separate production release decision. Database application stays explicitly authorized; native Vercel Git deployment stays disabled.
 2. `npm run format` formats supported nonignored files. `npm run check` checks formatting, lint, types, environment/release regressions and embedded schema behavior. `npm run test:import` covers workbook preparation; `npm run build` proves Next compilation.
 3. Commit hooks format only staged supported files, then run lint, type checking and `npm test`. The hook stops on the first failure. Python preparation and production build run in CI rather than every commit. `npm ci` installs the hook through `prepare`; CI sets `HUSKY=0`.
 4. Test uncertain consumer-visible invariants, transitions, precedence, authorization and boundaries through the Module's Interface. No mock echoes, source-string tests or incidental wording/default assertions. Preserve deterministic isolated fixtures; tests must never need production credentials.
