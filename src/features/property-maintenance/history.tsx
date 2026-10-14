@@ -7,6 +7,7 @@ import { useProtectedData } from '@/features/employees/use-protected-data';
 import {
   formatVnd,
   formatDecimal,
+  vietnamDate,
   vietnamTimestamp,
 } from '@/features/properties/format';
 import type { HistoryPage } from './data';
@@ -59,11 +60,13 @@ export function BusinessValues({
                               ? 'entrySourceRecorded'
                               : 'entryDateUnknown',
                         )
-                      : name === 'verified_at' && typeof value === 'string'
-                        ? vietnamTimestamp(value, locale)
-                        : Array.isArray(value)
-                          ? value.join(' / ')
-                          : String(value);
+                      : name === 'entry_on' && typeof value === 'string'
+                        ? vietnamDate(value)
+                        : name === 'verified_at' && typeof value === 'string'
+                          ? vietnamTimestamp(value, locale)
+                          : Array.isArray(value)
+                            ? value.join(' / ')
+                            : String(value);
         return (
           <div className="history-field" key={name}>
             <dt>
