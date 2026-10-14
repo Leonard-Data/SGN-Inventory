@@ -12,6 +12,8 @@ export interface Comment {
   createdAt: string;
   revision: string;
   removedAt: string | null;
+  /** Time of the most recent accepted author edit; marks the entry as edited. */
+  editedAt: string | null;
 }
 export type CommentCursor = {
   before: string;
