@@ -1,6 +1,9 @@
 // The admin employee list reads identities that already exist in `public.employees` under the
-// existing employee read and adds no schema, policy or grant. Keeping the paging bounds, the
-// access-state projection and the role rule here leaves them testable without a session.
+// existing employee read. Keeping the paging bounds, the access-state projection, the
+// recorded administration state and the role rule here leaves them testable without a session.
+import type { DeactivationState } from './deactivation.ts';
+import { mayAdministerEmployees } from './deactivation.ts';
+
 export const DIRECTORY_PAGE_SIZE = 30;
 
 // The columns the projection needs; the select in directory-data.ts returns exactly these.
@@ -18,12 +21,31 @@ export type DirectoryRow = {
 // presented as invited, and never as deleted.
 export type EmployeeAccess = 'active' | 'inactive' | 'unlinked';
 
+export type DirectoryDeactivation = {
+  state: DeactivationState;
+  revision: number;
+  updatedAt: string;
+};
+
 export type DirectoryEntry = {
   id: string;
   displayName: string;
   email: string;
   role: string;
   access: EmployeeAccess;
+  // The recorded administration state for this employee, or null when no operation exists.
+  // A disabled membership with `provider_pending`/`provider_failed` is never presented as a
+  // completed deactivation.
+  deactivation: DirectoryDeactivation | null;
+};
+
+// The columns the operation lookup returns; rows arrive newest-first so the first row for an
+// employee is the operation the list reports.
+export type DirectoryOperationRow = {
+  employee_id: string;
+  state: string;
+  revision: number;
+  updated_at: string;
 };
 
 export type DirectoryPage = {
@@ -63,7 +85,36 @@ export function accessState(
   return row.is_active ? 'active' : 'inactive';
 }
 
-export function directoryPage(rows: readonly DirectoryRow[]): DirectoryPage {
+export function directoryOperations(
+  rows: readonly DirectoryOperationRow[],
+): Map<string, DirectoryDeactivation> {
+  const latest = new Map<string, DirectoryDeactivation>();
+  for (const row of rows) {
+    if (
+      !row.employee_id ||
+      !['provider_pending', 'provider_failed', 'completed'].includes(
+        row.state,
+      ) ||
+      typeof row.revision !== 'number' ||
+      !Number.isInteger(row.revision) ||
+      typeof row.updated_at !== 'string' ||
+      !Number.isFinite(Date.parse(row.updated_at)) ||
+      latest.has(row.employee_id)
+    )
+      continue;
+    latest.set(row.employee_id, {
+      state: row.state as DeactivationState,
+      revision: row.revision,
+      updatedAt: row.updated_at,
+    });
+  }
+  return latest;
+}
+
+export function directoryPage(
+  rows: readonly DirectoryRow[],
+  operations: Map<string, DirectoryDeactivation> = new Map(),
+): DirectoryPage {
   const page = rows.slice(0, DIRECTORY_PAGE_SIZE);
   const last = page[page.length - 1];
   return {
@@ -73,13 +124,14 @@ export function directoryPage(rows: readonly DirectoryRow[]): DirectoryPage {
       email: row.email,
       role: row.role,
       access: accessState(row),
+      deactivation: operations.get(row.id) ?? null,
     })),
     nextCursor: rows.length > DIRECTORY_PAGE_SIZE && last ? last.id : null,
   };
 }
 
 // Admin-only surface. The live role is re-read from the session on every request; this
-// names the rule so the route guard, the route's page guard and the tests agree.
+// names the rule so the route guard, the proxy's page guard and the tests agree.
 export function mayReadDirectory(role: string): boolean {
-  return role === 'admin';
+  return mayAdministerEmployees(role);
 }

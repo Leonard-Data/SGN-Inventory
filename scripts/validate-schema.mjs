@@ -18,26 +18,12 @@ import { inventoryAgeContract } from './inventory-age-contract.mjs';
 import { vendorContract } from './vendor-contract.mjs';
 import { referenceCatalogContract } from './reference-catalog-contract.mjs';
 import { saleCompletionContract } from './sale-completion-contract.mjs';
+import { employeeDeactivationContract } from './employee-deactivation-contract.mjs';
+import { employeeDeactivationConcurrency } from './employee-deactivation-concurrency.mjs';
+import { applyEmbeddedSchema } from './embedded-schema.mjs';
 const root = process.env.SGN_PROJECT_ROOT || process.cwd();
 const db = new PGlite({extensions:{unaccent,pg_trgm,pgcrypto}});
-await db.exec(`
-  create role anon; create role authenticated; create role service_role bypassrls;
-  create schema auth; create table auth.users(id uuid primary key);
-  create function auth.uid() returns uuid language sql stable as $$
-    select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid;
-  $$;
-  grant usage on schema auth to authenticated,anon,service_role;
-  create schema storage;
-  create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
-  create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text,unique(bucket_id,name));
-  alter table storage.objects enable row level security;
-  grant usage on schema storage to authenticated,anon;
-  grant select,insert,update,delete on storage.objects to authenticated;
-`);
-for(const f of (await fs.readdir(path.join(root,'supabase/migrations'))).filter(f=>f.endsWith('.sql')).sort()) {
-  await db.exec(await fs.readFile(path.join(root,'supabase/migrations',f),'utf8'));
-  console.log('Applied',f);
-}
+await applyEmbeddedSchema({root,exec:(sql)=>db.exec(sql)});
 // Supabase defaults may grant privileges on future objects. Test our explicit revokes.
 const users = ['00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000003','00000000-0000-4000-8000-000000000004','00000000-0000-4000-8000-000000000005','00000000-0000-4000-8000-000000000006'];
 const employees = ['10000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000002','10000000-0000-4000-8000-000000000003','10000000-0000-4000-8000-000000000004','10000000-0000-4000-8000-000000000005','10000000-0000-4000-8000-000000000006'];
@@ -598,9 +584,13 @@ await inventoryAgeContract({db,asUser,check,fails,employees});
 await referenceCatalogContract({db,asUser,check,fails,employees,root});
 // Issue #38: one reviewed logical sale completion and the completed-sale ranking.
 await saleCompletionContract({db,asUser,check,fails,employees});
-// Ticket #73: the vendor directory's authority, validation, retry and paging rules.
+// Issue #66: guarded employee administration, last-active-admin protection and provider
+// reconciliation without losing the record.
+await employeeDeactivationContract({db,asUser,check,fails,employees});
+await employeeDeactivationConcurrency({root,check});
+// Ticket #73: the vendor directory authority, validation, retry and paging rules.
 await vendorContract({db,asUser,check,fails,employees});
-const report={checked_at:new Date().toISOString(),engine:'PGlite embedded PostgreSQL; mocked auth/storage schemas',passed,
- limitations:['Not a live Supabase integration test','HTTP Auth, signed URLs, Vercel and browser flows not exercised','True multi-session concurrent transaction test remains a staging acceptance gate']};
+const report={checked_at:new Date().toISOString(),engine:'PGlite embedded PostgreSQL plus an embedded real PostgreSQL engine for the two-connection last-admin race; mocked auth/storage schemas',passed,
+ limitations:['Not a live Supabase integration test','HTTP Auth, signed URLs, Vercel and browser flows not exercised','Sustained multi-session contention at production load remains a staging acceptance gate']};
 await fs.writeFile(path.join(root,'docs/validation-results.json'),JSON.stringify(report,null,2)+'\n');
 console.log(`${passed} assertions passed`);await db.close();
