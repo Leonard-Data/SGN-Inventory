@@ -13,6 +13,7 @@ import { commentRemovalContract } from './comment-removal-contract.mjs';
 import { commentEditContract } from './comment-edit-contract.mjs';
 import { companyActivityContract } from './company-activity-contract.mjs';
 import { myActivityContract } from './my-activity-contract.mjs';
+import { rankingContract } from './ranking-contract.mjs';
 import { priceHistoryContract } from './price-history-contract.mjs';
 import { inventoryAgeContract } from './inventory-age-contract.mjs';
 import { vendorContract } from './vendor-contract.mjs';
@@ -578,6 +579,8 @@ await commentEditContract({db,asUser,check,fails,employees});
 await companyActivityContract({db,asUser,check,fails,employees});
 // Ticket #30: the employee's own activity over an explicit Vietnam date range.
 await myActivityContract({db,asUser,check,fails,employees});
+// Ticket #34: the reviewer-only Employee owner-contact activity ranking.
+await rankingContract({db,asUser,check,fails,employees});
 // Issue #37: explicit original inventory entry dates and eligible chronological ordering.
 await inventoryAgeContract({db,asUser,check,fails,employees});
 // Seeded Vietnamese province/city and ward/commune reference catalogue.
