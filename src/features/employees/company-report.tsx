@@ -6,9 +6,10 @@ import { useProtectedData } from '@/features/employees/use-protected-data';
 import { vietnamDate } from '@/features/properties/format';
 import type { CompanyActivityReport } from './company-report-data';
 
-// Company employee-by-day activity report (#57). One authenticated screen: the filter
-// posts back to this route so the range stays in the URL, and the report itself is read
-// through /api/activity/company. The shell provides the rail, topbar and skip link.
+// Company employee-by-day activity report (#57) extended with the employee owner-contact
+// activity ranking (#34). One authenticated screen: the filter posts back to this route so the
+// range stays in the URL, and both reads come from /api/activity/company. The shell provides
+// the rail, topbar and skip link.
 export function CompanyReport({
   initialLocale,
   initialFrom,
@@ -175,6 +176,68 @@ export function CompanyReport({
               </div>
               <div className="panel-foot">
                 <span>{text.companyActivityNote}</span>
+              </div>
+            </section>
+
+            <section
+              className="panel page-section"
+              aria-labelledby="company-ranking"
+            >
+              <div className="panel-head">
+                <h2 id="company-ranking">{text.rankingTitle}</h2>
+                <span className="panel-note num">
+                  {vietnamDate(data.from)} – {vietnamDate(data.to)}
+                </span>
+              </div>
+              <div className="panel-body">
+                {data.ranking.length === 0 ? (
+                  <div className="state-panel">
+                    <h3>{text.noEmployees}</h3>
+                  </div>
+                ) : (
+                  <div className="table-wrap">
+                    <table className="data-table stackable">
+                      <thead>
+                        <tr>
+                          <th scope="col">{text.rankingRank}</th>
+                          <th scope="col">{text.companyEmployee}</th>
+                          <th scope="col">{text.todayOwnerContacts}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.ranking.map((row) => (
+                          <tr key={row.employeeId}>
+                            <td className="num" data-label={text.rankingRank}>
+                              {numberFormat.format(row.rank)}
+                            </td>
+                            <th scope="row" data-label={text.companyEmployee}>
+                              <span className="record-head">
+                                <span translate="no">{row.employeeName}</span>
+                                {row.employeeActive ? null : (
+                                  <span
+                                    className="badge badge-plain"
+                                    data-tone="muted"
+                                  >
+                                    {text.rankingInactive}
+                                  </span>
+                                )}
+                              </span>
+                            </th>
+                            <td
+                              className="num"
+                              data-label={text.todayOwnerContacts}
+                            >
+                              {numberFormat.format(row.ownerContactProperties)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+              <div className="panel-foot">
+                <span>{text.rankingNote}</span>
               </div>
             </section>
 

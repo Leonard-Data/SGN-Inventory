@@ -122,13 +122,18 @@ const vi = {
   invalidRange:
     'Khoảng ngày không hợp lệ. Ngày bắt đầu không được sau ngày kết thúc và tối đa 366 ngày.',
   rangeTooLarge:
-    'Khoảng ngày {from} – {to} vượt giới hạn 1.000 dòng của báo cáo (giới hạn = số nhân viên đang hoạt động × số ngày). Hãy thu hẹp khoảng ngày.',
+    'Khoảng ngày {from} – {to} vượt giới hạn 1.000 dòng của báo cáo (số nhân viên đang hoạt động × số ngày, hoặc số nhân viên có hoạt động được ghi nhận trong khoảng). Hãy thu hẹp khoảng ngày.',
   todaySummary: 'Tổng hợp hôm nay',
   companyHistory: 'Lịch sử theo ngày',
   companyEmployee: 'Nhân viên',
   companyActivityNote:
     'Lượt truy cập liên hệ chủ nhà là số bất động sản mà mỗi nhân viên đã mở liên hệ chủ nhà trong ngày (giờ Việt Nam): không phải điểm danh, giờ làm việc, cuộc gọi đã kết nối hay lượt thăm bất động sản.',
   noEmployees: 'Chưa có nhân viên đang hoạt động.',
+  rankingTitle: 'Xếp hạng hoạt động liên hệ chủ nhà',
+  rankingRank: 'Hạng',
+  rankingInactive: 'Không còn hoạt động',
+  rankingNote:
+    'Hạng dựa trên tổng số bất động sản mà mỗi nhân viên đã mở liên hệ chủ nhà trong khoảng đã chọn, cộng theo từng ngày (giờ Việt Nam): mỗi bất động sản tính một lần cho mỗi nhân viên mỗi ngày và các tổng bằng nhau dùng chung một hạng. Lượt xem trang và số bất động sản đã xem không tính vào hạng và được xem riêng ở bảng lịch sử theo ngày. Nhân viên đã ngừng hoạt động vẫn giữ hoạt động đã ghi nhận trong khoảng.',
   myActivity: 'Hoạt động của tôi',
   myActivityLink: 'Hoạt động của tôi',
   myActivityNote:
@@ -429,13 +434,18 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     invalidRange:
       'That date range is not valid. The start date must not be after the end date, and the range may cover at most 366 days.',
     rangeTooLarge:
-      "The range {from} – {to} exceeds the report's 1,000-row limit (the limit is active employees × days). Narrow the date range.",
+      "The range {from} – {to} exceeds the report's 1,000-row limit (active employees × days, or employees with recorded activity in the range). Narrow the date range.",
     todaySummary: "Today's summary",
     companyHistory: 'History by day',
     companyEmployee: 'Employee',
     companyActivityNote:
       'Owner-contact access is the number of properties whose owner contact each employee opened that Vietnam day: not attendance, work hours, connected calls or physical visits.',
     noEmployees: 'No active employees.',
+    rankingTitle: 'Owner-contact activity ranking',
+    rankingRank: 'Rank',
+    rankingInactive: 'No longer active',
+    rankingNote:
+      'The rank uses the number of properties whose owner contact each employee opened in the selected range, summed per Vietnam day: one property counts once per employee per day, and equal totals share a rank. Page views and distinct properties viewed never enter the rank and stay in the history-by-day table below. A contributor who is no longer active keeps the activity recorded in this range.',
     myActivity: 'My activity',
     myActivityLink: 'My activity',
     myActivityNote:

@@ -114,6 +114,10 @@ _Avoid_: Company report, visit KPI
 A manager/admin-only report of every currently active employee's Page-view event count, distinct properties viewed and Owner-contact access count for one Vietnam business day, including employees and dates with no activity. It uses the same metric definitions as Personal daily activity and persists nothing.
 _Avoid_: Attendance report, visit report, performance ranking
 
+**Employee owner-contact activity ranking**:
+A manager/admin-only order of employees by their total of the Daily owner-contact access counts over a selected Vietnam date range, reconciled to the recorded events, with Page-view events and distinct properties viewed kept separate and never blended into the rank. Every currently active employee appears, a zero total is an explicit row, equal totals share a rank with a stable order, and activity recorded while an employee was active stays attributed to that employee after deactivation.
+_Avoid_: Performance score, attendance ranking, composite score, commission ranking, physical-visit ranking
+
 **Owner-contact access disclosure**:
 A deliberate reveal of a property's recorded owner phone, committed as an Owner-contact access event before the phone is shown. Eligibility comes from the property's recorded owner relationship, and it counts one property per employee per Vietnam day rather than owners, phones or clicks.
 _Avoid_: Automatic phone display, call log, attendance
