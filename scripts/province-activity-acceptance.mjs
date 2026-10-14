@@ -1,10 +1,10 @@
 // Issue #35 hosted acceptance: reviewer-only province owner-contact activity.
 //
 // Real development Supabase Auth/Data API/RLS plus the local real Next.js application and real
-// Chrome sessions. It creates only the synthetic identities, catalog fixtures, properties and
-// committed activity rows the report needs under an exact-ID private manifest, and removes
-// exactly what it created through the supported service-role paths. Mock, shim and
-// readiness-page results are not acceptance.
+// Chrome sessions. It creates only the synthetic identities, catalog fixtures, properties,
+// contacts and committed activity rows the report needs under an exact-ID private manifest, and
+// removes exactly what it created through the supported operator-SQL and service-role paths.
+// Mock, shim and readiness-page results are not acceptance.
 //
 // Usage:
 //   SGN_ACCEPTANCE_DEV_ENV=<private dev env> \
@@ -80,6 +80,11 @@ assert.equal(
   'string',
   'The owner config must supply the owner capability',
 );
+assert.equal(
+  typeof owner.dbUrl,
+  'string',
+  'The owner config must supply the operator database URL',
+);
 const projectRef = devEnv.EXPECTED_SUPABASE_PROJECT_REF;
 const environment = readEnvironment(
   { ...devEnv, NEXT_PUBLIC_APP_URL: `http://127.0.0.1:${appPort}` },
@@ -128,6 +133,41 @@ async function retryThrown(label, work, attempts = 4) {
     }
   }
 }
+// The maintenance contract keeps property_history append-only and withdraws service-role
+// insert/update/delete from properties, property_addresses, contacts and property_contacts, so
+// the fixture rows for those tables are written and removed through the owner database
+// connection.
+function operatorSql(statement) {
+  const result = spawnSync(
+    'npx',
+    [
+      'supabase',
+      'db',
+      'query',
+      '--db-url',
+      owner.dbUrl,
+      '--output-format',
+      'json',
+      statement,
+    ],
+    { encoding: 'utf8', timeout: 180000 },
+  );
+  if (result.status !== 0)
+    throw new Error(
+      'Operator SQL failed: ' + (result.stdout || result.stderr).slice(-800),
+    );
+  try {
+    return JSON.parse(result.stdout).rows ?? [];
+  } catch {
+    return [];
+  }
+}
+async function operatorSqlWithRetry(label, statement) {
+  return retryThrown(label, async () => operatorSql(statement));
+}
+const sqlLiteral = (value) => `'${String(value).replaceAll("'", "''")}'`;
+const sqlId = (id) => `${sqlLiteral(id)}::uuid`;
+const sqlIds = (ids) => ids.map(sqlId).join(',');
 async function updateEmployee(id, patch) {
   return retryResult('employee-update', () =>
     admin.from('employees').update(patch).eq('id', id),
@@ -197,21 +237,41 @@ async function removeFixtures(manifest) {
     (identity) => identity.employeeId,
   );
   const propertyIds = Object.values(manifest.properties ?? {});
+  const contactIds = Object.values(manifest.contacts ?? {});
   const unitIds = Object.values(manifest.units ?? {});
+  const historyClauses = [];
+  if (propertyIds.length)
+    historyClauses.push(`property_id in (${sqlIds(propertyIds)})`);
+  if (employeeIds.length)
+    historyClauses.push(`actor_id in (${sqlIds(employeeIds)})`);
+  if (historyClauses.length)
+    await operatorSqlWithRetry(
+      'remove fixture history',
+      `delete from public.property_history where ${historyClauses.join(' or ')}`,
+    );
   if (propertyIds.length) {
+    await operatorSqlWithRetry(
+      'remove fixture links',
+      `delete from public.property_contacts where property_id in (${sqlIds(propertyIds)})`,
+    );
     const events = await retryResult('remove fixture activity', () =>
       admin.from('activity_events').delete().in('property_id', propertyIds),
     );
     assert.equal(events.error, null, 'remove fixture activity');
-    const addresses = await retryResult('remove fixture addresses', () =>
-      admin.from('property_addresses').delete().in('property_id', propertyIds),
+    await operatorSqlWithRetry(
+      'remove fixture addresses',
+      `delete from public.property_addresses where property_id in (${sqlIds(propertyIds)})`,
     );
-    assert.equal(addresses.error, null, 'remove fixture addresses');
-    const properties = await retryResult('remove fixture properties', () =>
-      admin.from('properties').delete().in('id', propertyIds),
+    await operatorSqlWithRetry(
+      'remove fixture properties',
+      `delete from public.properties where id in (${sqlIds(propertyIds)})`,
     );
-    assert.equal(properties.error, null, 'remove fixture properties');
   }
+  if (contactIds.length)
+    await operatorSqlWithRetry(
+      'remove fixture contacts',
+      `delete from public.contacts where id in (${sqlIds(contactIds)})`,
+    );
   if (unitIds.length) {
     const units = await retryResult('remove fixture units', () =>
       admin.from('admin_unit_versions').delete().in('id', unitIds),
@@ -316,6 +376,8 @@ async function createProvinceFixtures(manifest) {
     archived: randomUUID(),
   };
   manifest.properties = properties;
+  manifest.contacts = { sharedOwner: randomUUID() };
+  await writeManifest(manifest);
   await insertRows('insert fixture units', 'admin_unit_versions', [
     {
       id: units.provinceFirst,
@@ -369,78 +431,93 @@ async function createProvinceFixtures(manifest) {
       source_url: 'https://example.test/catalog',
     },
   ]);
-  await insertRows(
+  const propertyValues = Object.entries(properties)
+    .map(
+      ([name, id]) =>
+        `(${sqlId(id)},${sqlLiteral(`${namespace}-${name}`)},'sale','available',${sqlId(manager)})`,
+    )
+    .join(',');
+  await operatorSqlWithRetry(
     'insert fixture properties',
-    'properties',
-    Object.entries(properties).map(([name, id]) => ({
-      id,
-      property_code: `${namespace}-${name}`,
-      listing_mode: 'sale',
-      status: 'available',
-      created_by: manager,
-    })),
+    `insert into public.properties(id,property_code,listing_mode,status,created_by) values ${propertyValues}`,
   );
   // Current addresses start unresolved and are verified below through the authorized
   // maintenance RPC as the fixture manager; the unresolved candidate and the legacy-only
   // property keep the Unverified boundary.
-  await insertRows('insert fixture current addresses', 'property_addresses', [
+  const currentAddresses = [
     {
-      property_id: properties.verifiedA,
-      format: 'current',
-      address_text: `1 ${namespace} Street, ${namespace} Commune A1`,
-      province_unit_id: units.provinceFirst,
-      commune_unit_id: units.communeFirst,
-      effective_on: firstDay,
-      is_primary: true,
+      property: properties.verifiedA,
+      text: `1 ${namespace} Street, ${namespace} Commune A1`,
+      province: units.provinceFirst,
+      commune: units.communeFirst,
     },
     {
-      property_id: properties.verifiedA2,
-      format: 'current',
-      address_text: `2 ${namespace} Street, ${namespace} Commune A2`,
-      province_unit_id: units.provinceSecond,
-      commune_unit_id: units.communeSecond,
-      effective_on: firstDay,
-      is_primary: true,
+      property: properties.verifiedA2,
+      text: `2 ${namespace} Street, ${namespace} Commune A2`,
+      province: units.provinceSecond,
+      commune: units.communeSecond,
     },
     {
-      property_id: properties.verifiedB,
-      format: 'current',
-      address_text: `3 ${namespace} Street, ${namespace} Commune B1`,
-      province_unit_id: units.provinceOther,
-      commune_unit_id: units.communeOther,
-      effective_on: firstDay,
-      is_primary: true,
+      property: properties.verifiedB,
+      text: `3 ${namespace} Street, ${namespace} Commune B1`,
+      province: units.provinceOther,
+      commune: units.communeOther,
     },
     {
-      property_id: properties.archived,
-      format: 'current',
-      address_text: `6 ${namespace} Street, ${namespace} Commune A1`,
-      province_unit_id: units.provinceFirst,
-      commune_unit_id: units.communeFirst,
-      effective_on: firstDay,
-      is_primary: true,
+      property: properties.archived,
+      text: `6 ${namespace} Street, ${namespace} Commune A1`,
+      province: units.provinceFirst,
+      commune: units.communeFirst,
     },
     {
-      property_id: properties.candidate,
-      format: 'current',
-      address_text: `5 ${namespace} Street, ${namespace} Commune A2`,
-      province_unit_id: units.provinceSecond,
-      commune_unit_id: units.communeSecond,
-      mapping_status: 'candidate',
-      is_primary: true,
+      property: properties.candidate,
+      text: `5 ${namespace} Street, ${namespace} Commune A2`,
+      province: units.provinceSecond,
+      commune: units.communeSecond,
+      mapping: 'candidate',
     },
-  ]);
-  await insertRows('insert fixture legacy address', 'property_addresses', [
-    {
-      property_id: properties.legacyOnly,
-      format: 'legacy',
-      address_text: `12 ${namespace} Street, Phường 14, Quận 10, ${legacyRawProvince}`,
-      province_text: legacyRawProvince,
-      district_text: 'Quận 10',
-      commune_text: 'Phường 14',
-      is_primary: true,
-    },
-  ]);
+  ];
+  const addressValues = currentAddresses
+    .map(
+      (row) =>
+        `(${sqlId(row.property)},'current',${sqlLiteral(row.text)},${sqlId(
+          row.province,
+        )},${sqlId(row.commune)},${sqlLiteral(firstDay)},true,${sqlLiteral(
+          row.mapping ?? 'unresolved',
+        )})`,
+    )
+    .join(',');
+  await operatorSqlWithRetry(
+    'insert fixture current addresses',
+    `insert into public.property_addresses(property_id,format,address_text,province_unit_id,commune_unit_id,effective_on,is_primary,mapping_status) values ${addressValues}`,
+  );
+  await operatorSqlWithRetry(
+    'insert fixture legacy address',
+    `insert into public.property_addresses(property_id,format,address_text,province_text,district_text,commune_text,is_primary) values (${sqlId(
+      properties.legacyOnly,
+    )},'legacy',${sqlLiteral(
+      `12 ${namespace} Street, Phường 14, Quận 10, ${legacyRawProvince}`,
+    )},${sqlLiteral(legacyRawProvince)},${sqlLiteral('Quận 10')},${sqlLiteral(
+      'Phường 14',
+    )},true)`,
+  );
+  // One recorded owner is shared by the two canonical-province properties, and both carry a
+  // committed disclosure by the same employee on the second Vietnam day, so a regression that
+  // collapsed two properties of one owner into one unit would change the asserted count.
+  await operatorSqlWithRetry(
+    'insert shared owner contact',
+    `insert into public.contacts(id,display_name,contact_type) values (${sqlId(
+      manifest.contacts.sharedOwner,
+    )},${sqlLiteral(`${namespace} Shared Owner`)},'owner')`,
+  );
+  await operatorSqlWithRetry(
+    'insert shared owner links',
+    `insert into public.property_contacts(property_id,contact_id,relation,is_primary) values (${sqlId(
+      properties.verifiedA,
+    )},${sqlId(manifest.contacts.sharedOwner)},'owner',true),(${sqlId(
+      properties.verifiedA2,
+    )},${sqlId(manifest.contacts.sharedOwner)},'owner',true)`,
+  );
   return manifest;
 }
 
@@ -893,25 +970,27 @@ async function waitForReport(session, cdpPort, from, to) {
 // ------------------------------------------------------------------ run
 let manifest = null;
 let baseline = null;
+// An interrupted earlier run left its own exact-ID fixtures behind; remove them through the same
+// supported paths before the baseline, so the restoration check compares the real pre-acceptance
+// rows and no property or catalog identity is reused.
+const previous = await readManifest();
+if (previous) {
+  if (previous.namespace !== namespace)
+    assert.fail('Fixture manifest belongs to a different namespace');
+  await removeFixtures(previous);
+  await fs.rm(manifestPath, { force: true });
+}
 try {
-  // The pre-acceptance baseline is captured before any fixture write, so the restoration check
-  // compares exact rows rather than an assumed empty project.
+  // The pre-acceptance baseline is captured after any interrupted-run cleanup and before any
+  // fixture write, so the restoration check compares exact rows rather than an assumed empty
+  // project.
   baseline = {
     employees: await countRows('employees'),
     properties: await countRows('properties'),
     activity: await countRows('activity_events'),
+    contacts: await countRows('contacts'),
+    propertyContacts: await countRows('property_contacts'),
   };
-  manifest = (await readManifest()) ?? null;
-  if (manifest) {
-    // An interrupted earlier run left its own exact-ID fixtures behind; remove them through the
-    // same supported paths before creating a fresh set, so no property or catalog identity is
-    // reused and the restoration check still compares against the real pre-acceptance baseline.
-    if (manifest.namespace !== namespace)
-      assert.fail('Fixture manifest belongs to a different namespace');
-    await removeFixtures(manifest);
-    await fs.rm(manifestPath, { force: true });
-    manifest = null;
-  }
   manifest = await createIdentities();
   await startApp();
   const fixtures = manifest.identities;
@@ -936,14 +1015,36 @@ try {
   manifest = await createProvinceFixtures(manifest);
   manifest = await committedRows(manifest);
   const { units, properties } = manifest;
+  const sharedLinks = await retryResult('read shared owner links', () =>
+    manager
+      .from('property_contacts')
+      .select('property_id,contact_id,relation')
+      .in('property_id', [properties.verifiedA, properties.verifiedA2]),
+  );
+  assert.equal(sharedLinks.error, null, 'read shared owner links');
+  const sharedRows = sharedLinks.data ?? [];
+  assert.deepEqual(
+    sharedRows.map((row) => row.property_id).sort(),
+    [properties.verifiedA, properties.verifiedA2].sort(),
+    'both shared-owner properties must be linked',
+  );
+  assert.deepEqual(
+    [...new Set(sharedRows.map((row) => row.contact_id))],
+    [manifest.contacts.sharedOwner],
+    'the two properties must share one recorded owner',
+  );
+  assert.ok(
+    sharedRows.every((row) => row.relation === 'owner'),
+    'the shared links must be owner relations',
+  );
 
-  const mapping = (province, commune) => ({
+  const mapping = (province, commune, effectiveOn = firstDay) => ({
     province_unit_id: province,
     commune_unit_id: commune,
     mapping_status: 'verified',
     verification_method: 'manual',
     source_url: 'https://example.test/evidence',
-    effective_on: firstDay,
+    effective_on: effectiveOn,
     mapping_evidence:
       'Acceptance fixture: boundary and documents checked against official evidence',
   });
@@ -955,7 +1056,7 @@ try {
   await mappingFor(
     manager,
     properties.verifiedA2,
-    mapping(units.provinceSecond, units.communeSecond),
+    mapping(units.provinceSecond, units.communeSecond, secondDay),
   );
   await mappingFor(
     manager,
@@ -1047,7 +1148,8 @@ try {
     'repeated reads must be deterministic',
   );
   observed(
-    'employee-property-day units, the collapsed repeat and the second Vietnam day are exact',
+    'employee-property-day units, the collapsed repeat, the second Vietnam day and two properties sharing one recorded owner are exact',
+    { sharedOwner: manifest.contacts.sharedOwner },
   );
 
   // An authorized correction regroups earlier units; an invalidation moves them to Unverified.
@@ -1107,13 +1209,10 @@ try {
   );
 
   // Archiving a parent property keeps its committed credit.
-  const archivedUpdate = await retryResult('archive fixture property', () =>
-    admin
-      .from('properties')
-      .update({ archived_at: new Date().toISOString() })
-      .eq('id', properties.archived),
+  await operatorSqlWithRetry(
+    'archive fixture property',
+    `update public.properties set archived_at=now() where id=${sqlId(properties.archived)}`,
   );
-  assert.equal(archivedUpdate.error, null, 'archive fixture property');
   const secondDayAfter = rows(
     await provinceReport(manager, secondDay, secondDay),
     'province second day after archive',
@@ -1350,6 +1449,8 @@ try {
         employees: await countRows('employees'),
         properties: await countRows('properties'),
         activity: await countRows('activity_events'),
+        contacts: await countRows('contacts'),
+        propertyContacts: await countRows('property_contacts'),
       };
       assert.deepEqual(
         after,
@@ -1360,6 +1461,8 @@ try {
         employees: after.employees,
         properties: after.properties,
         activity: after.activity,
+        contacts: after.contacts,
+        propertyContacts: after.propertyContacts,
       });
     }
   }
@@ -1377,6 +1480,8 @@ const reportDocument = {
     unlinked: 1,
     properties: 6,
     admin_unit_versions: 6,
+    contacts: 1,
+    property_contacts: 2,
     activity_events: manifest?.committedEvents ?? 0,
   },
   removed: {
@@ -1384,6 +1489,8 @@ const reportDocument = {
     unlinked: 1,
     properties: 6,
     admin_unit_versions: 6,
+    contacts: 1,
+    property_contacts: 2,
     activity_events: manifest?.committedEvents ?? 0,
   },
   limitations: [
