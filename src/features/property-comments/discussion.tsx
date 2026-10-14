@@ -11,7 +11,12 @@ import { messages, type Locale } from '@/i18n/messages';
 import { api, RequestError } from '@/features/employees/api';
 import { vietnamTimestamp } from '@/features/properties/format';
 import { COMMENT_MAX_LENGTH, COMMENT_REASON_MAX_LENGTH } from './types';
-import { mergePage, mergeStaleEditState, withPost } from './discussion-state';
+import {
+  mergePage,
+  mergeStaleEditState,
+  retainEditTarget,
+  withPost,
+} from './discussion-state';
 import type {
   Comment,
   CommentCursor,
@@ -269,17 +274,26 @@ export function Discussion({
       const page = await fetchPage(null);
       if (version !== generation.current) return;
       const merged = withPost(created, page.comments, !!page.nextCursor);
-      setComments(
-        (rows) =>
+      setComments((rows) =>
+        retainEditTarget(
           withPost(created, mergePage(rows, page.comments), !!page.nextCursor)
             .rows,
+          rows,
+          editTarget.current,
+        ),
       );
       setNext(merged.next);
       setError(null);
     } catch {
       if (version !== generation.current) return;
       const merged = withPost(created, comments, !!next);
-      setComments((rows) => withPost(created, rows, !!next).rows);
+      setComments((rows) =>
+        retainEditTarget(
+          withPost(created, rows, !!next).rows,
+          rows,
+          editTarget.current,
+        ),
+      );
       setNext(merged.next);
     }
   }
@@ -361,6 +375,15 @@ export function Discussion({
     setComments((rows) =>
       rows.map((entry) => (entry.id === updated.id ? updated : entry)),
     );
+    // A replayed key can converge on an already-withdrawn comment, so the response is not a save.
+    if (updated.removedAt !== null) {
+      setBusy(true);
+      const result = await load();
+      if (result !== 'denied')
+        setEditAction({ id: row.id, code: 'stale-comment' });
+      setSavingEdit(false);
+      return;
+    }
     editTarget.current = null;
     setEditing(null);
     setEditDraft('');

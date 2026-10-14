@@ -627,6 +627,60 @@ await settle(primary);
     tiedTimes: true,
   });
 }
+{
+  // Posting while an editor is open on the oldest rendered row must keep that row and its draft.
+  const seededId = randomUUID();
+  await operatorSqlAsync(
+    `insert into public.property_comments(id,property_id,author_id,author_name,body,created_at,revision,idempotency_key) values('${seededId}','${paging.id}','${alphaEmployee}','${names.alpha.replace(/'/g, "''")}','Bình luận cũ đang sửa','2000-01-01T00:00:00Z','${randomUUID()}','${randomUUID()}')`,
+  );
+  browser(['open', detail(paging)], primary);
+  await settle(primary);
+  click('Xem bình luận cũ hơn', primary);
+  await waitUntil(
+    `() => document.querySelectorAll('section.discussion .comment').length === 36`,
+    primary,
+  );
+  evaluate(
+    `() => {
+      const target = [...document.querySelectorAll('section.discussion .comment')].find((node) => (node.querySelector('.comment-body')?.textContent ?? '') === 'Bình luận cũ đang sửa');
+      [...target.querySelectorAll('.comment-actions button')].find((button) => button.textContent.trim() === 'Chỉnh sửa bình luận').click();
+      return true;
+    }`,
+    primary,
+  );
+  await waitUntil(
+    `() => Boolean(document.querySelector('section.discussion .comment-edit textarea'))`,
+    primary,
+  );
+  fill('Chỉnh sửa bình luận', 'Bản nháp đang mở', primary);
+  fill('Bình luận', 'Bình luận mới trong khi đang sửa', primary);
+  click('Gửi bình luận', primary);
+  await waitUntil(
+    `() => [...document.querySelectorAll('section.discussion .comment-body')].some((node) => node.textContent === 'Bình luận mới trong khi đang sửa')`,
+    primary,
+  );
+  const afterPost = screen(primary);
+  assert.equal(
+    afterPost.editDraft,
+    'Bản nháp đang mở',
+    'Posting keeps the open editor and its draft',
+  );
+  assert.ok(
+    afterPost.comments.some(
+      (comment) => comment.body === 'Bình luận mới trong khi đang sửa',
+    ),
+    'The new comment is rendered',
+  );
+  observed('posting while an editor is open keeps the edited row and draft', {
+    entries: afterPost.comments.length,
+    draftKept: afterPost.editDraft === 'Bản nháp đang mở',
+  });
+  click('Huỷ', primary);
+  await waitUntil(
+    `() => !document.querySelector('section.discussion .comment-edit textarea')`,
+    primary,
+  );
+}
 browser(['open', detail(discussion)], primary);
 await settle(primary);
 {
@@ -2059,6 +2113,111 @@ await settle(secondary);
   observed(
     'same-text competing edit stays stale after refresh with draft and current text visible',
     { conflict: true, draftKept: true, currentVisible: true },
+  );
+}
+{
+  // A lost edit response leaves the key open; a withdrawal before the retry is not an update.
+  const seeded = await alpha.rpc('post_property_comment', {
+    p_property_id: discussion.id,
+    p_body: 'Nội dung phát lại sau khi gỡ',
+    p_key: '55000000-0000-4000-8000-000000000201',
+  });
+  assert.equal(
+    seeded.error,
+    null,
+    'Fixture comment posted for a replayed withdrawal',
+  );
+  browser(['open', detail(discussion)], primary);
+  await settle(primary);
+  evaluate(
+    `() => {
+      const target = [...document.querySelectorAll('section.discussion .comment')].find((node) => (node.querySelector('.comment-body')?.textContent ?? '') === 'Nội dung phát lại sau khi gỡ');
+      [...target.querySelectorAll('.comment-actions button')].find((button) => button.textContent.trim() === 'Chỉnh sửa bình luận').click();
+      return true;
+    }`,
+    primary,
+  );
+  await waitUntil(
+    `() => Boolean(document.querySelector('section.discussion .comment-edit textarea'))`,
+    primary,
+  );
+  fill('Chỉnh sửa bình luận', 'Bản nháp phát lại được giữ', primary);
+  evaluate(
+    `() => {
+      const original = window.fetch.bind(window);
+      window.__replayedEdit = false;
+      window.fetch = async (...args) => {
+        const input = args[0];
+        const options = args[1] ?? {};
+        const url = typeof input === 'string' ? input : input.url;
+        const method = String(options.method ?? input?.method ?? 'GET').toUpperCase();
+        const response = await original(...args);
+        if (method === 'PATCH' && url.includes('/comments/')) {
+          window.__replayedEdit = true;
+          window.fetch = original;
+          throw new TypeError('simulated lost edit response');
+        }
+        return response;
+      };
+      return true;
+    }`,
+    primary,
+  );
+  click('Lưu thay đổi', primary);
+  await waitUntil(`() => window.__replayedEdit === true`, primary);
+  await waitUntil(
+    `() => /Chưa lưu được thay đổi/.test(document.querySelector('section.discussion .comment-edit [role=alert]')?.textContent ?? '')`,
+    primary,
+  );
+  const committed = await commentState(seeded.data.id);
+  assert.equal(
+    committed.body,
+    'Bản nháp phát lại được giữ',
+    'The lost-response edit committed on the server',
+  );
+  const withdrawn = await alpha.rpc('remove_property_comment', {
+    p_property_id: discussion.id,
+    p_comment_id: seeded.data.id,
+    p_revision: committed.revision,
+    p_kind: 'author',
+  });
+  assert.equal(
+    withdrawn.error,
+    null,
+    'A competing author session withdraws the comment',
+  );
+  click('Lưu thay đổi', primary);
+  await waitUntil(
+    `() => /đã thay đổi|đã bị gỡ/.test(document.querySelector('section.discussion .comment-edit [role=alert]')?.textContent ?? '')`,
+    primary,
+  );
+  await waitUntil(
+    `() => document.querySelector('section.discussion .comment-current .comment-body')?.textContent === 'Bình luận đã được gỡ.'`,
+    primary,
+  );
+  const replayed = screen(primary);
+  assert.equal(
+    replayed.editDraft,
+    'Bản nháp phát lại được giữ',
+    'The unsent draft survives the replayed withdrawal',
+  );
+  assert.ok(
+    !replayed.statuses.some((status) => /Đã cập nhật bình luận/.test(status)),
+    'A replayed edit on a withdrawn comment claims no success',
+  );
+  assert.equal(
+    await editVersionCount(seeded.data.id),
+    1,
+    'The replay adds no further retained version',
+  );
+  observed(
+    'replayed edit key after withdrawal keeps the draft and reports the removal',
+    { draftKept: true, versions: 1 },
+  );
+  click('Huỷ', primary);
+  await waitUntil(
+    `() => !document.querySelector('section.discussion .comment-edit textarea')`,
+    primary,
   );
 }
 {
