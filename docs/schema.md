@@ -17,6 +17,8 @@ erDiagram
   PROPERTIES ||--o{ PROPERTY_LOCKS : reserves
   EMPLOYEES ||--o{ PROPERTY_LOCKS : claims
   PROPERTY_LOCKS ||--o{ LOCK_EVENTS : records
+  PROPERTIES ||--o{ SALE_COMPLETIONS : completes
+  EMPLOYEES ||--o{ SALE_COMPLETIONS : credits
   EMPLOYEES ||--o{ ACTIVITY_EVENTS : performs
   PROPERTIES ||--o{ ACTIVITY_EVENTS : concerns
   PROPERTIES ||--o{ PROPERTY_HISTORY : records
@@ -28,6 +30,9 @@ erDiagram
   EMPLOYEES ||--o{ PROPERTY_COMMENTS : posts
   PROPERTY_COMMENTS ||--o| PROPERTY_COMMENT_REMOVALS : retains
   EMPLOYEES ||--o{ PROPERTY_COMMENT_REMOVALS : removes
+  PROPERTY_COMMENTS ||--o{ PROPERTY_COMMENT_EDITS : retains
+  EMPLOYEES ||--o{ PROPERTY_COMMENT_EDITS : edits
+  EMPLOYEES ||--o{ VENDORS : records
 ```
 
 ## Business tables
@@ -37,7 +42,7 @@ erDiagram
 | `employees` | UUID `id`, optional unique `auth_user_id`, unique normalized email, name, phone, role, active flag | Active requires linked Auth user; only admin manages roles/activation; source employees start inactive |
 | `properties` | UUID, unique `property_code`, mode, physical type, access type, status/review state, dimensions, direction, VND prices, legal state, parcel/map sheet, notes, coordinates, recorded original inventory entry date/provenance (`entry_on`/`entry_source`), creator/updater/time/archive, nullable explicit cover file | UUID is permanent identity; amounts nonnegative; areas/dimensions positive; coordinates both present or absent; final/review states require reviewer; only a current editor chooses/clears a technically completed same-property photo, never an automatic first image; a known entry date is present exactly when provenance is not `unknown`, both are immutable once the identity exists, and a request-context insert records only today as `recorded` |
 | `property_addresses` | Property FK, legacy/current/alternate, original full text, house/street/raw unit labels, version FKs, mapping/verification metadata, primary flag, normalized search text | One primary per property and format; current has no district; verified requires provenance/reviewer and valid unit hierarchy/date |
-| `admin_unit_versions` | Official code as text, Vietnamese name, level, parent version, half-open validity dates, source URL | Codes preserve leading zeros; parent/version lineage checked at address verification; catalog ingestion must validate overlapping versions and parent intervals |
+| `admin_unit_versions` | Official code as text, Vietnamese name, level, parent version, half-open validity dates, source URL | Codes preserve leading zeros; parent/version lineage checked at address verification; catalog ingestion must validate overlapping versions and parent intervals; the national two-tier catalog (34 province/city and 3321 ward/commune/island units across dated version rows) is seeded from the pinned upstream releases by `20261014075435_vietnamese_admin_units_reference.sql`; one half-open validity window per official name, so a renamed unit's label is the name in force on the address date |
 | `admin_unit_crosswalks` | From/to version FKs, whole/partial/rename, effective date, source, notes, reviewer | Crosswalks do not directly set a property's address; partial transitions require boundary or property-level evidence |
 | `contacts` | UUID, name, normalized phone string array, untouched raw phone text, role and notes | No global merges based on generic owner name or masked phone ID |
 | `property_contacts` | Composite property/contact PK, relation, primary flag | Supports several owners/brokers; at most one primary contact per property |
@@ -47,13 +52,18 @@ erDiagram
 | `property_files` | UUID, property FK, historical legacy type, one category FK, independent document/photo purpose, private bucket, immutable object path/name/MIME/count/hash/uploader, upload state, paired technical-validation time/object identity, historical review attribution | No direct authenticated metadata writes; registration and attested completion preserve identity; ready files are shared privately without human review; pending recovery remains uploader-only on unarchived parents; only uploader/current editor corrects category, without changing content or readiness |
 | `document_categories` | UUID, trimmed accented name, optional known builtin marker, nullable creator and creation time | Active employees read/create-or-reuse company categories; normalized case/Unicode-edge uniqueness preserves accents; Other is the localized default; custom names remain verbatim; no rename/delete/merge/multiple tags |
 | `activity_events` | UUID, employee/property FK, page_view/owner_contact_access/site_visit, occurred/recorded timestamps, generated Vietnam day, source, idempotency key, retained visit decision | No direct client DML; one key per employee; owner-contact access counts one distinct property per employee/Vietnam day; new `site_visit` submission and confirmation are retired while retained rows keep their state; page_view and owner_contact_access have no visit status |
-| `property_locks` | UUID, property/claimant, reason, optional evidence, attribution reference, lifecycle state, expiry, independent decision | One approved row per property; one pending request per property/employee; effective reservation additionally requires future expiry |
-| `lock_events` | Identity key, lock FK, actor, action, reason, timestamp | Append-only client access; all approved/rejected/released/expired transitions retain trace |
-| `property_comments` | UUID, property/author FKs, author display name retained at posting time, original text (null once removed), server posting time, `revision`, `removed_at`, employee-scoped `idempotency_key` | No direct client writes: `select`-only grant, `anon` excluded, and a trigger rejects client inserts, every ordinary update and every delete; text is trimmed Unicode of 1–2000 characters; author identity, text and posting time stay immutable; text is null exactly when `removed_at` is set, so a removed entry is a marker |
-| `property_comment_removals` | One row per removed comment: comment/property/author FKs, retained author name, retained original text, original posting time and revision, removing actor and retained actor name, removal time, `author`/`moderation` kind and mandatory moderation reason | Reviewer-only `select` under RLS; no client insert/update/delete; the guard trigger keeps the retained evidence immutable and non-expiring; the current discussion projection never exposes it |
+| `property_locks` | UUID, property/claimant, reason, optional evidence, attribution reference, lifecycle state, expiry, independent decision | One approved row per property; one pending request per property/employee; effective reservation additionally requires future expiry; a completed sale closes open rows as `closed_by_sale` and keeps the claimant, reason and events |
+| `lock_events` | Identity key, lock FK, actor, action, reason, timestamp | Append-only client access; all approved/rejected/released/expired/sale-completed transitions retain trace |
+| `sale_completions` | UUID, property FK, explicitly credited employee FK, actual Vietnam `completed_on`, contract reference, retained pre-sale `available`/`negotiating` status, version, confirmer/time, employee-scoped retry key, reversal facts | No direct client or service write: `select`-only grant with reviewer-only RLS and a guard trigger; one effective (unreversed) completion per property; future dates, self-credit, an active rental, a conflicting effective claimant and reused retry keys are refused; the row is written, the property marked sold and open reservations closed in one transaction |
+| `property_comments` | UUID, property/author FKs, author display name retained at posting time, current text (null once removed), server posting time, `revision`, `removed_at`, `edited_at`, employee-scoped `idempotency_key` | No direct client writes: `select`-only grant, `anon` excluded, and a trigger rejects client inserts, every client update and every delete; text is trimmed Unicode of 1–2000 characters; comment identity, author, property and posting time stay immutable; only the guarded edit or removal transition may change the live text; text is null exactly when `removed_at` is set, so a removed entry is a marker and an edited entry keeps its posting position |
+| `property_comment_removals` | One row per removed comment: comment/property/author FKs, retained author name, text current at removal, original posting time and revision, removing actor and retained actor name, removal time, `author`/`moderation` kind and mandatory moderation reason | Reviewer-only `select` under RLS; no client insert/update/delete; the guard trigger keeps the retained evidence immutable and non-expiring; the current discussion projection never exposes it |
+| `property_comment_edits` | One retained row per accepted author edit in gap-free `version` order: employee-scoped edit key, comment/property/author FKs, retained author name, accepting actor and retained actor name, before/after text, before/after revision and edit time | Reviewer-only `select` under RLS; no client insert/update/delete; the guard trigger keeps every version immutable and non-expiring; `(edited_by, edit_key)` recovers only the matching accepted operation; the current discussion projection never exposes a prior version; the earliest `previous_body` is the original validated submission |
 | `property_price_history` (view) | Select-only `security_invoker` projection of `property_history`: one row per recorded price revision per `sale`/`rent` series with property, actor name, authoritative time, retained explanation and exact whole-VND `before_value`/`after_value` text | No direct client writes; revisions whose recorded price is unknown on both sides are excluded; keyset-paged on `(occurred_at,id)` per series; reads follow live membership and the archived-property RLS boundary |
+| `vendors` | UUID, company/display name, one optional contact block (contact name, 1–5 verbatim phone strings, email, raw address/source text, notes), stored normalized search projection, creator FK/time and employee-scoped submission key | No direct client writes: `select`-only grant for authenticated, `anon`/`service_role` excluded, and a trigger rejects client inserts plus every update or delete; every optional detail is independently null (unknown); same-key retries converge on one company and conflicting reuse is refused; no property link, deduplication or deletion |
 
 `properties`, `property_addresses`, `contacts` and `property_contacts` each carry a `revision` UUID that guards stale maintenance saves. Issue #7's maintenance RPCs, correction lifecycle and history rules are in [maintenance-contract.md](maintenance-contract.md).
+
+The seeded province/commune catalog is a reference list, not a property-level verification: it supplies selectable official units and the hierarchy/date guard behind a verified current address, but a property's mapping still needs recorded evidence. No district catalog or old→new crosswalk is seeded; see [address-model.md](address-model.md#seeded-reference-catalog).
 
 ## Rental tables (migration 4)
 
@@ -91,7 +101,7 @@ Rental agreements, monthly dues and manual receipt/refund tracking are included.
 | Record review | `pending`, `approved`, `rejected` — independent from reservation approval |
 | Legal status | `unknown`, `owner_reported`, `documents_received`, `reviewed`, `issue_flagged` |
 | Address mapping | `unresolved`, `candidate`, `verified` |
-| Reservation state | `pending`, `approved`, `rejected`, `released`, `expired` |
+| Reservation state | `pending`, `approved`, `rejected`, `released`, `expired`, `closed_by_sale` |
 | Direction | `N`, `NE`, `E`, `SE`, `S`, `SW`, `W`, `NW` with Vietnamese display labels |
 | Land/floor area | `numeric(12,2)` in m² |
 | Width/depth | `numeric(8,2)` in metres |
@@ -111,4 +121,4 @@ Rental agreements, monthly dues and manual receipt/refund tracking are included.
 
 ## Change boundaries
 
-Property, address, contact and link changes use the revision-checked maintenance RPCs, not direct table writes; audit, lock and activity changes also use RPCs. There is no authenticated hard-delete grant. Archived properties cannot be edited with the current policies; restoration requires a future reviewed admin action. Admin-unit catalogs are admin-maintained and versioned; do not edit historical units to represent new geography.
+Property, address, contact and link changes use the revision-checked maintenance RPCs, not direct table writes; audit, lock, activity and comment changes also use RPCs. There is no authenticated hard-delete grant. Archived properties cannot be edited with the current policies; restoration requires a future reviewed admin action. Admin-unit catalogs are admin-maintained and versioned; do not edit historical units to represent new geography.

@@ -10,10 +10,14 @@ import { maintenanceContract } from './maintenance-contract.mjs';
 import { correctionContract } from './correction-contract.mjs';
 import { commentsContract } from './comments-contract.mjs';
 import { commentRemovalContract } from './comment-removal-contract.mjs';
+import { commentEditContract } from './comment-edit-contract.mjs';
 import { companyActivityContract } from './company-activity-contract.mjs';
 import { myActivityContract } from './my-activity-contract.mjs';
 import { priceHistoryContract } from './price-history-contract.mjs';
 import { inventoryAgeContract } from './inventory-age-contract.mjs';
+import { vendorContract } from './vendor-contract.mjs';
+import { referenceCatalogContract } from './reference-catalog-contract.mjs';
+import { saleCompletionContract } from './sale-completion-contract.mjs';
 const root = process.env.SGN_PROJECT_ROOT || process.cwd();
 const db = new PGlite({extensions:{unaccent,pg_trgm,pgcrypto}});
 await db.exec(`
@@ -582,12 +586,20 @@ await check('inactive owner disclosure denied',()=>fails('select public.reveal_o
 await commentsContract({db,asUser,check,fails,employees,property});
 // Ticket #45: accountable Property comment removal.
 await commentRemovalContract({db,asUser,check,fails,employees});
+// Ticket #46: author editing with retained revisions, composed with removal and posting retry.
+await commentEditContract({db,asUser,check,fails,employees});
 // Ticket #31: company employee-by-day activity for live manager/admin readers.
 await companyActivityContract({db,asUser,check,fails,employees});
 // Ticket #30: the employee's own activity over an explicit Vietnam date range.
 await myActivityContract({db,asUser,check,fails,employees});
 // Issue #37: explicit original inventory entry dates and eligible chronological ordering.
 await inventoryAgeContract({db,asUser,check,fails,employees});
+// Seeded Vietnamese province/city and ward/commune reference catalogue.
+await referenceCatalogContract({db,asUser,check,fails,employees,root});
+// Issue #38: one reviewed logical sale completion and the completed-sale ranking.
+await saleCompletionContract({db,asUser,check,fails,employees});
+// Ticket #73: the vendor directory's authority, validation, retry and paging rules.
+await vendorContract({db,asUser,check,fails,employees});
 const report={checked_at:new Date().toISOString(),engine:'PGlite embedded PostgreSQL; mocked auth/storage schemas',passed,
  limitations:['Not a live Supabase integration test','HTTP Auth, signed URLs, Vercel and browser flows not exercised','True multi-session concurrent transaction test remains a staging acceptance gate']};
 await fs.writeFile(path.join(root,'docs/validation-results.json'),JSON.stringify(report,null,2)+'\n');
