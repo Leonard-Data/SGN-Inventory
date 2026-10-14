@@ -264,10 +264,11 @@ export async function employeeDeactivationContract({
     ),
   );
   await asActor(users.secondAdmin);
+  const resumeKey = randomUUID();
   await check(
     'another authorized admin resumes the original operation without rewriting attribution',
     async () => {
-      const resumed = await begin(staff.target, randomUUID());
+      const resumed = await begin(staff.target, resumeKey);
       assert.equal(resumed.id, begun.id);
       assert.equal(resumed.state, 'provider_pending');
       assert.equal(resumed.revision, 1);
@@ -282,6 +283,30 @@ export async function employeeDeactivationContract({
         1,
       );
     },
+  );
+  await check(
+    'a resuming admin key converges on the original operation without duplicate evidence',
+    async () => {
+      const retried = await begin(staff.target, resumeKey);
+      assert.equal(retried.id, begun.id);
+      assert.equal(retried.actorId, staff.newAdmin);
+      assert.equal(
+        (
+          await db.query(
+            "select count(*)::int as n from public.employee_admin_events where operation_id=$1 and action='resumed' and actor_id=$2",
+            [begun.id, staff.secondAdmin],
+          )
+        ).rows[0].n,
+        1,
+      );
+    },
+  );
+  await check('a resuming key reused for another employee is a conflict', () =>
+    fails(
+      'select public.begin_employee_deactivation($1,$2)',
+      [staff.linked, resumeKey],
+      '23505',
+    ),
   );
   await check(
     'deactivation retains identity, locale, role and the restrictive Auth link',
@@ -627,6 +652,17 @@ export async function employeeDeactivationContract({
       assert.ok(completed.completedAt);
     },
   );
+  await asActor(users.secondAdmin);
+  await check(
+    'a resuming admin retry after completion returns the original result',
+    async () => {
+      const retried = await begin(staff.target, resumeKey);
+      assert.equal(retried.id, begun.id);
+      assert.equal(retried.state, 'completed');
+      assert.equal(retried.actorId, staff.newAdmin);
+      assert.equal(retried.revision, 4);
+    },
+  );
   await asActor(users.newAdmin);
   await check(
     'the confirmed block is recorded as one piece of evidence',
@@ -918,12 +954,14 @@ export async function employeeDeactivationContract({
         '42501',
       ),
   );
-  await check('a direct deactivation of the last active admin is denied to clients', () =>
-    fails(
-      'update public.employees set is_active=false where id=$1',
-      [staff.newAdmin],
-      '42501',
-    ),
+  await check(
+    'a direct deactivation of the last active admin is denied to clients',
+    () =>
+      fails(
+        'update public.employees set is_active=false where id=$1',
+        [staff.newAdmin],
+        '42501',
+      ),
   );
   await check('clients have no direct delete path on employees', () =>
     fails(
@@ -980,6 +1018,49 @@ export async function employeeDeactivationContract({
         'delete from public.employees where id=$1',
         [staff.newAdmin],
         '42501',
+      );
+    },
+  );
+  await asOwner();
+  await check(
+    'two committed transactions cannot both remove the remaining active admins',
+    async () => {
+      await db.query('update public.employees set is_active=true where id=$1', [
+        staff.adminA,
+      ]);
+      await db.query('begin');
+      await db.query(
+        'update public.employees set is_active=false where id=$1',
+        [staff.adminA],
+      );
+      await db.query('commit');
+      assert.equal(
+        (
+          await db.query('select is_active from public.employees where id=$1', [
+            staff.adminA,
+          ])
+        ).rows[0].is_active,
+        false,
+      );
+      await db.query('begin');
+      let refused = null;
+      try {
+        await db.query(
+          'update public.employees set is_active=false where id=$1',
+          [staff.newAdmin],
+        );
+      } catch (error) {
+        refused = error;
+      }
+      await db.query('rollback');
+      assert.equal(refused?.code, 'P0010');
+      assert.equal(
+        (
+          await db.query('select is_active from public.employees where id=$1', [
+            staff.newAdmin,
+          ])
+        ).rows[0].is_active,
+        true,
       );
     },
   );

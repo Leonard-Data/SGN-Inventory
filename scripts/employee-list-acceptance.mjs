@@ -17,8 +17,8 @@
 //     [--report <sanitized json path>]
 //
 // The dev env supplies the publishable application settings; the owner config supplies the
-// owner capability. Both are read as data only and are never printed, shell sourced, or
-// passed in argv/logs.
+// database URL and owner capability. Both are read as data only and are never printed, shell
+// sourced, or passed in argv/logs.
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { openSync } from 'node:fs';
@@ -77,6 +77,38 @@ await fs.mkdir(workdir, { recursive: true });
 const ownerClient = createClient(environment.supabaseUrl, owner.authAdminKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
+// Employee rows are provisioned, changed and removed over the owner SQL connection: the
+// lifecycle guard refuses direct client writes, and the guarded administration operation is
+// not a fixture-management API.
+assert.ok(owner.dbUrl, 'The owner config needs the owner SQL connection');
+function sqlText(value) {
+  return "'" + String(value).replace(/'/g, "''") + "'";
+}
+function ownerSql(statement) {
+  const result = spawnSync(
+    'npx',
+    [
+      'supabase',
+      'db',
+      'query',
+      '--db-url',
+      owner.dbUrl,
+      '--output-format',
+      'json',
+      statement,
+    ],
+    { encoding: 'utf8', timeout: 180000 },
+  );
+  if (result.status !== 0)
+    throw new Error(
+      'Owner SQL failed: ' + (result.stdout || result.stderr).slice(-800),
+    );
+  try {
+    return JSON.parse(result.stdout).rows ?? [];
+  } catch {
+    return [];
+  }
+}
 const observations = [];
 function observed(name, details = {}) {
   observations.push({ name, ...details });
@@ -143,10 +175,9 @@ async function removeFixtures(manifest) {
     ...(manifest.pagingEmployeeIds ?? []),
   ];
   if (employeeIds.length) {
-    const employees = await retryResult('remove fixture employees', () =>
-      ownerClient.from('employees').delete().in('id', employeeIds),
+    ownerSql(
+      `delete from public.employees where id in (${employeeIds.map(sqlText).join(',')})`,
     );
-    assert.equal(employees.error, null, 'remove fixture employees');
   }
   const userIds = [
     ...Object.values(manifest.identities ?? {}).map(
@@ -192,17 +223,11 @@ async function createFixtures() {
     );
     assert.equal(created.error, null, `create auth user ${name}`);
     const employeeId = randomUUID();
-    const inserted = await retryResult(`create employee ${name}`, () =>
-      ownerClient.from('employees').insert({
-        id: employeeId,
-        auth_user_id: created.data.user.id,
-        email,
-        display_name: `${namespace} ${name}`,
-        role,
-        is_active: active,
-      }),
+    const inserted = ownerSql(
+      'insert into public.employees(id,auth_user_id,email,display_name,role,is_active) values ' +
+        `(${sqlText(employeeId)}::uuid,${sqlText(created.data.user.id)}::uuid,${sqlText(email)},${sqlText(`${namespace} ${name}`)},${sqlText(role)},${active}) returning id`,
     );
-    assert.equal(inserted.error, null, `create employee ${name}`);
+    assert.equal(inserted.length, 1, `create employee ${name}`);
     manifest.identities[name] = {
       userId: created.data.user.id,
       employeeId,
@@ -227,31 +252,30 @@ async function createFixtures() {
     email: unlinkedEmail,
     password: unlinkedPassword,
   };
+  const pagingValues = [];
   for (let index = 0; index < pagingRows; index++) {
     const employeeId = randomUUID();
-    const inserted = await retryResult(`create paging employee ${index}`, () =>
-      ownerClient.from('employees').insert({
-        id: employeeId,
-        auth_user_id: null,
-        email: `${namespace.toLowerCase()}.page${index}@example.test`,
-        display_name: `${namespace} page ${index}`,
-        role: 'sales',
-        is_active: false,
-      }),
-    );
-    assert.equal(inserted.error, null, `create paging employee ${index}`);
     manifest.pagingEmployeeIds.push(employeeId);
+    pagingValues.push(
+      `(${sqlText(employeeId)}::uuid,null,${sqlText(`${namespace.toLowerCase()}.page${index}@example.test`)},${sqlText(`${namespace} page ${index}`)},'sales',false)`,
+    );
   }
+  const paging = ownerSql(
+    'insert into public.employees(id,auth_user_id,email,display_name,role,is_active) values ' +
+      pagingValues.join(',') +
+      ' returning id',
+  );
+  assert.equal(paging.length, pagingRows, 'create paging employees');
   await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', {
     mode: 0o600,
   });
   return manifest;
 }
 async function setRole(employeeId, role) {
-  const updated = await retryResult('set fixture role', () =>
-    ownerClient.from('employees').update({ role }).eq('id', employeeId),
+  const updated = ownerSql(
+    `update public.employees set role=${sqlText(role)} where id=${sqlText(employeeId)} returning id`,
   );
-  assert.equal(updated.error, null, 'set fixture role');
+  assert.equal(updated.length, 1, 'set fixture role');
 }
 
 // ------------------------------------------------------------------ app server

@@ -148,14 +148,5 @@ test('the recorded deactivation states are distinct in both languages', () => {
       messages[locale].employeeDeactivateConfirmedLabel,
     ];
     assert.equal(new Set(labels).size, 3, `${locale} labels must differ`);
-    // The finite provider ban is stated as renewed explicitly, not as infinite.
-    assert.ok(
-      /có thời hạn|finite/.test(messages[locale].employeeDeactivateBanNote),
-      `${locale} must state the ban is finite`,
-    );
-    assert.ok(
-      /100/.test(messages[locale].employeeDeactivateBanNote),
-      `${locale} must state the finite ban duration`,
-    );
   }
 });

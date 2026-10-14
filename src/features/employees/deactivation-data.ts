@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { ApiError, type RouteContext } from '@/lib/supabase/route';
 import type { Database } from '@/types/database';
 import type { Employee } from './types';
+import { activeEmployee } from './access';
 import { accessState } from './directory';
 import {
   administerDeactivation,
@@ -218,5 +219,8 @@ export async function administerEmployeeDeactivation(
     actorId: actor.id,
     key,
   });
+  // Re-read live membership after the provider transition: an admin who deactivated their own
+  // row gets the normal denial path instead of a 404 for the now-hidden employee row.
+  await activeEmployee(context);
   return loadDeactivationConfirmation(context, employeeId);
 }

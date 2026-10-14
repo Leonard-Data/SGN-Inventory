@@ -1,10 +1,13 @@
 // Issue #66 hosted acceptance: deactivate an employee without losing the record.
 //
 // Real development Supabase Auth/Data API/RLS plus the real provider sign-in block. It
-// creates only the synthetic identities, properties and reservations this check needs under
-// an exact-ID private manifest, drives the guarded RPCs with each real session, calls the
-// Auth admin API exactly as the server adapter does, and reports sanitized observations.
-// Mock, shim and embedded-PGlite results are not acceptance.
+// creates only the synthetic identities, properties and reservations this check needs:
+// Auth users through the service-role Auth API and employee rows through the owner SQL
+// connection the lifecycle guard reserves for administration. The exact-ID private manifest
+// is persisted before the first Auth mutation, retained evidence is read through a live-admin
+// session, the guarded RPCs are driven with each real session, and the Auth admin API is
+// called exactly as the server adapter does. Mock, shim and embedded-PGlite results are not
+// acceptance.
 //
 // This script NEVER runs against production: it asserts SGN_ENV=dev, and it refuses to
 // mutate anything unless `--confirm` is passed. Without it, it prints the exact checks and
@@ -18,15 +21,17 @@
 //   node scripts/employee-deactivation-acceptance.mjs [--confirm] [--report <path>]
 //
 // The dev env supplies the publishable application settings; the owner config supplies the
-// server-only capability the trusted server adapter uses. Both are read as data only and are
-// never printed, shell sourced, or passed in argv/logs.
+// server-only Auth admin capability, the trusted server adapter's provider boundary and the
+// owner SQL connection (`dbUrl`) used for synthetic employee rows. Both are read as data only
+// and are never printed, shell sourced, or passed in argv/logs.
 //
-// Retained evidence: an operation and its events are permanent by design. Cleanup un-bans
-// the synthetic Auth identities and removes the synthetic reservations and properties, but
-// it never fabricates a delete path for the administration evidence; the exact-ID manifest
-// names every synthetic row for the authorized owner SQL path if physical removal is later
-// required.
+// Retained evidence: an operation, its events and every employee row they reference are
+// permanent by design. Cleanup un-bans the synthetic Auth identities and removes the
+// synthetic reservations, properties and any employee row no retained operation references;
+// it never fabricates a delete path for the administration evidence. The manifest stays in
+// the work directory and names every retained synthetic row.
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import { randomBytes, randomUUID } from 'node:crypto';
 import path from 'node:path';
@@ -37,7 +42,6 @@ const devEnvPath = process.env.SGN_ACCEPTANCE_DEV_ENV;
 const ownerPath = process.env.SGN_ACCEPTANCE_OWNER;
 const workdir = process.env.SGN_ACCEPTANCE_WORKDIR;
 const confirm = process.argv.includes('--confirm');
-const keep = process.env.SGN_ACCEPTANCE_KEEP === '1';
 const reportIndex = process.argv.indexOf('--report');
 const reportPath = reportIndex >= 0 ? process.argv[reportIndex + 1] : null;
 
@@ -49,7 +53,7 @@ const PLANNED_CHECKS = [
   'the old session is denied protected reads and guarded RPCs after membership removal',
   'employee identity, locale, role, Auth link, reservations and attribution survive deactivation',
   'a second live admin resumes the original operation without rewriting the actor',
-  'the last active admin cannot be deactivated directly or through a direct write',
+  'the last active admin cannot be deactivated through the RPC, a client write or the owner path',
   'a reviewer releases the deactivated claimant reservation explicitly, and the claimant cannot',
   'the provider reports the exact banned identity after the block',
 ];
@@ -80,6 +84,7 @@ assert.equal(
   'string',
   'The owner config must supply the server-only Auth admin capability',
 );
+assert.ok(owner.dbUrl, 'The owner config needs the owner SQL connection');
 const environment = readEnvironment(
   { ...devEnv, NEXT_PUBLIC_APP_URL: 'http://127.0.0.1:3117' },
   devEnv.EXPECTED_SUPABASE_PROJECT_REF,
@@ -93,9 +98,45 @@ function observed(name, details = {}) {
   observations.push({ name, ...details });
   console.log('PASS', name);
 }
+function sqlText(value) {
+  return "'" + String(value).replace(/'/g, "''") + "'";
+}
+// The owner SQL connection provisions, updates and removes synthetic employee rows; the
+// lifecycle guard refuses those writes to client roles.
+function ownerSql(statement) {
+  const result = spawnSync(
+    'npx',
+    [
+      'supabase',
+      'db',
+      'query',
+      '--db-url',
+      owner.dbUrl,
+      '--output-format',
+      'json',
+      statement,
+    ],
+    { encoding: 'utf8', timeout: 180000 },
+  );
+  if (result.status !== 0)
+    throw new Error(
+      'Owner SQL failed: ' + (result.stdout || result.stderr).slice(-800),
+    );
+  try {
+    return JSON.parse(result.stdout).rows ?? [];
+  } catch {
+    return [];
+  }
+}
+function ownerSqlRefusal(statement, code) {
+  ownerSql(
+    `do $$ begin begin ${statement}; raise exception 'expected refusal'; exception when others then if sqlstate <> '${code}' then raise; end if; end; end $$;`,
+  );
+}
 
 // ---------------------------------------------------------------- fixtures
 const namespace = 'SGN66';
+const runToken = randomBytes(4).toString('hex');
 const manifestPath = path.join(workdir, 'fixtures.json');
 const identities = [
   ['adminA', 'admin'],
@@ -103,51 +144,58 @@ const identities = [
   ['target', 'sales'],
   ['reserver', 'sales'],
 ];
+const manifest = {
+  namespace,
+  runToken,
+  createdAt: new Date().toISOString(),
+  identities: {},
+  properties: [],
+  locks: [],
+  pausedAdminIds: [],
+};
+async function persistManifest() {
+  await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', {
+    mode: 0o600,
+  });
+}
 async function createFixtures() {
-  const manifest = { namespace, identities: {}, properties: [], locks: [] };
+  // Persist each exact ID before the mutation that consumes it, so an interrupted run leaves
+  // a recoverable manifest instead of an orphaned Auth user.
+  await persistManifest();
   for (const [name, role] of identities) {
-    const email = `${namespace.toLowerCase()}.${name}@example.test`;
+    const email = `${namespace.toLowerCase()}.${runToken}.${name.toLowerCase()}@example.test`;
     const password = randomBytes(24).toString('base64url');
+    const employeeId = randomUUID();
+    manifest.identities[name] = { employeeId, email, password, role };
+    await persistManifest();
     const created = await ownerClient.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
     });
     assert.equal(created.error, null, `create auth user ${name}`);
-    const employeeId = randomUUID();
-    const inserted = await ownerClient.from('employees').insert({
-      id: employeeId,
-      auth_user_id: created.data.user.id,
-      email,
-      display_name: `${namespace} ${name}`,
-      role,
-      is_active: true,
-    });
-    assert.equal(inserted.error, null, `create employee ${name}`);
-    manifest.identities[name] = {
-      userId: created.data.user.id,
-      employeeId,
-      email,
-      password,
-      role,
-    };
+    manifest.identities[name].userId = created.data.user.id;
+    await persistManifest();
+    const inserted = ownerSql(
+      'insert into public.employees(id,auth_user_id,email,display_name,role,is_active) values ' +
+        `(${sqlText(employeeId)}::uuid,${sqlText(created.data.user.id)}::uuid,${sqlText(email)},${sqlText(`${namespace} ${name}`)},${sqlText(role)},true) returning id`,
+    );
+    assert.equal(inserted.length, 1, `create employee ${name}`);
   }
   for (const [index, code] of ['SGN66-A', 'SGN66-B'].entries()) {
     const propertyId = randomUUID();
+    manifest.properties.push(propertyId);
+    await persistManifest();
     const inserted = await ownerClient.from('properties').insert({
       id: propertyId,
-      property_code: code,
+      property_code: `${code}-${runToken}`,
       listing_mode: 'sale',
       status: 'available',
       created_by: manifest.identities.adminA.employeeId,
     });
     assert.equal(inserted.error, null, `create property ${index}`);
-    manifest.properties.push(propertyId);
   }
-  await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', {
-    mode: 0o600,
-  });
-  return manifest;
+  await persistManifest();
 }
 async function sessionFor(identity) {
   const client = createClient(
@@ -162,43 +210,90 @@ async function sessionFor(identity) {
   assert.equal(signedIn.error, null, 'fixture sign-in');
   return client;
 }
-async function cleanup(manifest) {
-  if (!manifest) return;
-  for (const identity of Object.values(manifest.identities)) {
-    // The provider block must be lifted for a synthetic identity, through the same admin
-    // API that placed it. This is cleanup of the check's own fixture, not a user action.
-    await ownerClient.auth.admin
-      .updateUserById(identity.userId, { ban_duration: 'none' })
-      .catch(() => {});
-  }
-  if (manifest.locks.length)
+async function restorePausedAdmins() {
+  if (!manifest.pausedAdminIds.length) return;
+  ownerSql(
+    `update public.employees set is_active=true where id in (${manifest.pausedAdminIds.map(sqlText).join(',')})`,
+  );
+  manifest.pausedAdminIds = [];
+  await persistManifest();
+}
+async function cleanup() {
+  // The deterministic last-admin check pauses other active admins; always restore them first.
+  await restorePausedAdmins();
+  if (manifest.locks.length) {
+    await ownerClient
+      .from('lock_events')
+      .delete()
+      .in('lock_id', manifest.locks);
     await ownerClient.from('property_locks').delete().in('id', manifest.locks);
+  }
   if (manifest.properties.length)
     await ownerClient.from('properties').delete().in('id', manifest.properties);
-  for (const identity of Object.values(manifest.identities))
-    await ownerClient.from('employees').delete().eq('id', identity.employeeId);
-  if (keep) console.log('KEEP=1: fixture manifest left at', manifestPath);
-  else await fs.rm(manifestPath, { force: true });
+  const employeeIds = Object.values(manifest.identities).map(
+    (identity) => identity.employeeId,
+  );
+  if (employeeIds.length) {
+    const list = employeeIds.map(sqlText).join(',');
+    ownerSql(
+      `update public.employees set is_active=false where id in (${list})`,
+    );
+    const referenced = new Set(
+      ownerSql(
+        `select employee_id as id from public.employee_admin_operations where employee_id in (${list}) ` +
+          `union select actor_id as id from public.employee_admin_operations where actor_id in (${list}) ` +
+          `union select employee_id as id from public.employee_admin_events where employee_id in (${list}) ` +
+          `union select actor_id as id from public.employee_admin_events where actor_id in (${list})`,
+      ).map((row) => row.id),
+    );
+    const removable = employeeIds.filter((id) => !referenced.has(id));
+    if (removable.length)
+      ownerSql(
+        `delete from public.employees where id in (${removable.map(sqlText).join(',')})`,
+      );
+    for (const identity of Object.values(manifest.identities)) {
+      if (!identity.userId) continue;
+      // The provider block must be lifted for a synthetic identity, through the same admin
+      // API that placed it. This is cleanup of the check's own fixture, not a user action.
+      await ownerClient.auth.admin
+        .updateUserById(identity.userId, { ban_duration: 'none' })
+        .catch(() => {});
+      if (referenced.has(identity.employeeId)) continue;
+      const removed = await ownerClient.auth.admin
+        .deleteUser(identity.userId)
+        .catch((error) => ({ error }));
+      if (removed?.error && !/not found/i.test(removed.error.message))
+        throw new Error(`remove fixture auth user: ${removed.error.message}`);
+    }
+  }
+  await persistManifest();
 }
 
-const manifest = await createFixtures();
-const before = {
-  employees: (await ownerClient.from('employees').select('id')).data.length,
-  properties: (await ownerClient.from('properties').select('id')).data.length,
-};
-const adminA = await sessionFor(manifest.identities.adminA);
-const adminB = await sessionFor(manifest.identities.adminB);
-const target = await sessionFor(manifest.identities.target);
-const reserver = await sessionFor(manifest.identities.reserver);
-const targetEmployee = manifest.identities.target;
-const adminAEmployee = manifest.identities.adminA;
-const adminBEmployee = manifest.identities.adminB;
-const reserverEmployee = manifest.identities.reserver;
-const targetAuthUserId = targetEmployee.userId;
-
 try {
+  await createFixtures();
+  const before = {
+    employees: (await ownerClient.from('employees').select('id')).data.length,
+    properties: (await ownerClient.from('properties').select('id')).data.length,
+  };
+  const adminA = await sessionFor(manifest.identities.adminA);
+  const adminB = await sessionFor(manifest.identities.adminB);
+  const target = await sessionFor(manifest.identities.target);
+  const reserver = await sessionFor(manifest.identities.reserver);
+  const targetEmployee = manifest.identities.target;
+  const adminAEmployee = manifest.identities.adminA;
+  const adminBEmployee = manifest.identities.adminB;
+  const reserverEmployee = manifest.identities.reserver;
+  const targetAuthUserId = targetEmployee.userId;
+
   // -------------------------------------------------- live before deactivation
-  assert.equal((await target.from('properties').select('id')).data.length, 2);
+  const visibleProperties = (
+    await target.from('properties').select('id')
+  ).data.map((row) => row.id);
+  for (const propertyId of manifest.properties)
+    assert.ok(
+      visibleProperties.includes(propertyId),
+      'fixture property visible before deactivation',
+    );
   const pendingRequest = await target.rpc('request_property_lock', {
     p_property_id: manifest.properties[0],
     p_reason: 'Acceptance fixture pending request before deactivation',
@@ -314,10 +409,11 @@ try {
   assert.ok(
     locks.data.every((row) => row.requested_by === targetEmployee.employeeId),
   );
-  const events = await ownerClient
+  const events = await adminA
     .from('employee_admin_events')
     .select('action')
     .eq('operation_id', begun.data.id);
+  assert.equal(events.error, null, 'live admin reads the retained evidence');
   assert.ok(events.data.some((row) => row.action === 'provider_blocked'));
   observed('identity, Auth link, reservations and attribution survive');
 
@@ -352,6 +448,15 @@ try {
   observed('another live admin resumes without rewriting attribution');
 
   // -------------------------------------------------- last active admin
+  // Control the admin set so the guard check is deterministic: pause every other active
+  // admin through the owner path and restore it immediately afterwards.
+  const fixtureIds = Object.values(manifest.identities).map(
+    (identity) => identity.employeeId,
+  );
+  manifest.pausedAdminIds = ownerSql(
+    `update public.employees set is_active=false where role='admin' and is_active and id not in (${fixtureIds.map(sqlText).join(',')}) returning id`,
+  ).map((row) => row.id);
+  await persistManifest();
   assert.equal(
     (
       await adminA.rpc('begin_employee_deactivation', {
@@ -370,12 +475,21 @@ try {
     .from('employees')
     .update({ role: 'sales' })
     .eq('id', adminAEmployee.employeeId);
-  assert.equal(directDemotion.error.code, 'P0010');
-  observed('the last active admin cannot be removed, even by a direct write');
-  await ownerClient
-    .from('employees')
-    .update({ is_active: true })
-    .eq('id', adminBEmployee.employeeId);
+  assert.equal(directDemotion.error.code, '42501');
+  ownerSqlRefusal(
+    `update public.employees set role='sales' where id=${sqlText(adminAEmployee.employeeId)}`,
+    'P0010',
+  );
+  assert.deepEqual(
+    ownerSql(
+      `select role,is_active from public.employees where id=${sqlText(adminAEmployee.employeeId)}`,
+    )[0],
+    { role: 'admin', is_active: true },
+  );
+  observed(
+    'the last active admin cannot be removed through the RPC, a client write or the owner path',
+  );
+  await restorePausedAdmins();
 
   // -------------------------------------------------- provider identity check
   const provider = await ownerClient.auth.admin.getUserById(targetAuthUserId);
@@ -406,12 +520,12 @@ try {
     limitations: [
       'No immediate recall of copied JWTs, remote provider memory or already-issued signed URLs is claimed.',
       'The provider ban is finite (about 100 years) and renewed only by an explicit reconciliation.',
-      'Administration operation and event evidence is retained by design; physical fixture removal uses the authorized owner SQL path.',
+      'Administration operation and event evidence and the employee rows it references are retained by design; cleanup removes only synthetic rows no retained operation references, and the manifest names every retained row.',
     ],
   };
   if (reportPath)
     await fs.writeFile(reportPath, JSON.stringify(report, null, 2) + '\n');
   console.log(`${observations.length} observations passed`);
 } finally {
-  await cleanup(manifest);
+  await cleanup();
 }

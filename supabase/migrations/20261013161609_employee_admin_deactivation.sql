@@ -47,17 +47,23 @@ comment on column public.employee_admin_operations.provider_user_id is 'The exac
 create unique index employee_admin_operations_open_idx
   on public.employee_admin_operations(employee_id) where state <> 'completed';
 
--- 2. Append-only evidence for every operation step, including who resumed it.
+-- 2. Append-only evidence for every operation step, including who resumed it. A resuming
+--    admin's submission key is bound here, so a lost-response retry returns the original
+--    result for that actor and key and a reused key against another employee conflicts.
 create table public.employee_admin_events (
   id uuid primary key default gen_random_uuid(),
   operation_id uuid not null references public.employee_admin_operations(id),
   employee_id uuid not null references public.employees(id),
   actor_id uuid not null references public.employees(id),
   action text not null check (action in ('begun','resumed','provider_blocked','provider_failed','provider_ambiguous')),
+  idempotency_key uuid,
   detail text check (detail is null or length(detail) between 1 and 500),
   created_at timestamptz not null default clock_timestamp()
 );
 comment on table public.employee_admin_events is 'Append-only employee administration evidence; direct client writes are refused and the rows are never deleted';
+comment on column public.employee_admin_events.idempotency_key is 'Resumer submission key bound to the operation it resumed; the initiating actor''s key stays on the operation row';
+create unique index employee_admin_events_submission_idx
+  on public.employee_admin_events(actor_id, idempotency_key) where idempotency_key is not null;
 
 -- 3. Retention guards. The guarded definers run as their owner, so they may write; every
 --    client role and every direct write path is refused, and identity fields are immutable.
@@ -170,6 +176,7 @@ declare
   me uuid := private.employee_id();
   target public.employees;
   existing public.employee_admin_operations;
+  resumed public.employee_admin_events;
   op public.employee_admin_operations;
 begin
   if me is null or private.employee_role() is distinct from 'admin' then
@@ -194,11 +201,20 @@ begin
     end if;
     return private.employee_admin_operation_json(existing);
   end if;
+  select * into resumed from public.employee_admin_events
+    where actor_id = me and idempotency_key = p_key for update;
+  if resumed.id is not null then
+    select * into op from public.employee_admin_operations where id = resumed.operation_id;
+    if op.id is null or op.employee_id <> p_employee_id or op.kind <> 'deactivate' then
+      raise exception 'submission key reused for a different employee or action' using errcode = '23505';
+    end if;
+    return private.employee_admin_operation_json(op);
+  end if;
   select * into existing from public.employee_admin_operations
     where employee_id = p_employee_id and state <> 'completed' for update;
   if existing.id is not null then
-    insert into public.employee_admin_events(operation_id,employee_id,actor_id,action)
-      values(existing.id,p_employee_id,me,'resumed');
+    insert into public.employee_admin_events(operation_id,employee_id,actor_id,action,idempotency_key)
+      values(existing.id,p_employee_id,me,'resumed',p_key);
     return private.employee_admin_operation_json(existing);
   end if;
   if not target.is_active then
