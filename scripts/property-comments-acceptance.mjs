@@ -2116,6 +2116,121 @@ await settle(secondary);
   );
 }
 {
+  // A save in flight cannot be orphaned: the author cannot open a second editor, so a failure
+  // stays visible in the session that sent it with its unsent draft.
+  browser(['open', detail(discussion)], primary);
+  await settle(primary);
+  const editable = screen(primary).comments.filter(
+    (comment) => comment.author === names.alpha && !comment.removed,
+  );
+  assert.ok(
+    editable.length >= 2,
+    'The author has two editable comments for the in-flight save check',
+  );
+  click('Chỉnh sửa bình luận', primary);
+  await waitUntil(
+    `() => Boolean(document.querySelector('section.discussion .comment-edit textarea'))`,
+    primary,
+  );
+  fill('Chỉnh sửa bình luận', 'Bản nháp đang lưu', primary);
+  evaluate(
+    `() => {
+      const original = window.fetch.bind(window);
+      let release;
+      window.__editSaveHeld = false;
+      window.__releaseEditSave = () => release?.();
+      window.fetch = async (...args) => {
+        const input = args[0];
+        const options = args[1] ?? {};
+        const url = typeof input === 'string' ? input : input.url;
+        const method = String(options.method ?? input?.method ?? 'GET').toUpperCase();
+        if (method === 'PATCH' && url.includes('/comments/')) {
+          window.__editSaveHeld = true;
+          await new Promise((resolve) => { release = resolve; });
+          window.fetch = original;
+          return new Response(JSON.stringify({ error: 'unavailable' }), {
+            status: 503,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        return original(...args);
+      };
+      return true;
+    }`,
+    primary,
+  );
+  click('Lưu thay đổi', primary);
+  await waitUntil(`() => window.__editSaveHeld === true`, primary);
+  await waitUntil(
+    `() => {
+      const buttons = [...document.querySelectorAll('section.discussion .comment-actions button')]
+        .filter((button) => /Chỉnh sửa bình luận|^Edit comment$/.test(button.textContent.trim()));
+      return buttons.length > 0 && buttons.every((button) => button.disabled);
+    }`,
+    primary,
+  );
+  const held = screen(primary);
+  assert.equal(
+    held.editDraft,
+    'Bản nháp đang lưu',
+    'The in-flight save keeps its draft',
+  );
+  evaluate(
+    `() => {
+      const button = [...document.querySelectorAll('section.discussion .comment-actions button')]
+        .find((node) => /Chỉnh sửa bình luận|^Edit comment$/.test(node.textContent.trim()));
+      button?.click();
+      return true;
+    }`,
+    primary,
+  );
+  assert.equal(
+    screen(primary).editDraft,
+    'Bản nháp đang lưu',
+    'The attempted second editor does not replace the open draft',
+  );
+  assert.equal(
+    evaluate(
+      `() => document.querySelectorAll('section.discussion .comment-edit textarea').length`,
+      primary,
+    ),
+    1,
+    'Only the session that sent the save stays open',
+  );
+  evaluate(`() => { window.__releaseEditSave(); return true; }`, primary);
+  await waitUntil(
+    `() => Boolean(document.querySelector('section.discussion .comment-edit [role=alert]'))`,
+    primary,
+  );
+  const failed = screen(primary);
+  assert.equal(
+    failed.editDraft,
+    'Bản nháp đang lưu',
+    'A failed save keeps the unsent draft in its own editor',
+  );
+  assert.ok(
+    /Chưa lưu được thay đổi/.test(failed.editError ?? ''),
+    'A failed save shows the localized error where the save was sent',
+  );
+  assert.ok(
+    !failed.statuses.some((status) => /Đã cập nhật bình luận/.test(status)),
+    'A failed save claims no success',
+  );
+  observed(
+    'in-flight edit save blocks a second editor and keeps the failed draft and error',
+    {
+      otherEditors: editable.length - 1,
+      draftKept: failed.editDraft === 'Bản nháp đang lưu',
+      localizedError: true,
+    },
+  );
+  click('Huỷ', primary);
+  await waitUntil(
+    `() => !document.querySelector('section.discussion .comment-edit textarea')`,
+    primary,
+  );
+}
+{
   // A lost edit response leaves the key open; a withdrawal before the retry is not an update.
   const seeded = await alpha.rpc('post_property_comment', {
     p_property_id: discussion.id,
