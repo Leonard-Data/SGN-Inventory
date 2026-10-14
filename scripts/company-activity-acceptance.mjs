@@ -1314,6 +1314,16 @@ try {
       `a query failure renders the localized failure and loading states, and Retry recovers the table in ${label}`,
     );
   };
+  evaluate(
+    'sgn31-vi',
+    9331,
+    `(() => { document.querySelector('.lang-switch button[lang=vi]').click(); return true; })()`,
+  );
+  await waitFor(
+    'sgn31-vi',
+    9331,
+    `() => document.documentElement.lang === 'vi'`,
+  );
   await assertReportStates('vi');
   evaluate(
     'sgn31-vi',
