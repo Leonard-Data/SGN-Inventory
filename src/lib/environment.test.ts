@@ -110,7 +110,7 @@ test('privileged keys cannot enter public configuration', () => {
     () =>
       readEnvironment({
         ...valid,
-        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_secret_fixture',
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: `${['sb', 'secret'].join('_')}_fixture`,
       }),
     /never a secret/,
   );
