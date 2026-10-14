@@ -188,6 +188,10 @@ _Avoid_: Attendance report, visit report, performance ranking
 A manager/admin-only order of employees by their total of the Daily owner-contact access counts over a selected Vietnam date range, reconciled to the recorded events, with Page-view events and distinct properties viewed kept separate and never blended into the rank. Every currently active employee appears, a zero total is an explicit row, equal totals share a rank with a stable order, and activity recorded while an employee was active stays attributed to that employee after deactivation.
 _Avoid_: Performance score, attendance ranking, composite score, commission ranking, physical-visit ranking
 
+**Province owner-contact activity**:
+A manager/admin-only derived table of the same employee-property-Vietnam-day owner-contact units as Company employee-by-day activity, grouped by each property's latest verified primary current province/city with an always-reported Unverified location group for properties whose province cannot be resolved. Correcting or invalidating an address may regroup earlier activity without changing the company total, and it is never a geographic map, a physical-visit count or a performance score.
+_Avoid_: Province ranking, geographic map, visit report
+
 **Owner-contact access disclosure**:
 A deliberate reveal of a property's recorded owner phone, committed as an Owner-contact access event before the phone is shown. Eligibility comes from the property's recorded owner relationship, and it counts one property per employee per Vietnam day rather than owners, phones or clicks.
 _Avoid_: Automatic phone display, call log, attendance

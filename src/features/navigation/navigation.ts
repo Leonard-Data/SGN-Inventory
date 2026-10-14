@@ -112,6 +112,13 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: 'chart',
         roles: REPORT_ROLES,
       },
+      {
+        id: 'province-activity',
+        label: 'provinceActivityLink',
+        href: '/activity/provinces',
+        icon: 'chart',
+        roles: REPORT_ROLES,
+      },
     ],
   },
 ];

@@ -2126,6 +2126,15 @@ export type Database = {
           page_view_events: number;
         }[];
       };
+      company_province_owner_contact_activity: {
+        Args: { p_from: string; p_to: string };
+        Returns: {
+          official_code: string | null;
+          owner_contact_properties: number;
+          province_name: string | null;
+          province_unit_id: string | null;
+        }[];
+      };
       my_daily_activity: {
         Args: { p_from: string; p_to: string };
         Returns: {
