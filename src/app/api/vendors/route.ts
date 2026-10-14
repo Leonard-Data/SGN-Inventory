@@ -6,6 +6,7 @@ import {
   createVendor,
   listVendors,
 } from '@/features/vendors/data';
+import { VENDOR_BODY_MAX_BYTES } from '@/features/vendors/draft';
 
 // The vendor directory read is open to every active employee (C5); creation is
 // staff/manager/admin only, re-checked live here and again inside the guarded RPC.
@@ -24,7 +25,7 @@ export function POST(request: NextRequest) {
     assertVendorMaintainer(employee.role);
     const vendor = await createVendor(
       context,
-      await objectBody(request, context),
+      await objectBody(request, context, VENDOR_BODY_MAX_BYTES),
     );
     return NextResponse.json({ vendor }, { status: 201 });
   });

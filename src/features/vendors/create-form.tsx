@@ -56,7 +56,7 @@ export function VendorCreateForm({
         return;
       }
       const code =
-        failure instanceof RequestError ? failure.code : 'invalid-input';
+        failure instanceof RequestError ? failure.code : 'unavailable';
       // The key was already used for different details: retire it so the corrected
       // draft can be recorded, rather than trapping the user on one failed identity.
       if (code === 'vendor-conflict') submissionKey.current = null;

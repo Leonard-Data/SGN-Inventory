@@ -570,10 +570,7 @@ export async function vendorContract({ db, asUser, check, fails, employees }) {
         'update public.employees set is_active=false where id=$1',
         [employees[5]],
       );
-      await db.exec('set role authenticated');
-      await db.query("select set_config('request.jwt.claim.sub',$1,false)", [
-        '10000000-0000-4000-8000-000000000006',
-      ]);
+      await asUser(5);
       await fails(
         createDefaults,
         [randomUUID(), 'Công ty Bị Từ Chối'],

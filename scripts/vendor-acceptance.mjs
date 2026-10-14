@@ -7,7 +7,8 @@
 //
 // This slice deliberately has no vendor deletion path, so the synthetic vendor rows are
 // retained after the run under the declared SGN73 namespace: the report lists their exact
-// ids. Only the synthetic Auth users and employee rows are removed.
+// ids. Fixture employees and Auth users those retained rows reference are also retained
+// and recorded in the report; every other synthetic identity is removed.
 //
 // Usage:
 //   SGN_ACCEPTANCE_DEV_ENV=<private dev env> \
@@ -135,6 +136,10 @@ const VENDOR_COLUMNS =
 // ------------------------------------------------------------------ fixtures
 const namespace = 'SGN73';
 const filePrefix = namespace.toLowerCase();
+// Fresh identities and vendor names per run: an interrupted earlier run leaves its
+// retained SGN73 rows behind, so only this run's unique name is asserted to be alone.
+const runToken = randomBytes(3).toString('hex');
+const fixtureName = (suffix) => `${namespace} ${runToken} ${suffix}`;
 // role, is_active. The unlinked identity below has an Auth account but no employee row.
 const identities = [
   ['admin', 'admin', true],
@@ -153,41 +158,160 @@ async function readManifest() {
     return null;
   }
 }
-async function removeFixtures(manifest) {
-  if (!manifest) return;
-  const employeeIds = Object.values(manifest.identities ?? {}).map(
-    (identity) => identity.employeeId,
+// Which employees do already-retained vendors reference? The vendor table grants no
+// privileged read, so the check runs through a real active employee session.
+async function vendorCreators(manifest, employeeIds) {
+  const reader = Object.values(manifest.identities ?? {}).find(
+    (identity) =>
+      identity.active === true &&
+      ['staff', 'manager', 'admin'].includes(identity.role),
   );
-  if (employeeIds.length) {
-    const employees = await retryResult('remove fixture employees', () =>
-      ownerClient.from('employees').delete().in('id', employeeIds),
+  if (!reader) return null;
+  try {
+    const client = sessionClient();
+    const signedIn = await retryResult('sign in retained fixture reader', () =>
+      client.auth.signInWithPassword({
+        email: reader.email,
+        password: reader.password,
+      }),
     );
-    assert.equal(employees.error, null, 'remove fixture employees');
+    if (signedIn.error) return null;
+    const result = await retryResult('read retained vendor creators', () =>
+      client.from('vendors').select('created_by').in('created_by', employeeIds),
+    );
+    if (result.error) return null;
+    return new Set(result.data.map((row) => row.created_by));
+  } catch {
+    return null;
   }
-  const userIds = [
-    ...Object.values(manifest.identities ?? {}).map(
-      (identity) => identity.userId,
-    ),
-    ...(manifest.unlinked ? [manifest.unlinked.userId] : []),
+}
+// Cleanup never throws: a failure here must not skip the report, the remaining Auth
+// removal or the manifest handling. Employees (and their Auth users) that retained
+// vendors reference cannot be deleted, so they stay and are recorded in the report.
+async function removeFixtures(manifest) {
+  const cleanup = {
+    employees_removed: [],
+    employees_retained: [],
+    auth_users_removed: [],
+    auth_users_retained: [],
+    failures: [],
+  };
+  if (!manifest) return cleanup;
+  const identities = Object.entries(manifest.identities ?? {});
+  const employeeIds = identities
+    .map(([, identity]) => identity.employeeId)
+    .filter(Boolean);
+  let existing = new Set();
+  if (employeeIds.length) {
+    try {
+      const rows = await retryResult('read fixture employees', () =>
+        ownerClient.from('employees').select('id').in('id', employeeIds),
+      );
+      if (rows.error) {
+        cleanup.failures.push(`read fixture employees: ${rows.error.message}`);
+        existing = new Set(employeeIds);
+      } else {
+        existing = new Set(rows.data.map((row) => row.id));
+      }
+    } catch (error) {
+      cleanup.failures.push(`read fixture employees: ${error.message}`);
+      existing = new Set(employeeIds);
+    }
+  }
+  const retained = new Set();
+  const present = employeeIds.filter((id) => existing.has(id));
+  if (present.length) {
+    const referenced = await vendorCreators(manifest, present);
+    if (referenced === null) {
+      for (const id of present) retained.add(id);
+      cleanup.failures.push(
+        'could not resolve retained vendor creators; fixture employees were left in place',
+      );
+    } else {
+      for (const id of referenced) retained.add(id);
+    }
+  }
+  for (const [name, identity] of identities) {
+    if (!identity.employeeId || !existing.has(identity.employeeId)) continue;
+    if (retained.has(identity.employeeId)) {
+      cleanup.employees_retained.push(identity.employeeId);
+      continue;
+    }
+    let removed;
+    try {
+      removed = await retryResult(`remove fixture employee ${name}`, () =>
+        ownerClient
+          .from('employees')
+          .delete()
+          .eq('id', identity.employeeId)
+          .select('id'),
+      );
+    } catch (error) {
+      removed = { error };
+    }
+    if (removed?.error || (removed?.data ?? []).length === 0) {
+      retained.add(identity.employeeId);
+      cleanup.employees_retained.push(identity.employeeId);
+      if (removed?.error)
+        cleanup.failures.push(
+          `remove fixture employee ${name}: ${removed.error.message}`,
+        );
+    } else {
+      cleanup.employees_removed.push(identity.employeeId);
+    }
+  }
+  const users = [
+    ...identities.map(([name, identity]) => ({
+      name,
+      userId: identity.userId,
+      employeeId: identity.employeeId ?? null,
+    })),
+    ...(manifest.unlinked
+      ? [
+          {
+            name: 'unlinked',
+            userId: manifest.unlinked.userId,
+            employeeId: null,
+          },
+        ]
+      : []),
   ];
-  for (const userId of userIds) {
-    const removed = await retryThrown('remove fixture auth user', () =>
-      ownerClient.auth.admin.deleteUser(userId),
-    ).catch((error) => ({ error }));
+  for (const user of users) {
+    if (user.employeeId !== null && retained.has(user.employeeId)) {
+      cleanup.auth_users_retained.push(user.userId);
+      continue;
+    }
+    let removed;
+    try {
+      removed = await retryThrown(`remove fixture auth user ${user.name}`, () =>
+        ownerClient.auth.admin.deleteUser(user.userId),
+      );
+    } catch (error) {
+      removed = { error };
+    }
+    const message = removed?.error?.message ?? '';
     // An identity an earlier interrupted run already removed is not a failure.
-    if (removed.error && !/not found/i.test(removed.error.message))
-      assert.fail(`remove fixture auth user: ${removed.error.message}`);
+    if (!removed?.error || /not found/i.test(message)) {
+      cleanup.auth_users_removed.push(user.userId);
+    } else {
+      cleanup.auth_users_retained.push(user.userId);
+      cleanup.failures.push(
+        `remove fixture auth user ${user.name}: ${message}`,
+      );
+    }
   }
+  return cleanup;
 }
 async function createFixtures() {
   const manifest = {
     namespace,
+    run_token: runToken,
     identities: {},
     unlinked: null,
     retainedVendorIds: [],
   };
   for (const [name, role, active] of identities) {
-    const email = `${filePrefix}.${name}@example.test`;
+    const email = `${filePrefix}.${name}.${runToken}@example.test`;
     const password = randomBytes(24).toString('base64url');
     const created = await retryResult(`create auth user ${name}`, () =>
       ownerClient.auth.admin.createUser({
@@ -203,7 +327,7 @@ async function createFixtures() {
         id: employeeId,
         auth_user_id: created.data.user.id,
         email,
-        display_name: `${namespace} ${name}`,
+        display_name: fixtureName(name),
         role,
         is_active: active,
       }),
@@ -218,7 +342,7 @@ async function createFixtures() {
       active,
     };
   }
-  const unlinkedEmail = `${filePrefix}.unlinked@example.test`;
+  const unlinkedEmail = `${filePrefix}.unlinked.${runToken}@example.test`;
   const unlinkedPassword = randomBytes(24).toString('base64url');
   const unlinked = await retryResult('create unlinked auth user', () =>
     ownerClient.auth.admin.createUser({
@@ -239,9 +363,11 @@ async function createFixtures() {
   return manifest;
 }
 async function createVendor(client, fields) {
+  // One submission key per call: a transient retry converges on the same vendor.
+  const key = randomUUID();
   const result = await retryResult('create fixture vendor', () =>
     client.rpc('create_vendor', {
-      p_key: randomUUID(),
+      p_key: key,
       p_display_name: fields.displayName,
       ...(fields.contactName ? { p_contact_name: fields.contactName } : {}),
       ...(fields.phones ? { p_phones: fields.phones } : {}),
@@ -537,19 +663,24 @@ let manifest = null;
 const report = {
   issue: 73,
   namespace,
+  run_token: runToken,
   started_at: new Date().toISOString(),
-  observations: [],
+  observations,
+  retained_vendors: [],
+  before,
   limitations: [
     'Supabase Auth email delivery and invitation acceptance are outside this slice.',
-    'The vendor slice has no deletion path, so the synthetic SGN73 vendor rows are retained; the report lists their exact ids.',
+    'The vendor slice has no deletion path, so the synthetic SGN73 vendor rows are retained; the report lists their exact ids and the fixture identities those rows reference.',
     'A real concurrent-session write race remains a staging gate.',
   ],
 };
+let failure = null;
 try {
-  // A previous interrupted run may have left its own identities behind; remove them
-  // first so the retry creates a fresh, exactly identifiable fixture set.
-  await removeFixtures(await readManifest());
+  // A previous interrupted run may have left identities behind; remove what it can and
+  // record what must stay before this run creates fresh, uniquely named fixtures.
+  report.previous_cleanup = await removeFixtures(await readManifest());
   manifest = await createFixtures();
+  report.retained_vendors = manifest.retainedVendorIds;
   const staff = await signInClient(
     manifest.identities.staff.email,
     manifest.identities.staff.password,
@@ -586,8 +717,9 @@ try {
   ).data.length;
 
   // A separately named fixture per role proves one confirmed identity per permitted create.
+  const staffVendorName = fixtureName('Nhà cung cấp chính');
   const staffVendor = await createVendor(staff, {
-    displayName: `${namespace} Nhà cung cấp chính`,
+    displayName: staffVendorName,
     contactName: 'Nguyễn Văn Ứng',
     phones: ['090 123 4567', '+84 (0)28 3822 1234'],
     email: 'ung.dung@example.test',
@@ -596,18 +728,18 @@ try {
   });
   manifest.retainedVendorIds.push(staffVendor.id);
   const managerVendor = await createVendor(manager, {
-    displayName: `${namespace} Đại lý sắt thép`,
+    displayName: fixtureName('Đại lý sắt thép'),
   });
   manifest.retainedVendorIds.push(managerVendor.id);
   const adminVendor = await createVendor(admin, {
-    displayName: `${namespace} Công ty hạ tầng`,
+    displayName: fixtureName('Công ty hạ tầng'),
     phones: ['028 7300 1234'],
   });
   manifest.retainedVendorIds.push(adminVendor.id);
   for (let index = 0; index < pagingRows; index++) {
     const vendor = await createVendor(staff, {
-      displayName: `${namespace} page ${String(index).padStart(2, '0')}`,
-      contactName: index % 2 === 0 ? `${namespace} liên hệ ${index}` : null,
+      displayName: fixtureName(`page ${String(index).padStart(2, '0')}`),
+      contactName: index % 2 === 0 ? fixtureName(`liên hệ ${index}`) : null,
     });
     manifest.retainedVendorIds.push(vendor.id);
   }
@@ -626,7 +758,7 @@ try {
   assert.ok(anonymousList.error, 'Anonymous bounded list must fail');
   const anonymousCreate = await anonClient.rpc('create_vendor', {
     p_key: randomUUID(),
-    p_display_name: `${namespace} forged`,
+    p_display_name: fixtureName('forged'),
   });
   assert.equal(anonymousCreate.error?.code, '42501');
   assert.equal(
@@ -634,7 +766,7 @@ try {
       await sales
         .from('vendors')
         .select('id')
-        .eq('display_name', `${namespace} forged`)
+        .eq('display_name', fixtureName('forged'))
     ).data.length,
     0,
   );
@@ -648,7 +780,7 @@ try {
   assert.equal(unlinkedList.data.length, 0, 'Unlinked bounded list is empty');
   const unlinkedCreate = await unlinked.rpc('create_vendor', {
     p_key: randomUUID(),
-    p_display_name: `${namespace} unlinked forged`,
+    p_display_name: fixtureName('unlinked forged'),
   });
   assert.equal(unlinkedCreate.error?.code, '42501');
   observed(
@@ -660,7 +792,7 @@ try {
   assert.equal(inactiveRead.data.length, 0, 'Inactive read is empty');
   const inactiveCreate = await inactive.rpc('create_vendor', {
     p_key: randomUUID(),
-    p_display_name: `${namespace} inactive forged`,
+    p_display_name: fixtureName('inactive forged'),
   });
   assert.equal(inactiveCreate.error?.code, '42501');
   observed('an inactive identity reads nothing and cannot create');
@@ -670,11 +802,11 @@ try {
   assert.ok(salesRead.data.length >= manifest.retainedVendorIds.length);
   const salesCreate = await sales.rpc('create_vendor', {
     p_key: randomUUID(),
-    p_display_name: `${namespace} sales forged`,
+    p_display_name: fixtureName('sales forged'),
   });
   assert.equal(salesCreate.error?.code, '42501');
   const salesInsert = await sales.from('vendors').insert({
-    display_name: `${namespace} forged direct`,
+    display_name: fixtureName('forged direct'),
     created_by: manifest.identities.sales.employeeId,
     submission_key: randomUUID(),
   });
@@ -696,7 +828,7 @@ try {
     .select('display_name')
     .eq('id', staffVendor.id)
     .single();
-  assert.equal(preserved.data.display_name, `${namespace} Nhà cung cấp chính`);
+  assert.equal(preserved.data.display_name, staffVendor.display_name);
   observed(
     'a sales employee reads the directory while every mutation path stays denied',
   );
@@ -705,7 +837,7 @@ try {
   const retryKey = randomUUID();
   const retryPayload = {
     p_key: retryKey,
-    p_display_name: `${namespace} retry`,
+    p_display_name: fixtureName('retry'),
   };
   const first = await staff.rpc('create_vendor', retryPayload);
   assert.equal(first.error, null);
@@ -715,7 +847,7 @@ try {
   manifest.retainedVendorIds.push(first.data.id);
   const conflicted = await staff.rpc('create_vendor', {
     p_key: retryKey,
-    p_display_name: `${namespace} retry changed`,
+    p_display_name: fixtureName('retry changed'),
   });
   assert.equal(conflicted.error?.code, '23505');
   const malformed = await staff.rpc('create_vendor', {
@@ -745,7 +877,7 @@ try {
     'A literal fragment does not act as a wildcard',
   );
   const accented = await sales.rpc('list_vendors', {
-    p_query: 'nha cung cap chinh',
+    p_query: `${runToken} nha cung cap chinh`,
   });
   assert.equal(accented.error, null);
   assert.deepEqual(
@@ -783,7 +915,7 @@ try {
   assert.ok(salesList.body.vendors.length <= 30);
   const salesDenied = await appPost(salesCookies, '/api/vendors', {
     key: randomUUID(),
-    displayName: `${namespace} route forged`,
+    displayName: fixtureName('route forged'),
   });
   assert.equal(salesDenied.status, 403);
   const halfCursor = await appGet(salesCookies, '/api/vendors?before=1');
@@ -843,9 +975,10 @@ try {
     manifest.identities.staff.email,
     manifest.identities.staff.password,
   );
+  const createRouteKey = randomUUID();
   const createRoute = await appPost(staffCookies, '/api/vendors', {
-    key: randomUUID(),
-    displayName: `${namespace} route created`,
+    key: createRouteKey,
+    displayName: fixtureName('route created'),
     contactName: 'Trần Văn Route',
     phones: ['0912 345 678'],
     email: null,
@@ -862,15 +995,33 @@ try {
     '/api/vendors/' + createRoute.body.vendor.id,
   );
   assert.equal(after.status, 200);
-  assert.equal(after.body.vendor.displayName, `${namespace} route created`);
+  assert.equal(after.body.vendor.displayName, fixtureName('route created'));
   const forgedField = await appPost(staffCookies, '/api/vendors', {
     key: randomUUID(),
-    displayName: `${namespace} forged field`,
+    displayName: fixtureName('forged field'),
     role: 'admin',
   });
   assert.equal(forgedField.status, 400);
   observed(
     'a permitted create returns the identity the detail read then confirms',
+  );
+  const conflictRoute = await appPost(staffCookies, '/api/vendors', {
+    key: createRouteKey,
+    displayName: fixtureName('route conflicting'),
+  });
+  assert.equal(conflictRoute.status, 409);
+  assert.equal(conflictRoute.body.error, 'vendor-conflict');
+  const unchangedRoute = await appGet(
+    staffCookies,
+    '/api/vendors/' + createRoute.body.vendor.id,
+  );
+  assert.equal(unchangedRoute.status, 200);
+  assert.equal(
+    unchangedRoute.body.vendor.displayName,
+    fixtureName('route created'),
+  );
+  observed(
+    'conflicting reuse of the submission key is 409/vendor-conflict at the endpoint',
   );
 
   await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', {
@@ -879,6 +1030,7 @@ try {
 
   // ---------------------------------------------------------------- browser
   await startBrowser(9336);
+  browser('sgn73-anon', 9336, ['open', `${appUrl}/login?lang=vi`]);
   browser('sgn73-anon', 9336, ['open', `${appUrl}/people/vendors`]);
   await waitFor('sgn73-anon', 9336, `() => location.pathname === '/login'`);
   observed(
@@ -894,7 +1046,7 @@ try {
   );
   browser('sgn73-staff', 9336, [
     'open',
-    `${appUrl}/people/vendors?query=${encodeURIComponent(`${namespace} Nhà cung cấp chính`)}`,
+    `${appUrl}/people/vendors?query=${encodeURIComponent(staffVendorName)}`,
   ]);
   await waitFor(
     'sgn73-staff',
@@ -902,7 +1054,7 @@ try {
     `() => Boolean(document.querySelector('main table.data-table'))`,
   );
   const staffScreen = vendorScreen('sgn73-staff', 9336);
-  assert.equal(staffScreen.heading, 'Danh sách nhà cung cấp');
+  assert.equal(staffScreen.heading, 'Nhà cung cấp');
   assert.equal(
     staffScreen.createForm,
     true,
@@ -916,7 +1068,7 @@ try {
     (
       await appGet(
         staffCookies,
-        `/api/vendors?query=${encodeURIComponent(`${namespace} Nhà cung cấp chính`)}`,
+        `/api/vendors?query=${encodeURIComponent(staffVendorName)}`,
       )
     ).status,
     200,
@@ -930,7 +1082,7 @@ try {
   await waitFor(
     'sgn73-staff',
     9336,
-    `() => document.querySelector('h1')?.textContent?.trim() === ${JSON.stringify(`${namespace} Nhà cung cấp chính`)}`,
+    `() => document.querySelector('h1')?.textContent?.trim() === ${JSON.stringify(staffVendorName)}`,
   );
   const staffDetail = detailScreen('sgn73-staff', 9336);
   const staffFacts = Object.fromEntries(
@@ -965,7 +1117,7 @@ try {
   await waitFor(
     'sgn73-staff',
     9336,
-    `() => document.querySelector('h1')?.textContent?.trim() === 'Vendor directory'`,
+    `() => document.querySelector('h1')?.textContent?.trim() === 'Vendors'`,
   );
   const english = vendorScreen('sgn73-staff', 9336);
   assert.equal(english.lang, 'en');
@@ -981,7 +1133,7 @@ try {
   );
   browser('sgn73-sales', 9336, [
     'open',
-    `${appUrl}/people/vendors?query=${encodeURIComponent(`${namespace} Nhà cung cấp chính`)}`,
+    `${appUrl}/people/vendors?query=${encodeURIComponent(staffVendorName)}`,
   ]);
   await waitFor(
     'sgn73-sales',
@@ -1054,21 +1206,21 @@ try {
   observed(
     'inactive and unlinked identities are refused before the directory renders',
   );
-
-  report.observations = observations;
-  report.retained_vendors = manifest.retainedVendorIds;
-  report.before = before;
+} catch (error) {
+  failure = error;
 } finally {
-  await stopBrowsers();
-  await stopApp();
-  await removeFixtures(manifest);
+  await stopBrowsers().catch(() => {});
+  await stopApp().catch(() => {});
+  report.cleanup = await removeFixtures(manifest);
+  report.finished_at = new Date().toISOString();
+  report.retries = retryCount;
+  if (failure) report.failure = String(failure?.message ?? failure);
+  if (reportPath) {
+    await fs.mkdir(path.dirname(reportPath), { recursive: true });
+    await fs.writeFile(reportPath, JSON.stringify(report, null, 2) + '\n');
+  }
   if (keep) console.log('KEEP=1: fixture manifest left at', manifestPath);
-  else await fs.rm(manifestPath, { force: true });
+  else await fs.rm(manifestPath, { force: true }).catch(() => {});
 }
-report.finished_at = new Date().toISOString();
-report.retries = retryCount;
-if (reportPath) {
-  await fs.mkdir(path.dirname(reportPath), { recursive: true });
-  await fs.writeFile(reportPath, JSON.stringify(report, null, 2) + '\n');
-}
+if (failure) throw failure;
 console.log(`${observations.length} observations passed`);

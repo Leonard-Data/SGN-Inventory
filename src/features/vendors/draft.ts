@@ -9,6 +9,7 @@ export const VENDOR_PHONE_MAX_COUNT = 5;
 export const VENDOR_EMAIL_MAX_LENGTH = 254;
 export const VENDOR_SOURCE_ADDRESS_MAX_LENGTH = 500;
 export const VENDOR_NOTES_MAX_LENGTH = 2000;
+export const VENDOR_BODY_MAX_BYTES = 32 * 1024;
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
