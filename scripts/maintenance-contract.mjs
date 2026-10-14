@@ -682,6 +682,35 @@ export async function maintenanceContract({
       assert.equal(await historyCount(), committed);
     },
   );
+  await check(
+    'the intentional shared-contact editor exposes recorded details without owner-contact credit',
+    async () => {
+      const ownerCredit = async () =>
+        (
+          await db.query(
+            "select count(*)::int as n from public.activity_events where kind='owner_contact_access'",
+          )
+        ).rows[0].n;
+      assert.equal(await ownerCredit(), 0);
+      const preview = (
+        await db.query('select public.contact_impact($1) as impact', [shared])
+      ).rows[0].impact;
+      assert.deepEqual(
+        preview.properties.map((r) => r.id).sort(),
+        [created, property, other].sort(),
+      );
+      assert.deepEqual(
+        (
+          await db.query(
+            'select phones,raw_phone_text from public.contacts where id=$1',
+            [shared],
+          )
+        ).rows[0],
+        { phones: ['0900999999'], raw_phone_text: '0900 %_ mới' },
+      );
+      assert.equal(await ownerCredit(), 0);
+    },
+  );
   await db.exec('reset role');
   await db.query("select set_config('request.jwt.claim.sub','',false)");
   await check(

@@ -199,10 +199,10 @@ export function maintenanceError(locale: Locale, code: string | null) {
       ? text.stale
       : code === 'conflict'
         ? text.conflict
-        : code === 'invalid-input'
-          ? text.invalid
-          : code === 'explanation-without-price'
-            ? text.correctionExplanationNeedsPrice
+        : code === 'explanation-without-price'
+          ? text.correctionExplanationNeedsPrice
+          : code === 'invalid-input'
+            ? text.invalid
             : code === 'contact-refusal'
               ? text.contactRefusal
               : text.unavailable;
