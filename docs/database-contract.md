@@ -53,7 +53,6 @@ Recovery: `POST /api/auth/recover` `{email,locale}` invokes `resetPasswordForEma
 | Company employee-by-day activity | `company_employee_daily_activity` RPC | Live manager/admin only; every currently active employee and requested Vietnam day, including explicit zeros, with Page views, distinct properties viewed and owner-contact properties per day |
 | Area inventory | `v_admin_inventory_by_area` | Manager/admin only; zero rows for other roles |
 | Employee lock count | `v_admin_locks_by_employee` | Manager/admin only |
-<<<<<<< HEAD
 | Completed-sale ranking | `completed_sale_ranking` RPC | Live manager/admin only; effective (`reversed_at is null`) completions on their actual Vietnam completion date, tied totals sharing a rank and unknown attribution counted separately from any registered property sold state |
 | Employee directory | `employees` | Active internal employees. Employee rows are provisioned and their lifecycle, sign-in link and role are changed only through the owner/administrative path or a future guarded operation: the `employees_admin_insert`/`employees_admin_update` policies and the `authenticated` insert/update grant remain for that future operation, while the guard refuses direct client lifecycle writes today. The employee list page and `GET /api/employees` are admin-only, while the row read used for business attribution stays open to every active employee |
 | Property discussion | `property_comments` + `list_property_comments` RPC | Active employees on any readable property; archived discussion is reviewer-only |
