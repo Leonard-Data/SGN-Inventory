@@ -815,7 +815,7 @@ export function Detail({
                         />
                       ) : null}
                       <Reservation
-                        key={property.id}
+                        key={'reservation' + property.id + refreshTick}
                         propertyId={property.id}
                         locale={locale}
                         status={property.status}
