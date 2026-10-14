@@ -21,7 +21,10 @@
 //     [--report <sanitized json path>]
 //
 // The dev env supplies the publishable application settings; the owner config supplies the
-// owner capability. Both are read as data only and are never printed, shell sourced, or
+// server-only Auth admin capability (`authAdminKey`) and the owner SQL connection
+// (`databaseUrl`). The synthetic employees are provisioned and removed over that owner SQL
+// connection because client roles cannot write employee lifecycle rows under the live
+// employee guard. Both files are read as data only and are never printed, shell sourced, or
 // passed in argv/logs.
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -30,6 +33,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
+import pg from 'pg';
 import { readEnvironment } from '../src/lib/environment.ts';
 
 const devEnvPath = process.env.SGN_ACCEPTANCE_DEV_ENV;
@@ -69,7 +73,12 @@ assert.equal(devEnv.SGN_ENV, 'dev', 'Acceptance must never target production');
 assert.equal(
   typeof owner.authAdminKey,
   'string',
-  'The owner config must supply the owner capability',
+  'The owner config must supply the server-only Auth admin capability',
+);
+assert.equal(
+  typeof owner.databaseUrl,
+  'string',
+  'The owner config must supply the owner SQL capability for employee fixtures',
 );
 const environment = readEnvironment(
   { ...devEnv, NEXT_PUBLIC_APP_URL: `http://127.0.0.1:${appPort}` },
@@ -81,6 +90,11 @@ await fs.mkdir(workdir, { recursive: true });
 const ownerClient = createClient(environment.supabaseUrl, owner.authAdminKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
+// The employee lifecycle guard refuses every client role, so the fixture employees are
+// provisioned and removed with the separately authorized owner SQL capability.
+const ownerSql = new pg.Client({ connectionString: owner.databaseUrl });
+await ownerSql.connect();
+const ownerQuery = (text, params = []) => ownerSql.query(text, params);
 const observations = [];
 function observed(name, details = {}) {
   observations.push({ name, ...details });
@@ -239,17 +253,15 @@ async function removeFixtures(manifest) {
     }
     let removed;
     try {
-      removed = await retryResult(`remove fixture employee ${name}`, () =>
-        ownerClient
-          .from('employees')
-          .delete()
-          .eq('id', identity.employeeId)
-          .select('id'),
+      removed = await retryThrown(`remove fixture employee ${name}`, () =>
+        ownerQuery('delete from public.employees where id = $1', [
+          identity.employeeId,
+        ]),
       );
     } catch (error) {
       removed = { error };
     }
-    if (removed?.error || (removed?.data ?? []).length === 0) {
+    if (removed?.error || removed?.rowCount !== 1) {
       retained.add(identity.employeeId);
       cleanup.employees_retained.push(identity.employeeId);
       if (removed?.error)
@@ -322,17 +334,19 @@ async function createFixtures() {
     );
     assert.equal(created.error, null, `create auth user ${name}`);
     const employeeId = randomUUID();
-    const inserted = await retryResult(`create employee ${name}`, () =>
-      ownerClient.from('employees').insert({
-        id: employeeId,
-        auth_user_id: created.data.user.id,
-        email,
-        display_name: fixtureName(name),
-        role,
-        is_active: active,
-      }),
+    await retryThrown(`create employee ${name}`, () =>
+      ownerQuery(
+        'insert into public.employees(id,auth_user_id,email,display_name,role,is_active) values ($1,$2,$3,$4,$5,$6)',
+        [
+          employeeId,
+          created.data.user.id,
+          email,
+          fixtureName(name),
+          role,
+          active,
+        ],
+      ),
     );
-    assert.equal(inserted.error, null, `create employee ${name}`);
     manifest.identities[name] = {
       userId: created.data.user.id,
       employeeId,
@@ -1212,6 +1226,7 @@ try {
   await stopBrowsers().catch(() => {});
   await stopApp().catch(() => {});
   report.cleanup = await removeFixtures(manifest);
+  await ownerSql.end().catch(() => {});
   report.finished_at = new Date().toISOString();
   report.retries = retryCount;
   if (failure) report.failure = String(failure?.message ?? failure);
