@@ -20,9 +20,12 @@
 // on SGN_ACCEPTANCE_PORT and stops it again.
 //
 // The dev env supplies the publishable application settings; the owner config supplies the
-// database URL and owner capability. Both are read as data only and are never printed, shell
-// sourced, or passed in argv/logs. Counts are asserted as deltas around the fixture write,
-// because the report is company-wide and the development project is shared.
+// operator database URL and owner capability. Both are read as data only and are never printed
+// or shell sourced. The owner Auth key stays in-process, but `supabase db query` accepts no
+// other connection source, so each maintenance fixture statement carries the owner database URL
+// (with its password) in the child process argv and it is visible in the process table while
+// that statement runs. Counts are asserted as deltas around the fixture write, because the
+// report is company-wide and the development project is shared.
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { openSync } from 'node:fs';
@@ -709,13 +712,16 @@ async function stopApp() {
   if (app.exitCode === null) app.kill('SIGKILL');
   app = null;
 }
-async function appLogin(email, password, locale = 'vi') {
-  const response = await fetch(`${appUrl}/api/auth/login`, {
+function appLoginRequest(email, password, locale = 'vi') {
+  return fetch(`${appUrl}/api/auth/login`, {
     method: 'POST',
     redirect: 'manual',
     headers: { 'content-type': 'application/json', origin: appUrl },
     body: JSON.stringify({ email, password, locale }),
   });
+}
+async function appLogin(email, password, locale = 'vi') {
+  const response = await appLoginRequest(email, password, locale);
   assert.equal(response.status, 200, `Application login ${response.status}`);
   const cookies = (response.headers.getSetCookie?.() ?? [])
     .map((value) => value.split(';')[0])
@@ -1257,19 +1263,38 @@ try {
     fixtures.staff.email,
     fixtures.staff.password,
   );
-  const inactiveCookies = await appLogin(
-    fixtures.inactive.email,
-    fixtures.inactive.password,
-  );
   const route = `/api/activity/provinces?from=${firstDay}&to=${secondDay}`;
   assert.equal((await appGet(managerCookies, route)).status, 200);
   assert.equal((await appGet(adminCookies, route)).status, 200);
   assert.equal((await appGet(salesCookies, route)).status, 403);
   assert.equal((await appGet(staffCookies, route)).status, 403);
-  assert.equal((await appGet(inactiveCookies, route)).status, 403);
   assert.equal((await appGet('', route)).status, 401);
+  const inactiveLogin = await appLoginRequest(
+    fixtures.inactive.email,
+    fixtures.inactive.password,
+  );
+  assert.equal(inactiveLogin.status, 403);
+  assert.equal((await inactiveLogin.json()).error, 'access-denied');
   const directSales = await provinceReport(sales, firstDay, secondDay);
   assert.equal(directSales.error?.code, '42501');
+  const directStaff = await provinceReport(
+    await signIn(fixtures.staff.email, fixtures.staff.password),
+    firstDay,
+    secondDay,
+  );
+  assert.equal(directStaff.error?.code, '42501');
+  const directInactive = await provinceReport(
+    await signIn(fixtures.inactive.email, fixtures.inactive.password),
+    firstDay,
+    secondDay,
+  );
+  assert.equal(directInactive.error?.code, '42501');
+  const directUnlinked = await provinceReport(
+    await signIn(manifest.unlinked.email, manifest.unlinked.password),
+    firstDay,
+    secondDay,
+  );
+  assert.equal(directUnlinked.error?.code, '42501');
   const managerNow = rows(
     await provinceReport(manager, firstDay, secondDay),
     'manager re-read',
@@ -1286,7 +1311,7 @@ try {
     );
   assert.equal(countOf(managerNow, units.provinceSecond), 5);
   observed(
-    'manager and admin read the report while sales, staff, inactive and anonymous identities are refused',
+    'manager and admin read the report while sales and staff are refused by the application route and the direct RPC, the inactive identity is refused at login and by the direct RPC, and the authenticated-unlinked identity is refused by the direct RPC',
   );
 
   // A role downgrade applies to an already-issued session on its next request.
@@ -1298,6 +1323,15 @@ try {
   assert.equal((await appGet(managerCookies, route)).status, 200);
   observed(
     'a role downgrade removes authority on the next request and restoring the role restores it, with no new sign-in',
+  );
+  await updateEmployee(fixtures.manager.employeeId, { is_active: false });
+  const deactivated = await provinceReport(manager, firstDay, secondDay);
+  assert.equal(deactivated.error?.code, '42501');
+  assert.equal((await appGet(managerCookies, route)).status, 403);
+  await updateEmployee(fixtures.manager.employeeId, { is_active: true });
+  assert.equal((await appGet(managerCookies, route)).status, 200);
+  observed(
+    'deactivating the manager denies the existing session on the next direct and application request and reactivation restores it',
   );
 
   // Rendered journey: the manager's real Chrome session in Vietnamese/default and English.
