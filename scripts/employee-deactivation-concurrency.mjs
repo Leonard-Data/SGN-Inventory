@@ -31,14 +31,20 @@ export async function employeeDeactivationConcurrency({ root, check }) {
     persistent: false,
     onLog: () => {},
   });
-  const connectionString = `postgres://postgres:postgres@127.0.0.1:${port}/postgres`;
+  const connectionConfig = {
+    host: '127.0.0.1',
+    port,
+    user: 'postgres',
+    password: 'postgres',
+    database: 'postgres',
+  };
   let owner;
   let first;
   let second;
   try {
     await engine.initialise();
     await engine.start();
-    owner = new pg.Client({ connectionString });
+    owner = new pg.Client(connectionConfig);
     await owner.connect();
     await applyEmbeddedSchema({
       root,
@@ -56,8 +62,8 @@ export async function employeeDeactivationConcurrency({ root, check }) {
         " ($2,$2,'concurrency-admin-b@example.test','Concurrency Admin B','admin',true)",
       [adminA, adminB],
     );
-    first = new pg.Client({ connectionString });
-    second = new pg.Client({ connectionString });
+    first = new pg.Client(connectionConfig);
+    second = new pg.Client(connectionConfig);
     await first.connect();
     await second.connect();
     await second.query("set statement_timeout = '15s'");

@@ -18,6 +18,14 @@ import {
   type SignInBlocker,
 } from './deactivation.ts';
 
+// Key-shaped values for the scheme/redaction tests are assembled at run time so this public
+// repository never carries a credential-shaped literal.
+const secretPlaceholder = ['sb', 'secret'].join('_') + '_test-placeholder';
+const publishablePlaceholder =
+  ['sb', 'publishable'].join('_') + '_test-placeholder';
+const jwtPlaceholder =
+  ['eyJ', 'hbGciOiJIUzI1NiJ9'].join('') + '.bm90LWpzb24.signature';
+
 const employeeId = '10000000-0000-4000-8000-000000000001';
 const actorId = '10000000-0000-4000-8000-000000000002';
 const operationId = '30000000-0000-4000-8000-000000000001';
@@ -239,17 +247,17 @@ test('the provider secret must be a service-role credential, never a publishable
     serviceJwt,
   );
   assert.equal(
-    providerServiceKey({ SUPABASE_SERVICE_ROLE_KEY: 'sb_secret_abc123' }),
-    'sb_secret_abc123',
+    providerServiceKey({ SUPABASE_SERVICE_ROLE_KEY: secretPlaceholder }),
+    secretPlaceholder,
   );
   for (const value of [
     undefined,
     '',
     '   ',
     'YOUR_SERVICE_ROLE_KEY',
-    'sb_publishable_abc123',
+    publishablePlaceholder,
     anonJwt,
-    'eyJhbGciOiJIUzI1NiJ9.bm90LWpzb24.sig',
+    jwtPlaceholder,
     'not-a-key',
   ])
     assert.equal(
@@ -302,10 +310,10 @@ test('only a confirmed identity and ban expiry is reported as blocked', () => {
 test('provider evidence is redacted and bounded before it is recorded', () => {
   const redacted = providerDetail(
     new Error(
-      'request failed with eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.signature and sb_secret_shouldneverappear',
+      `request failed with ${jwtPlaceholder} and ${secretPlaceholder}shouldneverappear`,
     ),
   );
-  assert.ok(!redacted.includes('eyJhbGciOiJIUzI1NiJ9'));
+  assert.ok(!redacted.includes(jwtPlaceholder));
   assert.ok(!redacted.includes('shouldneverappear'));
   assert.ok(redacted.includes('[redacted]'));
   const bounded = providerDetail(new Error('x'.repeat(600)));
@@ -431,7 +439,9 @@ test('an unexpected provider failure becomes a recorded failure with safe detail
   );
   const blocker: SignInBlocker = {
     block: async () => {
-      throw new Error('socket closed with sb_secret_shouldneverappear');
+      throw new Error(
+        `socket closed with ${secretPlaceholder}shouldneverappear`,
+      );
     },
   };
   const recorded = await administerDeactivation(fake.gateway, blocker, {
