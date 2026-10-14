@@ -840,7 +840,14 @@ export async function maintenanceContract({
       await fails(
         'select public.contact_impact($1)',
         [unlinkedContact],
-        '42501',
+        'PT403',
+      );
+      const linkedPreview = (
+        await db.query('select public.contact_impact($1) as impact', [shared])
+      ).rows[0].impact;
+      assert.deepEqual(
+        linkedPreview.properties.map((r) => r.id).sort(),
+        [created, property, other].sort(),
       );
       assert.deepEqual(
         (

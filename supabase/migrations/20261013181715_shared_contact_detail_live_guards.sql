@@ -7,7 +7,7 @@ declare result jsonb;
 begin
   if private.employee_id() is null then raise exception 'active employee required' using errcode='42501'; end if;
   if not exists(select 1 from public.property_contacts where contact_id=p_contact_id)
-    and private.employee_role() not in ('staff','manager','admin') then raise exception 'linked contact required' using errcode='42501'; end if;
+    and private.employee_role() not in ('staff','manager','admin') then raise exception 'linked contact required' using errcode='PT403'; end if;
   if exists(select 1 from public.property_contacts pc join public.properties p on p.id=pc.property_id where pc.contact_id=p_contact_id and p.archived_at is not null and not private.is_reviewer()) then raise exception 'affected property read denied' using errcode='PT403'; end if;
   select jsonb_build_object('revision',c.revision,'properties',coalesce((select jsonb_agg(jsonb_build_object('id',p.id,'property_code',p.property_code) order by p.id) from public.property_contacts pc join public.properties p on p.id=pc.property_id where pc.contact_id=c.id),'[]')) into result from public.contacts c where c.id=p_contact_id;
   if result is null then raise exception 'contact not found' using errcode='23514'; end if;
@@ -23,7 +23,7 @@ begin
   perform private.validate_maintenance('contact',p_changes);
   perform private.maintenance_gate();
   if not exists(select 1 from public.property_contacts where contact_id=p_contact_id)
-    and private.employee_role() not in ('staff','manager','admin') then raise exception 'linked contact required' using errcode='42501'; end if;
+    and private.employee_role() not in ('staff','manager','admin') then raise exception 'linked contact required' using errcode='PT403'; end if;
   perform private.contact_impact(p_contact_id);
   perform 1 from public.properties where id in (select property_id from public.property_contacts where contact_id=p_contact_id) order by id for update;
   select * into person from public.contacts where id=p_contact_id for update;
