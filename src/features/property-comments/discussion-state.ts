@@ -15,21 +15,31 @@ export function withPost(created: Comment, page: Comment[], more: boolean) {
   return { rows, next: more ? cursorOf(rows.at(-1)) : null };
 }
 
+function mergeRow(existing: Comment | undefined, row: Comment): Comment {
+  if (!existing) return row;
+  if (existing.removedAt !== null && row.removedAt === null) return existing;
+  if (row.removedAt !== null) return row;
+  if (
+    existing.editedAt !== null &&
+    (row.editedAt === null ||
+      timestampKey(row.editedAt) <= timestampKey(existing.editedAt))
+  )
+    return existing;
+  return row;
+}
+
 export function mergePage(current: Comment[], page: Comment[]): Comment[] {
   const local = new Map(current.map((row) => [row.id, row]));
-  return page.map((row) => {
-    const existing = local.get(row.id);
-    if (!existing) return row;
-    if (existing.removedAt !== null && row.removedAt === null) return existing;
-    if (row.removedAt !== null) return row;
-    if (
-      existing.editedAt !== null &&
-      (row.editedAt === null ||
-        timestampKey(row.editedAt) <= timestampKey(existing.editedAt))
-    )
-      return existing;
-    return row;
-  });
+  return page.map((row) => mergeRow(local.get(row.id), row));
+}
+
+export function mergeAcceptedEdit(
+  current: Comment[],
+  updated: Comment,
+): Comment[] {
+  return current.map((row) =>
+    row.id === updated.id ? mergeRow(row, updated) : row,
+  );
 }
 
 function timestampKey(value: string): string {
@@ -61,8 +71,7 @@ export function mergeStaleEditState(
   if (comment) {
     const existing =
       incoming.get(comment.id) ?? current.find((row) => row.id === comment.id);
-    mergedComment =
-      mergePage(existing ? [existing] : [], [comment]).at(0) ?? comment;
+    mergedComment = mergeRow(existing, comment);
     incoming.set(comment.id, mergedComment);
   }
   const seen = new Set<string>();

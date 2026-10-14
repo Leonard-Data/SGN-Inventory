@@ -12,6 +12,7 @@ import { api, RequestError } from '@/features/employees/api';
 import { vietnamTimestamp } from '@/features/properties/format';
 import { COMMENT_MAX_LENGTH, COMMENT_REASON_MAX_LENGTH } from './types';
 import {
+  mergeAcceptedEdit,
   mergePage,
   mergeStaleEditState,
   retainEditTarget,
@@ -378,10 +379,8 @@ export function Discussion({
       setSavingEdit(false);
       return;
     }
-    // The accepted response replaces the entry in place, so the edit never becomes a new post.
-    setComments((rows) =>
-      rows.map((entry) => (entry.id === updated.id ? updated : entry)),
-    );
+    // The accepted response is merged into its entry in place, so the edit never becomes a new post.
+    setComments((rows) => mergeAcceptedEdit(rows, updated));
     // A replayed key can converge on an already-withdrawn comment, so the response is not a save.
     if (updated.removedAt !== null) {
       setBusy(true);

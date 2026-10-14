@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  mergeAcceptedEdit,
   mergePage,
   mergeStaleEditState,
   retainEditTarget,
@@ -189,6 +190,79 @@ test('incoming removal marker replaces locally edited text', () => {
   };
 
   assert.deepEqual(mergePage([latest], [removed]), [removed]);
+});
+
+test('accepted edit response replaces its rendered entry in place', () => {
+  const newest = comment('newest', 'Newest', '2026-10-13T09:00:00.000Z');
+  const target = comment('target', 'Before', '2026-10-12T09:00:00.000Z');
+  const older = comment('older', 'Older', '2026-10-11T09:00:00.000Z');
+  const accepted = {
+    ...target,
+    body: 'Accepted edit',
+    revision: 'target-revision-2',
+    editedAt: '2026-10-13T10:00:00.000Z',
+  };
+
+  assert.deepEqual(mergeAcceptedEdit([newest, target, older], accepted), [
+    newest,
+    accepted,
+    older,
+  ]);
+});
+
+test('slow accepted edit response cannot roll back a newer rendered edit', () => {
+  const newer = comment(
+    'edited',
+    'Newer edit',
+    '2026-10-12T09:00:00.000Z',
+    '2026-10-13T10:00:00.000Z',
+  );
+  const slow = {
+    ...newer,
+    body: 'Older accepted edit',
+    revision: 'edited-revision-slow',
+    editedAt: '2026-10-13T09:00:00.000Z',
+  };
+
+  assert.deepEqual(mergeAcceptedEdit([newer], slow), [newer]);
+});
+
+test('slow accepted edit response cannot restore a withdrawn entry', () => {
+  const withdrawn = comment(
+    'edited',
+    null,
+    '2026-10-12T09:00:00.000Z',
+    '2026-10-13T09:00:00.000Z',
+    '2026-10-13T11:00:00.000Z',
+  );
+  const slow = {
+    ...withdrawn,
+    body: 'Older accepted edit',
+    revision: 'edited-revision-slow',
+    removedAt: null,
+  };
+
+  assert.deepEqual(mergeAcceptedEdit([withdrawn], slow), [withdrawn]);
+});
+
+test('refresh then slow accepted response keeps the newer committed edit', () => {
+  const before = comment('edited', 'Before', '2026-10-12T09:00:00.000Z');
+  const accepted = {
+    ...before,
+    body: 'Accepted edit',
+    revision: 'edited-revision-1',
+    editedAt: '2026-10-13T09:00:00.000Z',
+  };
+  const committedLater = {
+    ...before,
+    body: 'Newer committed edit',
+    revision: 'edited-revision-2',
+    editedAt: '2026-10-13T10:00:00.000Z',
+  };
+  const refreshed = mergePage([before], [committedLater]);
+
+  assert.deepEqual(refreshed, [committedLater]);
+  assert.deepEqual(mergeAcceptedEdit(refreshed, accepted), [committedLater]);
 });
 
 test('stale edit merge preserves loaded row position', () => {
