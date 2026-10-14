@@ -2,6 +2,8 @@
 // with the same limits the database enforces. Optional details are trimmed and a blank
 // one becomes null (unknown); a malformed create is refused before any RPC runs, so it
 // cannot leave a partial vendor.
+import { isUuid } from '../../lib/supabase/query.ts';
+
 export const VENDOR_NAME_MAX_LENGTH = 200;
 export const VENDOR_CONTACT_NAME_MAX_LENGTH = 200;
 export const VENDOR_PHONE_MAX_LENGTH = 40;
@@ -11,8 +13,6 @@ export const VENDOR_SOURCE_ADDRESS_MAX_LENGTH = 500;
 export const VENDOR_NOTES_MAX_LENGTH = 2000;
 export const VENDOR_BODY_MAX_BYTES = 32 * 1024;
 
-const uuidPattern =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const draftKeys = [
   'key',
@@ -84,7 +84,7 @@ function phoneEntries(value: unknown): string[] | null {
 export function vendorDraft(body: Record<string, unknown>): VendorDraft {
   if (Object.keys(body).some((key) => !draftKeys.includes(key as never)))
     invalid();
-  if (typeof body.key !== 'string' || !uuidPattern.test(body.key)) invalid();
+  if (!isUuid(body.key)) invalid();
   if (typeof body.displayName !== 'string') invalid();
   const displayName = body.displayName.trim();
   if (

@@ -22,11 +22,12 @@
 //     [--report <sanitized json path>]
 //
 // The dev env supplies the publishable application settings; the owner config supplies the
-// server-only Auth admin capability (`authAdminKey`). The operator config supplies the owner
-// connection (`dbUrl`) queried through the Supabase CLI to provision and remove the
+// server-only Auth admin capability (`authAdminKey`), which is never printed, shell sourced
+// or passed in argv. The operator config supplies the owner connection (`dbUrl`), handed to
+// the Supabase CLI in argv for the fixture statements that provision and remove the
 // synthetic employees, because client roles cannot write employee lifecycle rows under the
-// live employee guard. All files are read as data only and are never printed, shell sourced,
-// or passed in argv/logs.
+// live employee guard. Captured CLI output is redacted of the connection string before it is
+// recorded.
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { openSync } from 'node:fs';
@@ -107,7 +108,11 @@ function operatorSql(statement) {
   );
   if (result.status !== 0)
     throw new Error(
-      'Operator SQL failed: ' + (result.stdout || result.stderr).slice(-800),
+      'Operator SQL failed: ' +
+        (result.stdout || result.stderr)
+          .split(operator.dbUrl)
+          .join('[redacted connection string]')
+          .slice(-800),
     );
   try {
     return JSON.parse(result.stdout).rows ?? [];
