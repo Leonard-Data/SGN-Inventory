@@ -24,6 +24,12 @@ import type {
   CommentRemovalKind,
 } from './types';
 
+type EditSession = {
+  id: string;
+  expectedRevision: string;
+  key: string;
+};
+
 export function Discussion({
   propertyId,
   locale,
@@ -65,11 +71,7 @@ export function Discussion({
   );
   const [removeNotice, setRemoveNotice] = useState<string | null>(null);
   // Author editing: the open editor, its unsent draft, the kept failure state and its notice.
-  const [editing, setEditing] = useState<{
-    id: string;
-    expectedRevision: string;
-    key: string;
-  } | null>(null);
+  const [editing, setEditing] = useState<EditSession | null>(null);
   const [editDraft, setEditDraft] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
   const [editAction, setEditAction] = useState<{
@@ -81,6 +83,8 @@ export function Discussion({
   const inFlight = useRef<AbortController | null>(null);
   const generation = useRef(0);
   const editTarget = useRef<string | null>(null);
+  // The open editor's identity; a save response only closes the editor it was sent from.
+  const editSession = useRef<EditSession | null>(null);
   // One submission key per draft: an ambiguous failure retries the original comment, a conflict
   // proves that key can never succeed and retires it.
   const submissionKey = useRef('');
@@ -300,12 +304,14 @@ export function Discussion({
   // Opening the editor replaces the entry's text with the draft and clears the other actions,
   // so one entry is never being edited, moderated and withdrawn at the same time.
   function beginEdit(row: Comment) {
-    editTarget.current = row.id;
-    setEditing({
+    const session: EditSession = {
       id: row.id,
       expectedRevision: row.revision,
       key: crypto.randomUUID(),
-    });
+    };
+    editTarget.current = row.id;
+    editSession.current = session;
+    setEditing(session);
     setEditDraft(row.body ?? '');
     setEditAction(null);
     setEditReconciled(false);
@@ -316,6 +322,7 @@ export function Discussion({
   }
   function cancelEdit() {
     editTarget.current = null;
+    editSession.current = null;
     setEditing(null);
     setEditDraft('');
     setEditAction(null);
@@ -384,10 +391,14 @@ export function Discussion({
       setSavingEdit(false);
       return;
     }
-    editTarget.current = null;
-    setEditing(null);
-    setEditDraft('');
-    setEditReconciled(false);
+    // Only the session that sent this request closes with it; a newer editor keeps its draft.
+    if (editSession.current === session) {
+      editTarget.current = null;
+      editSession.current = null;
+      setEditing(null);
+      setEditDraft('');
+      setEditReconciled(false);
+    }
     setEditNotice(text.commentEdited);
     setSavingEdit(false);
   }
