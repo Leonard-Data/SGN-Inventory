@@ -1,7 +1,7 @@
 {
-  "checkedAt": "2026-10-14T10:59:46.220Z",
+  "checkedAt": "2026-10-14T12:58:30.692Z",
   "projectRef": "tneucwzcrzteeixvttpu",
-  "testedHead": "144fe378f3704c7e72361afb7243a618e8285b85",
+  "testedHead": "beef9969c5795923f6583c8900052d829ee7c2c7 (dirty worktree)",
   "namespace": "SGN34",
   "environment": "authorized hosted development Supabase / local production Next.js build",
   "observations": [
@@ -51,7 +51,7 @@
     },
     {
       "name": "the manager browser renders the ranked totals, the explicit zero row and the daily history",
-      "rows": 50
+      "rows": 54
     },
     {
       "name": "an invalid range renders the localized validation and no ranking in Vietnamese/default"
@@ -88,11 +88,27 @@
     },
     {
       "name": "the synthetic identities, employee rows and activity are removed",
-      "baselineEmployees": 122,
-      "employees": 122
+      "baselineEmployees": 127,
+      "employees": 127
     }
   ],
+  "screenshots": [
+    "ranking-default-30-day.png",
+    "ranking-invalid-range-vi.png",
+    "ranking-failure-vi.png",
+    "ranking-english.png",
+    "ranking-invalid-range-en.png",
+    "ranking-failure-en.png",
+    "ranking-single-day.png",
+    "ranking-mobile-375.png",
+    "ranking-timezone-pacific-kiritimati.png",
+    "ranking-deactivated-denied.png",
+    "ranking-sales-denied.png",
+    "ranking-after-sign-out.png"
+  ],
+  "screenshotsSkipped": [],
   "transientRetries": 1,
+  "bridgeRetries": 0,
   "pageRetries": 0,
   "sessionRecoveries": 0,
   "created": {

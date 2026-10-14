@@ -14,6 +14,9 @@
 //   [SGN_ACCEPTANCE_BROWSER_CLI=<chrome-devtools-axi>] \
 //   [SGN_ACCEPTANCE_CHROME=<chromium binary>] \
 //   [SGN_ACCEPTANCE_PORT=<app port>] \
+//   [SGN_ACCEPTANCE_CDP_MANAGER=<manager debugging port>] \
+//   [SGN_ACCEPTANCE_CDP_SALES=<sales debugging port>] \
+//   [SGN_ACCEPTANCE_CDP_TZ=<second-timezone debugging port>] \
 //   node --env-file-if-exists=.env.local scripts/ranking-acceptance.mjs \
 //     [--report <sanitized json path>]
 //
@@ -27,7 +30,7 @@
 // pass it, because the delivered employee-admin guard reserves lifecycle writes to that path.
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
-import { openSync } from 'node:fs';
+import { openSync, statSync } from 'node:fs';
 import { randomBytes, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
@@ -48,6 +51,13 @@ const chromeBin =
     '.cache/ms-playwright/chromium-1248/chrome-linux64/chrome',
   );
 const appPort = Number(process.env.SGN_ACCEPTANCE_PORT ?? 3103);
+// The browser debugging ports are overridable because a concurrent lane on a shared
+// workstation runs its own acceptance harness with the same defaults.
+const cdpPorts = {
+  manager: Number(process.env.SGN_ACCEPTANCE_CDP_MANAGER ?? 9341),
+  sales: Number(process.env.SGN_ACCEPTANCE_CDP_SALES ?? 9342),
+  tz: Number(process.env.SGN_ACCEPTANCE_CDP_TZ ?? 9343),
+};
 const keep = process.env.SGN_ACCEPTANCE_KEEP === '1';
 const root = path.resolve(import.meta.dirname, '..');
 const reportIndex = process.argv.indexOf('--report');
@@ -110,6 +120,8 @@ function observed(name, details = {}) {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // Flaky transport steps are retried and counted, then disclosed; assertions are never retried.
 let retryCount = 0;
+// Bridge-session restarts are counted and disclosed like the other transient retries.
+let bridgeRetries = 0;
 function isTransient(error) {
   const text = `${error?.message ?? ''} ${error?.details ?? ''}`;
   return /fetch failed|ConnectTimeout|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket hang up|Connection terminated|upstream connect error|502|503|504/i.test(
@@ -510,6 +522,13 @@ async function startApp() {
   );
   app = child;
   for (let attempt = 0; attempt < 60; attempt++) {
+    // A port already held by another lane's server would satisfy the readiness probe while the
+    // spawned application never started, so the spawned process itself has to stay alive.
+    assert.equal(
+      child.exitCode,
+      null,
+      `The local application exited before it became ready (port ${appPort} in use?)`,
+    );
     try {
       const response = await fetch(`${appUrl}/api/health`, {
         redirect: 'manual',
@@ -594,19 +613,41 @@ async function stopBrowsers() {
     await fs.rm(profile, { recursive: true, force: true });
   profileDirs.length = 0;
 }
+// A session name is persisted with its bridge daemon and the CLI's bridge port is derived from
+// that name, so a long-lived bridge from another lane's concurrent session can already hold the
+// port this run hashed to. A startup failure that names the bridge is retried once under a fresh
+// session name, which derives a new port; the callers keep passing the logical session name.
+const sessionAliases = new Map();
+function isBridgeStartupFailure(result) {
+  const text = `${result.stderr ?? ''}\n${result.stdout ?? ''}`;
+  return /BRIDGE_NOT_READY|already in use/i.test(text);
+}
+function browserResult(session, cdpPort, args) {
+  const invoke = (name) =>
+    spawnSync(process.execPath, [browserCli, ...args], {
+      encoding: 'utf8',
+      timeout: 120000,
+      env: {
+        ...process.env,
+        CHROME_DEVTOOLS_AXI_SESSION: name,
+        CHROME_DEVTOOLS_AXI_AUTO_CONNECT: '0',
+        CHROME_DEVTOOLS_AXI_BROWSER_URL: `http://127.0.0.1:${cdpPort}`,
+        CHROME_DEVTOOLS_AXI_MCP_SERVER_URL: '',
+        CHROME_DEVTOOLS_AXI_BRIDGE_TIMEOUT_MS: '180000',
+      },
+    });
+  let result = invoke(sessionAliases.get(session) ?? session);
+  if (isBridgeStartupFailure(result)) {
+    const next = `${session}-r${sessionAliases.size + 2}`;
+    sessionAliases.set(session, next);
+    result = invoke(next);
+    bridgeRetries++;
+    if (result.status === 0) console.log('RETRY bridge session', session, next);
+  }
+  return result;
+}
 function browser(session, cdpPort, args) {
-  const result = spawnSync(process.execPath, [browserCli, ...args], {
-    encoding: 'utf8',
-    timeout: 120000,
-    env: {
-      ...process.env,
-      CHROME_DEVTOOLS_AXI_SESSION: session,
-      CHROME_DEVTOOLS_AXI_AUTO_CONNECT: '0',
-      CHROME_DEVTOOLS_AXI_BROWSER_URL: `http://127.0.0.1:${cdpPort}`,
-      CHROME_DEVTOOLS_AXI_MCP_SERVER_URL: '',
-      CHROME_DEVTOOLS_AXI_BRIDGE_TIMEOUT_MS: '180000',
-    },
-  });
+  const result = browserResult(session, cdpPort, args);
   const diagnostic = `${result.stderr ?? ''}\n${result.stdout ?? ''}`
     .split('\n')
     .map((line) => line.trim())
@@ -681,6 +722,51 @@ function screen(session, cdpPort) {
   const value = evaluate(session, cdpPort, companyScreen);
   assert.equal(typeof value, 'object', 'Unexpected browser screen payload');
   return value;
+}
+// Reviewer-visible artifacts: each screenshot is captured from the same live browser state the
+// surrounding observation asserts, so the hosted run leaves the rendered ranking as evidence
+// beside its assertion output.
+const screenshots = [];
+const screenshotsSkipped = [];
+async function capture(session, cdpPort, name, selector = null) {
+  // Frame the observed surface before capturing: the report shell pushes the ranking panel below
+  // the fold, and a viewport shot of the page top would not show the ranked rows.
+  try {
+    evaluate(
+      session,
+      cdpPort,
+      `(() => { const node = ${selector ? `document.querySelector(${JSON.stringify(selector)})` : 'null'} ?? document.querySelector('main') ?? document.body; window.scrollTo(0, Math.max(0, node.getBoundingClientRect().top + window.scrollY - 90)); return true; })()`,
+    );
+  } catch {
+    // Framing is best-effort; the capture itself must still write the image.
+  }
+  const file = path.join(workdir, name);
+  // The CLI can exit non-zero after `emulate --network ...` ("did not report a saved
+  // screenshot path") or exit zero without writing after a navigation, so the written artifact
+  // itself decides whether the capture succeeded. Artifacts are evidence rather than gates, so
+  // a capture that still writes nothing after a retry is disclosed and the run continues.
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const result = browserResult(session, cdpPort, ['screenshot', file]);
+    let size = 0;
+    try {
+      size = statSync(file).size;
+    } catch {
+      size = 0;
+    }
+    if (size > 0) {
+      screenshots.push(name);
+      return file;
+    }
+    if (attempt === 2)
+      console.log(
+        'NOTE screenshot skipped',
+        name,
+        String(result.status === 0 ? '' : (result.stderr ?? '')).slice(-160),
+      );
+    else await sleep(1000);
+  }
+  screenshotsSkipped.push(name);
+  return null;
 }
 let pageRetries = 0;
 let sessionRecoveries = 0;
@@ -814,6 +900,12 @@ async function assertReportStates(
     invalid.alerts.some((entry) => entry.includes(text.invalidRange)),
     `invalid-range alert missing in ${label}`,
   );
+  await capture(
+    session,
+    cdpPort,
+    `ranking-invalid-range-${language}.png`,
+    '[role=alert]',
+  );
   observed(
     `an invalid range renders the localized validation and no ranking in ${label}`,
   );
@@ -848,6 +940,12 @@ async function assertReportStates(
   assert.ok(
     failure.alerts.some((entry) => entry.includes(text.connectionFailure)),
     `query failure alert missing in ${label}`,
+  );
+  await capture(
+    session,
+    cdpPort,
+    `ranking-failure-${language}.png`,
+    '[role=alert]',
   );
   browser(session, cdpPort, ['emulate', '--network', 'Fast 4G']);
   evaluate(
@@ -1251,10 +1349,10 @@ try {
 
   // The real manager browser: the ranking panel renders the same values, survives a language
   // switch, follows a selected range and stays readable on a mobile viewport.
-  await startBrowser(9341, 'Asia/Ho_Chi_Minh');
+  await startBrowser(cdpPorts.manager, 'Asia/Ho_Chi_Minh');
   await browserSignIn(
     managerSession,
-    9341,
+    cdpPorts.manager,
     fixtures.manager.email,
     fixtures.manager.password,
   );
@@ -1263,7 +1361,7 @@ try {
   // table says about its own row cap for the same scope.
   const defaultOpen = await openRanking(
     managerSession,
-    9341,
+    cdpPorts.manager,
     '',
     managerCookies,
     fixtures.manager,
@@ -1286,9 +1384,15 @@ try {
     'the manager browser opens the 30-day default and renders the ranked totals and ranks',
     { dailyScope: defaultDailyCapped ? 'over-cap' : 'in-cap' },
   );
+  await capture(
+    managerSession,
+    cdpPorts.manager,
+    'ranking-default-30-day.png',
+    'section[aria-labelledby="company-ranking"]',
+  );
   const vi = await openRanking(
     managerSession,
-    9341,
+    cdpPorts.manager,
     `?from=${previousDay}&to=${day}`,
     managerCookies,
     fixtures.manager,
@@ -1324,7 +1428,7 @@ try {
 
   await assertReportStates(
     managerSession,
-    9341,
+    cdpPorts.manager,
     'vi',
     day,
     previousDay,
@@ -1333,19 +1437,19 @@ try {
   );
   // Capture the rendered default range immediately before the switch so the comparison is not
   // exposed to another user's activity landing between the two reads.
-  const viBeforeEn = await waitForRanking(managerSession, 9341);
+  const viBeforeEn = await waitForRanking(managerSession, cdpPorts.manager);
 
   evaluate(
     managerSession,
-    9341,
+    cdpPorts.manager,
     `(() => { const button = document.querySelector('.lang-switch button[lang=en]'); button.click(); return true; })()`,
   );
   await waitFor(
     managerSession,
-    9341,
+    cdpPorts.manager,
     `() => document.documentElement.lang === 'en'`,
   );
-  const en = await waitForRanking(managerSession, 9341);
+  const en = await waitForRanking(managerSession, cdpPorts.manager);
   assert.deepEqual(en.rankingHeaders, [
     'Rank',
     'Employee',
@@ -1357,13 +1461,19 @@ try {
     'Switching language changed a recorded total or rank',
   );
   assert.equal(en.rankingPeriod, viBeforeEn.rankingPeriod);
+  await capture(
+    managerSession,
+    cdpPorts.manager,
+    'ranking-english.png',
+    'section[aria-labelledby="company-ranking"]',
+  );
   observed(
     'switching Vietnamese to English keeps the ranked totals and rewrites no record',
   );
 
   await assertReportStates(
     managerSession,
-    9341,
+    cdpPorts.manager,
     'en',
     day,
     previousDay,
@@ -1371,17 +1481,17 @@ try {
     fixtures.manager,
   );
 
-  evaluate(managerSession, 9341, setInput('#report-from', day));
-  evaluate(managerSession, 9341, setInput('#report-to', day));
+  evaluate(managerSession, cdpPorts.manager, setInput('#report-from', day));
+  evaluate(managerSession, cdpPorts.manager, setInput('#report-to', day));
   evaluate(
     managerSession,
-    9341,
+    cdpPorts.manager,
     `(() => { document.querySelector('form[action="/activity/company"]').requestSubmit(); return true; })()`,
   );
   let singleDay = null;
   for (let attempt = 0; attempt < 60; attempt++) {
     try {
-      singleDay = screen(managerSession, 9341);
+      singleDay = screen(managerSession, cdpPorts.manager);
       if (
         singleDay.rankingRows.some(
           (row) => row[1] === `${namespace} salesB` && row[2] === '2',
@@ -1400,33 +1510,45 @@ try {
     renderedRow(singleDay, 'salesB')?.[0],
     'Equal single-day totals must share a rank',
   );
+  await capture(
+    managerSession,
+    cdpPorts.manager,
+    'ranking-single-day.png',
+    'section[aria-labelledby="company-ranking"]',
+  );
   observed(
     'the selected single-day range reranks the tied employees from the committed units',
   );
 
-  browser(managerSession, 9341, ['resize', '375', '900']);
-  const mobile = screen(managerSession, 9341);
+  browser(managerSession, cdpPorts.manager, ['resize', '375', '900']);
+  const mobile = screen(managerSession, cdpPorts.manager);
   assert.equal(
     mobile.overflowX,
     0,
     'The 375px ranking view overflows horizontally',
   );
   assert.ok(mobile.rangedLabels >= 3);
+  await capture(
+    managerSession,
+    cdpPorts.manager,
+    'ranking-mobile-375.png',
+    'section[aria-labelledby="company-ranking"]',
+  );
   observed('the ranking stays readable without horizontal overflow at 375px');
 
   // A browser in another timezone reads the same Vietnam period and the same ranked facts.
-  await startBrowser(9343, 'Pacific/Kiritimati');
+  await startBrowser(cdpPorts.tz, 'Pacific/Kiritimati');
   await browserSignIn(
     tzSession,
-    9343,
+    cdpPorts.tz,
     fixtures.manager.email,
     fixtures.manager.password,
   );
-  browser(tzSession, 9343, [
+  browser(tzSession, cdpPorts.tz, [
     'open',
     `${appUrl}/activity/company?from=${previousDay}&to=${day}`,
   ]);
-  const tz = await waitForRanking(tzSession, 9343);
+  const tz = await waitForRanking(tzSession, cdpPorts.tz);
   assert.equal(tz.rankingPeriod, vi.rankingPeriod);
   for (const [name, total] of [
     ['salesA', '2'],
@@ -1448,10 +1570,16 @@ try {
     true,
     'The timezone browser did not render the requested Vietnam period',
   );
+  await capture(
+    tzSession,
+    cdpPorts.tz,
+    'ranking-timezone-pacific-kiritimati.png',
+    'section[aria-labelledby="company-ranking"]',
+  );
   observed(
     'a browser in another timezone sees the same Vietnam period and the same ranked totals',
   );
-  await stopBrowser(9343);
+  await stopBrowser(cdpPorts.tz);
 
   // A live deactivation clears the displayed ranking on refocus and denies the next read.
   assert.ok(
@@ -1460,7 +1588,7 @@ try {
   );
   evaluate(
     managerSession,
-    9341,
+    cdpPorts.manager,
     `(() => { window.dispatchEvent(new Event('focus')); return true; })()`,
   );
   let refocusState = null;
@@ -1468,7 +1596,7 @@ try {
     try {
       refocusState = evaluate(
         managerSession,
-        9341,
+        cdpPorts.manager,
         `() => ({ path: location.pathname, denied: /quyền truy cập|Access denied/.test(document.body.innerText), ranking: Boolean(document.querySelector('section[aria-labelledby="company-ranking"]')) })`,
       );
       if (refocusState.path === '/access-denied' || refocusState.denied) break;
@@ -1485,6 +1613,11 @@ try {
     refocusState.ranking,
     false,
     'The ranking stayed visible after deactivation',
+  );
+  await capture(
+    managerSession,
+    cdpPorts.manager,
+    'ranking-deactivated-denied.png',
   );
   assert.ok(
     updateEmployee(fixtures.manager.employeeId, { is_active: true }),
@@ -1510,53 +1643,62 @@ try {
   );
   await browserSignIn(
     managerSession,
-    9341,
+    cdpPorts.manager,
     fixtures.manager.email,
     fixtures.manager.password,
   );
-  browser(managerSession, 9341, [
+  browser(managerSession, cdpPorts.manager, [
     'open',
     `${appUrl}/activity/company?from=${previousDay}&to=${day}`,
   ]);
-  await waitForRanking(managerSession, 9341);
+  await waitForRanking(managerSession, cdpPorts.manager);
   observed(
     'deactivation clears the displayed ranking on refocus and denies the next read',
   );
 
   // Denial in the browser, and no ranking left behind after sign-out.
-  await startBrowser(9342, 'Asia/Ho_Chi_Minh');
+  await startBrowser(cdpPorts.sales, 'Asia/Ho_Chi_Minh');
   await browserSignIn(
     salesSession,
-    9342,
+    cdpPorts.sales,
     fixtures.salesA.email,
     fixtures.salesA.password,
   );
-  browser(salesSession, 9342, ['open', `${appUrl}/activity/company`]);
+  browser(salesSession, cdpPorts.sales, ['open', `${appUrl}/activity/company`]);
   await waitFor(
     salesSession,
-    9342,
+    cdpPorts.sales,
     `() => location.pathname === '/access-denied'`,
   );
+  await capture(salesSession, cdpPorts.sales, 'ranking-sales-denied.png');
   observed('a sales employee opening the report directly is denied');
 
   evaluate(
     managerSession,
-    9341,
+    cdpPorts.manager,
     `(() => { document.querySelector('.sgn-user-btn').click(); return true; })()`,
   );
   await sleep(300);
   const signedOut = evaluate(
     managerSession,
-    9341,
+    cdpPorts.manager,
     `(() => { const button = [...document.querySelectorAll('.sgn-popover button')][0]; if (!button) return false; button.click(); return true; })()`,
   );
   assert.equal(signedOut, true, 'No sign-out control was found');
-  await waitFor(managerSession, 9341, `() => location.pathname === '/login'`);
-  evaluate(managerSession, 9341, `(() => { history.back(); return true; })()`);
+  await waitFor(
+    managerSession,
+    cdpPorts.manager,
+    `() => location.pathname === '/login'`,
+  );
+  evaluate(
+    managerSession,
+    cdpPorts.manager,
+    `(() => { history.back(); return true; })()`,
+  );
   await sleep(2000);
   const afterBack = evaluate(
     managerSession,
-    9341,
+    cdpPorts.manager,
     `() => ({ path: location.pathname, ranking: Boolean(document.querySelector('section[aria-labelledby="company-ranking"]')) })`,
   );
   assert.equal(
@@ -1564,6 +1706,7 @@ try {
     false,
     'Back exposed the ranking after sign-out',
   );
+  await capture(managerSession, cdpPorts.manager, 'ranking-after-sign-out.png');
   observed('sign-out clears the ranking so Back cannot reveal it');
 } catch (error) {
   primary = error;
@@ -1571,6 +1714,16 @@ try {
   if (!keep) {
     try {
       await stopBrowsers();
+      // Leave no bridge daemon behind: it would hold this run's derived port for the next one.
+      for (const [session, cdpPort] of [
+        [managerSession, cdpPorts.manager],
+        [tzSession, cdpPorts.tz],
+        [salesSession, cdpPorts.sales],
+      ]) {
+        const stopped = browserResult(session, cdpPort, ['stop']);
+        if (stopped.status !== 0)
+          console.log('NOTE bridge stop skipped', session);
+      }
       await stopApp();
       manifest = (await readManifest()) ?? manifest;
       await removeFixtures(manifest);
@@ -1645,7 +1798,10 @@ const reportDocument = {
   environment:
     'authorized hosted development Supabase / local production Next.js build',
   observations: observations.map(({ name, ...rest }) => ({ name, ...rest })),
+  screenshots,
+  screenshotsSkipped,
   transientRetries: retryCount,
+  bridgeRetries,
   pageRetries,
   sessionRecoveries,
   created: {
@@ -1664,6 +1820,9 @@ const reportDocument = {
       : null,
     pageRetries
       ? `${pageRetries} in-page Retry activations were needed after transient upstream 503 responses on the report read; each retry re-issued the same authorized request and no assertion was retried.`
+      : null,
+    bridgeRetries
+      ? `${bridgeRetries} browser bridge sessions were restarted under a fresh session name because the CLI's derived bridge port was already held by another long-lived session; the action was re-issued on the new bridge and no assertion was retried.`
       : null,
     sessionRecoveries
       ? `${sessionRecoveries} page-level denial recoveries were needed: the browser briefly met /access-denied while the manager was live, the same read was probed through the application and returned 200 for that live manager, and the session was re-established before the open was retried. No ranking assertion was relaxed.`
