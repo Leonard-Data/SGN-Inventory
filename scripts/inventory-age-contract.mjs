@@ -382,6 +382,40 @@ export async function inventoryAgeContract({
     },
   );
 
+  // The insert guard sees a request context through auth.uid(): a request-context insert may
+  // record only today as `recorded`, so it cannot choose its own age or forge legacy provenance.
+  await asUser(0);
+  await db.exec('reset role');
+  await check(
+    'a request-context insert cannot choose a past date or forge legacy provenance',
+    async () => {
+      await fails(
+        "insert into public.properties(id,property_code,listing_mode,status,created_by,entry_on,entry_source) values($1,'SGN-AGE-E1','sale','available',$2,date '2024-01-01','legacy')",
+        [id('e1'), sales],
+        '23514',
+      );
+      await fails(
+        "insert into public.properties(id,property_code,listing_mode,status,created_by,entry_on,entry_source) values($1,'SGN-AGE-E2','sale','available',$2,null,'unknown')",
+        [id('e2'), sales],
+        '23514',
+      );
+      const inserted = await db.query(
+        "insert into public.properties(id,property_code,listing_mode,status,created_by,entry_on,entry_source) values($1,'SGN-AGE-E3','sale','available',$2,(now() at time zone 'Asia/Ho_Chi_Minh')::date,'recorded') returning entry_on,entry_source",
+        [id('e3'), sales],
+      );
+      assert.equal(isoDate(inserted.rows[0].entry_on), isoDate(today));
+      assert.equal(inserted.rows[0].entry_source, 'recorded');
+    },
+  );
+  await asUser(0);
+  await check('a direct authenticated properties insert stays denied', () =>
+    fails(
+      "insert into public.properties(id,property_code,listing_mode,status,created_by,entry_on,entry_source) values($1,'SGN-AGE-E4','sale','available',$2,(now() at time zone 'Asia/Ho_Chi_Minh')::date,'recorded')",
+      [id('e4'), sales],
+      '42501',
+    ),
+  );
+
   // A genuinely new identity records the authoritative Vietnam business day, not import time.
   await asUser(0);
   const created = (
@@ -481,14 +515,12 @@ export async function inventoryAgeContract({
     ),
   );
   await asUser(4);
-  await check(
-    'inactive identity inventory age read denied',
-    () =>
-      fails(
-        'select * from public.list_inventory_by_age($1::text,$2::text)',
-        ['oldest', 'agefix'],
-        '42501',
-      ),
+  await check('inactive identity inventory age read denied', () =>
+    fails(
+      'select * from public.list_inventory_by_age($1::text,$2::text)',
+      ['oldest', 'agefix'],
+      '42501',
+    ),
   );
   await asOwner();
 }

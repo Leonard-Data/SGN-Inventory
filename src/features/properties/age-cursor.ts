@@ -9,6 +9,17 @@ export type AgeCursor =
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+export const INVENTORY_PAGE_SIZE = 30;
+
+// The read asks for one lookahead row and exposes a full page only when a following page
+// exists, so a complete final page never links to a page that renders as empty inventory.
+export function inventoryPage<T>(
+  rows: readonly T[],
+  pageSize: number = INVENTORY_PAGE_SIZE,
+): { page: T[]; hasMore: boolean } {
+  return { page: rows.slice(0, pageSize), hasMore: rows.length > pageSize };
+}
+
 export function isInventoryOrder(value: unknown): value is InventoryOrder {
   return value === 'oldest' || value === 'newest';
 }

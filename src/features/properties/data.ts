@@ -5,6 +5,8 @@ import {
   ageCursorArgs,
   decodeAgeCursor,
   encodeAgeCursor,
+  inventoryPage,
+  INVENTORY_PAGE_SIZE,
   isInventoryOrder,
   type InventoryOrder,
 } from './age-cursor';
@@ -79,18 +81,20 @@ async function listInventoryByAge(
     {
       p_direction: order,
       p_query: query,
-      p_limit: 30,
+      // One lookahead row beyond the exposed page decides whether a next page exists.
+      p_limit: INVENTORY_PAGE_SIZE + 1,
       ...ageCursorArgs(decoded.cursor),
     },
   );
   if (error) throw accessError(error.code);
-  if (!rows?.length) return { order, properties: [], nextCursor: null };
+  const { page, hasMore } = inventoryPage(rows ?? []);
+  if (!page.length) return { order, properties: [], nextCursor: null };
   const addresses = await addressSummaries(
     context,
-    rows.map((row) => row.id),
+    page.map((row) => row.id),
     query,
   );
-  const properties: PropertySummary[] = rows.map((row) => ({
+  const properties: PropertySummary[] = page.map((row) => ({
     id: row.id,
     propertyCode: row.property_code,
     listingMode: row.listing_mode,
@@ -112,12 +116,12 @@ async function listInventoryByAge(
   return {
     order,
     properties,
-    // A full page can have a following page; the cursor is opaque to the browser and carries
-    // the ordering section, so an unknown-date page continues from its own identity.
-    nextCursor:
-      rows.length === 30
-        ? encodeAgeCursor({ entryOn: last.entryOn ?? null, id: last.id })
-        : null,
+    // A lookahead row beyond this page means a following page exists; the cursor is opaque to
+    // the browser and carries the ordering section, so an unknown-date page continues from its
+    // own identity.
+    nextCursor: hasMore
+      ? encodeAgeCursor({ entryOn: last.entryOn ?? null, id: last.id })
+      : null,
   };
 }
 

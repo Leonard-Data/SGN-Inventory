@@ -1,6 +1,5 @@
 import { cookies } from 'next/headers';
 import { Inventory } from '@/features/properties/inventory';
-import { isInventoryOrder } from '@/features/properties/age-cursor';
 export default async function Properties({
   searchParams,
 }: {
@@ -20,8 +19,9 @@ export default async function Properties({
       initialQuery={params.query ?? ''}
       after={params.after ?? null}
       trail={params.trail ?? ''}
-      // An unknown ordering falls back to the ordinary browse; the API still rejects it.
-      sort={isInventoryOrder(params.sort) ? params.sort : null}
+      // The supplied ordering passes through unchanged so the read rejects an unknown value
+      // instead of silently browsing by UUID.
+      sort={params.sort ?? null}
     />
   );
 }

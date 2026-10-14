@@ -6,7 +6,11 @@ import { messages } from '@/i18n/messages';
 import type { PropertyPage } from './types';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { PropertyCard } from './property-card';
-import { validTrailToken, type InventoryOrder } from './age-cursor';
+import {
+  isInventoryOrder,
+  validTrailToken,
+  type InventoryOrder,
+} from './age-cursor';
 
 export function Inventory({
   initialLocale,
@@ -19,8 +23,9 @@ export function Inventory({
   initialQuery: string;
   after: string | null;
   trail: string;
-  sort: InventoryOrder | null;
+  sort: string | null;
 }) {
+  const activeOrder = isInventoryOrder(sort) ? sort : null;
   const endpoint =
     '/api/properties?' +
     new URLSearchParams({
@@ -43,7 +48,7 @@ export function Inventory({
     [clear],
   );
   const cursors = trail
-    ? trail.split(',').filter((cursor) => validTrailToken(sort, cursor))
+    ? trail.split(',').filter((cursor) => validTrailToken(activeOrder, cursor))
     : [];
   const previous = cursors[cursors.length - 1];
   function search(event: FormEvent<HTMLFormElement>) {
@@ -164,7 +169,9 @@ export function Inventory({
                   key={order.value ?? 'default'}
                   className="seg-btn"
                   href={orderHref(order.value)}
-                  aria-current={sort === order.value ? 'true' : undefined}
+                  aria-current={
+                    activeOrder === order.value ? 'true' : undefined
+                  }
                 >
                   {order.label}
                 </a>

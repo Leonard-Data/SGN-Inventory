@@ -4,6 +4,7 @@ import {
   ageCursorArgs,
   decodeAgeCursor,
   encodeAgeCursor,
+  inventoryPage,
   isInventoryOrder,
   validTrailToken,
 } from './age-cursor.ts';
@@ -71,6 +72,22 @@ test('the trail validates tokens against the active ordering only', () => {
   assert.equal(validTrailToken('oldest', `d:2025-06-01:${id}`), true);
   assert.equal(validTrailToken('newest', `u:${id}`), true);
   assert.equal(validTrailToken('oldest', 'nonsense'), false);
+});
+
+test('a page links forward only when a lookahead row proves another page exists', () => {
+  const rows = Array.from({ length: 31 }, (_, index) => index);
+  const full = inventoryPage(rows);
+  assert.equal(full.page.length, 30);
+  assert.equal(full.hasMore, true);
+  const exact = inventoryPage(rows.slice(0, 30));
+  assert.equal(exact.page.length, 30);
+  assert.equal(exact.hasMore, false);
+  const partial = inventoryPage(rows.slice(0, 29));
+  assert.equal(partial.page.length, 29);
+  assert.equal(partial.hasMore, false);
+  const empty = inventoryPage([]);
+  assert.equal(empty.page.length, 0);
+  assert.equal(empty.hasMore, false);
 });
 
 test('only the two chronological orderings are accepted', () => {

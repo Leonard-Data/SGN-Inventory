@@ -100,9 +100,13 @@ export function PropertyCard({
                   : ''}
               </>
             ) : (
-              <span className="badge" data-tone="muted">
-                {label(locale, 'entryDateUnknown')}
-              </span>
+              <>
+                <span className="badge" data-tone="muted">
+                  {label(locale, 'entryDateUnknown')}
+                </span>
+                {' · '}
+                {label(locale, 'entryAgeUnknown')}
+              </>
             )}
           </p>
         ) : null}
