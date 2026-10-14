@@ -1,6 +1,6 @@
 # Sources and evidence
 
-Reviewed 10 October 2026. Government sources describe the policy baseline; the database design and verification workflow are application decisions. Check for later official changes when ingesting catalogs.
+Reviewed 14 October 2026. Government sources describe the policy baseline; the database design and verification workflow are application decisions. Check for later official changes when ingesting catalogs.
 
 | Source | Use in this design |
 | --- | --- |
