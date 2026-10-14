@@ -624,7 +624,7 @@ export function Discussion({
                           type="button"
                           className="btn btn-sm btn-ghost"
                           onClick={() => beginEdit(row)}
-                          disabled={removing === row.id}
+                          disabled={savingEdit || removing === row.id}
                         >
                           {text.editComment}
                         </button>

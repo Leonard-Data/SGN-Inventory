@@ -73,7 +73,7 @@ export function mergeStaleEditState(
   for (const row of pageRows) {
     if (seen.has(row.id)) continue;
     seen.add(row.id);
-    rows.push(incoming.get(row.id) ?? row);
+    rows.push(incoming.get(row.id)!);
   }
   if (comment && mergedComment && !seen.has(comment.id))
     rows.push(mergedComment);
