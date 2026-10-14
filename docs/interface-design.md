@@ -84,7 +84,7 @@ The contract is `src/app/sgn-app.css` — the ported design package. Compose the
 | Fields | `.field` > `.field-label-row` (`.field-req`), `.input`/`.select`/`.textarea`, `.field-unit`, `.check`, `.field-hint`, `.field-error` | one control set for every form |
 | Rows / detail | `.detail-head`, `.detail-sub`, `.detail-body`, `.detail-rail`, `.chips.head-chips`, `.facts` > `.fact` (`dt`/`dd`, `.is-unknown`), `.record` > `.record-head`/`.record-title`/`.record-body`/`.record-meta` | facts print `Chưa rõ` for unknown values, never a dash |
 | Files | `.doc-row`, `.doc-icon`, `.doc-name`, `.doc-meta`, `.doc-actions`, `.dropzone` | replaces the legacy file list |
-| History / price | `.timeline` > `.tl-item` (`.tl-time`, `.tl-title`, `.tl-body`, `.tl-actor`), `.hist-row` (`.hist-when`, `.hist-change`, `.hist-field`), `.price-row` (`.price-when`, `.price-change`, `.price-note`, `.price-who`) | `property_history` events render through the history rows; the record's recorded sale/rent series (#36) renders through the price rows |
+| History / price | `.timeline` > `.tl-item` (`.tl-time`, `.tl-title`, `.tl-body`, `.tl-actor`), `.hist-row` (`.hist-when`, `.hist-change`, `.hist-field`), `.price-series` (`.price-series-title`) > `.price-row` (`.price-when`, `.price-change`, `.price-note`, `.price-who`) | `property_history` events render through the history rows; the record's recorded sale/rent series (#36) renders through the price rows |
 | Comments | `.comment` (`.sgn-avatar` cell + body) > `.comment-author`, `.comment-meta`, `.comment-body`, `.comment-actions`, `.composer` > `.composer-foot` | 500-character contract unchanged |
 | States | `.state-panel` (+ `data-tone="danger"`, `.state-mark`, `.state-title`), `.busy-bar`, `.busy-line` + `.spinner`, `.skeleton`/`.sk-card`, `.alert` (+ `data-tone`), `.toast` | loading, empty, error and denial stay distinct; empty ≠ zero ≠ denied |
 | Lists / tables | `.data-table.stackable` (`[data-num]`, `data-label`), `.pagination` > `.page-info` + `.page-buttons` > `.pager-btn` | tables stack to label/value cards under 640px |
@@ -123,6 +123,7 @@ Shipped: the card cover is the site plate drawn from the record's own fields; a 
       .tabpanel "Tổng quan":
         panel .plate-hero (top of the grid)  → Plate(hero) | stored cover photograph
         panel Facts      → dl.facts with .fact rows; unknown values print Chưa rõ
+        panel Price history → two .price-series groups (sale asking price / monthly asking rent) of .price-row (.price-when, .price-change, .price-note, .price-who), newest-first with per-series paging
         panel Addresses  → .record rows + mapping .badge, .addrNote policy line
         panel Contacts   → .record rows + owner-contact disclosure (.owner-disclosure/.owner-phone)
         panel Reservation→ effective/pending states (.reservation-effective/.reservation-pending) + request and decision forms

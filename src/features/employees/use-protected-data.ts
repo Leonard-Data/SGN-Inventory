@@ -122,6 +122,10 @@ export function useProtectedData<T>(
     }
   }, [clear, conceal, reload]);
   useEffect(() => {
+    // load() enters the loading state synchronously so a source change (paging)
+    // keeps truthful feedback instead of blanking the surface; the rule flags
+    // that deliberate update as a cascading render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional loading state for a new source
     void load();
     const focus = () => {
       const action = refocusAction(renderedFor.current, reading.current);
