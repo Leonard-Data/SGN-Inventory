@@ -112,7 +112,7 @@ export function CompanyReport({
               : error === 'invalid-input'
                 ? text.invalidInput
                 : error === 'range-too-large'
-                  ? text.rangeTooLarge
+                  ? text.rankingTooLarge
                       .replace('{from}', initialFrom)
                       .replace('{to}', initialTo)
                   : error === 'sign-out-failed'
@@ -252,7 +252,18 @@ export function CompanyReport({
                 </span>
               </div>
               <div className="panel-body">
-                {data.rows.length === 0 ? (
+                {data.rowsError === 'range-too-large' ? (
+                  // The daily table's own payload cap: it refuses the requested employee x day
+                  // scope instead of showing a short or truncated day list, while the ranking
+                  // panel above keeps its independent aggregate totals.
+                  <div className="state-panel" data-tone="danger">
+                    <h3>
+                      {text.rangeTooLarge
+                        .replace('{from}', vietnamDate(data.from) ?? data.from)
+                        .replace('{to}', vietnamDate(data.to) ?? data.to)}
+                    </h3>
+                  </div>
+                ) : data.rows.length === 0 ? (
                   <div className="state-panel">
                     <h3>{text.noEmployees}</h3>
                   </div>

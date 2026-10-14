@@ -122,7 +122,9 @@ const vi = {
   invalidRange:
     'Khoảng ngày không hợp lệ. Ngày bắt đầu không được sau ngày kết thúc và tối đa 366 ngày.',
   rangeTooLarge:
-    'Khoảng ngày {from} – {to} vượt giới hạn 1.000 dòng của báo cáo (số nhân viên đang hoạt động × số ngày, hoặc số nhân viên có hoạt động được ghi nhận trong khoảng). Hãy thu hẹp khoảng ngày.',
+    'Khoảng ngày {from} – {to} vượt giới hạn 1.000 dòng của báo cáo (giới hạn = số nhân viên đang hoạt động × số ngày). Hãy thu hẹp khoảng ngày.',
+  rankingTooLarge:
+    'Khoảng ngày {from} – {to} vượt giới hạn 1.000 dòng của bảng xếp hạng (số nhân viên trong phạm vi báo cáo). Hãy thu hẹp khoảng ngày.',
   todaySummary: 'Tổng hợp hôm nay',
   companyHistory: 'Lịch sử theo ngày',
   companyEmployee: 'Nhân viên',
@@ -434,7 +436,9 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     invalidRange:
       'That date range is not valid. The start date must not be after the end date, and the range may cover at most 366 days.',
     rangeTooLarge:
-      "The range {from} – {to} exceeds the report's 1,000-row limit (active employees × days, or employees with recorded activity in the range). Narrow the date range.",
+      "The range {from} – {to} exceeds the report's 1,000-row limit (the limit is active employees × days). Narrow the date range.",
+    rankingTooLarge:
+      "The range {from} – {to} exceeds the ranking's 1,000-row limit (the number of employees in scope). Narrow the date range.",
     todaySummary: "Today's summary",
     companyHistory: 'History by day',
     companyEmployee: 'Employee',

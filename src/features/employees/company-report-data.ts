@@ -33,6 +33,11 @@ export type CompanyActivityReport = {
     ownerContactProperties: number;
   };
   rows: CompanyActivityRow[];
+  // The daily table's own state: its report refuses an employee × day scope above the Data API
+  // row cap, and that refusal is reported for the daily section alone. The ranking is an
+  // aggregate read and is returned either way, so the daily payload limit never decides whether
+  // a manager can see the ranking.
+  rowsError: 'range-too-large' | null;
   ranking: CompanyRankingRow[];
 };
 
@@ -55,13 +60,14 @@ export async function companyActivity(
       failure instanceof ReportRangeError ? failure.code : 'invalid-input',
     );
   }
-  const [rows, ranking] = await Promise.all([
-    reportRows(context, range.from, range.to),
-    rankingRows(context, range.from, range.to),
-  ]);
+  // The ranking is its own aggregate read over the committed daily units, so it is read first
+  // and independently of the companion daily table: the daily row cap never decides whether the
+  // ranking is available, and a 30-day first open still returns real totals and ranks.
+  const ranking = await rankingRows(context, range.from, range.to);
+  const daily = await dailyRows(context, range.from, range.to);
   const todayRows =
-    range.from <= today && today <= range.to
-      ? rows.filter((row) => row.businessDay === today)
+    daily.error === null && range.from <= today && today <= range.to
+      ? daily.rows.filter((row) => row.businessDay === today)
       : await reportRows(context, today, today);
   return {
     ...range,
@@ -71,7 +77,8 @@ export async function companyActivity(
       distinctPropertiesViewed: sum(todayRows, 'distinctPropertiesViewed'),
       ownerContactProperties: sum(todayRows, 'ownerContactProperties'),
     },
-    rows,
+    rows: daily.rows,
+    rowsError: daily.error,
     ranking,
   };
 }
@@ -105,6 +112,23 @@ async function reportRows(
     distinctPropertiesViewed: Number(row.distinct_properties_viewed),
     ownerContactProperties: Number(row.owner_contact_properties),
   }));
+}
+
+// The daily section's own read. Its row cap is reported as this section's state rather than as
+// the whole report's failure, so an over-cap daily scope no longer hides the ranking; every
+// other failure still fails the request.
+async function dailyRows(
+  context: RouteContext,
+  from: string,
+  to: string,
+): Promise<{ rows: CompanyActivityRow[]; error: 'range-too-large' | null }> {
+  try {
+    return { rows: await reportRows(context, from, to), error: null };
+  } catch (failure) {
+    if (failure instanceof ApiError && failure.code === 'range-too-large')
+      return { rows: [], error: 'range-too-large' };
+    throw failure;
+  }
 }
 
 // The employee ranking read behind the same report: the database derives every total from the

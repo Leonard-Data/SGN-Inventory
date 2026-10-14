@@ -28,7 +28,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { openSync } from 'node:fs';
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
@@ -206,15 +206,6 @@ async function countRows(table) {
   assert.equal(error, null, `count ${table}`);
   return count;
 }
-async function idHash(table) {
-  const { data, error } = await retryResult(`hash ${table}`, () =>
-    admin.from(table).select('id').order('id'),
-  );
-  assert.equal(error, null, `hash ${table}`);
-  return createHash('sha256')
-    .update(data.map((row) => row.id).join(','))
-    .digest('hex');
-}
 
 // ------------------------------------------------------------------ fixtures
 const namespace = 'SGN34';
@@ -350,7 +341,20 @@ async function selectInventory() {
     eligible.length >= 2,
     'Two unarchived owner-eligible properties are required for the ranking fixture',
   );
-  return { owners: [eligible[0], eligible[1]] };
+  // A third unarchived property carries the Page-view fixture, so a regression that lets Page
+  // views into the ranked total would change a fixture employee's total instead of hiding
+  // behind a property that already earns an owner-contact unit that day.
+  const pageView = properties
+    .map((property) => property.id)
+    .find(
+      (propertyId) =>
+        !archived.get(propertyId) && !eligible.includes(propertyId),
+    );
+  assert.ok(
+    pageView,
+    'A third unarchived property is required for the Page-view fixture',
+  );
+  return { owners: [eligible[0], eligible[1]], pageView };
 }
 
 // ------------------------------------------------------------------ clients
@@ -664,6 +668,7 @@ const companyScreen = `() => {
       : [],
     rankingRows: rows(rankingTable),
     historyRows: rows(history?.querySelector('table.data-table')),
+    historyState: history?.querySelector('.state-panel h3')?.textContent?.trim() ?? null,
     rangedLabels: ranking
       ? [...ranking.querySelectorAll('th[data-label],td[data-label]')].length
       : 0,
@@ -678,12 +683,14 @@ function screen(session, cdpPort) {
   return value;
 }
 let pageRetries = 0;
+let sessionRecoveries = 0;
 async function waitForRanking(session, cdpPort, attempts = 120) {
   let last = null;
   for (let attempt = 0; attempt < attempts; attempt++) {
     try {
       last = screen(session, cdpPort);
       if (last.rankingHeading && last.rankingRows.length) return last;
+      if (last.path === '/access-denied') return last;
       if (last.alerts.length && attempt % 8 === 7 && pageRetries < 5) {
         const clicked = evaluate(
           session,
@@ -701,6 +708,48 @@ async function waitForRanking(session, cdpPort, attempts = 120) {
     await sleep(500);
   }
   assert.fail(`Company report did not load: ${JSON.stringify(last)}`);
+}
+// Opening the report can land on the denial page while the manager is live: on the shared
+// development project a transient Auth or Data API refusal surfaces as the same
+// /access-denied page a real role loss shows. The same read is probed through the application
+// and a live manager the API itself denies fails the run; otherwise the browser session is
+// re-established and the open retried once, and the recovery is disclosed in the report.
+async function recoverDenied(
+  session,
+  cdpPort,
+  search,
+  cookies,
+  credentials,
+  state,
+) {
+  if (state.path !== '/access-denied') return state;
+  const probe = await appGet(cookies, `/api/activity/company${search}`);
+  assert.equal(
+    probe.status,
+    200,
+    `A live manager was denied by the application (${probe.status})`,
+  );
+  sessionRecoveries++;
+  console.log('RETRY session-reopen', sessionRecoveries);
+  await browserSignIn(
+    session,
+    cdpPort,
+    credentials.email,
+    credentials.password,
+  );
+  browser(session, cdpPort, ['open', `${appUrl}/activity/company${search}`]);
+  return waitForRanking(session, cdpPort);
+}
+async function openRanking(session, cdpPort, search, cookies, credentials) {
+  browser(session, cdpPort, ['open', `${appUrl}/activity/company${search}`]);
+  return recoverDenied(
+    session,
+    cdpPort,
+    search,
+    cookies,
+    credentials,
+    await waitForRanking(session, cdpPort),
+  );
 }
 const setInput = (selector, value) => `(() => {
   const el = document.querySelector(${JSON.stringify(selector)});
@@ -744,6 +793,8 @@ async function assertReportStates(
   language,
   day,
   previousDay,
+  cookies,
+  credentials,
 ) {
   const label = language === 'vi' ? 'Vietnamese/default' : 'English';
   const text = reportStrings[language];
@@ -767,11 +818,18 @@ async function assertReportStates(
     `an invalid range renders the localized validation and no ranking in ${label}`,
   );
 
-  browser(session, cdpPort, [
-    'open',
-    `${appUrl}/activity/company?from=${previousDay}&to=${day}`,
-  ]);
-  await waitForRanking(session, cdpPort);
+  const reopened = await openRanking(
+    session,
+    cdpPort,
+    `?from=${previousDay}&to=${day}`,
+    cookies,
+    credentials,
+  );
+  assert.equal(
+    reopened.path,
+    '/activity/company',
+    `Reopening the report landed on ${reopened.path}`,
+  );
   browser(session, cdpPort, ['emulate', '--network', 'Offline']);
   evaluate(session, cdpPort, observeStatus);
   evaluate(
@@ -797,7 +855,14 @@ async function assertReportStates(
     cdpPort,
     `(() => { const button = document.querySelector('[role=alert] button'); if (!button) return false; button.click(); return true; })()`,
   );
-  const recovered = await waitForRanking(session, cdpPort);
+  const recovered = await recoverDenied(
+    session,
+    cdpPort,
+    `?from=${previousDay}&to=${day}`,
+    cookies,
+    credentials,
+    await waitForRanking(session, cdpPort),
+  );
   assert.equal(renderedRow(recovered, 'salesB')?.[2], '3');
   assert.equal(renderedRow(recovered, 'staff')?.[2], '0');
   const seen = evaluate(session, cdpPort, `() => window.__sgnStatusSeen ?? []`);
@@ -835,8 +900,6 @@ try {
   baseline = {
     employees: await countRows('employees'),
     activity: await countRows('activity_events'),
-    employeeHash: await idHash('employees'),
-    activityHash: await idHash('activity_events'),
   };
   manifest = await createFixtures();
   await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', {
@@ -859,6 +922,7 @@ try {
     employees: identities.length,
     unlinked: 1,
     ownerEligibleProperties: inventory.owners.length,
+    controlPageViewProperty: Boolean(inventory.pageView),
   });
 
   // Today's committed activity through the delivered disclosure RPC: salesA reveals one
@@ -883,7 +947,7 @@ try {
       'owner disclosure was not credited',
     );
   }
-  const view = await viewProperty(salesA, ownerOne);
+  const view = await viewProperty(salesA, inventory.pageView);
   assert.equal(view.error, null, 'page view RPC failed');
   // One committed row is placed on the previous Vietnam day with an explicit instant, so the
   // same property on another day must add a further unit.
@@ -956,13 +1020,14 @@ try {
     'the same property on the next Vietnam day adds a further ranked unit',
   );
 
-  // Page views and distinct properties viewed stay separate: salesA owns a committed Page view
-  // that changed no owner-contact total.
+  // Page views and distinct properties viewed stay separate: salesA owns a Page view of a
+  // third property that must earn no owner-contact unit, so a kind-filter regression would
+  // raise the asserted total rather than hide behind an already-credited property.
   const committedPageViews = (
     await retryResult('read committed page views', () =>
       admin
         .from('activity_events')
-        .select('employee_id')
+        .select('employee_id,property_id')
         .eq('employee_id', fixtures.salesA.employeeId)
         .eq('kind', 'page_view')
         .gte('business_day', day)
@@ -970,8 +1035,12 @@ try {
     )
   ).data;
   assert.ok(committedPageViews.length >= 1, 'The Page-view fixture is missing');
+  assert.ok(
+    committedPageViews.some((row) => row.property_id === inventory.pageView),
+    'The Page-view fixture is on a property that also earns an owner-contact unit',
+  );
   assert.equal(totalOf(todayData, fixtures.salesA.employeeId), 2);
-  observed('Page views stay outside the ranked total');
+  observed('Page views on a third property stay outside the ranked total');
 
   // The application endpoint returns the same ranking under its own validated range.
   const managerCookies = await appLogin(
@@ -989,39 +1058,70 @@ try {
     2,
     'The endpoint ranking disagrees with the RPC',
   );
-  // The default period is today plus the preceding 29 Vietnam days. The companion daily report
-  // is capped at the Data API's 1,000 rows (active employees x days), so on a project with more
-  // than 33 active employees the endpoint rejects it rather than returning a short or truncated
-  // ranking; the ranking's own scope stays under its own cap and is read directly either way.
+  assert.equal(appRange.body.rowsError, null);
+  assert.ok(
+    appRange.body.rows.some(
+      (row) =>
+        row.employeeId === fixtures.staff.employeeId &&
+        row.ownerContactProperties === 0,
+    ),
+    'The zero staff row is missing from the daily report',
+  );
+  observed(
+    'the application endpoint returns the same ranking and the explicit zero daily row',
+  );
+  // The default period is today plus the preceding 29 Vietnam days. The ranking is its own
+  // aggregate read over the committed daily units, so the first open returns its real totals and
+  // ranks whatever the companion daily table's own row cap says about the same scope; the daily
+  // section reports that cap as its own state instead of failing the whole report.
+  const defaultFrom = await today(-29);
   const appDefault = await appGet(managerCookies, '/api/activity/company');
-  if (appDefault.status === 200) {
-    assert.equal(appDefault.body.from, await today(-29));
-    assert.equal(appDefault.body.to, day);
-    assert.equal(
-      totalOf(appDefault.body.ranking, fixtures.salesB.employeeId),
-      3,
-      'The default 30-day ranking lost the previous-day unit',
+  assert.equal(
+    appDefault.status,
+    200,
+    `Default company open ${appDefault.status}`,
+  );
+  assert.equal(appDefault.body.from, defaultFrom);
+  assert.equal(appDefault.body.to, day);
+  assert.equal(
+    totalOf(appDefault.body.ranking, fixtures.salesB.employeeId),
+    3,
+    'The default 30-day ranking lost the previous-day unit',
+  );
+  assert.equal(
+    totalOf(appDefault.body.ranking, fixtures.staff.employeeId),
+    0,
+    'The default 30-day ranking lost the explicit zero row',
+  );
+  assert.ok(appDefault.body.todayTotals, 'The today summary is missing');
+  const overCap = appDefault.body.rowsError === 'range-too-large';
+  if (overCap) {
+    // The daily table keeps its own cap and reports it in place; the daily report RPC still
+    // raises 54000 for the same scope, so nothing about that limit was relaxed.
+    assert.equal(appDefault.body.rows.length, 0);
+    const capped = await retryResult('capped daily read', () =>
+      manager.rpc('company_employee_daily_activity', {
+        p_from: defaultFrom,
+        p_to: day,
+      }),
     );
+    assert.equal(capped.error?.code, '54000');
+  } else {
+    assert.equal(appDefault.body.rowsError, null);
     assert.ok(
       appDefault.body.rows.some(
         (row) =>
           row.employeeId === fixtures.staff.employeeId &&
           row.ownerContactProperties === 0,
       ),
-      'The zero staff row is missing from the daily report',
-    );
-    observed(
-      'the application endpoint returns the same ranking, the explicit zero row and the 30-day default',
-    );
-  } else {
-    assert.equal(appDefault.status, 400, 'Default company range status');
-    assert.equal(appDefault.body.error, 'range-too-large');
-    observed(
-      'a 30-day default above the companion report row cap is rejected, never a zero or truncated ranking',
-      { activeScope: true },
+      'The zero staff row is missing from the default daily report',
     );
   }
-  const defaultRanking = await ranking(manager, await today(-29), day);
+  observed(
+    'the default 30-day open returns real ranked totals while the daily table keeps its own row cap',
+    { dailyScope: overCap ? 'over-cap' : 'in-cap' },
+  );
+  const defaultRanking = await ranking(manager, defaultFrom, day);
   assert.equal(defaultRanking.error, null, 'default ranking RPC read');
   assert.equal(
     totalOf(defaultRanking.data, fixtures.salesB.employeeId),
@@ -1127,7 +1227,6 @@ try {
   for (const [query, status, error] of [
     [`from=${day}&to=${previousDay}`, 400, 'invalid-range'],
     [`from=${day}&to=`, 400, 'invalid-input'],
-    ['from=2025-01-01&to=2026-01-01', 400, 'range-too-large'],
   ]) {
     const invalid = await appGet(
       managerCookies,
@@ -1136,8 +1235,18 @@ try {
     assert.equal(invalid.status, status, `Range ${query}`);
     assert.equal(invalid.body.error, error, `Range ${query}`);
   }
+  // A whole-year scope is a valid range: the ranking is still returned (its own scope cap is on
+  // employees, not employee-days) and the daily section names its own row cap in place, while
+  // the daily report RPC keeps refusing that scope.
+  const wideApp = await appGet(
+    managerCookies,
+    '/api/activity/company?from=2025-01-01&to=2026-01-01',
+  );
+  assert.equal(wideApp.status, 200, 'Wide scope status');
+  assert.equal(wideApp.body.rowsError, 'range-too-large');
+  assert.ok(Array.isArray(wideApp.body.ranking), 'Wide scope lost the ranking');
   observed(
-    'invalid, partial and over-cap ranges are rejected, never shown as zeros',
+    'invalid and partial ranges are rejected, never shown as zeros; a whole-year scope keeps the ranking and names the daily cap in place',
   );
 
   // The real manager browser: the ranking panel renders the same values, survives a language
@@ -1149,11 +1258,42 @@ try {
     fixtures.manager.email,
     fixtures.manager.password,
   );
-  browser(managerSession, 9341, [
-    'open',
-    `${appUrl}/activity/company?from=${previousDay}&to=${day}`,
-  ]);
-  const vi = await waitForRanking(managerSession, 9341);
+  // The documented first open: no parameters, so the page defaults to today plus the preceding
+  // 29 Vietnam days and must render real ranked totals there, whatever the companion daily
+  // table says about its own row cap for the same scope.
+  const defaultOpen = await openRanking(
+    managerSession,
+    9341,
+    '',
+    managerCookies,
+    fixtures.manager,
+  );
+  assert.equal(defaultOpen.path, '/activity/company');
+  assert.equal(defaultOpen.lang, 'vi');
+  assert.equal(renderedRow(defaultOpen, 'salesB')?.[2], '3');
+  assert.equal(renderedRow(defaultOpen, 'salesA')?.[2], '2');
+  assert.equal(renderedRow(defaultOpen, 'staff')?.[2], '0');
+  const defaultDailyCapped = defaultOpen.historyRows.length === 0;
+  // The daily table keeps its own cap and names it in place when the scope exceeds it; either
+  // way the ranking above it carries the committed totals.
+  assert.ok(
+    defaultDailyCapped
+      ? (defaultOpen.historyState ?? '').includes('1.000 dòng')
+      : defaultOpen.historyRows.some((row) => row[0] === `${namespace} salesA`),
+    `Default daily section state: ${JSON.stringify(defaultOpen.historyState)}`,
+  );
+  observed(
+    'the manager browser opens the 30-day default and renders the ranked totals and ranks',
+    { dailyScope: defaultDailyCapped ? 'over-cap' : 'in-cap' },
+  );
+  const vi = await openRanking(
+    managerSession,
+    9341,
+    `?from=${previousDay}&to=${day}`,
+    managerCookies,
+    fixtures.manager,
+  );
+  assert.equal(vi.path, '/activity/company');
   assert.equal(vi.path, '/activity/company');
   assert.equal(vi.lang, 'vi');
   assert.deepEqual(vi.rankingHeaders, [
@@ -1182,7 +1322,15 @@ try {
     { rows: vi.rankingRows.length },
   );
 
-  await assertReportStates(managerSession, 9341, 'vi', day, previousDay);
+  await assertReportStates(
+    managerSession,
+    9341,
+    'vi',
+    day,
+    previousDay,
+    managerCookies,
+    fixtures.manager,
+  );
   // Capture the rendered default range immediately before the switch so the comparison is not
   // exposed to another user's activity landing between the two reads.
   const viBeforeEn = await waitForRanking(managerSession, 9341);
@@ -1213,7 +1361,15 @@ try {
     'switching Vietnamese to English keeps the ranked totals and rewrites no record',
   );
 
-  await assertReportStates(managerSession, 9341, 'en', day, previousDay);
+  await assertReportStates(
+    managerSession,
+    9341,
+    'en',
+    day,
+    previousDay,
+    managerCookies,
+    fixtures.manager,
+  );
 
   evaluate(managerSession, 9341, setInput('#report-from', day));
   evaluate(managerSession, 9341, setInput('#report-to', day));
@@ -1334,6 +1490,30 @@ try {
     updateEmployee(fixtures.manager.employeeId, { is_active: true }),
     'manager reactivation failed',
   );
+  // A reactivated manager must be accepted by the application again; a live employee still
+  // denied here would be a product defect, so it is asserted before the browser journey
+  // continues. The browser then signs in afresh: the deactivation legitimately ended its
+  // displayed session, and no gate claims that the old display resumes by itself.
+  let restoredStatus = 0;
+  for (let attempt = 0; attempt < 20 && restoredStatus !== 200; attempt++) {
+    const probe = await appGet(
+      managerCookies,
+      `/api/activity/company?from=${day}&to=${day}`,
+    );
+    restoredStatus = probe.status;
+    if (restoredStatus !== 200) await sleep(500);
+  }
+  assert.equal(
+    restoredStatus,
+    200,
+    'A reactivated manager was still denied by the application',
+  );
+  await browserSignIn(
+    managerSession,
+    9341,
+    fixtures.manager.email,
+    fixtures.manager.password,
+  );
   browser(managerSession, 9341, [
     'open',
     `${appUrl}/activity/company?from=${previousDay}&to=${day}`,
@@ -1441,13 +1621,33 @@ try {
 }
 if (primary) throw primary;
 
+// The head the acceptance actually exercised, with an explicit marker when the worktree carried
+// changes on top of it, so the committed report can never claim a clean head it did not build.
+function testedHead() {
+  const head = spawnSync('git', ['rev-parse', 'HEAD'], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+  const sha = head.status === 0 ? head.stdout.trim() : '';
+  const status = spawnSync('git', ['status', '--porcelain'], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+  const dirty = status.status === 0 && status.stdout.trim().length > 0;
+  return dirty ? `${sha} (dirty worktree)` : sha;
+}
+
 const reportDocument = {
-  checked_at: new Date().toISOString(),
-  project_ref: projectRef,
+  checkedAt: new Date().toISOString(),
+  projectRef,
+  testedHead: testedHead(),
   namespace,
+  environment:
+    'authorized hosted development Supabase / local production Next.js build',
   observations: observations.map(({ name, ...rest }) => ({ name, ...rest })),
-  transient_retries: retryCount,
-  page_retries: pageRetries,
+  transientRetries: retryCount,
+  pageRetries,
+  sessionRecoveries,
   created: {
     identities: identities.map(([name]) => `${namespace} ${name}`),
     unlinked: 1,
@@ -1458,16 +1658,19 @@ const reportDocument = {
     unlinked: 1,
     activity_events: committedRows + 6,
   },
-  limitations: [
+  limits: [
     retryCount
       ? `${retryCount} transient transport retries were needed for idempotent fixture/read steps; no assertion was retried.`
       : null,
     pageRetries
       ? `${pageRetries} in-page Retry activations were needed after transient upstream 503 responses on the report read; each retry re-issued the same authorized request and no assertion was retried.`
       : null,
+    sessionRecoveries
+      ? `${sessionRecoveries} page-level denial recoveries were needed: the browser briefly met /access-denied while the manager was live, the same read was probed through the application and returned 200 for that live manager, and the session was re-established before the open was retried. No ranking assertion was relaxed.`
+      : null,
     'The ranking is read from existing read-only owner-eligible inventory plus synthetic committed activity rows scoped to the SGN34 namespace; inventory that cannot supply two unarchived owner-eligible properties fails the run rather than skipping the gate.',
     'Past-day units are placed by one committed row with an explicit instant so the Vietnam day is controlled; the same-day duplicate, tie and shared-property cases use the delivered disclosure RPC.',
-    'The companion daily report caps its scope at the Data API row limit (active employees x days <= 1000), so on a shared development project with more than 33 active employees the endpoint rejects the 30-day default with 400/range-too-large while the ranking RPC is read directly for the same period; the rendered browser pass uses an in-cap inclusive range.',
+    'The companion daily table keeps its own Data API row cap (active employees x days <= 1000): on a shared development project with more than 33 active employees it reports range-too-large in place for the 30-day default, while the ranking - an aggregate read over the committed daily units - still returns real totals and ranks. The rendered browser pass observes both that 30-day default and an in-cap inclusive range.',
     'The shared development project is used by other lanes concurrently, so fixture removal is verified against the exact synthetic employee and activity IDs instead of a global row-count baseline.',
     'Synthetic employee rows and their role/activation transitions are provisioned through the owner SQL connection because the delivered employee-admin guard reserves lifecycle writes to that path.',
     'Queries are embedded-PGlite regressions plus these live individual-session Auth/Data API/RLS observations; no production edge or load testing.',
