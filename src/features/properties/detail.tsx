@@ -35,6 +35,7 @@ import {
 } from './format';
 import { Discussion } from '@/features/property-comments/discussion';
 import { Reservation } from './reservation';
+import { SaleCompletion } from '@/features/sales/completion';
 import { detailMessages } from './messages';
 import { contactRows } from './contact-rows';
 // The record screen groups its content the way the design package does: the record's own
@@ -802,8 +803,19 @@ export function Detail({
 
                   {employee ? (
                     <>
+                      {employee.role === 'manager' ||
+                      employee.role === 'admin' ? (
+                        <SaleCompletion
+                          key={'sale' + property.id}
+                          propertyId={property.id}
+                          locale={locale}
+                          employeeId={employee.id}
+                          onDenied={denyFiles}
+                          onSaved={changed}
+                        />
+                      ) : null}
                       <Reservation
-                        key={property.id}
+                        key={'reservation' + property.id + refreshTick}
                         propertyId={property.id}
                         locale={locale}
                         status={property.status}

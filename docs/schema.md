@@ -17,6 +17,8 @@ erDiagram
   PROPERTIES ||--o{ PROPERTY_LOCKS : reserves
   EMPLOYEES ||--o{ PROPERTY_LOCKS : claims
   PROPERTY_LOCKS ||--o{ LOCK_EVENTS : records
+  PROPERTIES ||--o{ SALE_COMPLETIONS : completes
+  EMPLOYEES ||--o{ SALE_COMPLETIONS : credits
   EMPLOYEES ||--o{ ACTIVITY_EVENTS : performs
   PROPERTIES ||--o{ ACTIVITY_EVENTS : concerns
   PROPERTIES ||--o{ PROPERTY_HISTORY : records
@@ -47,8 +49,9 @@ erDiagram
 | `property_files` | UUID, property FK, historical legacy type, one category FK, independent document/photo purpose, private bucket, immutable object path/name/MIME/count/hash/uploader, upload state, paired technical-validation time/object identity, historical review attribution | No direct authenticated metadata writes; registration and attested completion preserve identity; ready files are shared privately without human review; pending recovery remains uploader-only on unarchived parents; only uploader/current editor corrects category, without changing content or readiness |
 | `document_categories` | UUID, trimmed accented name, optional known builtin marker, nullable creator and creation time | Active employees read/create-or-reuse company categories; normalized case/Unicode-edge uniqueness preserves accents; Other is the localized default; custom names remain verbatim; no rename/delete/merge/multiple tags |
 | `activity_events` | UUID, employee/property FK, page_view/owner_contact_access/site_visit, occurred/recorded timestamps, generated Vietnam day, source, idempotency key, retained visit decision | No direct client DML; one key per employee; owner-contact access counts one distinct property per employee/Vietnam day; new `site_visit` submission and confirmation are retired while retained rows keep their state; page_view and owner_contact_access have no visit status |
-| `property_locks` | UUID, property/claimant, reason, optional evidence, attribution reference, lifecycle state, expiry, independent decision | One approved row per property; one pending request per property/employee; effective reservation additionally requires future expiry |
-| `lock_events` | Identity key, lock FK, actor, action, reason, timestamp | Append-only client access; all approved/rejected/released/expired transitions retain trace |
+| `property_locks` | UUID, property/claimant, reason, optional evidence, attribution reference, lifecycle state, expiry, independent decision | One approved row per property; one pending request per property/employee; effective reservation additionally requires future expiry; a completed sale closes open rows as `closed_by_sale` and keeps the claimant, reason and events |
+| `lock_events` | Identity key, lock FK, actor, action, reason, timestamp | Append-only client access; all approved/rejected/released/expired/sale-completed transitions retain trace |
+| `sale_completions` | UUID, property FK, explicitly credited employee FK, actual Vietnam `completed_on`, contract reference, retained pre-sale `available`/`negotiating` status, version, confirmer/time, employee-scoped retry key, reversal facts | No direct client or service write: `select`-only grant with reviewer-only RLS and a guard trigger; one effective (unreversed) completion per property; future dates, self-credit, an active rental, a conflicting effective claimant and reused retry keys are refused; the row is written, the property marked sold and open reservations closed in one transaction |
 | `property_comments` | UUID, property/author FKs, author display name retained at posting time, original text (null once removed), server posting time, `revision`, `removed_at`, employee-scoped `idempotency_key` | No direct client writes: `select`-only grant, `anon` excluded, and a trigger rejects client inserts, every ordinary update and every delete; text is trimmed Unicode of 1–2000 characters; author identity, text and posting time stay immutable; text is null exactly when `removed_at` is set, so a removed entry is a marker |
 | `property_comment_removals` | One row per removed comment: comment/property/author FKs, retained author name, retained original text, original posting time and revision, removing actor and retained actor name, removal time, `author`/`moderation` kind and mandatory moderation reason | Reviewer-only `select` under RLS; no client insert/update/delete; the guard trigger keeps the retained evidence immutable and non-expiring; the current discussion projection never exposes it |
 | `property_price_history` (view) | Select-only `security_invoker` projection of `property_history`: one row per recorded price revision per `sale`/`rent` series with property, actor name, authoritative time, retained explanation and exact whole-VND `before_value`/`after_value` text | No direct client writes; revisions whose recorded price is unknown on both sides are excluded; keyset-paged on `(occurred_at,id)` per series; reads follow live membership and the archived-property RLS boundary |
@@ -92,7 +95,7 @@ Rental agreements, monthly dues and manual receipt/refund tracking are included.
 | Record review | `pending`, `approved`, `rejected` — independent from reservation approval |
 | Legal status | `unknown`, `owner_reported`, `documents_received`, `reviewed`, `issue_flagged` |
 | Address mapping | `unresolved`, `candidate`, `verified` |
-| Reservation state | `pending`, `approved`, `rejected`, `released`, `expired` |
+| Reservation state | `pending`, `approved`, `rejected`, `released`, `expired`, `closed_by_sale` |
 | Direction | `N`, `NE`, `E`, `SE`, `S`, `SW`, `W`, `NW` with Vietnamese display labels |
 | Land/floor area | `numeric(12,2)` in m² |
 | Width/depth | `numeric(8,2)` in metres |

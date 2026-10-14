@@ -300,6 +300,67 @@ const vi = {
   reservationLoadFailed: 'Không tải được tình trạng đặt chỗ.',
   reservationNote:
     'Chỉ đặt chỗ đã được duyệt và còn hiệu lực mới giữ bất động sản.',
+  reservationRelease: 'Giải phóng đặt chỗ',
+  reservationReleaseReason: 'Lý do giải phóng',
+  reservationReleaseReasonHint: 'Từ 10 đến 2.000 ký tự.',
+  reservationReleaseReasonRequired:
+    'Vui lòng nhập lý do từ 10 đến 2.000 ký tự.',
+  reservationReleaseSubmit: 'Giải phóng',
+  reservationReleased:
+    'Đã giải phóng đặt chỗ; người đặt chỗ và lịch sử được giữ nguyên.',
+  reservationReleaseFailed: 'Chưa giải phóng được đặt chỗ. Vui lòng thử lại.',
+  reservationReleaseClosed:
+    'Đặt chỗ này không còn hiệu lực để giải phóng. Trạng thái mới nhất đang được hiển thị.',
+  reservationReleaseNote:
+    'Giải phóng không xoá người đặt chỗ, lý do hay sự kiện đã ghi.',
+  completedSaleTitle: 'Xác nhận bán thành công',
+  completedSaleNote:
+    'Chỉ quản lý hoặc quản trị viên khác nhân viên được ghi nhận mới có thể xác nhận. Một bất động sản chỉ có một thương vụ bán đang hiệu lực.',
+  completedSaleCreditedCloser: 'Nhân viên được ghi nhận',
+  completedSaleSelectCloser: 'Chọn nhân viên',
+  completedSaleSuggestedCloser:
+    'Người đặt chỗ hiệu lực: {name} — bạn phải tự chọn để xác nhận.',
+  completedSaleDate: 'Ngày bán thực tế (Việt Nam)',
+  completedSaleReference: 'Hợp đồng/tham chiếu',
+  completedSaleReferenceHint: 'Từ 1 đến 200 ký tự.',
+  completedSaleReferenceRequired:
+    'Vui lòng chọn nhân viên và nhập ngày, tham chiếu hợp lệ.',
+  completedSaleClosesReservations:
+    'Xác nhận sẽ đóng mọi yêu cầu đặt chỗ đang mở và giữ nguyên người đặt chỗ cùng lịch sử.',
+  completedSaleSubmit: 'Xác nhận đã bán',
+  completedSaleRecorded:
+    'Đã ghi nhận bán thành công; bất động sản chuyển sang Đã bán.',
+  completedSaleFailed: 'Chưa ghi được xác nhận bán. Vui lòng thử lại.',
+  completedSaleSelfCredit: 'Bạn không thể tự ghi nhận thương vụ của mình.',
+  completedSaleFutureDate: 'Ngày bán không được ở tương lai.',
+  completedSaleConflict:
+    'Ghi nhận bán đã thay đổi. Trạng thái mới nhất đang được hiển thị.',
+  completedSaleReservationConflict:
+    'Bất động sản đang có đặt chỗ hiệu lực của nhân viên khác. Hãy giải phóng đặt chỗ đó trước.',
+  completedSaleRentalActive:
+    'Bất động sản đang có hợp đồng thuê hiệu lực; hãy kết thúc hợp đồng thuê trước.',
+  completedSaleUnavailable:
+    'Bất động sản đang ở trạng thái {status}, không thể xác nhận bán.',
+  completedSaleArchived: 'Hồ sơ lưu trữ không thể xác nhận bán.',
+  completedSaleNoCloser:
+    'Không có nhân viên nào khác để ghi nhận thương vụ này.',
+  completedSaleLoadFailed: 'Không tải được trạng thái xác nhận bán.',
+  completedSaleRecordedBy: 'Người xác nhận',
+  completedSaleRecordedAt: 'Thời điểm ghi nhận',
+  completedSalePreviousStatus: 'Trạng thái trước khi bán',
+  navCompletedSales: 'Bán thành công',
+  completedSalesRanking: 'Xếp hạng bán thành công',
+  completedSalesNote:
+    'Chỉ các thương vụ bán đã được xác nhận độc lập mới được tính; đặt chỗ, trạng thái Đã bán thô và hồ sơ cũ chưa có người ghi nhận không tạo thành tích.',
+  completedSales: 'Thương vụ bán đã xác nhận',
+  completedSalesCount: 'Số thương vụ',
+  completedSalesEmpty:
+    'Không có thương vụ bán nào được xác nhận trong khoảng thời gian này.',
+  completedSalesTotal: 'Tổng cộng: {n}',
+  completedSalesUnknown:
+    'Bất động sản đã bán chưa có người được ghi nhận (tính đến {date}): {n} — hiển thị riêng, không gán cho nhân viên nào.',
+  completedSalesFailed: 'Không tải được xếp hạng bán thành công.',
+  rank: 'Hạng',
 };
 export type MessageKey = keyof typeof vi;
 
@@ -612,6 +673,65 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     reservationLoadFailed: 'Reservation state did not load.',
     reservationNote:
       'Only an approved, unexpired reservation holds the property.',
+    reservationRelease: 'Release reservation',
+    reservationReleaseReason: 'Release reason',
+    reservationReleaseReasonHint: 'Between 10 and 2,000 characters.',
+    reservationReleaseReasonRequired:
+      'Enter a reason between 10 and 2,000 characters.',
+    reservationReleaseSubmit: 'Release',
+    reservationReleased:
+      'Reservation released; the claimant and recorded events are retained.',
+    reservationReleaseFailed: 'The reservation was not released. Try again.',
+    reservationReleaseClosed:
+      'This reservation can no longer be released. The latest state is shown.',
+    reservationReleaseNote:
+      'Release never erases the claimant, reason or recorded events.',
+    completedSaleTitle: 'Confirm completed sale',
+    completedSaleNote:
+      'Only a manager or admin other than the credited employee can confirm. A property has at most one effective completed sale.',
+    completedSaleCreditedCloser: 'Credited closer',
+    completedSaleSelectCloser: 'Select an employee',
+    completedSaleSuggestedCloser:
+      'Effective reservation claimant: {name} — you must select a closer explicitly.',
+    completedSaleDate: 'Actual completion date (Vietnam)',
+    completedSaleReference: 'Contract/reference',
+    completedSaleReferenceHint: 'Between 1 and 200 characters.',
+    completedSaleReferenceRequired:
+      'Select an employee and enter a valid date and reference.',
+    completedSaleClosesReservations:
+      'Confirming closes every open reservation and retains its claimant and events.',
+    completedSaleSubmit: 'Confirm completed sale',
+    completedSaleRecorded:
+      'Completed sale recorded; the property is marked sold.',
+    completedSaleFailed: 'The completion was not recorded. Try again.',
+    completedSaleSelfCredit: 'You cannot credit your own sale.',
+    completedSaleFutureDate: 'The completion date cannot be in the future.',
+    completedSaleConflict:
+      'The completion state changed. The latest state is shown.',
+    completedSaleReservationConflict:
+      'Another employee holds an effective reservation. Release it first.',
+    completedSaleRentalActive:
+      'An active rental commitment blocks this sale; close the rental first.',
+    completedSaleUnavailable:
+      'The property is {status}; a completion can only be recorded from available or negotiating.',
+    completedSaleArchived: 'An archived record cannot be completed.',
+    completedSaleNoCloser: 'No other employee is available to credit.',
+    completedSaleLoadFailed: 'The completion state did not load.',
+    completedSaleRecordedBy: 'Confirmed by',
+    completedSaleRecordedAt: 'Recorded at',
+    completedSalePreviousStatus: 'Pre-sale status',
+    navCompletedSales: 'Completed sales',
+    completedSalesRanking: 'Completed sales ranking',
+    completedSalesNote:
+      'Only independently confirmed completions count; reservations, raw sold statuses and unrecorded legacy sales earn no credit.',
+    completedSales: 'Confirmed completed sales',
+    completedSalesCount: 'Completed sales',
+    completedSalesEmpty: 'No completed sale was confirmed in this period.',
+    completedSalesTotal: 'Total: {n}',
+    completedSalesUnknown:
+      'Sold properties with no recorded closer (as of {date}): {n} — shown separately, never assigned to an employee.',
+    completedSalesFailed: 'The completed-sales ranking did not load.',
+    rank: 'Rank',
   },
 };
 export function label(
