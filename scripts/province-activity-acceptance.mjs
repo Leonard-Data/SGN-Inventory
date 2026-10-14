@@ -636,6 +636,11 @@ const countOf = (reportRows, key) => {
   return Number(row.owner_contact_properties);
 };
 const numberFormat = (locale) => new Intl.NumberFormat(locale);
+// The report panel prints a Vietnam date as dd/mm/yyyy.
+const vietnamLabel = (iso) => {
+  const [year, month, day] = iso.split('-');
+  return `${day}/${month}/${year}`;
+};
 async function mappingFor(client, propertyId, changes) {
   const { data: address, error: addressError } = await retryResult(
     'read fixture address',
@@ -892,6 +897,9 @@ const screenExpression = (groupNames) => `() => {
         document.querySelector('svg[role=img]'),
     ),
     dateInputs: [...document.querySelectorAll('input[type=date]')].map((node) => node.id),
+    dateValues: [...document.querySelectorAll('input[type=date]')].map((node) => node.value),
+    bounds:
+      document.querySelector('.panel-head .panel-note.num')?.textContent?.trim() ?? null,
     focused: document.activeElement?.id ?? null,
     overflowX: Math.max(
       0,
@@ -1013,6 +1021,14 @@ try {
     await provinceReport(manager, firstDay, secondDay),
     'province baseline',
   );
+  const provinceBeforeFirstDay = rows(
+    await provinceReport(manager, firstDay, firstDay),
+    'province first day baseline',
+  );
+  const provinceBeforeSecondDay = rows(
+    await provinceReport(manager, secondDay, secondDay),
+    'province second day baseline',
+  );
   const companyBefore = rows(
     await companyReport(manager, firstDay, secondDay),
     'company baseline',
@@ -1130,8 +1146,8 @@ try {
   );
 
   // Counting units: the two employees on one property and day, the collapsed repeat, the second
-  // Vietnam day and the control property of the same province. Every comparison is the delta
-  // around the fixture write against the pre-fixture baseline.
+  // Vietnam day and the control property of the same province. Each single-day comparison is
+  // the delta around the fixture write against that day's own pre-fixture baseline.
   const firstDayRows = rows(
     await provinceReport(manager, firstDay, firstDay),
     'province first day',
@@ -1140,12 +1156,12 @@ try {
     await provinceReport(manager, secondDay, secondDay),
     'province second day',
   );
-  assert.deepEqual(deltaOf(provinceBefore, firstDayRows), {
+  assert.deepEqual(deltaOf(provinceBeforeFirstDay, firstDayRows), {
     [units.provinceSecond]: 2,
     [units.provinceOther]: 1,
     unverified: 2,
   });
-  assert.deepEqual(deltaOf(provinceBefore, secondDayRows), {
+  assert.deepEqual(deltaOf(provinceBeforeSecondDay, secondDayRows), {
     [units.provinceSecond]: 3,
   });
   assert.deepEqual(
@@ -1264,6 +1280,14 @@ try {
     fixtures.staff.password,
   );
   const route = `/api/activity/provinces?from=${firstDay}&to=${secondDay}`;
+  const defaultApp = await appGet(managerCookies, '/api/activity/provinces');
+  assert.equal(defaultApp.status, 200);
+  assert.equal(defaultApp.body.from, vietnamDay(-29));
+  assert.equal(defaultApp.body.to, vietnamDay(0));
+  assert.equal(defaultApp.body.today, vietnamDay(0));
+  observed(
+    'the report endpoint defaults to today and the preceding 29 Vietnam days when no range is given',
+  );
   assert.equal((await appGet(managerCookies, route)).status, 200);
   assert.equal((await appGet(adminCookies, route)).status, 200);
   assert.equal((await appGet(salesCookies, route)).status, 403);
@@ -1347,6 +1371,17 @@ try {
     9350,
     fixtures.manager.email,
     fixtures.manager.password,
+  );
+  browser('sgn35-manager', 9350, ['open', `${appUrl}/activity/provinces`]);
+  await waitForReport('sgn35-manager', 9350, vietnamDay(-29), vietnamDay(0));
+  const defaultScreen = screen('sgn35-manager', 9350, groupNames);
+  assert.deepEqual(defaultScreen.dateValues, [vietnamDay(-29), vietnamDay(0)]);
+  assert.equal(
+    defaultScreen.bounds,
+    `${vietnamLabel(vietnamDay(-29))} – ${vietnamLabel(vietnamDay(0))}`,
+  );
+  observed(
+    'the page opens on the default period of today and the preceding 29 Vietnam days without query parameters',
   );
   browser('sgn35-manager', 9350, [
     'open',
