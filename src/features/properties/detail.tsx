@@ -35,6 +35,7 @@ import {
 import { Discussion } from '@/features/property-comments/discussion';
 import { Reservation } from './reservation';
 import { detailMessages } from './messages';
+import { contactRows } from './contact-rows';
 // The record screen groups its content the way the design package does: the record's own
 // facts, its documents and its discussion.
 const RECORD_TABS = ['overview', 'docs', 'comments'] as const;
@@ -261,6 +262,12 @@ export function Detail({
       : (typeof value === 'string'
           ? formatDecimal(value, locale)
           : numberFormat.format(value)) + unit;
+  // One projection for every contact surface: the recorded owner phone is withheld until the
+  // deliberate Show owner contact disclosure, on the overview panel and the sticky card alike.
+  const contacts = useMemo(
+    () => contactRows(data?.contacts ?? []),
+    [data?.contacts],
+  );
   const dt = detailMessages[locale];
   return (
     <div lang={locale}>
@@ -654,34 +661,31 @@ export function Detail({
                       <h2>{dt.contacts}</h2>
                     </div>
                     <div className="panel-body">
-                      {data.contacts.length ? (
-                        data.contacts.map((link) => (
-                          <div
-                            className="record"
-                            key={link.contacts?.id ?? link.contact_id}
-                          >
+                      {contacts.length ? (
+                        contacts.map((row) => (
+                          <div className="record" key={row.id}>
                             <div className="record-head">
                               <span className="record-title" translate="no">
-                                {link.contacts?.display_name ?? text.unknown}
+                                {row.name ?? text.unknown}
                               </span>
                               <span
                                 className="badge"
                                 data-tone={
-                                  link.relation === 'owner'
+                                  row.relation === 'owner'
                                     ? 'accent'
                                     : 'neutral'
                                 }
                               >
-                                {link.relation === 'owner'
+                                {row.relation === 'owner'
                                   ? dt.owner
-                                  : link.relation === 'broker' ||
-                                      link.relation === 'agent'
+                                  : row.relation === 'broker' ||
+                                      row.relation === 'agent'
                                     ? dt.agent
-                                    : link.relation === 'representative'
+                                    : row.relation === 'representative'
                                       ? dt.representative
-                                      : label(locale, link.relation)}
+                                      : label(locale, row.relation)}
                               </span>
-                              {link.is_primary ? (
+                              {row.isPrimary ? (
                                 <span
                                   className="badge badge-plain"
                                   data-tone="neutral"
@@ -690,11 +694,13 @@ export function Detail({
                                 </span>
                               ) : null}
                             </div>
-                            <p className="record-body num">
-                              {link.contacts?.raw_phone_text ?? text.unknown}
-                            </p>
+                            {row.phone.show ? (
+                              <p className="record-body num" translate="no">
+                                {row.phone.text ?? text.unknown}
+                              </p>
+                            ) : null}
                             <p className="record-meta">
-                              {link.is_primary
+                              {row.isPrimary
                                 ? dt.contactConsent
                                 : dt.contactSource}
                             </p>
@@ -872,39 +878,38 @@ export function Detail({
                     <h2 id="detail-contacts">{dt.contacts}</h2>
                   </div>
                   <div className="panel-body">
-                    {data.contacts.length ? (
+                    {contacts.length ? (
                       <div className="contact-card-list">
-                        {data.contacts.map((link) => (
-                          <article
-                            className="contact-card-item"
-                            key={link.contact_id}
-                          >
+                        {contacts.map((row) => (
+                          <article className="contact-card-item" key={row.id}>
                             <div className="record-head">
                               <strong className="record-title" translate="no">
-                                {link.contacts?.display_name ?? text.unknown}
+                                {row.name ?? text.unknown}
                               </strong>
                               <span
                                 className="badge badge-plain"
                                 data-tone={
-                                  link.relation === 'owner'
+                                  row.relation === 'owner'
                                     ? 'accent'
                                     : 'neutral'
                                 }
                               >
-                                {link.relation === 'owner'
+                                {row.relation === 'owner'
                                   ? dt.owner
-                                  : link.relation === 'broker' ||
-                                      link.relation === 'agent'
+                                  : row.relation === 'broker' ||
+                                      row.relation === 'agent'
                                     ? dt.agent
-                                    : link.relation === 'representative'
+                                    : row.relation === 'representative'
                                       ? dt.representative
-                                      : label(locale, link.relation)}
+                                      : label(locale, row.relation)}
                               </span>
                             </div>
-                            <p className="record-body num" translate="no">
-                              {link.contacts?.raw_phone_text ?? text.unknown}
-                            </p>
-                            {link.is_primary ? (
+                            {row.phone.show ? (
+                              <p className="record-body num" translate="no">
+                                {row.phone.text ?? text.unknown}
+                              </p>
+                            ) : null}
+                            {row.isPrimary ? (
                               <p className="record-meta">{dt.primary}</p>
                             ) : null}
                           </article>

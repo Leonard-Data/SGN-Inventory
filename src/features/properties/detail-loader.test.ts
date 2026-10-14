@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadPropertyDetail, loadTodayActivity } from './detail-loader.ts';
+import {
+  loadPropertyDetail,
+  loadTodayActivity,
+  revealOwnerContact,
+} from './detail-loader.ts';
 import { RequestError } from '../employees/api.ts';
 
 const id = '11111111-1111-4111-8111-111111111111';
@@ -144,4 +148,54 @@ test('ordinary activity failure preserves detail and exposes retry state', async
   assert.equal(result.viewError, true);
   assert.equal(result.todayError, true);
   assert.equal(result.today, null);
+});
+
+test('opening and re-reading a detail never requests owner-contact disclosure', async (t) => {
+  const requested: string[] = [];
+  t.mock.method(globalThis, 'fetch', async (path: string) => {
+    requested.push(path);
+    if (path === `/api/properties/${id}`) return Response.json(detail);
+    if (path === '/api/activity/today') return Response.json(today);
+    return new Response(null, { status: 204 });
+  });
+  await loadPropertyDetail(id, new AbortController().signal);
+  await loadTodayActivity(id, key, new AbortController().signal);
+  // A refocus re-runs the same reads; the disclosure is a deliberate action, never a read.
+  await loadTodayActivity(id, key, new AbortController().signal);
+  assert.deepEqual(
+    requested.filter((path) => path.endsWith('/owner-contact')),
+    [],
+  );
+});
+
+test('the deliberate reveal sends one retry key and returns the committed reference', async (t) => {
+  const disclosure = {
+    eventId: '33333333-3333-4333-8333-333333333333',
+    businessDay: '2026-10-10',
+    credited: true,
+    contact: {
+      id: '44444444-4444-4444-8444-444444444444',
+      displayName: 'Synthetic owner',
+      relation: 'owner',
+      isPrimary: true,
+      phone: '0900000001',
+    },
+  };
+  let calls = 0;
+  t.mock.method(
+    globalThis,
+    'fetch',
+    async (path: string, options: RequestInit) => {
+      calls += 1;
+      assert.equal(path, `/api/properties/${id}/owner-contact`);
+      assert.equal(options.method, 'POST');
+      // The action sends the retry key alone: no actor, day, phone or property choice.
+      assert.deepEqual(JSON.parse(String(options.body)), { key });
+      return Response.json(disclosure);
+    },
+  );
+  assert.deepEqual(await revealOwnerContact(id, key), disclosure);
+  // A lost response retried with the same key returns the original committed reference.
+  assert.deepEqual(await revealOwnerContact(id, key), disclosure);
+  assert.equal(calls, 2);
 });
