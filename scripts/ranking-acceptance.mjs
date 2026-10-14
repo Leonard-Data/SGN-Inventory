@@ -1037,7 +1037,7 @@ try {
   assert.ok(committedPageViews.length >= 1, 'The Page-view fixture is missing');
   assert.ok(
     committedPageViews.some((row) => row.property_id === inventory.pageView),
-    'The Page-view fixture is on a property that also earns an owner-contact unit',
+    'The Page-view fixture is not on the control property that earns no owner-contact unit',
   );
   assert.equal(totalOf(todayData, fixtures.salesA.employeeId), 2);
   observed('Page views on a third property stay outside the ranked total');
