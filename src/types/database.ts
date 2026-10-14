@@ -1246,6 +1246,104 @@ export type Database = {
           },
         ];
       };
+      sale_completions: {
+        Row: {
+          completed_on: string;
+          confirmed_at: string;
+          confirmed_by: string;
+          credited_employee_id: string;
+          id: string;
+          idempotency_key: string;
+          previous_status: string;
+          property_id: string;
+          reference: string;
+          reversal_reason: string | null;
+          reversed_at: string | null;
+          reversed_by: string | null;
+          version: number;
+        };
+        Insert: {
+          completed_on: string;
+          confirmed_at?: string;
+          confirmed_by: string;
+          credited_employee_id: string;
+          id?: string;
+          idempotency_key: string;
+          previous_status: string;
+          property_id: string;
+          reference: string;
+          reversal_reason?: string | null;
+          reversed_at?: string | null;
+          reversed_by?: string | null;
+          version?: number;
+        };
+        Update: {
+          completed_on?: string;
+          confirmed_at?: string;
+          confirmed_by?: string;
+          credited_employee_id?: string;
+          id?: string;
+          idempotency_key?: string;
+          previous_status?: string;
+          property_id?: string;
+          reference?: string;
+          reversal_reason?: string | null;
+          reversed_at?: string | null;
+          reversed_by?: string | null;
+          version?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'sale_completions_confirmed_by_fkey';
+            columns: ['confirmed_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'sale_completions_confirmed_by_fkey';
+            columns: ['confirmed_by'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+          {
+            foreignKeyName: 'sale_completions_credited_employee_id_fkey';
+            columns: ['credited_employee_id'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'sale_completions_credited_employee_id_fkey';
+            columns: ['credited_employee_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+          {
+            foreignKeyName: 'sale_completions_property_id_fkey';
+            columns: ['property_id'];
+            isOneToOne: false;
+            referencedRelation: 'properties';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'sale_completions_reversed_by_fkey';
+            columns: ['reversed_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'sale_completions_reversed_by_fkey';
+            columns: ['reversed_by'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+        ];
+      };
     };
     Views: {
       property_price_history: {
@@ -1842,6 +1940,20 @@ export type Database = {
       set_property_cover: {
         Args: { p_file_id?: string; p_property_id: string };
         Returns: undefined;
+      };
+      complete_property_sale: {
+        Args: {
+          p_completed_on: string;
+          p_credited_employee_id: string;
+          p_key: string;
+          p_property_id: string;
+          p_reference: string;
+        };
+        Returns: string;
+      };
+      completed_sale_ranking: {
+        Args: { p_from: string; p_to: string };
+        Returns: Json;
       };
     };
     Enums: {
