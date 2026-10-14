@@ -58,14 +58,15 @@ test('a recorded owner phone is absent from every automatic contact row', () => 
 });
 
 test('owner eligibility is the property relation, not the contact type or another property', () => {
-  const shared = link('a1', 'broker', { display_name: 'Shared person' });
+  const shared = link('a1', 'broker', {
+    display_name: 'Shared person',
+    contact_type: 'owner',
+  });
   // The same contact is an owner elsewhere; this property records only a broker relationship.
   assert.deepEqual(contactRows([shared])[0]?.phone, {
     show: true,
     text: '0900 000 001',
   });
-  // The contact's global classification is never what decides the row.
-  assert.equal(shared.contacts.contact_type, 'broker');
 });
 
 test('non-owner relationships stay as recorded and missing values stay explicit', () => {
@@ -112,4 +113,3 @@ test('a link without embedded contact details still withholds an owner phone', (
     },
   ]);
 });
-

@@ -545,7 +545,7 @@ try {
   assert.ok(screen().text.includes('Môi giới thử nghiệm'));
   assert.ok(screen().text.includes('Liên hệ chính'));
   assert.ok(!screen().text.includes('0900 000 001'));
-  assert.ok(!screen().text.includes('0900 000 002'));
+  assert.ok(screen().text.includes('0900 000 002'));
   const detailLocation = screen().path + screen().query;
   browser(['emulate', '--network', 'Offline']);
   networkOffline = true;
