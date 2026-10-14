@@ -184,6 +184,97 @@ export async function correctionContract({
       assert.equal((await row()).notes, 'Đã chỉnh đúng nguồn');
     },
   );
+  await check(
+    'an oversized padded outcome reason is refused and a valid reason is stored trimmed',
+    async () => {
+      await asUser(1);
+      const observed = await row();
+      const padded = (
+        await db.query(submit, [
+          property,
+          'property',
+          property,
+          'incorrect',
+          'Giá chào cần đính chính từ nguồn',
+          { sale_price_vnd: '1500000000' },
+          observed.revision,
+          observed.revision,
+        ])
+      ).rows[0].id;
+      await asUser(5);
+      const pending = await request(padded),
+        beforePrice = (
+          await db.query(
+            'select sale_price_vnd::text as price from public.properties where id=$1',
+            [property],
+          )
+        ).rows[0].price,
+        beforeHistory = (
+          await db.query(
+            'select id from public.property_history where property_id=$1 order by id',
+            [property],
+          )
+        ).rows;
+      await fails(
+        decide,
+        [
+          padded,
+          pending.revision,
+          'apply',
+          `${' '.repeat(1990)}Giải thích kết quả hợp lệ`,
+          null,
+        ],
+        '23514',
+      );
+      assert.equal((await request(padded)).status, 'open');
+      assert.equal(
+        (
+          await db.query(
+            'select sale_price_vnd::text as price from public.properties where id=$1',
+            [property],
+          )
+        ).rows[0].price,
+        beforePrice,
+      );
+      assert.deepEqual(
+        (
+          await db.query(
+            'select id from public.property_history where property_id=$1 order by id',
+            [property],
+          )
+        ).rows,
+        beforeHistory,
+      );
+      await db.query(decide, [
+        padded,
+        pending.revision,
+        'apply',
+        '  Giải thích kết quả hợp lệ  ',
+        null,
+      ]);
+      const terminal = await request(padded);
+      assert.equal(terminal.status, 'applied');
+      assert.equal(terminal.outcome_reason, 'Giải thích kết quả hợp lệ');
+      assert.equal(
+        (
+          await db.query(
+            'select sale_price_vnd::text as price from public.properties where id=$1',
+            [property],
+          )
+        ).rows[0].price,
+        '1500000000',
+      );
+      assert.deepEqual(
+        (
+          await db.query(
+            'select explanation from public.property_price_history where property_id=$1 and after_value=$2',
+            [property, '1500000000'],
+          )
+        ).rows,
+        [{ explanation: 'Giải thích kết quả hợp lệ' }],
+      );
+    },
+  );
   await asUser(1);
   let stale;
   await check(

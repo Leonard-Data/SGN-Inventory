@@ -12,6 +12,7 @@ import { commentsContract } from './comments-contract.mjs';
 import { commentRemovalContract } from './comment-removal-contract.mjs';
 import { companyActivityContract } from './company-activity-contract.mjs';
 import { myActivityContract } from './my-activity-contract.mjs';
+import { priceHistoryContract } from './price-history-contract.mjs';
 const root = process.env.SGN_PROJECT_ROOT || process.cwd();
 const db = new PGlite({extensions:{unaccent,pg_trgm,pgcrypto}});
 await db.exec(`
@@ -500,6 +501,8 @@ await db.exec('reset role');await db.query("select set_config('request.jwt.claim
 assert.deepEqual((await db.query(`select ${coverSourceColumns} from public.property_files where property_id=$1 order by id`,[coverProperty])).rows,coverBefore);
 const maintainedProperty=await maintenanceContract({db,asUser,check,fails,employees,property,other});
 await correctionContract({db,asUser,check,fails,employees,property:maintainedProperty});
+// Ticket #36: recorded Asking-price history over the allowlisted business-history seam.
+await priceHistoryContract({db,asUser,check,fails,employees});
 // Ticket #29: a deliberate disclosure commits one property per employee/Vietnam day.
 const ownerProperty='20000000-0000-4000-8000-00000000000b';
 const ownerProperty2='20000000-0000-4000-8000-00000000000c';

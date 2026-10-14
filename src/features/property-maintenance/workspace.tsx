@@ -92,7 +92,7 @@ export function Maintenance({
       if (!abort.signal.aborted) setContactBusy(false);
     }
   }
-  async function save(changes: Changes) {
+  async function save(changes: Changes, explanation?: string) {
     if (!editor) return;
     return api('/api/properties/' + property.id + '/maintenance', {
       target: editor.target,
@@ -100,6 +100,7 @@ export function Maintenance({
       revision: editor.revision,
       propertyRevision: editor.propertyRevision,
       changes,
+      ...(explanation ? { explanation } : {}),
     });
   }
   async function saved() {
@@ -279,19 +280,41 @@ export function Maintenance({
               save={save}
               onSaved={saved}
               onDenied={onDenied}
+              explanation={editor.target === 'property'}
             >
               {editor.target === 'property' ? (
-                <RecordFields
-                  locale={locale}
-                  values={editor.values}
-                  names={targetFields.property.filter(
-                    (k) =>
-                      k !== 'status' ||
-                      !['sold', 'rented'].includes(
-                        String(editor.values.status),
-                      ),
-                  )}
-                />
+                <>
+                  <RecordFields
+                    locale={locale}
+                    values={editor.values}
+                    names={targetFields.property.filter(
+                      (k) =>
+                        k !== 'status' ||
+                        !['sold', 'rented'].includes(
+                          String(editor.values.status),
+                        ),
+                    )}
+                  />
+                  {/* A mistaken price keeps its own revision; this note is optional. */}
+                  <div className="field">
+                    <label
+                      className="field-label"
+                      htmlFor="maintenance-explanation"
+                    >
+                      {text.correctionExplanation}
+                    </label>
+                    <textarea
+                      id="maintenance-explanation"
+                      className="textarea"
+                      name="explanation"
+                      rows={2}
+                      maxLength={2000}
+                    />
+                    <p className="field-hint">
+                      {text.correctionExplanationHint}
+                    </p>
+                  </div>
+                </>
               ) : null}
               {editor.target === 'address' || editor.target === 'mapping' ? (
                 <AddressFields

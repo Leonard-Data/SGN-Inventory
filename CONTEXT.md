@@ -88,6 +88,14 @@ _Avoid_: Replacement request, edited original
 The record of who changed information affecting a property, when, and its before/after values, including property facts, addresses, contact links and shared-contact details displayed on that property.
 _Avoid_: Approval queue, page-view history
 
+**Asking-price history**:
+A property's recorded sale asking prices and monthly asking rents, presented as separate newest-first series with the actor, Vietnam time and before/after whole-VND values of each saved change. An unknown value is a gap and a recorded zero stays zero; an untouched amount never appears as a change. Achieved sale prices, contractual rent, monthly dues and receipts are not part of either series, and no earlier price is invented.
+_Avoid_: Market valuation, price list, achieved price, projected price
+
+**Correction explanation**:
+An optional retained note an authorized editor attaches to a recorded price correction. It stays with the revision it explains and never replaces the mistaken value, deletes earlier history or creates an approval step.
+_Avoid_: Approval reason, price justification, replacement value
+
 ### Activity and reservations
 
 **Page view**:

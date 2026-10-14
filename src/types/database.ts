@@ -1248,6 +1248,20 @@ export type Database = {
       };
     };
     Views: {
+      property_price_history: {
+        Row: {
+          actor_id: string | null;
+          actor_name: string | null;
+          after_value: string | null;
+          before_value: string | null;
+          explanation: string | null;
+          id: string | null;
+          occurred_at: string | null;
+          property_id: string | null;
+          series: string | null;
+        };
+        Relationships: [];
+      };
       v_admin_inventory_by_area: {
         Row: {
           available_count: number | null;
@@ -1550,6 +1564,7 @@ export type Database = {
           p_expected_revision: string;
           p_changes: Json;
           p_property_revision: string;
+          p_explanation?: string | null;
         };
         Returns: string;
       };

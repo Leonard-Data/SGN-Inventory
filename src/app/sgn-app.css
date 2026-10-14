@@ -765,11 +765,15 @@ dialog.sgn-dialog::backdrop { background: color-mix(in oklab, var(--fg) 46%, tra
 .hist-change ins { color: var(--fg); text-decoration: none; font-weight: 600; }
 .hist-when { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 
-.price-row { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; gap: var(--space-4); align-items: baseline; padding: var(--space-3) 0; border-bottom: 1px solid var(--border-soft); }
+.price-series + .price-series { margin-top: var(--space-5); }
+.price-series-title { margin-bottom: var(--space-2); font-size: var(--text-sm); font-weight: 600; color: var(--fg); }
+.price-row { display: grid; grid-template-columns: minmax(96px, auto) minmax(0, 1fr) auto; gap: var(--space-4); align-items: baseline; padding: var(--space-3) 0; border-bottom: 1px solid var(--border-soft); }
 .price-row:last-child { border-bottom: 0; }
-.price-when { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.price-when { font-family: var(--font-mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
 .price-change { font-family: var(--font-mono); font-size: var(--text-sm); font-variant-numeric: tabular-nums; color: var(--fg); }
 .price-change del { color: var(--muted); }
+.price-change .is-unknown { color: var(--muted); }
+.price-note { display: block; margin-top: 2px; font-family: var(--font-body); font-size: var(--text-xs); color: var(--fg-2); overflow-wrap: anywhere; }
 .price-who { font-size: var(--text-xs); color: var(--muted); text-align: right; }
 
 /* ── create page ────────────────────────────────────────────────────────── */

@@ -1,5 +1,6 @@
 import 'server-only';
 import { ApiError, uuid, type RouteContext } from '@/lib/supabase/route';
+import { cursorPair, timestamp } from '@/lib/supabase/query';
 import {
   COMMENT_MAX_LENGTH,
   COMMENT_PAGE_SIZE,
@@ -8,10 +9,6 @@ import {
   type CommentPage,
   type CommentRemovalKind,
 } from './types';
-
-// The exposed discussion page is at most 30 entries; one extra row is the follow-page probe.
-const timestamp =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|\+00:00)$/;
 
 function databaseError(error: { code?: string }) {
   const denied = error.code === '42501';
@@ -59,22 +56,18 @@ export async function commentPage(
   params: URLSearchParams,
 ): Promise<CommentPage> {
   if (!uuid(id)) throw new ApiError(400, 'invalid-input');
-  const before = params.get('before'),
-    beforeId = params.get('beforeId');
+  const cursor = cursorPair(params);
   if (
     [...params.keys()].some((key) => key !== 'before' && key !== 'beforeId') ||
-    !!before !== !!beforeId ||
-    (before !== null &&
-      (!timestamp.test(before) ||
-        !Number.isFinite(Date.parse(before)) ||
-        !uuid(beforeId)))
+    cursor === 'invalid'
   )
     throw new ApiError(400, 'invalid-input');
   const { data, error } = await context.client.rpc('list_property_comments', {
     p_property_id: id,
+    // The exposed discussion page is at most 30 entries; one extra row is the follow-page probe.
     p_limit: COMMENT_PAGE_SIZE + 1,
-    ...(before && beforeId
-      ? { p_before_created_at: before, p_before_id: beforeId }
+    ...(cursor
+      ? { p_before_created_at: cursor.before, p_before_id: cursor.beforeId }
       : {}),
   });
   if (error) databaseError(error);
