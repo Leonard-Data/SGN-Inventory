@@ -115,6 +115,9 @@ export function EmployeeDeactivationPanel({
   const actionable =
     mayAdministerEmployees(actorRole) &&
     actionKey !== null &&
+    !loading &&
+    problem === null &&
+    snapshot !== null &&
     (employee.access === 'active' || resumable);
 
   async function confirm(event: FormEvent<HTMLFormElement>) {
@@ -148,20 +151,13 @@ export function EmployeeDeactivationPanel({
         onDenied(failure.status);
         return;
       }
-      const code =
-        failure instanceof RequestError ? failure.code : 'unavailable';
-      // A conflict or a provider-configuration failure means the committed state moved on
-      // (or could not be recorded); read it again instead of guessing.
-      if (
-        code === 'stale-operation' ||
-        code === 'deactivation-key-conflict' ||
-        code === 'provider-unavailable' ||
-        code === 'not-deactivable'
-      ) {
-        void load();
-        onChanged();
-      }
-      setProblem(code);
+      // The POST may have committed before the response was lost; re-read the confirmation
+      // and the directory with the same action key instead of guessing the outcome.
+      void load();
+      onChanged();
+      setProblem(
+        failure instanceof RequestError ? failure.code : 'unavailable',
+      );
     } finally {
       setBusy(false);
     }
@@ -204,24 +200,27 @@ export function EmployeeDeactivationPanel({
         <p className="panel-note" role="status">
           {text.loading}
         </p>
-      ) : snapshot && snapshot.reservations.length ? (
-        <ul className="deactivation-reservations">
-          {snapshot.reservations.map((reservation) => (
-            <li key={reservation.id}>
-              <strong translate="no">{reservation.propertyCode}</strong>
-              {' · '}
-              {reservation.kind === 'effective'
-                ? text.employeeDeactivateReservationEffective
-                : text.employeeDeactivateReservationPending}
-              {' · '}
-              {text.employeeDeactivateReservationExpires}:{' '}
-              {vietnamTimestamp(reservation.expiresAt, locale) ?? text.unknown}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="panel-note">{text.employeeDeactivateNoOutstanding}</p>
-      )}
+      ) : snapshot ? (
+        snapshot.reservations.length ? (
+          <ul className="deactivation-reservations">
+            {snapshot.reservations.map((reservation) => (
+              <li key={reservation.id}>
+                <strong translate="no">{reservation.propertyCode}</strong>
+                {' · '}
+                {reservation.kind === 'effective'
+                  ? text.employeeDeactivateReservationEffective
+                  : text.employeeDeactivateReservationPending}
+                {' · '}
+                {text.employeeDeactivateReservationExpires}:{' '}
+                {vietnamTimestamp(reservation.expiresAt, locale) ??
+                  text.unknown}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="panel-note">{text.employeeDeactivateNoOutstanding}</p>
+        )
+      ) : null}
       <p className="field-hint">{text.employeeDeactivateReservationNote}</p>
 
       {problem ? (

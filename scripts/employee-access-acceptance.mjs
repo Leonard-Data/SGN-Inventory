@@ -8,7 +8,7 @@ import { readEnvironment } from '../src/lib/environment.ts';
 
 if (process.argv.includes('--help')) {
   console.log(
-    'Real development acceptance: SGN_ACCEPTANCE_FIXTURES=<private JSON path> npm run test:acceptance -- --allow-deactivation [--report <sanitized JSON path>]. Requires the documented chrome-devtools-axi installation. Mutates only declared synthetic employee locale/access and records page views. Restores employee activation in finally. This automated run does not cover real mailbox recovery; see docs/testing.md for separately recorded human-coordinated acceptance.',
+    'Real development acceptance: SGN_ACCEPTANCE_FIXTURES=<private JSON path> SGN_ACCEPTANCE_OPERATOR=<private operator JSON path> npm run test:acceptance -- --allow-deactivation [--report <sanitized JSON path>]. Requires the documented chrome-devtools-axi installation. Mutates only declared synthetic employee locale/access and records page views. Restores employee activation in finally. This automated run does not cover real mailbox recovery; see docs/testing.md for separately recorded human-coordinated acceptance.',
   );
   process.exit(0);
 }
@@ -34,8 +34,19 @@ assert.ok(
   process.env.SGN_ACCEPTANCE_FIXTURES,
   'Provide an ignored, external fixture manifest',
 );
+assert.ok(
+  process.env.SGN_ACCEPTANCE_OPERATOR,
+  'Provide the private operator config with the owner SQL connection',
+);
 const fixtures = JSON.parse(
   await fs.readFile(process.env.SGN_ACCEPTANCE_FIXTURES, 'utf8'),
+);
+const operatorConfig = JSON.parse(
+  await fs.readFile(process.env.SGN_ACCEPTANCE_OPERATOR, 'utf8'),
+);
+assert.ok(
+  operatorConfig.dbUrl,
+  'The operator config needs an owner connection',
 );
 for (const name of ['active', 'english', 'inactive', 'unlinked', 'operator']) {
   assert.equal(
@@ -55,6 +66,36 @@ assert.ok(
   ),
   'Only synthetic inventory fixtures are allowed',
 );
+// Employee lifecycle writes run over the owner SQL connection: the lifecycle guard refuses
+// direct client writes, and the guarded administration operation is not a fixture toggle.
+function sqlText(value) {
+  return "'" + String(value).replace(/'/g, "''") + "'";
+}
+function ownerSql(statement) {
+  const result = spawnSync(
+    'npx',
+    [
+      'supabase',
+      'db',
+      'query',
+      '--db-url',
+      operatorConfig.dbUrl,
+      '--output-format',
+      'json',
+      statement,
+    ],
+    { encoding: 'utf8', timeout: 180000 },
+  );
+  if (result.status !== 0)
+    throw new Error(
+      'Owner SQL failed: ' + (result.stdout || result.stderr).slice(-800),
+    );
+  try {
+    return JSON.parse(result.stdout).rows ?? [];
+  } catch {
+    return [];
+  }
+}
 const npmRoot =
   process.platform === 'win32'
     ? spawnSync('cmd.exe', ['/d', '/s', '/c', 'npm root --global'], {
@@ -598,15 +639,11 @@ try {
   wait('Chủ nhà thử nghiệm');
   // Restore even if the update committed but its HTTP response was lost.
   deactivated = true;
-  const changed = await operator
-    .from('employees')
-    .update({ is_active: false })
-    .eq('id', fixtures.active.employeeId)
-    .eq('auth_user_id', fixtures.active.userId)
-    .select('id');
-  assert.equal(changed.error, null);
+  const changed = ownerSql(
+    `update public.employees set is_active=false where id=${sqlText(fixtures.active.employeeId)} and auth_user_id=${sqlText(fixtures.active.userId)} returning id`,
+  );
   assert.deepEqual(
-    changed.data.map((row) => row.id),
+    changed.map((row) => row.id),
     [fixtures.active.employeeId],
   );
   assert.equal(
@@ -630,12 +667,10 @@ try {
     'live deactivation with original app/direct sessions and clearing on refocus',
     { appStatus: 403, directRows: 0 },
   );
-  const restored = await operator
-    .from('employees')
-    .update({ is_active: true })
-    .eq('id', fixtures.active.employeeId)
-    .eq('auth_user_id', fixtures.active.userId);
-  assert.equal(restored.error, null);
+  const restored = ownerSql(
+    `update public.employees set is_active=true where id=${sqlText(fixtures.active.employeeId)} and auth_user_id=${sqlText(fixtures.active.userId)} returning id`,
+  );
+  assert.equal(restored.length, 1);
   deactivated = false;
   click('Sign out');
   browserLogin('active', primary);
@@ -741,13 +776,9 @@ try {
 } finally {
   if (networkOffline) browser(['emulate', '--network', 'Fast 4G']);
   if (deactivated) {
-    const result = await operator
-      .from('employees')
-      .update({ is_active: true })
-      .eq('id', fixtures.active.employeeId)
-      .eq('auth_user_id', fixtures.active.userId);
-    if (result.error)
-      throw new Error('Failed to restore declared test employee activation');
+    ownerSql(
+      `update public.employees set is_active=true where id=${sqlText(fixtures.active.employeeId)} and auth_user_id=${sqlText(fixtures.active.userId)}`,
+    );
   }
 }
 const report = {
