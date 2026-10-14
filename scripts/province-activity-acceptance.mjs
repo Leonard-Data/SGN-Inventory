@@ -4,6 +4,10 @@
 // Chrome sessions. It creates only the synthetic identities, catalog fixtures, properties,
 // contacts and committed activity rows the report needs under an exact-ID private manifest, and
 // removes exactly what it created through the supported operator-SQL and service-role paths.
+// Synthetic employee rows are written, role-changed and removed through the owner database
+// connection as well: the live employee admin-state guard rejects service-role employee
+// inserts, sign-in links and lifecycle changes, and the owner connection is the same path the
+// repo's operator fixtures already use.
 // Mock, shim and readiness-page results are not acceptance.
 //
 // Usage:
@@ -172,9 +176,19 @@ const sqlLiteral = (value) => `'${String(value).replaceAll("'", "''")}'`;
 const sqlId = (id) => `${sqlLiteral(id)}::uuid`;
 const sqlIds = (ids) => ids.map(sqlId).join(',');
 async function updateEmployee(id, patch) {
-  return retryResult('employee-update', () =>
-    admin.from('employees').update(patch).eq('id', id),
+  const assignments = Object.entries(patch)
+    .map(([column, value]) =>
+      typeof value === 'boolean'
+        ? `${column} = ${value}`
+        : `${column} = ${sqlLiteral(value)}`,
+    )
+    .join(',');
+  const updated = await operatorSqlWithRetry(
+    'employee-update',
+    `update public.employees set ${assignments} where id=${sqlId(id)} returning id`,
   );
+  assert.equal(updated.length, 1, 'employee update affected one row');
+  return updated;
 }
 async function insertRows(label, table, rows) {
   const inserted = await retryResult(label, () =>
@@ -189,6 +203,19 @@ async function countRows(table) {
   );
   assert.equal(error, null, `count ${table}`);
   return count;
+}
+// Exact-identity count of rows this harness created, so removal is asserted on the fixture rows
+// rather than on whole-table counts a sibling harness can move.
+async function countFixtureRows(table, column, ids) {
+  if (!ids.length) return 0;
+  const { count, error } = await retryResult(`count fixture ${table}`, () =>
+    admin
+      .from(table)
+      .select('*', { count: 'exact', head: true })
+      .in(column, ids),
+  );
+  assert.equal(error, null, `count fixture ${table}`);
+  return count ?? 0;
 }
 function vietnamDay(offsetDays = 0) {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -282,10 +309,15 @@ async function removeFixtures(manifest) {
     assert.equal(units.error, null, 'remove fixture units');
   }
   if (employeeIds.length) {
-    const employees = await retryResult('remove fixture employees', () =>
-      admin.from('employees').delete().in('id', employeeIds),
+    const removedEmployees = await operatorSqlWithRetry(
+      'remove fixture employees',
+      `delete from public.employees where id in (${sqlIds(employeeIds)}) returning id`,
     );
-    assert.equal(employees.error, null, 'remove fixture employees');
+    assert.equal(
+      removedEmployees.length,
+      employeeIds.length,
+      'remove fixture employees',
+    );
   }
   const users = [
     ...Object.values(manifest.identities ?? {}).map(
@@ -320,17 +352,11 @@ async function createIdentities() {
     assert.equal(created.error, null, `create auth user ${name}`);
     const userId = created.data.user.id;
     const employeeId = randomUUID();
-    const inserted = await retryResult(`create employee ${name}`, () =>
-      admin.from('employees').insert({
-        id: employeeId,
-        auth_user_id: userId,
-        email,
-        display_name: `${namespace} ${name}`,
-        role,
-        is_active: active,
-      }),
+    const inserted = await operatorSqlWithRetry(
+      `create employee ${name}`,
+      `insert into public.employees(id,auth_user_id,email,display_name,role,is_active) values (${sqlId(employeeId)},${sqlId(userId)},${sqlLiteral(email)},${sqlLiteral(`${namespace} ${name}`)},${sqlLiteral(role)},${active}) returning id`,
     );
-    assert.equal(inserted.error, null, `create employee ${name}`);
+    assert.equal(inserted.length, 1, `create employee ${name}`);
     manifest.identities[name] = {
       userId,
       employeeId,
@@ -717,8 +743,22 @@ async function stopApp() {
   if (app.exitCode === null) app.kill('SIGKILL');
   app = null;
 }
+// A local application request can lose its transport connection transiently (the development
+// host also runs sibling acceptance harnesses), so the connection is retried and any eventual
+// failure names the underlying cause instead of an opaque "fetch failed".
+function appFetch(label, url, options) {
+  return retryThrown(label, async () => {
+    try {
+      return await fetch(url, options);
+    } catch (error) {
+      throw new Error(
+        `${label} failed: ${error?.message ?? error} (${error?.cause?.code ?? error?.cause?.message ?? 'no cause'})`,
+      );
+    }
+  });
+}
 function appLoginRequest(email, password, locale = 'vi') {
-  return fetch(`${appUrl}/api/auth/login`, {
+  return appFetch('application login request', `${appUrl}/api/auth/login`, {
     method: 'POST',
     redirect: 'manual',
     headers: { 'content-type': 'application/json', origin: appUrl },
@@ -735,7 +775,7 @@ async function appLogin(email, password, locale = 'vi') {
   return cookies;
 }
 async function appGet(cookies, route) {
-  const response = await fetch(appUrl + route, {
+  const response = await appFetch('application read', appUrl + route, {
     redirect: 'manual',
     headers: cookies ? { cookie: cookies } : {},
   });
@@ -1513,7 +1553,45 @@ try {
     manifest = (await readManifest()) ?? manifest;
     await removeFixtures(manifest);
     await fs.rm(manifestPath, { force: true });
-    if (baseline) {
+    if (baseline && manifest) {
+      // The development project is shared with sibling acceptance harnesses, so foreign rows can
+      // appear or disappear around this run. What is asserted is the part this harness owns: no
+      // fixture row survives removal under its exact identity. The global counts are reported,
+      // not asserted, and their drift is recorded as foreign movement.
+      const employeeIds = Object.values(manifest.identities ?? {}).map(
+        (identity) => identity.employeeId,
+      );
+      const propertyIds = Object.values(manifest.properties ?? {});
+      const contactIds = Object.values(manifest.contacts ?? {});
+      const unitIds = Object.values(manifest.units ?? {});
+      const leftovers = {
+        employees: await countFixtureRows('employees', 'id', employeeIds),
+        properties: await countFixtureRows('properties', 'id', propertyIds),
+        activity: await countFixtureRows(
+          'activity_events',
+          'property_id',
+          propertyIds,
+        ),
+        contacts: await countFixtureRows('contacts', 'id', contactIds),
+        propertyContacts: await countFixtureRows(
+          'property_contacts',
+          'property_id',
+          propertyIds,
+        ),
+        units: await countFixtureRows('admin_unit_versions', 'id', unitIds),
+      };
+      assert.deepEqual(
+        leftovers,
+        {
+          employees: 0,
+          properties: 0,
+          activity: 0,
+          contacts: 0,
+          propertyContacts: 0,
+          units: 0,
+        },
+        'Fixture rows survived removal',
+      );
       const after = {
         employees: await countRows('employees'),
         properties: await countRows('properties'),
@@ -1521,18 +1599,19 @@ try {
         contacts: await countRows('contacts'),
         propertyContacts: await countRows('property_contacts'),
       };
-      assert.deepEqual(
-        after,
-        baseline,
-        'Fixture restoration did not return to baseline',
+      observed(
+        'every fixture row is removed and the global row counts are reported',
+        {
+          baseline,
+          after,
+          foreignDrift: Object.fromEntries(
+            Object.keys(after).map((table) => [
+              table,
+              after[table] - baseline[table],
+            ]),
+          ),
+        },
       );
-      observed('fixtures removed and the pre-acceptance baseline restored', {
-        employees: after.employees,
-        properties: after.properties,
-        activity: after.activity,
-        contacts: after.contacts,
-        propertyContacts: after.propertyContacts,
-      });
     }
   }
 }
@@ -1567,6 +1646,7 @@ const reportDocument = {
       ? `${retryCount} transient transport retries were needed for idempotent fixture/read steps; no assertion was retried.`
       : null,
     'Counts are asserted as deltas around the fixture write, because the report is company-wide and the development project is shared; concurrent foreign activity inside the two fixture days would surface as a mismatch rather than being silently absorbed.',
+    'Fixture removal is asserted by exact identity against the rows this harness created; the global employee, property, activity, contact and link counts are reported before and after with any foreign drift, because sibling harnesses share the development project.',
     'The rendered journey covers the report table, the always-listed Unverified row, both languages, an invalid range, the mobile viewport and the denied redirect; the in-flight loading state, transport-failure retry and the company report page remain outside this harness.',
   ].filter(Boolean),
 };

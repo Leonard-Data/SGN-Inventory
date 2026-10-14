@@ -263,7 +263,7 @@ Because the grouping is derived from current address state, an authorized mappin
 
 The `/activity/provinces` surface is manager/admin-only in the rail and reports loading, denial, failure, a genuine zero period and the explicit Unverified zero as distinct localized states in Vietnamese/default and English. The table is sorted highest first, prints exact counts as text, and colour-codes each count cell as one accent at three strengths whose level label is also printed as text, so colour alone carries no meaning; there is no geographic map. The panel labels the grouping as the latest verified location and shows the selected period bounds.
 
-**Verification:** `scripts/province-activity-contract.mjs` runs in the embedded schema harness (24 checks) for the live role boundary, role downgrade and deactivation, the employee/property/day unit rules, canonical catalog identity, the legacy-text and candidate boundaries, the always-reported Unverified group, authorized regrouping after a mapping correction or invalidation with an unchanged company total and unchanged company-report reconciliation, archived retention, direct-api denial and range bounds. **The hosted Supabase/browser acceptance harness `scripts/province-activity-acceptance.mjs` is written but has not been executed; see [testing.md](testing.md#province-activity-acceptance-ticket-35).**
+**Verification:** the embedded contract checks and the executed hosted Supabase/browser acceptance evidence for this table and endpoint are recorded in [testing.md](testing.md#province-activity-acceptance-ticket-35).
 
 ### Ticket #18 — Reservation request and independent decision
 

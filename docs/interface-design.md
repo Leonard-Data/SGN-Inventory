@@ -62,7 +62,7 @@ The shell replaces the per-page `SessionHeader`. Locale switch and sign-out move
 | Reservations & Reviews | My requests (`/requests`); Reviews hub (`/reviews/…`, corrections shipped) | all; queues per role |
 | Rentals | Agreements (`/rentals`) | staff, manager, admin |
 | People | Employees (`/people/employees`); Contacts (`/people/contacts`) | admin; staff/manager/admin |
-| Reports | My activity (`/activity/me`, shipped); Company (`/activity/company`, shipped) | all; manager/admin |
+| Reports | My activity (`/activity/me`, shipped); Company (`/activity/company`, shipped); Provinces (`/activity/provinces`, shipped) | all; manager/admin; manager/admin |
 | Admin | Categories (`/admin/categories`); Units (`/admin/units`) | admin |
 
 `/reviews` redirects to the first queue the role can see. Detail is reached from inventory, never from the menu.
@@ -260,7 +260,7 @@ page-intro · [New category] / [New unit]
 
 ### Shipped-state gaps (deliberate, not silent)
 
-- Navigation renders four groups: Inventory (`/properties` and `/properties/new`, every role), Reservations & Reviews (`/reviews/corrections`, every role — the queue reads the caller's own requests while only staff/manager/admin decide), People (`/people/employees`, admin) and Reports (`/activity/me`, every role; `/activity/company`, manager/admin). The ADR's other two groups (Rentals, Admin) ship with their routes.
+- Navigation renders four groups: Inventory (`/properties` and `/properties/new`, every role), Reservations & Reviews (`/reviews/corrections`, every role — the queue reads the caller's own requests while only staff/manager/admin decide), People (`/people/employees`, admin) and Reports (`/activity/me`, every role; `/activity/company` and `/activity/provinces`, manager/admin). The ADR's other two groups (Rentals, Admin) ship with their routes.
 - The inventory results have **cards only**: the package's Cards/List/Table `.seg` switch and the ordering control are not implemented, and `.cell-plate` table thumbnails therefore have no consumer yet.
 - The card shows the record's existing fact set (code, mode, address, status). The prototype's card also prints area and price lines; adding them would be new data display beyond this restyle, so they were left out.
 - The record page has no Edit action (no edit route exists; editing stays the in-page maintenance disclosure).
