@@ -169,8 +169,8 @@ A deliberate reveal of a property's recorded owner phone, committed as an Owner-
 _Avoid_: Automatic phone display, call log, attendance
 
 **Confirmed physical visit**:
-A reported visit to a property confirmed by an independent reviewer.
-_Avoid_: Page view, legacy click
+A reported visit to a property confirmed by an independent reviewer. Submission and independent confirmation are retired in favour of automatically recorded Owner-contact access; retained rows are historical records only, they are never converted into owner-contact credit and no visit review queue exists.
+_Avoid_: Page view, legacy click, owner-contact access
 
 **Reservation request**:
 A pending claim awaiting independent review. It does not reserve the property.

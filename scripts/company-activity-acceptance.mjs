@@ -529,12 +529,13 @@ async function waitFor(session, cdpPort, expression, attempts = 60) {
   }
   assert.fail('Timed out waiting for browser state');
 }
-// The report page is loaded when its table exists; a failure path reports the observed state
-// instead of an opaque timeout. A transient upstream error is retried through the page's own
-// Retry control, and every such retry is disclosed in the sanitized report.
+// The report page is loaded when its shipped design-vocabulary table exists; a failure path
+// reports the observed state instead of an opaque timeout. A transient upstream error is
+// retried through the page's own Retry control, and every such retry is disclosed in the
+// sanitized report.
 const loadState = `() => ({
   path: location.pathname,
-  table: Boolean(document.querySelector('table.report-table')),
+  table: Boolean(document.querySelector('main table.data-table')),
   alert: document.querySelector('[role=alert]')?.textContent?.trim() ?? null,
   status: document.querySelector('[role=status]')?.textContent?.trim() ?? null,
 })`;
@@ -582,12 +583,15 @@ async function browserSignIn(session, cdpPort, email, password) {
   await waitFor(session, cdpPort, `() => location.pathname === '/properties'`);
 }
 // The browser bridge truncates large payloads, so the read returns only the tracked rows for
-// the days under assertion rather than the whole employee/date table.
+// the days under assertion rather than the whole employee/date table. Every selector below is
+// the shipped design-system markup: the two report panels, their `.panel-head .panel-note`
+// day/period text, the `dl.facts` summary and the `.data-table` history.
 function screenExpression(tracked, dates) {
   return `() => {
-  const main = document.querySelector('main');
-  const summary = document.querySelector('#today-summary')?.parentElement ?? null;
-  const table = document.querySelector('table.report-table');
+  const summary = document.querySelector('#today-summary')?.closest('section') ?? null;
+  const history = document.querySelector('#company-history')?.closest('section') ?? null;
+  const form = document.querySelector('form[action="/activity/company"]');
+  const table = document.querySelector('main table.data-table');
   const tracked = ${JSON.stringify(tracked)};
   const dates = ${JSON.stringify(dates)};
   const rows = table
@@ -595,17 +599,32 @@ function screenExpression(tracked, dates) {
         .map((tr) => [...tr.children].map((cell) => cell.textContent.trim()))
         .filter((cells) => tracked.includes(cells[0]) && dates.includes(cells[1]))
     : [];
+  const labels = form
+    ? [...form.querySelectorAll('label')].map((node) => node.textContent.trim())
+    : [];
+  const controls = form
+    ? [...form.querySelectorAll('input')].map((node) => ({
+        id: node.id,
+        type: node.type,
+        value: node.value,
+      }))
+    : [];
   return {
     path: location.pathname,
-    lang: main?.lang ?? document.documentElement.lang,
+    lang: document.documentElement.lang,
     heading: document.querySelector('h1')?.textContent?.trim() ?? null,
-    summaryDate: summary?.querySelector('dd')?.textContent?.trim() ?? null,
-    summaryLabels: summary ? [...summary.querySelectorAll('dt')].map((node) => node.textContent.trim()) : [],
-    summaryValues: summary ? [...summary.querySelectorAll('dd')].slice(1).map((node) => node.textContent.trim()) : [],
-    caption: table?.querySelector('caption')?.textContent?.trim() ?? null,
+    summaryDate: summary?.querySelector('.panel-head .panel-note')?.textContent?.trim() ?? null,
+    summaryLabels: summary ? [...summary.querySelectorAll('dl.facts dt')].map((node) => node.textContent.trim()) : [],
+    summaryValues: summary ? [...summary.querySelectorAll('dl.facts dd')].map((node) => node.textContent.trim()) : [],
+    period: history?.querySelector('.panel-head .panel-note')?.textContent?.trim() ?? null,
+    hasTable: Boolean(table),
+    empty: document.querySelector('.state-panel h3')?.textContent?.trim() ?? null,
+    labels,
+    controls,
     headers: table ? [...table.querySelectorAll('thead th')].map((node) => node.textContent.trim()) : [],
     rowCount: table ? table.querySelectorAll('tbody tr').length : 0,
     rows,
+    overflowX: Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth),
     alerts: [...document.querySelectorAll('[role=alert]')].map((node) => node.textContent.trim()),
     denied: document.body.innerText.includes('Không có quyền truy cập') || document.body.innerText.includes('Access denied'),
   };
@@ -1042,6 +1061,7 @@ try {
   ]);
   await waitForReport('sgn31-vi', 9331);
   const screenDate = day.split('-').reverse().join('/');
+  const fromScreenDate = from.split('-').reverse().join('/');
   const emptyScreenDate = emptyDay.split('-').reverse().join('/');
   const screenDates = [screenDate, emptyScreenDate];
   const trackedNames = [
@@ -1058,8 +1078,14 @@ try {
   );
   assert.equal(vi.lang, 'vi');
   assert.equal(vi.heading, 'Hoạt động của nhân viên theo ngày');
+  // Today's summary names the Vietnam business day in its panel head and shows the three
+  // metrics separately; the history panel head carries the selected Vietnam period.
+  assert.equal(vi.summaryDate, screenDate);
+  assert.ok(
+    vi.period.includes(fromScreenDate) && vi.period.includes(screenDate),
+    `period ${vi.period} does not cover ${fromScreenDate} – ${screenDate}`,
+  );
   assert.deepEqual(vi.summaryLabels, [
-    'Ngày (giờ Việt Nam)',
     'Lượt xem trang',
     'Bất động sản đã xem',
     'Bất động sản đã xem liên hệ chủ nhà',
@@ -1076,16 +1102,16 @@ try {
     'a live manager sees the Vietnamese report with separated metrics and explicit zero rows',
   );
   const activityBefore = await report(manager, day, day);
-  const englishButton = `(() => { const button = [...document.querySelectorAll('header button')].find((node) => node.textContent.trim() === 'English'); button.click(); return true; })()`;
+  const englishButton = `(() => { const button = document.querySelector('.lang-switch button[lang=en]'); button.click(); return true; })()`;
   evaluate('sgn31-vi', 9331, englishButton);
   await waitFor(
     'sgn31-vi',
     9331,
-    `() => document.querySelector('main')?.lang === 'en'`,
+    `() => document.documentElement.lang === 'en'`,
   );
   const en = screen('sgn31-vi', 9331, trackedNames, screenDates);
+  assert.equal(en.summaryDate, screenDate);
   assert.deepEqual(en.summaryLabels, [
-    'Day (Vietnam time)',
     'Page views',
     'Distinct properties viewed',
     'Owner-contact properties',
@@ -1113,7 +1139,7 @@ try {
     };
     set('#report-from', ${JSON.stringify(day)});
     set('#report-to', ${JSON.stringify(day)});
-    document.querySelector('form.report-filter').requestSubmit();
+    document.querySelector('form[action="/activity/company"]').requestSubmit();
     return true;
   })()`;
   evaluate('sgn31-vi', 9331, filter);
@@ -1139,10 +1165,177 @@ try {
   assert.equal(
     filtered.rowCount,
     singleDayApp.body.rows.length,
-    `filtered row count ${filtered.rowCount} expected ${singleDayApp.body.rows.length} caption ${filtered.caption} alerts ${JSON.stringify(filtered.alerts)}`,
+    `filtered row count ${filtered.rowCount} expected ${singleDayApp.body.rows.length} period ${filtered.period} alerts ${JSON.stringify(filtered.alerts)}`,
   );
-  assert.ok(filtered.caption.includes(screenDate));
+  assert.ok(filtered.period.includes(screenDate));
   observed('the date filter selects another validated single-day range');
+
+  // Accessible labels and keyboard-reachable date controls on a mobile viewport.
+  assert.deepEqual(vi.labels, ['Từ ngày', 'Đến ngày']);
+  assert.deepEqual(
+    vi.controls.map((control) => [control.id, control.type]),
+    [
+      ['report-from', 'date'],
+      ['report-to', 'date'],
+    ],
+  );
+  browser('sgn31-vi', 9331, ['resize', '375', '900']);
+  await sleep(500);
+  const mobile = screen('sgn31-vi', 9331, trackedNames, [screenDate]);
+  assert.equal(mobile.overflowX, 0, 'mobile viewport overflows horizontally');
+  assert.deepEqual(
+    mobile.rows
+      .find((row) => row[0] === 'SGN31 salesA' && row[1] === screenDate)
+      .slice(2),
+    ['2', '2', '1'],
+  );
+  browser('sgn31-vi', 9331, ['resize', '1440', '900']);
+  await sleep(500);
+  observed(
+    'the report controls carry accessible labels and the report stays readable at 375px without horizontal overflow',
+  );
+
+  // The required states must stay distinguishable as rendered, localized output: a real zero
+  // period, invalid-range validation, a genuine query failure and the in-flight loading state,
+  // each in Vietnamese/default and English.
+  const rangeValidation = {
+    vi: 'Khoảng ngày không hợp lệ. Ngày bắt đầu không được sau ngày kết thúc và tối đa 366 ngày.',
+    en: 'That date range is not valid. The start date must not be after the end date, and the range may cover at most 366 days.',
+  };
+  const connectionFailure = {
+    vi: 'Không thể kết nối. Vui lòng thử lại.',
+    en: 'Unable to connect. Please try again.',
+  };
+  const loadingLabel = { vi: 'Đang tải…', en: 'Loading…' };
+  // The observer records every rendered [role=status] label, so the loading state is captured
+  // during the real read instead of racing a fixed sleep.
+  const observeStatus = `(() => {
+    window.__sgnStatusSeen = [];
+    const record = () => {
+      const node = document.querySelector('[role=status]');
+      if (!node) return;
+      const text = node.textContent.trim();
+      if (!window.__sgnStatusSeen.includes(text)) window.__sgnStatusSeen.push(text);
+    };
+    new MutationObserver(record).observe(document.body, { childList: true, subtree: true, characterData: true });
+    record();
+    return true;
+  })()`;
+  const assertReportStates = async (language) => {
+    const label = language === 'vi' ? 'Vietnamese/default' : 'English';
+    // A real zero period: the requested Vietnam day still lists every active employee with
+    // explicit zeros, no alert and no empty-state stand-in.
+    browser('sgn31-vi', 9331, [
+      'open',
+      `${appUrl}/activity/company?from=${emptyDay}&to=${emptyDay}`,
+    ]);
+    await waitForReport('sgn31-vi', 9331);
+    const zero = screen('sgn31-vi', 9331, trackedNames, [emptyScreenDate]);
+    assert.equal(zero.lang, language);
+    assert.deepEqual(zero.alerts, []);
+    assert.equal(zero.empty, null);
+    assert.deepEqual(
+      zero.rows
+        .find((row) => row[0] === 'SGN31 salesA' && row[1] === emptyScreenDate)
+        .slice(2),
+      ['0', '0', '0'],
+    );
+    observed(
+      `a real zero period renders explicit zeros rather than an omitted day in ${label}`,
+    );
+
+    // An invalid range renders the localized validation alert, never a zero report.
+    browser('sgn31-vi', 9331, [
+      'open',
+      `${appUrl}/activity/company?from=${day}&to=${from}`,
+    ]);
+    await waitFor(
+      'sgn31-vi',
+      9331,
+      `() => (document.querySelector('[role=alert]')?.textContent ?? '').includes(${JSON.stringify(rangeValidation[language])})`,
+    );
+    const invalid = screen('sgn31-vi', 9331, trackedNames, [screenDate]);
+    assert.equal(invalid.hasTable, false);
+    assert.equal(invalid.empty, null);
+    assert.ok(
+      invalid.alerts.some((text) => text.includes(rangeValidation[language])),
+    );
+    observed(`an invalid range renders the localized validation in ${label}`);
+
+    // A genuine transport failure (browser offline) is distinguishable from zero and loading;
+    // restoring the network and the Retry control recover the table.
+    browser('sgn31-vi', 9331, [
+      'open',
+      `${appUrl}/activity/company?from=${from}&to=${to}`,
+    ]);
+    await waitForReport('sgn31-vi', 9331);
+    browser('sgn31-vi', 9331, ['emulate', '--network', 'Offline']);
+    evaluate('sgn31-vi', 9331, observeStatus);
+    evaluate(
+      'sgn31-vi',
+      9331,
+      `(() => { window.dispatchEvent(new Event('focus')); return true; })()`,
+    );
+    await waitFor(
+      'sgn31-vi',
+      9331,
+      `() => (document.querySelector('[role=alert]')?.textContent ?? '').includes(${JSON.stringify(connectionFailure[language])})`,
+    );
+    const failure = screen('sgn31-vi', 9331, trackedNames, screenDates);
+    assert.equal(failure.hasTable, false);
+    assert.equal(failure.empty, null);
+    assert.ok(
+      failure.alerts.some((text) => text.includes(connectionFailure[language])),
+    );
+    browser('sgn31-vi', 9331, ['emulate', '--network', 'Fast 4G']);
+    evaluate(
+      'sgn31-vi',
+      9331,
+      `(() => { const button = document.querySelector('[role=alert] button'); if (!button) return false; button.click(); return true; })()`,
+    );
+    await waitForReport('sgn31-vi', 9331);
+    const recovered = screen('sgn31-vi', 9331, trackedNames, screenDates);
+    assert.deepEqual(
+      recovered.rows
+        .find((row) => row[0] === 'SGN31 salesA' && row[1] === screenDate)
+        .slice(2),
+      ['2', '2', '1'],
+    );
+    const seen = evaluate(
+      'sgn31-vi',
+      9331,
+      `() => window.__sgnStatusSeen ?? []`,
+    );
+    assert.ok(
+      seen.includes(loadingLabel[language]),
+      `loading state not observed in ${label}: ${JSON.stringify(seen)}`,
+    );
+    observed(
+      `a query failure renders the localized failure and loading states, and Retry recovers the table in ${label}`,
+    );
+  };
+  await assertReportStates('vi');
+  evaluate(
+    'sgn31-vi',
+    9331,
+    `(() => { document.querySelector('.lang-switch button[lang=en]').click(); return true; })()`,
+  );
+  await waitFor(
+    'sgn31-vi',
+    9331,
+    `() => document.documentElement.lang === 'en'`,
+  );
+  await assertReportStates('en');
+  evaluate(
+    'sgn31-vi',
+    9331,
+    `(() => { document.querySelector('.lang-switch button[lang=vi]').click(); return true; })()`,
+  );
+  await waitFor(
+    'sgn31-vi',
+    9331,
+    `() => document.documentElement.lang === 'vi'`,
+  );
 
   await browserSignIn(
     'sgn31-tz',
@@ -1171,7 +1364,13 @@ try {
   evaluate(
     'sgn31-tz',
     9332,
-    `(() => { const button = [...document.querySelectorAll('header button')].find((node) => /Đăng xuất|Sign out/.test(node.textContent)); button.click(); return true; })()`,
+    `(() => { document.querySelector('.sgn-user-btn').click(); return true; })()`,
+  );
+  await sleep(300);
+  evaluate(
+    'sgn31-tz',
+    9332,
+    `(() => { const button = [...document.querySelectorAll('.sgn-popover button')][0]; if (!button) return false; button.click(); return true; })()`,
   );
   await waitFor('sgn31-tz', 9332, `() => location.pathname === '/login'`);
   evaluate('sgn31-tz', 9332, `(() => { history.back(); return true; })()`);
@@ -1179,7 +1378,7 @@ try {
   const afterBack = await evaluate(
     'sgn31-tz',
     9332,
-    `() => ({ path: location.pathname, report: Boolean(document.querySelector('table.report-table')) })`,
+    `() => ({ path: location.pathname, report: Boolean(document.querySelector('main table.data-table')) })`,
   );
   assert.equal(afterBack.report, false);
   observed('sign-out clears the protected report and Back exposes none of it');
