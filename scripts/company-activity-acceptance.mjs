@@ -16,8 +16,10 @@
 //     [--report <sanitized json path>]
 //
 // The dev env supplies the publishable application settings; the owner config supplies the
-// database URL and owner capability. Both are read as data only and are never printed, shell
-// sourced, or passed in argv/logs.
+// database URL and owner capability. Both are read as data only. The owner URL is passed to
+// the Supabase CLI without its password for the fixture statements and the password is
+// supplied through the environment, so no credential appears in argv; captured CLI output is
+// redacted.
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { openSync } from 'node:fs';
@@ -26,6 +28,7 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
 import { readEnvironment } from '../src/lib/environment.ts';
+import { createOwnerSql } from './owner-sql.mjs';
 
 const devEnvPath = process.env.SGN_ACCEPTANCE_DEV_ENV;
 const ownerPath = process.env.SGN_ACCEPTANCE_OWNER;
@@ -100,31 +103,7 @@ assert.ok(owner.dbUrl, 'The owner config needs the owner SQL connection');
 function sqlText(value) {
   return "'" + String(value).replace(/'/g, "''") + "'";
 }
-function ownerSql(statement) {
-  const result = spawnSync(
-    'npx',
-    [
-      'supabase',
-      'db',
-      'query',
-      '--db-url',
-      owner.dbUrl,
-      '--output-format',
-      'json',
-      statement,
-    ],
-    { encoding: 'utf8', timeout: 180000 },
-  );
-  if (result.status !== 0)
-    throw new Error(
-      'Owner SQL failed: ' + (result.stdout || result.stderr).slice(-800),
-    );
-  try {
-    return JSON.parse(result.stdout).rows ?? [];
-  } catch {
-    return [];
-  }
-}
+const ownerSql = createOwnerSql(owner.dbUrl);
 const observations = [];
 function observed(name, details = {}) {
   observations.push({ name, ...details });

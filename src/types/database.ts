@@ -458,6 +458,7 @@ export type Database = {
           detail: string | null;
           employee_id: string;
           id: string;
+          idempotency_key: string | null;
           operation_id: string;
         };
         Insert: never;
