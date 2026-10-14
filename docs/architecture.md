@@ -49,7 +49,7 @@ The Postgres → Storage line represents authorization through registered file m
 | Live employee authorization | Deactivation and role changes affect subsequent DB requests without waiting for JWT role refresh |
 | Private storage and immutable paths | Legal files remain internal; replacement means a new metadata record and object path |
 | PostgreSQL search first | Accent-normalized trigram search fits ~19k records; short numeric queries can need more work than long words |
-| UUID keyset pagination | Stable, bounded retrieval; initial order is UUID, not newest-first. Add an indexed `(created_at,id)` cursor if newest-first is required |
+| UUID keyset pagination | Stable, bounded retrieval; initial order is UUID, not newest-first. Add an indexed chronological cursor if newest-first is required; inventory age orders on `(entry_on,id)` and never converts `created_at` into an entry date ([schema.md](schema.md)) |
 | Independent approval | Prevents unilateral reservation claims; requires at least two active reviewers for reviewer-owned deals |
 | VND integer numeric, rent dues/receipts but no commission ledger | Supports inventory prices and rental month balances; commission remains attribution-only |
 

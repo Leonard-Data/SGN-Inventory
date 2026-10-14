@@ -104,6 +104,18 @@ _Avoid_: Market valuation, price list, achieved price, projected price
 An optional retained note an authorized editor attaches to a recorded price correction. It stays with the revision it explains and never replaces the mistaken value, deletes earlier history or creates an approval step.
 _Avoid_: Approval reason, price justification, replacement value
 
+**Inventory entry date**:
+The recorded original date a property entered the company inventory, preserved from a reliable legacy source date or recorded when a genuinely new property identity is created. It is not the record's creation, update or import time.
+_Avoid_: Import day, created timestamp
+
+**Unknown inventory entry date**:
+An inventory record whose original entry date is not reliably recorded. It is an explicit known gap: it keeps its place in chronological lists after the dated records and has no invented or ranked age.
+_Avoid_: Oldest record, guessed date
+
+**Inventory age**:
+The number of Vietnam business days from a property's Inventory entry date to today, shown in the chronological inventory views. It does not reset when a property is relisted, repriced, corrected or otherwise updated.
+_Avoid_: Listing age, update age
+
 ### Vendors
 
 **Vendor**:

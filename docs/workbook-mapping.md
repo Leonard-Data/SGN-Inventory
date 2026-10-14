@@ -42,7 +42,7 @@ Profiled the complete provided workbook, not just sample rows. The sanitized `wo
 | PropertyID | `private.property_source_map.source_key` | Canonical property UUID is independent; keep source key as provenance; only unambiguous reviewed mappings |
 | Tên người tạo | Staging provenance | Display-name fallback only; never identifies an Auth account |
 | Email Người Tạo | `properties.created_by` via reviewed employee map | Normalize email; unresolved authors remain source provenance, not invented employees |
-| Ngày Tạo | `properties.created_at` | Interpret naive datetime in Vietnam only after confirmation; retain raw |
+| Ngày Tạo | `properties.entry_on` + `entry_source='legacy'`; `properties.created_at` stays the record creation time | Use the source value as the original inventory entry date only when it is a reliable entry date, interpreting a naive datetime in Vietnam only after confirmation; retain the raw value in staging. Unreliable or absent values leave `entry_on` null with `entry_source='unknown'` instead of substituting `created_at` or the import day |
 | Tên chủ sở hũu | `contacts.display_name` | Generic names such as owner shorthand do not establish identity |
 | Số điện thoai | `contacts.phones` + `raw_phone_text` | Split multiple values; normalized valid mobile strings; preserve invalid/landline text for review |
 | Địa chỉ dự án | `property_addresses.address_text`, format legacy | Preserve exactly; no automatic new ward |

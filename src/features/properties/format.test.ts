@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   formatVnd,
   formatDecimal,
+  formatInteger,
   vietnamDate,
   vietnamTimestamp,
   dialableNumber,
@@ -26,6 +27,8 @@ test('whole VND remains exact beyond JavaScript safe integer precision', () => {
 test('decimal dimensions remain exact and history instants show Vietnam time', () => {
   assert.equal(formatDecimal('1234567890.50', 'vi'), '1.234.567.890,50');
   assert.equal(formatDecimal('1234567890.50', 'en'), '1,234,567,890.50');
+  assert.equal(formatInteger(1299, 'vi'), '1.299');
+  assert.equal(formatInteger(0, 'en'), '0');
   const stamp = vietnamTimestamp('2026-10-09T17:05:00Z', 'en');
   assert.ok(stamp);
   assert.match(stamp, /10\/10\/2026.*00:05/);

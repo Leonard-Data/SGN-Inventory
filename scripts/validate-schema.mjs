@@ -14,6 +14,7 @@ import { commentEditContract } from './comment-edit-contract.mjs';
 import { companyActivityContract } from './company-activity-contract.mjs';
 import { myActivityContract } from './my-activity-contract.mjs';
 import { priceHistoryContract } from './price-history-contract.mjs';
+import { inventoryAgeContract } from './inventory-age-contract.mjs';
 import { vendorContract } from './vendor-contract.mjs';
 import { referenceCatalogContract } from './reference-catalog-contract.mjs';
 import { saleCompletionContract } from './sale-completion-contract.mjs';
@@ -591,6 +592,8 @@ await commentEditContract({db,asUser,check,fails,employees});
 await companyActivityContract({db,asUser,check,fails,employees});
 // Ticket #30: the employee's own activity over an explicit Vietnam date range.
 await myActivityContract({db,asUser,check,fails,employees});
+// Issue #37: explicit original inventory entry dates and eligible chronological ordering.
+await inventoryAgeContract({db,asUser,check,fails,employees});
 // Seeded Vietnamese province/city and ward/commune reference catalogue.
 await referenceCatalogContract({db,asUser,check,fails,employees,root});
 // Issue #38: one reviewed logical sale completion and the completed-sale ranking.

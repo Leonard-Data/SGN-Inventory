@@ -528,6 +528,8 @@ export type Database = {
           created_by: string | null;
           depth_m: number | null;
           direction: string | null;
+          entry_on: string | null;
+          entry_source: string;
           floor_area_m2: number | null;
           floors: number | null;
           frontage_m: number | null;
@@ -563,6 +565,8 @@ export type Database = {
           created_by?: string | null;
           depth_m?: number | null;
           direction?: string | null;
+          entry_on?: string | null;
+          entry_source?: string;
           floor_area_m2?: number | null;
           floors?: number | null;
           frontage_m?: number | null;
@@ -598,6 +602,8 @@ export type Database = {
           created_by?: string | null;
           depth_m?: number | null;
           direction?: string | null;
+          entry_on?: string | null;
+          entry_source?: string;
           floor_area_m2?: number | null;
           floors?: number | null;
           frontage_m?: number | null;
@@ -1967,6 +1973,33 @@ export type Database = {
         Args: { p_key: string; p_property_id: string };
         Returns: Json;
       };
+      list_inventory_by_age: {
+        Args: {
+          p_after_id?: string;
+          p_after_on?: string;
+          p_after_unknown?: boolean;
+          p_direction: string;
+          p_limit?: number;
+          p_query?: string;
+        };
+        Returns: {
+          access_type: string | null;
+          age_days: number | null;
+          cover_file_id: string | null;
+          depth_m: string | null;
+          direction: string | null;
+          entry_on: string | null;
+          entry_source: string;
+          floor_area_m2: string | null;
+          floors: number | null;
+          frontage_m: string | null;
+          id: string;
+          land_area_m2: string | null;
+          listing_mode: string;
+          property_code: string;
+          status: string;
+        }[];
+      };
       search_properties: {
         Args: {
           p_after?: string;
@@ -1989,6 +2022,8 @@ export type Database = {
           created_by: string | null;
           depth_m: number | null;
           direction: string | null;
+          entry_on: string | null;
+          entry_source: string;
           floor_area_m2: number | null;
           floors: number | null;
           frontage_m: number | null;
