@@ -872,7 +872,7 @@ try {
   operatorSql('select 1 as ok');
   insertProvenanceApplied =
     operatorSql(
-      "select (pg_get_functiondef('private.guard_inventory_entry_date()'::regprocedure) like '%auth.uid()%') as applied",
+      "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261014002006') as applied",
     )[0]?.applied === true;
   await startApp();
   baseline = {
