@@ -3,7 +3,9 @@ import { test } from 'node:test';
 import {
   administerDeactivation,
   attemptSignInBlock,
+  deactivationFailure,
   deactivationKey,
+  deactivationProblemAfterLoad,
   deactivationStatus,
   mayAdministerEmployees,
   outstandingReservations,
@@ -183,6 +185,36 @@ test('the list status distinguishes pending, reconciliation and confirmed', () =
     ),
     'confirmed',
   );
+});
+
+test('a definite refusal stays visible while an ambiguous failure reconciles', () => {
+  const definite: Array<[string, { status: number; code: string }]> = [
+    ['invalid-input', { status: 400, code: 'invalid-input' }],
+    ['not-found', { status: 404, code: 'not-found' }],
+    ['last-admin', { status: 409, code: 'last-admin' }],
+    [
+      'deactivation-key-conflict',
+      { status: 409, code: 'deactivation-key-conflict' },
+    ],
+    ['not-deactivable', { status: 409, code: 'not-deactivable' }],
+    ['stale-operation', { status: 409, code: 'stale-operation' }],
+  ];
+  for (const [code, failure] of definite) {
+    const classified = deactivationFailure(failure);
+    assert.deepEqual(classified, { code, ambiguous: false });
+    assert.deepEqual(deactivationProblemAfterLoad(classified), classified);
+  }
+  const ambiguous: Array<[{ status: number; code: string } | null, string]> = [
+    [{ status: 503, code: 'provider-unavailable' }, 'provider-unavailable'],
+    [{ status: 500, code: 'unavailable' }, 'unavailable'],
+    [{ status: 502, code: '' }, 'unavailable'],
+    [null, 'unavailable'],
+  ];
+  for (const [failure, code] of ambiguous) {
+    const classified = deactivationFailure(failure);
+    assert.deepEqual(classified, { code, ambiguous: true });
+    assert.equal(deactivationProblemAfterLoad(classified), null);
+  }
 });
 
 test('only the admin role may administer employee deactivation', () => {

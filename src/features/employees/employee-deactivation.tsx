@@ -4,9 +4,12 @@ import { messages, label, type Locale } from '@/i18n/messages';
 import { vietnamTimestamp } from '@/features/properties/format';
 import { api, RequestError } from './api';
 import {
+  deactivationFailure,
+  deactivationProblemAfterLoad,
   deactivationStatus,
   mayAdministerEmployees,
   type DeactivationConfirmation,
+  type DeactivationFailure,
 } from './deactivation';
 import type { DirectoryEntry } from './directory';
 
@@ -34,7 +37,9 @@ export function EmployeeDeactivationPanel({
     null,
   );
   const [loading, setLoading] = useState(true);
-  const [problem, setProblem] = useState<string | null>(null);
+  const [loadProblem, setLoadProblem] = useState<string | null>(null);
+  const [actionProblem, setActionProblem] =
+    useState<DeactivationFailure | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // One client key per opened confirmation: a retry after an ambiguous failure reuses it, so
@@ -57,7 +62,8 @@ export function EmployeeDeactivationPanel({
     )
       .then((value) => {
         setSnapshot(value);
-        setProblem(null);
+        setLoadProblem(null);
+        setActionProblem((current) => deactivationProblemAfterLoad(current));
       })
       .catch((failure: unknown) => {
         if (abort.signal.aborted) return;
@@ -68,7 +74,7 @@ export function EmployeeDeactivationPanel({
           onDenied(failure.status);
           return;
         }
-        setProblem(
+        setLoadProblem(
           failure instanceof RequestError ? failure.code : 'unavailable',
         );
       })
@@ -79,6 +85,7 @@ export function EmployeeDeactivationPanel({
   }, [employee.id, refresh, onDenied]);
 
   const operation = snapshot?.operation ?? null;
+  const problem = actionProblem?.code ?? loadProblem;
   const status = deactivationStatus(operation);
   const problemText: Record<string, string> = {
     'last-admin': text.employeeDeactivateLastAdmin,
@@ -124,7 +131,7 @@ export function EmployeeDeactivationPanel({
     event.preventDefault();
     if (busy || !actionKey) return;
     setBusy(true);
-    setProblem(null);
+    setActionProblem(null);
     setNotice(null);
     try {
       const next = await api<DeactivationConfirmation>(
@@ -151,13 +158,17 @@ export function EmployeeDeactivationPanel({
         onDenied(failure.status);
         return;
       }
-      // The POST may have committed before the response was lost; re-read the confirmation
-      // and the directory with the same action key instead of guessing the outcome.
-      void load();
-      onChanged();
-      setProblem(
-        failure instanceof RequestError ? failure.code : 'unavailable',
+      const classified = deactivationFailure(
+        failure instanceof RequestError ? failure : null,
       );
+      // Only a genuinely ambiguous failure may have committed without returning; re-read the
+      // confirmation and the directory with the same action key instead of guessing. A
+      // definite refusal keeps its message on screen.
+      if (classified.ambiguous) {
+        void load();
+        onChanged();
+      }
+      setActionProblem(classified);
     } finally {
       setBusy(false);
     }
