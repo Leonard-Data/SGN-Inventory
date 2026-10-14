@@ -95,6 +95,13 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: 'chart',
         roles: REPORT_ROLES,
       },
+      {
+        id: 'completed-sales',
+        label: 'navCompletedSales',
+        href: '/reports/completed-sales',
+        icon: 'chart',
+        roles: REPORT_ROLES,
+      },
     ],
   },
 ];

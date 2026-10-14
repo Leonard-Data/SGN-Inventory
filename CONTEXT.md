@@ -52,6 +52,10 @@ _Avoid_: Incorrect address, current address
 A separate address under the applicable province/city and commune/ward structure, without a district. Its presence alone does not establish that its mapping is verified.
 _Avoid_: Translated address, automatically converted address
 
+**Administrative-unit reference catalog**:
+The seeded official province/city and commune/ward list carrying official codes, parent links and one half-open validity window per official name from the pinned upstream dataset. It is a reference list for selection and hierarchy validation, not a property's verified address; a renamed unit reports the name in force on the address date.
+_Avoid_: Verified address, property-level mapping
+
 **Address search**:
 A match of a literal, accent-insensitive contiguous fragment against recorded addresses; `%` and `_` are ordinary characters.
 _Avoid_: Fuzzy search, automatic ward mapping
@@ -143,6 +147,26 @@ _Avoid_: Effective reservation
 **Effective reservation**:
 An approved, unexpired property reservation identifying the claimant for commission attribution, not a commission amount or payout.
 _Avoid_: Pending lock, permanent property lock
+
+**Credited closer**:
+The one employee explicitly credited with a completed sale. A reviewer selects that employee during confirmation; the property creator, updater, reservation claimant or recorded status never infers it.
+_Avoid_: Deal owner, auto-attributed employee
+
+**Sale completion**:
+A reviewed logical record that one actual completed sale happened: its property, credited closer, actual Vietnam completion date, contract/reference, confirmer and recording time. It marks the property sold and closes its outstanding reservations without rewriting their attribution. An imported or manually set sold status, an approved reservation and a pending claim are not sale completions.
+_Avoid_: Sold flag, general transaction, commission record
+
+**Completed-sale ranking**:
+The manager/admin list of effective sale completions grouped by credited closer over a validated Vietnam period, with equal totals sharing a rank and genuinely unknown legacy attribution shown separately rather than assigned to a guessed employee.
+_Avoid_: Commission ranking, composite performance score
+
+**Unknown sale attribution**:
+A property recorded as sold that has no effective sale completion, so no employee is credited. It is counted separately from the ranking and never becomes an invented closer.
+_Avoid_: Unassigned sale, ownerless deal
+
+**Reservation release**:
+The audited closure of a pending or approved reservation with a meaningful reason, retaining the original claimant, request reason and every recorded event. It resolves a conflicting claimant before a sale completion; it is neither a completion nor a transfer of attribution.
+_Avoid_: Reassignment, deletion of a claim
 
 ### Discussion
 

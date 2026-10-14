@@ -126,7 +126,8 @@ Shipped: the card cover is the site plate drawn from the record's own fields; a 
         panel Price history → two .price-series groups (sale asking price / monthly asking rent) of .price-row (.price-when, .price-change, .price-note, .price-who), newest-first with per-series paging
         panel Addresses  → .record rows + mapping .badge, .addrNote policy line
         panel Contacts   → .record rows + owner-contact disclosure (.owner-disclosure/.owner-phone)
-        panel Reservation→ effective/pending states (.reservation-effective/.reservation-pending) + request and decision forms
+        panel Completed sale → reviewer-only confirmation form (credited closer, actual Vietnam date, contract reference) or the recorded completion (.sale-completion/.sale-completion-recorded), manager/admin only
+        panel Reservation→ effective/pending states (.reservation-effective/.reservation-pending) + request and decision forms; a manager/admin also gets the reasoned release control on an effective reservation
         panel Maintenance→ in-page maintenance workspace (revision-checked)
         panel Corrections→ report + role-scoped queue
       .tabpanel "Tài liệu": panel Files → property-files Workspace (.doc-row vocabulary, cover, dropzone)
@@ -163,7 +164,7 @@ queue rows: .history-event — subject link · claimant/actor · dates · eviden
   expanding row reveals decision form: [reason textarea] [Approve] [Reject]
 pagination
 ```
-Routes: `/reviews/corrections` (shipped as **Correction requests**: page-intro plus the correction queue, guarded by its own protected read — every active employee reads their own requests, and staff/manager/admin decide them), `/reviews/reservations`, `/reviews/visits`, `/reviews/rental-activation`, `/reviews/sale-completions`, `/reviews/closure-corrections`. Same layout shell; each queue is its own route and guard. `/reviews` redirects to the first permitted queue.
+Routes: `/reviews/corrections` (shipped as **Correction requests**: page-intro plus the correction queue, guarded by its own protected read — every active employee reads their own requests, and staff/manager/admin decide them), `/reviews/reservations`, `/reviews/visits`, `/reviews/rental-activation`, `/reviews/sale-completions`, `/reviews/closure-corrections`. Same layout shell; each queue is its own route and guard. `/reviews` redirects to the first permitted queue. Issue #38 ships the sale confirmation interaction on the property detail instead of the planned `/reviews/sale-completions` queue; that queue remains unbuilt.
 
 ### 5.5 `/rentals` + `/rentals/[id]` (new)
 
@@ -245,6 +246,8 @@ footnote: historical rankings can change after cancellation/correction
 ```
 Three separate rankings, no composite score; no geographic map (per the confirmed analytics plan).
 
+Shipped for issue #38: the completed-sales ranking alone is delivered at `/reports/completed-sales` — a manager/admin rail entry with the validated Vietnam range filter, tied ranks, an explicit total and the separate unknown-attribution note; the reviewer-only confirmation form lives on the property detail beside the reservation panel rather than as a `/reviews/sale-completions` queue, and the province, completed-rental and owner-contact-activity panels above remain planned.
+
 ### 5.10 `/admin/categories` · `/admin/units` (new, admin)
 
 ```
@@ -275,7 +278,7 @@ page-intro · [New category] / [New unit]
 
 ### Shipped-state gaps (deliberate, not silent)
 
-- Navigation renders four groups: Inventory (`/properties` and `/properties/new`, every role), Reservations & Reviews (`/reviews/corrections`, every role — the queue reads the caller's own requests while only staff/manager/admin decide), People (`/people/employees`, admin) and Reports (`/activity/me`, every role; `/activity/company`, manager/admin). The ADR's other two groups (Rentals, Admin) ship with their routes.
+- Navigation renders four groups: Inventory (`/properties` and `/properties/new`, every role), Reservations & Reviews (`/reviews/corrections`, every role — the queue reads the caller's own requests while only staff/manager/admin decide), People (`/people/employees`, admin) and Reports (`/activity/me`, every role; `/activity/company` and `/reports/completed-sales`, manager/admin). The ADR's other two groups (Rentals, Admin) ship with their routes.
 - The inventory results have **cards only**: the package's Cards/List/Table `.seg` switch and the ordering control are not implemented, and `.cell-plate` table thumbnails therefore have no consumer yet.
 - The card shows the record's existing fact set (code, mode, address, status). The prototype's card also prints area and price lines; adding them would be new data display beyond this restyle, so they were left out.
 - The record page has no Edit action (no edit route exists; editing stays the in-page maintenance disclosure).
