@@ -47,7 +47,6 @@ const chromeBin =
     '.cache/ms-playwright/chromium-1234/chrome-linux64/chrome',
   );
 const appPort = Number(process.env.SGN_ACCEPTANCE_PORT ?? 3104);
-const keep = process.env.SGN_ACCEPTANCE_KEEP === '1';
 const root = path.resolve(import.meta.dirname, '..');
 const reportIndex = process.argv.indexOf('--report');
 const reportPath =
@@ -1374,32 +1373,30 @@ try {
   assert.equal(afterBack.cards, false, 'sign-out clears the protected list');
   observed('sign-out clears the protected list and Back exposes none of it');
 } finally {
-  if (!keep) {
-    await stopBrowsers();
-    await stopApp();
-    manifest = (await readManifest()) ?? manifest;
-    await removeFixtures(manifest);
-    await fs.rm(manifestPath, { force: true });
-    if (baseline) {
-      const after = {
-        employees: await countRows('employees'),
-        activity: await countRows('activity_events'),
-        properties: await countRows('properties'),
-        employeeHash: await idHash('employees'),
-        activityHash: await idHash('activity_events'),
-        propertyHash: await idHash('properties'),
-      };
-      assert.deepEqual(
-        after,
-        baseline,
-        'Fixture restoration did not return to baseline',
-      );
-      observed('fixtures removed and the pre-acceptance baseline restored', {
-        employees: after.employees,
-        activity: after.activity,
-        properties: after.properties,
-      });
-    }
+  await stopBrowsers();
+  await stopApp();
+  manifest = (await readManifest()) ?? manifest;
+  await removeFixtures(manifest);
+  await fs.rm(manifestPath, { force: true });
+  if (baseline) {
+    const after = {
+      employees: await countRows('employees'),
+      activity: await countRows('activity_events'),
+      properties: await countRows('properties'),
+      employeeHash: await idHash('employees'),
+      activityHash: await idHash('activity_events'),
+      propertyHash: await idHash('properties'),
+    };
+    assert.deepEqual(
+      after,
+      baseline,
+      'Fixture restoration did not return to baseline',
+    );
+    observed('fixtures removed and the pre-acceptance baseline restored', {
+      employees: after.employees,
+      activity: after.activity,
+      properties: after.properties,
+    });
   }
 }
 
