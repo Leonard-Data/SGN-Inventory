@@ -2,27 +2,59 @@
 --
 -- Source of truth: thanglequoc/vietnamese-provinces-database
 --   repository: https://github.com/thanglequoc/vietnamese-provinces-database
---   release tag: v5.2.0
+--   pinned release: v5.2.0
 --   tag commit: 62b1abdfe39625289c37a58ef6678e9db3d37f84
 --   data file: postgresql/postgres_ImportData_vn_units.sql (md5 df6532630cdbb65228d140786eaec1f0)
+--   pre-2026 reference: v3.0.2, data file postgresql/ImportData_vn_units.sql
+--     (md5 d2a3372d23480d75d2d32710707df98b) carries the 2025-07-01 names
 --   dataset metadata: {"DatasetVersion":"v5.2.0","LatestDecree":"388/NQ-UBTVQH16","GeneratedAt":"2026-09-20T13:13:17Z"}
 --   release notes: docs/release_notes/v5.1.0.md, docs/release_notes/v5.2.0.md
 --
 -- Codes, names and the ward -> province hierarchy are taken verbatim from the
--- upstream release; nothing is invented. `name_vi` is the upstream `full_name`
--- (official name with its administrative type prefix). Upstream ward 06325 has a
--- lowercased type prefix in `full_name`; that single record uses the upstream
--- `administrative_units.short_name` for its type. A `unit_level = 'commune'` row
--- is a ward (Phường), commune (Xã) or island special administrative region
+-- upstream dataset; nothing is invented. The 2025-07-01 windows carry the
+-- official names in force then, which predate the 2026 promotions below and
+-- match the pre-2026 upstream reference; the dated windows carry the pinned
+-- v5.2.0 names. Every row cites the pinned v5.2.0 data file in source_url, the
+-- revision this catalog is built from and pinned to. Later upstream releases
+-- corrected some diacritics without changing an official unit (for example
+-- Hòa became Hoà); those text corrections are kept on the baseline window and
+-- are not dated official changes. `name_vi` is the upstream `full_name`
+-- (official name with its administrative type prefix). Upstream ward 06325 has
+-- a lowercased type prefix in `full_name`; that single record uses the upstream
+-- `administrative_units.short_name` for its type. A `unit_level = 'commune'`
+-- row is a ward (Phường), commune (Xã) or island special administrative region
 -- (Đặc khu); the catalog has one two-tier level pair, so all second-tier units
 -- share the commune level.
 --
 -- Validity opens on 2025-07-01, the effective date of the two-tier
--- province/commune structure (Decision 19/2025/QĐ-TTg). Upstream v5.1.0/v5.2.0
--- later renamed province/city labels and promoted some wards without changing
--- any code or parent link, so the seeded text is the pinned v5.2.0 revision on
--- that baseline window. A later upstream revision must add new dated versions by
+-- province/commune structure (Decision 19/2025/QĐ-TTg). Each official name has
+-- exactly one half-open [valid_from, valid_to) window, so an official rename
+-- ends the previous window and opens a dated one instead of editing the name
+-- in place, and a verification dated inside a renamed period reports the name
+-- in force then. A later upstream revision must add new dated versions by
 -- migration; do not edit this row set in place.
+--
+-- Dated official changes, each ending the previous window:
+--   * code 75 'Tỉnh Đồng Nai' ends 2026-04-30, when Nghị quyết 30/2026/QH16
+--     (issued 2026-04-14, effective 2026-04-30) promoted it to
+--     'Thành phố Đồng Nai', and ten Đồng Nai communes became wards under
+--     Nghị quyết 237/NQ-UBTVQH16 (issued 2026-04-14, effective 2026-04-30):
+--     25270, 25357, 25363, 26116, 26170, 26248, 26326, 26368, 26425 and 26485.
+--   * code 22 'Tỉnh Quảng Ninh' ends 2026-09-01, when Nghị quyết 36/2026/QH16
+--     (issued 2026-08-24, effective 2026-09-01) promoted it to
+--     'Thành phố Quảng Ninh'.
+--   * code 24 'Tỉnh Bắc Ninh' ends 2026-09-20, when Nghị quyết 39/2026/QH16
+--     (issued 2026-08-04, effective 2026-09-20) promoted it to
+--     'Thành phố Bắc Ninh', and twelve Bắc Ninh communes became wards under
+--     Nghị quyết 388/NQ-UBTVQH16 (issued 2026-08-04, effective 2026-09-20):
+--     07294, 07375, 07399, 07444, 07840, 09193, 09292, 09313, 09319, 09454,
+--     09475 and 09496.
+--   Every promoted unit keeps its code and parent link and only changes Xã to
+--   Phường.
+--
+-- Because parent_id references one version row, a renamed province also carries
+-- its commune rows forward into the new window, so both windows keep a complete
+-- picker hierarchy and an address verification pair that the guard accepts.
 --
 -- Idempotent: every row converges on the (unit_level, official_code, valid_from)
 -- unique key, so re-applying the migration neither duplicates rows nor changes
@@ -34,7 +66,7 @@
 
 begin;
 
--- 34 province / centrally governed city rows.
+-- 34 province / centrally governed city rows opening the 2025-07-01 window.
 insert into public.admin_unit_versions (official_code,name_vi,unit_level,parent_id,valid_from,source_url) values
 ('01','Thành phố Hà Nội','province',null,date '2025-07-01','https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql'),
     ('04','Tỉnh Cao Bằng','province',null,date '2025-07-01','https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql'),
@@ -45,8 +77,8 @@ insert into public.admin_unit_versions (official_code,name_vi,unit_level,parent_
     ('15','Tỉnh Lào Cai','province',null,date '2025-07-01','https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql'),
     ('19','Tỉnh Thái Nguyên','province',null,date '2025-07-01','https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql'),
     ('20','Tỉnh Lạng Sơn','province',null,date '2025-07-01','https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql'),
-    ('22','Thành phố Quảng Ninh','province',null,date '2025-07-01','https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql'),
-    ('24','Thành phố Bắc Ninh','province',null,date '2025-07-01','https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql'),
+    ('22','Tỉnh Quảng Ninh','province',null,date '2025-07-01','https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql'),
+    ('24','Tỉnh Bắc Ninh','province',null,date '2025-07-01','https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql'),
     ('25','Tỉnh Phú Thọ','province',null,date '2025-07-01','https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql'),
     ('31','Thành phố Hải Phòng','province',null,date '2025-07-01','https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql'),
     ('33','Tỉnh Hưng Yên','province',null,date '2025-07-01','https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql'),
@@ -62,7 +94,7 @@ insert into public.admin_unit_versions (official_code,name_vi,unit_level,parent_
     ('56','Tỉnh Khánh Hoà','province',null,date '2025-07-01','https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql'),
     ('66','Tỉnh Đắk Lắk','province',null,date '2025-07-01','https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql'),
     ('68','Tỉnh Lâm Đồng','province',null,date '2025-07-01','https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql'),
-    ('75','Thành phố Đồng Nai','province',null,date '2025-07-01','https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql'),
+    ('75','Tỉnh Đồng Nai','province',null,date '2025-07-01','https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql'),
     ('79','Thành phố Hồ Chí Minh','province',null,date '2025-07-01','https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql'),
     ('80','Tỉnh Tây Ninh','province',null,date '2025-07-01','https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql'),
     ('82','Tỉnh Đồng Tháp','province',null,date '2025-07-01','https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql'),
@@ -75,8 +107,11 @@ on conflict (unit_level,official_code,valid_from) do update
       parent_id = excluded.parent_id,
       source_url = excluded.source_url;
 
--- 3321 second-tier rows: wards (Phường), communes (Xã) and island special
--- administrative regions (Đặc khu), each parented to its province/city.
+-- 3321 second-tier rows at the 2025-07-01 baseline: wards (Phường), communes
+-- (Xã) and island special administrative regions (Đặc khu), each parented to its
+-- province/city. The twelve Bắc Ninh communes promoted on 2026-09-20 carry their
+-- pre-promotion Xã name here; their Phường names are added in the dated window
+-- below.
 insert into public.admin_unit_versions (official_code,name_vi,unit_level,parent_id,valid_from,source_url)
 select w.official_code, w.name_vi, 'commune', p.id, date '2025-07-01', 'https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql'
 from (values
@@ -860,18 +895,18 @@ from (values
     ('07264','Xã Tam Tiến','24'),
     ('07282','Xã Đồng Kỳ','24'),
     ('07288','Xã Yên Thế','24'),
-    ('07294','Phường Bố Hạ','24'),
+    ('07294','Xã Bố Hạ','24'),
     ('07306','Xã Nhã Nam','24'),
     ('07330','Xã Phúc Hoà','24'),
     ('07333','Xã Quang Trung','24'),
     ('07339','Xã Tân Yên','24'),
     ('07351','Xã Ngọc Thiện','24'),
-    ('07375','Phường Lạng Giang','24'),
+    ('07375','Xã Lạng Giang','24'),
     ('07381','Xã Tiên Lục','24'),
-    ('07399','Phường Kép','24'),
+    ('07399','Xã Kép','24'),
     ('07420','Xã Mỹ Thái','24'),
     ('07432','Xã Tân Dĩnh','24'),
-    ('07444','Phường Lục Nam','24'),
+    ('07444','Xã Lục Nam','24'),
     ('07450','Xã Đông Phú','24'),
     ('07462','Xã Bảo Đài','24'),
     ('07486','Xã Nghĩa Phương','24'),
@@ -909,13 +944,13 @@ from (values
     ('07795','Phường Nếnh','24'),
     ('07798','Phường Vân Hà','24'),
     ('07822','Xã Hoàng Vân','24'),
-    ('07840','Phường Hiệp Hoà','24'),
+    ('07840','Xã Hiệp Hoà','24'),
     ('07864','Xã Hợp Thịnh','24'),
     ('07870','Xã Xuân Cẩm','24'),
     ('09169','Phường Vũ Ninh','24'),
     ('09187','Phường Kinh Bắc','24'),
     ('09190','Phường Võ Cường','24'),
-    ('09193','Phường Yên Phong','24'),
+    ('09193','Xã Yên Phong','24'),
     ('09202','Xã Tam Giang','24'),
     ('09205','Xã Yên Trung','24'),
     ('09208','Xã Tam Đa','24'),
@@ -924,11 +959,11 @@ from (values
     ('09253','Phường Nhân Hoà','24'),
     ('09265','Phường Phương Liễu','24'),
     ('09286','Phường Nam Sơn','24'),
-    ('09292','Phường Phù Lãng','24'),
+    ('09292','Xã Phù Lãng','24'),
     ('09295','Phường Bồng Lai','24'),
     ('09301','Phường Đào Viên','24'),
-    ('09313','Phường Chi Lăng','24'),
-    ('09319','Phường Tiên Du','24'),
+    ('09313','Xã Chi Lăng','24'),
+    ('09319','Xã Tiên Du','24'),
     ('09325','Phường Hạp Lĩnh','24'),
     ('09334','Xã Liên Bão','24'),
     ('09340','Xã Đại Đồng','24'),
@@ -944,12 +979,12 @@ from (values
     ('09430','Phường Trạm Lộ','24'),
     ('09433','Phường Song Liễu','24'),
     ('09445','Phường Ninh Xá','24'),
-    ('09454','Phường Gia Bình','24'),
+    ('09454','Xã Gia Bình','24'),
     ('09466','Xã Cao Đức','24'),
     ('09469','Xã Đại Lai','24'),
-    ('09475','Phường Nhân Thắng','24'),
+    ('09475','Xã Nhân Thắng','24'),
     ('09487','Xã Đông Cứu','24'),
-    ('09496','Phường Lương Tài','24'),
+    ('09496','Xã Lương Tài','24'),
     ('09499','Xã Trung Kênh','24'),
     ('09523','Xã Trung Chính','24'),
     ('09529','Xã Lâm Thao','24'),
@@ -2559,7 +2594,7 @@ from (values
     ('25255','Xã Long Hà','75'),
     ('25261','Xã Phú Trung','75'),
     ('25267','Xã Phú Nghĩa','75'),
-    ('25270','Phường Lộc Ninh','75'),
+    ('25270','Xã Lộc Ninh','75'),
     ('25279','Xã Lộc Tấn','75'),
     ('25280','Xã Lộc Thạnh','75'),
     ('25292','Xã Lộc Quang','75'),
@@ -2573,8 +2608,8 @@ from (values
     ('25345','Xã Tân Hưng','75'),
     ('25349','Xã Minh Đức','75'),
     ('25351','Xã Tân Quan','75'),
-    ('25357','Phường Tân Khai','75'),
-    ('25363','Phường Đồng Phú','75'),
+    ('25357','Xã Tân Khai','75'),
+    ('25363','Xã Đồng Phú','75'),
     ('25378','Xã Tân Lợi','75'),
     ('25387','Xã Thuận Lợi','75'),
     ('25390','Xã Đồng Tâm','75'),
@@ -2598,12 +2633,12 @@ from (values
     ('26098','Phường Bảo Vinh','75'),
     ('26104','Phường Xuân Lập','75'),
     ('26113','Phường Hàng Gòn','75'),
-    ('26116','Phường Tân Phú','75'),
+    ('26116','Xã Tân Phú','75'),
     ('26119','Xã Đak Lua','75'),
     ('26122','Xã Nam Cát Tiên','75'),
     ('26134','Xã Tà Lài','75'),
     ('26158','Xã Phú Lâm','75'),
-    ('26170','Phường Trị An','75'),
+    ('26170','Xã Trị An','75'),
     ('26173','Xã Phú Lý','75'),
     ('26179','Xã Tân An','75'),
     ('26188','Phường Tân Triều','75'),
@@ -2612,20 +2647,20 @@ from (values
     ('26215','Xã Phú Vinh','75'),
     ('26221','Xã Phú Hoà','75'),
     ('26227','Xã La Ngà','75'),
-    ('26248','Phường Trảng Bom','75'),
+    ('26248','Xã Trảng Bom','75'),
     ('26254','Xã Bàu Hàm','75'),
     ('26278','Xã Bình Minh','75'),
     ('26281','Xã Hưng Thịnh','75'),
     ('26296','Xã An Viễn','75'),
     ('26299','Xã Thống Nhất','75'),
     ('26311','Xã Gia Kiệm','75'),
-    ('26326','Phường Dầu Giây','75'),
+    ('26326','Xã Dầu Giây','75'),
     ('26332','Xã Xuân Quế','75'),
     ('26341','Xã Cẩm Mỹ','75'),
     ('26347','Xã Xuân Đường','75'),
     ('26359','Xã Xuân Đông','75'),
     ('26362','Xã Sông Ray','75'),
-    ('26368','Phường Long Thành','75'),
+    ('26368','Xã Long Thành','75'),
     ('26374','Phường Tam Phước','75'),
     ('26377','Phường Phước Tân','75'),
     ('26380','Phường Long Hưng','75'),
@@ -2633,13 +2668,13 @@ from (values
     ('26389','Xã Bình An','75'),
     ('26413','Xã Long Phước','75'),
     ('26422','Xã Phước Thái','75'),
-    ('26425','Phường Xuân Lộc','75'),
+    ('26425','Xã Xuân Lộc','75'),
     ('26428','Xã Xuân Bắc','75'),
     ('26434','Xã Xuân Thành','75'),
     ('26446','Xã Xuân Hoà','75'),
     ('26458','Xã Xuân Phú','75'),
     ('26461','Xã Xuân Định','75'),
-    ('26485','Phường Nhơn Trạch','75'),
+    ('26485','Xã Nhơn Trạch','75'),
     ('26491','Xã Đại Phước','75'),
     ('26503','Xã Phước An','75'),
     ('25747','Phường Thủ Dầu Một','79'),
@@ -3411,19 +3446,122 @@ on conflict (unit_level,official_code,valid_from) do update
       parent_id = excluded.parent_id,
       source_url = excluded.source_url;
 
--- Fail the migration rather than ship a partial or orphaned catalog.
+-- The 2026 province promotions end the 2025-07-01 window of every unit in
+-- Đồng Nai, Quảng Ninh and Bắc Ninh.
+update public.admin_unit_versions c
+   set valid_to = case p.official_code
+                    when '75' then date '2026-04-30'
+                    when '22' then date '2026-09-01'
+                    else date '2026-09-20'
+                  end
+  from public.admin_unit_versions p
+ where p.id = c.parent_id
+   and p.unit_level = 'province'
+   and p.official_code in ('22','24','75')
+   and c.unit_level = 'commune'
+   and c.valid_from = date '2025-07-01';
+
+update public.admin_unit_versions
+   set valid_to = case official_code
+                    when '75' then date '2026-04-30'
+                    when '22' then date '2026-09-01'
+                    else date '2026-09-20'
+                  end
+ where unit_level = 'province'
+   and official_code in ('22','24','75')
+   and valid_from = date '2025-07-01';
+
+-- 2026 province/city promotions: one dated row per official name.
+insert into public.admin_unit_versions (official_code,name_vi,unit_level,parent_id,valid_from,source_url) values
+('75','Thành phố Đồng Nai','province',null,date '2026-04-30','https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql'),
+('22','Thành phố Quảng Ninh','province',null,date '2026-09-01','https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql'),
+('24','Thành phố Bắc Ninh','province',null,date '2026-09-20','https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql')
+on conflict (unit_level,official_code,valid_from) do update
+  set name_vi = excluded.name_vi,
+      parent_id = excluded.parent_id,
+      source_url = excluded.source_url;
+
+-- Carry every commune of the renamed provinces into the new window so that
+-- each province version row keeps a complete child hierarchy; the promoted
+-- communes take their v5.2.0 ward name.
+insert into public.admin_unit_versions (official_code,name_vi,unit_level,parent_id,valid_from,source_url)
+select c.official_code,
+       coalesce(promoted.name_vi,c.name_vi),
+       'commune',
+       np.id,
+       np.valid_from,
+       'https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql'
+  from public.admin_unit_versions c
+  join public.admin_unit_versions p
+    on p.id = c.parent_id
+   and p.unit_level = 'province'
+   and p.official_code in ('22','24','75')
+  join public.admin_unit_versions np
+    on np.unit_level = 'province'
+   and np.official_code = p.official_code
+   and np.valid_from = case p.official_code
+                         when '75' then date '2026-04-30'
+                         when '22' then date '2026-09-01'
+                         else date '2026-09-20'
+                       end
+  left join (values
+    ('07294','Phường Bố Hạ'),
+    ('07375','Phường Lạng Giang'),
+    ('07399','Phường Kép'),
+    ('07444','Phường Lục Nam'),
+    ('07840','Phường Hiệp Hoà'),
+    ('09193','Phường Yên Phong'),
+    ('09292','Phường Phù Lãng'),
+    ('09313','Phường Chi Lăng'),
+    ('09319','Phường Tiên Du'),
+    ('09454','Phường Gia Bình'),
+    ('09475','Phường Nhân Thắng'),
+    ('09496','Phường Lương Tài'),
+    ('25270','Phường Lộc Ninh'),
+    ('25357','Phường Tân Khai'),
+    ('25363','Phường Đồng Phú'),
+    ('26116','Phường Tân Phú'),
+    ('26170','Phường Trị An'),
+    ('26248','Phường Trảng Bom'),
+    ('26326','Phường Dầu Giây'),
+    ('26368','Phường Long Thành'),
+    ('26425','Phường Xuân Lộc'),
+    ('26485','Phường Nhơn Trạch')
+  ) as promoted(official_code,name_vi) on promoted.official_code = c.official_code
+ where c.unit_level = 'commune'
+   and c.valid_from = date '2025-07-01'
+on conflict (unit_level,official_code,valid_from) do update
+  set name_vi = excluded.name_vi,
+      parent_id = excluded.parent_id,
+      source_url = excluded.source_url;
+
+-- Fail the migration rather than ship a partial, orphaned or overlapping catalog.
 do $$
 declare
-  v_provinces integer;
-  v_communes integer;
+  v_province_units integer;
+  v_commune_units integer;
+  v_province_versions integer;
+  v_commune_versions integer;
+  v_dated_versions integer;
   v_orphans integer;
+  v_overlaps integer;
 begin
-  select count(*) into v_provinces
+  select count(distinct official_code) into v_province_units
     from public.admin_unit_versions
    where source_url = 'https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql' and unit_level = 'province';
-  select count(*) into v_communes
+  select count(distinct official_code) into v_commune_units
     from public.admin_unit_versions
    where source_url = 'https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql' and unit_level = 'commune';
+  select count(*) into v_province_versions
+    from public.admin_unit_versions
+   where source_url = 'https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql' and unit_level = 'province';
+  select count(*) into v_commune_versions
+    from public.admin_unit_versions
+   where source_url = 'https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql' and unit_level = 'commune';
+  select count(*) into v_dated_versions
+    from public.admin_unit_versions
+   where source_url = 'https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql'
+     and valid_from in (date '2026-04-30',date '2026-09-01',date '2026-09-20');
   select count(*) into v_orphans
     from public.admin_unit_versions c
    where c.source_url = 'https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql'
@@ -3432,9 +3570,20 @@ begin
        select 1 from public.admin_unit_versions p
         where p.id = c.parent_id and p.unit_level = 'province'
      );
-  if v_provinces <> 34 or v_communes <> 3321 or v_orphans <> 0 then
-    raise exception 'vietnamese admin unit reference catalog check failed: provinces=%, communes=%, orphans=%',
-      v_provinces, v_communes, v_orphans using errcode = '23514';
+  select count(*) into v_overlaps
+    from public.admin_unit_versions a
+    join public.admin_unit_versions b
+      on b.unit_level = a.unit_level
+     and b.official_code = a.official_code
+     and b.valid_from > a.valid_from
+   where a.source_url = 'https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql'
+     and b.source_url = 'https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql'
+     and (a.valid_to is null or a.valid_to > b.valid_from);
+  if v_province_units <> 34 or v_commune_units <> 3321
+     or v_province_versions <> 37 or v_commune_versions <> 3569
+     or v_dated_versions <> 251 or v_orphans <> 0 or v_overlaps <> 0 then
+    raise exception 'vietnamese admin unit reference catalog check failed: province_units=%, commune_units=%, province_versions=%, commune_versions=%, dated_versions=%, orphans=%, overlaps=%',
+      v_province_units, v_commune_units, v_province_versions, v_commune_versions, v_dated_versions, v_orphans, v_overlaps using errcode = '23514';
   end if;
 end $$;
 
