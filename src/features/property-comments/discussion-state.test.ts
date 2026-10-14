@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mergePage, mergeStaleEditState } from './discussion-state.ts';
-import type { Comment } from './types.ts';
+import {
+  mergePage,
+  mergeStaleEditState,
+  retainEditTarget,
+  withPost,
+} from './discussion-state.ts';
+import { COMMENT_PAGE_SIZE, type Comment } from './types.ts';
 
 function comment(
   id: string,
@@ -213,4 +218,42 @@ test('ordinary page refresh still follows the refreshed page contents', () => {
   const older = comment('older', 'Older', '2026-10-12T09:00:00.000Z');
 
   assert.deepEqual(mergePage([newest, older], [newest]), [newest]);
+});
+
+test('a post that fills the refreshed page keeps the open edit target', () => {
+  const page = Array.from({ length: COMMENT_PAGE_SIZE - 1 }, (_, index) =>
+    comment(
+      `page-${index}`,
+      `Page ${index}`,
+      `2026-10-13T09:${String(index).padStart(2, '0')}:00.000Z`,
+    ),
+  );
+  const created = comment('created', 'New post', '2026-10-13T10:00:00.000Z');
+  const target = comment('older', 'Draft owner', '2026-10-12T09:00:00.000Z');
+  const posted = withPost(created, page, true).rows;
+  assert.equal(
+    posted.length,
+    COMMENT_PAGE_SIZE,
+    'The refreshed page fills the bounded list',
+  );
+
+  assert.deepEqual(retainEditTarget(posted, [...page, target], 'older'), [
+    ...posted,
+    target,
+  ]);
+  assert.equal(
+    retainEditTarget(posted, [...page, target], null),
+    posted,
+    'A post with no open editor is unchanged',
+  );
+  assert.equal(
+    retainEditTarget(page, [...page, target], 'page-0'),
+    page,
+    'A target already in the list is not duplicated',
+  );
+  assert.equal(
+    retainEditTarget(posted, [...page, target], 'absent'),
+    posted,
+    'An open editor without a loaded row keeps the list unchanged',
+  );
 });

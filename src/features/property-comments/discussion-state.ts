@@ -47,13 +47,13 @@ export function mergeStaleEditState(
 ): Comment[] {
   const pageRows = mergePage(current, page);
   const incoming = new Map(pageRows.map((row) => [row.id, row]));
+  let mergedComment: Comment | null = null;
   if (comment) {
     const existing =
       incoming.get(comment.id) ?? current.find((row) => row.id === comment.id);
-    incoming.set(
-      comment.id,
-      existing ? mergePage([existing], [comment])[0] : comment,
-    );
+    mergedComment =
+      mergePage(existing ? [existing] : [], [comment]).at(0) ?? comment;
+    incoming.set(comment.id, mergedComment);
   }
   const seen = new Set<string>();
   const rows = current.map((row) => {
@@ -66,9 +66,20 @@ export function mergeStaleEditState(
     .map((row) => incoming.get(row.id) ?? row);
   if (
     comment &&
+    mergedComment &&
     !seen.has(comment.id) &&
     !fresh.some((row) => row.id === comment.id)
   )
-    return [...fresh, ...rows, incoming.get(comment.id) ?? comment];
+    return [...fresh, ...rows, mergedComment];
   return [...fresh, ...rows];
+}
+
+export function retainEditTarget(
+  rows: Comment[],
+  previous: Comment[],
+  id: string | null,
+): Comment[] {
+  if (!id || rows.some((row) => row.id === id)) return rows;
+  const target = previous.find((row) => row.id === id);
+  return target ? [...rows, target] : rows;
 }
