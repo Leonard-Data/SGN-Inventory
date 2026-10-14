@@ -135,6 +135,24 @@ const vi = {
     'Các số liệu này chỉ tính hoạt động của chính bạn: lượt xem trang, số bất động sản đã xem và số bất động sản bạn đã mở liên hệ chủ nhà trong ngày (giờ Việt Nam). Không phải điểm danh, giờ làm việc, cuộc gọi đã kết nối hay lượt thăm bất động sản.',
   myActivityEmpty:
     'Không có hoạt động nào được ghi nhận trong khoảng đã chọn. Mỗi ngày vẫn hiển thị với giá trị 0.',
+  provinceActivity: 'Hoạt động mở liên hệ chủ nhà theo tỉnh/thành phố',
+  provinceActivityLink: 'Hoạt động theo tỉnh/thành phố',
+  provinceActivityNote:
+    'Bảng này chỉ dành cho quản lý/quản trị, nhóm theo địa chỉ mới đã xác minh và đơn vị hành chính chính thức mới nhất của từng bất động sản. Mỗi lượt tính là một cặp nhân viên – bất động sản – ngày (giờ Việt Nam) đã mở liên hệ chủ nhà, không phải lượt thăm, số điện thoại hay số lần bấm. Sửa hoặc thu hồi xác minh địa chỉ có thể chuyển hoạt động cũ sang nhóm khác nhưng tổng toàn công ty không đổi.',
+  provinceOwnerContact: 'Lượt mở liên hệ chủ nhà',
+  provinceColumn: 'Tỉnh/Thành phố (địa chỉ đã xác minh)',
+  unverifiedLocation: 'Chưa xác minh vị trí',
+  provinceActivityTotal: 'Tổng cộng',
+  provinceActivityCountsFrom:
+    'Tổng này bằng tổng số lượt mở liên hệ chủ nhà của báo cáo hoạt động công ty trong cùng khoảng ngày.',
+  provinceActivityEmpty:
+    'Không có lượt mở liên hệ chủ nhà nào trong khoảng đã chọn. Nhóm “Chưa xác minh vị trí” vẫn hiển thị với giá trị 0.',
+  provinceActivityBands:
+    'Mức màu chỉ so sánh trong kỳ đã chọn với nhóm có số lượt lớn nhất; mỗi ô đều hiển thị số chính xác và nhãn mức bằng chữ.',
+  activityLevelNone: 'Không phát sinh',
+  activityLevelLow: 'Thấp',
+  activityLevelMedium: 'Trung bình',
+  activityLevelHigh: 'Cao',
   discussion: 'Thảo luận bất động sản',
   addComment: 'Bình luận',
   commentHint: 'Viết bình luận chung cho bất động sản này. Tối đa 2.000 ký tự.',
@@ -442,6 +460,24 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
       'These figures cover your own activity only: page views, distinct properties viewed and the number of properties whose owner contact you opened that Vietnam day. Not attendance, work hours, connected calls or physical visits.',
     myActivityEmpty:
       'No activity was recorded in the selected period. Every day still appears with zero values.',
+    provinceActivity: 'Owner-contact activity by province/city',
+    provinceActivityLink: 'Activity by province/city',
+    provinceActivityNote:
+      'This manager/admin-only table groups by each property’s latest verified current address and its canonical official province/city identity. One access is one employee – property – Vietnam day that opened an owner contact, not a physical visit, a phone number or a click count. Correcting or invalidating an address may move earlier activity to another group, but the company total does not change.',
+    provinceOwnerContact: 'Owner-contact accesses',
+    provinceColumn: 'Province/city (verified address)',
+    unverifiedLocation: 'Unverified location',
+    provinceActivityTotal: 'Total',
+    provinceActivityCountsFrom:
+      'This total equals the owner-contact accesses summed from the company activity report for the same date range.',
+    provinceActivityEmpty:
+      'No owner contact was opened in the selected period. The Unverified location group still appears with zero.',
+    provinceActivityBands:
+      'Colour bands compare groups inside the selected period against the largest group; every cell also prints its exact count and a text level label.',
+    activityLevelNone: 'None',
+    activityLevelLow: 'Low',
+    activityLevelMedium: 'Medium',
+    activityLevelHigh: 'High',
     discussion: 'Property discussion',
     addComment: 'Comment',
     commentHint:

@@ -14,6 +14,7 @@ import { companyActivityContract } from './company-activity-contract.mjs';
 import { myActivityContract } from './my-activity-contract.mjs';
 import { priceHistoryContract } from './price-history-contract.mjs';
 import { referenceCatalogContract } from './reference-catalog-contract.mjs';
+import { provinceActivityContract } from './province-activity-contract.mjs';
 const root = process.env.SGN_PROJECT_ROOT || process.cwd();
 const db = new PGlite({extensions:{unaccent,pg_trgm,pgcrypto}});
 await db.exec(`
@@ -588,6 +589,8 @@ await companyActivityContract({db,asUser,check,fails,employees});
 await myActivityContract({db,asUser,check,fails,employees});
 // Seeded Vietnamese province/city and ward/commune reference catalogue.
 await referenceCatalogContract({db,asUser,check,fails,employees,root});
+// Ticket #35: reviewer-only province activity grouped by latest verified primary province.
+await provinceActivityContract({db,asUser,check,fails,employees});
 const report={checked_at:new Date().toISOString(),engine:'PGlite embedded PostgreSQL; mocked auth/storage schemas',passed,
  limitations:['Not a live Supabase integration test','HTTP Auth, signed URLs, Vercel and browser flows not exercised','True multi-session concurrent transaction test remains a staging acceptance gate']};
 await fs.writeFile(path.join(root,'docs/validation-results.json'),JSON.stringify(report,null,2)+'\n');

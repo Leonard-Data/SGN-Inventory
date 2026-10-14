@@ -71,3 +71,17 @@
 .comment-moderation .composer-foot {
   justify-content: flex-start;
 }
+
+/* The province owner-contact table (#35) colour-codes each count cell by its band inside the
+   selected period: one accent at three strengths over the surface, so the screen adds no colour
+   to the token layer. The exact count and the localized level label stay as text in the same
+   cell, so colour never carries the meaning alone and no separate legend is needed. */
+.activity-cell[data-level='low'] {
+  background: color-mix(in oklab, var(--accent) 7%, var(--surface));
+}
+.activity-cell[data-level='medium'] {
+  background: color-mix(in oklab, var(--accent) 14%, var(--surface));
+}
+.activity-cell[data-level='high'] {
+  background: color-mix(in oklab, var(--accent) 18%, var(--surface));
+}
