@@ -67,6 +67,15 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: 'people',
         roles: ADMIN_ROLES,
       },
+      {
+        id: 'vendors',
+        // Every active employee reads the vendor directory; staff/manager/admin
+        // create vendors (the route and database enforce the mutation boundary).
+        label: 'vendorsLink',
+        href: '/people/vendors',
+        icon: 'people',
+        roles: ALL_ROLES,
+      },
     ],
   },
   {

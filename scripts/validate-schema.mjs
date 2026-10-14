@@ -13,6 +13,7 @@ import { commentRemovalContract } from './comment-removal-contract.mjs';
 import { companyActivityContract } from './company-activity-contract.mjs';
 import { myActivityContract } from './my-activity-contract.mjs';
 import { priceHistoryContract } from './price-history-contract.mjs';
+import { vendorContract } from './vendor-contract.mjs';
 import { referenceCatalogContract } from './reference-catalog-contract.mjs';
 import { saleCompletionContract } from './sale-completion-contract.mjs';
 const root = process.env.SGN_PROJECT_ROOT || process.cwd();
@@ -591,6 +592,8 @@ await myActivityContract({db,asUser,check,fails,employees});
 await referenceCatalogContract({db,asUser,check,fails,employees,root});
 // Issue #38: one reviewed logical sale completion and the completed-sale ranking.
 await saleCompletionContract({db,asUser,check,fails,employees});
+// Ticket #73: the vendor directory's authority, validation, retry and paging rules.
+await vendorContract({db,asUser,check,fails,employees});
 const report={checked_at:new Date().toISOString(),engine:'PGlite embedded PostgreSQL; mocked auth/storage schemas',passed,
  limitations:['Not a live Supabase integration test','HTTP Auth, signed URLs, Vercel and browser flows not exercised','True multi-session concurrent transaction test remains a staging acceptance gate']};
 await fs.writeFile(path.join(root,'docs/validation-results.json'),JSON.stringify(report,null,2)+'\n');

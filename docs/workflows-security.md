@@ -5,6 +5,8 @@
 | Capability | Sales | Staff | Manager | Admin |
 | --- | --- | --- | --- | --- |
 | Read internal inventory, addresses, contacts/files and employee directory | Yes | Yes | Yes | Yes |
+| Read the vendor directory | Yes | Yes | Yes | Yes |
+| Create/maintain vendors | No | Yes | Yes | Yes |
 | Create property / request reservation | Yes | Yes | Yes | Yes |
 | Edit property/address | Own unarchived | All unarchived | All unarchived | All unarchived |
 | Correct an existing linked shared-contact detail | Yes | Yes | Yes | Yes |
