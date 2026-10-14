@@ -62,7 +62,7 @@ The shell replaces the per-page `SessionHeader`. Locale switch and sign-out move
 | Reservations & Reviews | My requests (`/requests`); Reviews hub (`/reviews/…`, corrections shipped) | all; queues per role |
 | Rentals | Agreements (`/rentals`) | staff, manager, admin |
 | People | Employees (`/people/employees`, shipped: list only, admin); Vendors (`/people/vendors`, shipped, all roles); Contacts (`/people/contacts`, shipped: directory, Owners view and shared-detail correction, all roles) | admin; all; all |
-| Reports | My activity (`/activity/me`, shipped); Company (`/activity/company`, shipped) | all; manager/admin |
+| Reports | My activity (`/activity/me`, shipped); Company (`/activity/company`, shipped); Provinces (`/activity/provinces`, shipped) | all; manager/admin; manager/admin |
 | Admin | Categories (`/admin/categories`); Units (`/admin/units`) | admin |
 
 `/reviews` redirects to the first queue the role can see. Detail is reached from inventory, never from the menu.
