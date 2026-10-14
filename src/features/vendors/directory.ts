@@ -1,3 +1,4 @@
+import { cursorPair, isUuid } from '../../lib/supabase/query.ts';
 import type { Vendor, VendorCursor, VendorPage } from './types';
 
 // Directory rules kept outside React so the route, the page and the tests agree on the
@@ -15,11 +16,6 @@ export class VendorDirectoryError extends Error {
   }
 }
 
-const uuidPattern =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const timestampPattern =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|\+00:00)$/;
-
 export type VendorDirectoryQuery = {
   query: string | null;
   before: string | null;
@@ -32,17 +28,12 @@ export function vendorDirectoryQuery(
   params: URLSearchParams,
 ): VendorDirectoryQuery {
   const query = params.get('query');
-  const before = params.get('before');
-  const beforeId = params.get('beforeId');
+  const cursor = cursorPair(params);
   if (
     [...params.keys()].some(
       (key) => key !== 'query' && key !== 'before' && key !== 'beforeId',
     ) ||
-    (before === null) !== (beforeId === null) ||
-    (before !== null &&
-      (!timestampPattern.test(before) ||
-        !Number.isFinite(Date.parse(before)) ||
-        !uuidPattern.test(beforeId!)))
+    cursor === 'invalid'
   )
     throw new VendorDirectoryError('invalid-input');
   const text = (query ?? '').trim();
@@ -50,8 +41,8 @@ export function vendorDirectoryQuery(
     throw new VendorDirectoryError('invalid-input');
   return {
     query: text === '' ? null : text,
-    before,
-    beforeId,
+    before: cursor?.before ?? null,
+    beforeId: cursor?.beforeId ?? null,
   };
 }
 
@@ -80,7 +71,7 @@ export function vendorRecord(row: unknown): Vendor {
             throw new VendorDirectoryError('invalid-input');
           })();
   if (
-    !uuidPattern.test(String(value.id ?? '')) ||
+    !isUuid(value.id) ||
     typeof value.display_name !== 'string' ||
     typeof value.created_at !== 'string'
   )

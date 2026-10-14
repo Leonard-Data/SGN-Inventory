@@ -13,6 +13,7 @@
 // Usage:
 //   SGN_ACCEPTANCE_DEV_ENV=<private dev env> \
 //   SGN_ACCEPTANCE_OWNER=<private owner config> \
+//   SGN_ACCEPTANCE_OPERATOR=<private operator config> \
 //   SGN_ACCEPTANCE_WORKDIR=<private work directory> \
 //   [SGN_ACCEPTANCE_PORT=<app port>] \
 //   [SGN_ACCEPTANCE_BROWSER_CLI=<chrome-devtools-axi>] \
@@ -21,11 +22,11 @@
 //     [--report <sanitized json path>]
 //
 // The dev env supplies the publishable application settings; the owner config supplies the
-// server-only Auth admin capability (`authAdminKey`) and the owner SQL connection
-// (`databaseUrl`). The synthetic employees are provisioned and removed over that owner SQL
-// connection because client roles cannot write employee lifecycle rows under the live
-// employee guard. Both files are read as data only and are never printed, shell sourced, or
-// passed in argv/logs.
+// server-only Auth admin capability (`authAdminKey`). The operator config supplies the owner
+// connection (`dbUrl`) queried through the Supabase CLI to provision and remove the
+// synthetic employees, because client roles cannot write employee lifecycle rows under the
+// live employee guard. All files are read as data only and are never printed, shell sourced,
+// or passed in argv/logs.
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { openSync } from 'node:fs';
@@ -33,11 +34,11 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
-import pg from 'pg';
 import { readEnvironment } from '../src/lib/environment.ts';
 
 const devEnvPath = process.env.SGN_ACCEPTANCE_DEV_ENV;
 const ownerPath = process.env.SGN_ACCEPTANCE_OWNER;
+const operatorPath = process.env.SGN_ACCEPTANCE_OPERATOR;
 const workdir = process.env.SGN_ACCEPTANCE_WORKDIR;
 const appPort = Number(process.env.SGN_ACCEPTANCE_PORT ?? 3104);
 const browserCli =
@@ -55,8 +56,8 @@ const reportIndex = process.argv.indexOf('--report');
 const reportPath = reportIndex >= 0 ? process.argv[reportIndex + 1] : null;
 
 assert.ok(
-  devEnvPath && ownerPath && workdir,
-  'Provide SGN_ACCEPTANCE_DEV_ENV, SGN_ACCEPTANCE_OWNER and SGN_ACCEPTANCE_WORKDIR',
+  devEnvPath && ownerPath && operatorPath && workdir,
+  'Provide SGN_ACCEPTANCE_DEV_ENV, SGN_ACCEPTANCE_OWNER, SGN_ACCEPTANCE_OPERATOR and SGN_ACCEPTANCE_WORKDIR',
 );
 
 function parseEnv(text) {
@@ -69,17 +70,14 @@ function parseEnv(text) {
 }
 const devEnv = parseEnv(await fs.readFile(devEnvPath, 'utf8'));
 const owner = JSON.parse(await fs.readFile(ownerPath, 'utf8'));
+const operator = JSON.parse(await fs.readFile(operatorPath, 'utf8'));
 assert.equal(devEnv.SGN_ENV, 'dev', 'Acceptance must never target production');
 assert.equal(
   typeof owner.authAdminKey,
   'string',
   'The owner config must supply the server-only Auth admin capability',
 );
-assert.equal(
-  typeof owner.databaseUrl,
-  'string',
-  'The owner config must supply the owner SQL capability for employee fixtures',
-);
+assert.ok(operator.dbUrl, 'The operator config needs an owner connection');
 const environment = readEnvironment(
   { ...devEnv, NEXT_PUBLIC_APP_URL: `http://127.0.0.1:${appPort}` },
   devEnv.EXPECTED_SUPABASE_PROJECT_REF,
@@ -91,10 +89,32 @@ const ownerClient = createClient(environment.supabaseUrl, owner.authAdminKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 // The employee lifecycle guard refuses every client role, so the fixture employees are
-// provisioned and removed with the separately authorized owner SQL capability.
-const ownerSql = new pg.Client({ connectionString: owner.databaseUrl });
-await ownerSql.connect();
-const ownerQuery = (text, params = []) => ownerSql.query(text, params);
+// provisioned and removed with the separately authorized owner connection.
+function operatorSql(statement) {
+  const result = spawnSync(
+    'npx',
+    [
+      'supabase',
+      'db',
+      'query',
+      '--db-url',
+      operator.dbUrl,
+      '--output-format',
+      'json',
+      statement,
+    ],
+    { encoding: 'utf8', timeout: 180000 },
+  );
+  if (result.status !== 0)
+    throw new Error(
+      'Operator SQL failed: ' + (result.stdout || result.stderr).slice(-800),
+    );
+  try {
+    return JSON.parse(result.stdout).rows ?? [];
+  } catch {
+    return [];
+  }
+}
 const observations = [];
 function observed(name, details = {}) {
   observations.push({ name, ...details });
@@ -218,15 +238,12 @@ async function removeFixtures(manifest) {
   let existing = new Set();
   if (employeeIds.length) {
     try {
-      const rows = await retryResult('read fixture employees', () =>
-        ownerClient.from('employees').select('id').in('id', employeeIds),
+      const rows = operatorSql(
+        `select id::text as id from public.employees where id in (${employeeIds
+          .map((id) => `'${id}'`)
+          .join(',')})`,
       );
-      if (rows.error) {
-        cleanup.failures.push(`read fixture employees: ${rows.error.message}`);
-        existing = new Set(employeeIds);
-      } else {
-        existing = new Set(rows.data.map((row) => row.id));
-      }
+      existing = new Set(rows.map((row) => row.id));
     } catch (error) {
       cleanup.failures.push(`read fixture employees: ${error.message}`);
       existing = new Set(employeeIds);
@@ -251,25 +268,17 @@ async function removeFixtures(manifest) {
       cleanup.employees_retained.push(identity.employeeId);
       continue;
     }
-    let removed;
     try {
-      removed = await retryThrown(`remove fixture employee ${name}`, () =>
-        ownerQuery('delete from public.employees where id = $1', [
-          identity.employeeId,
-        ]),
+      operatorSql(
+        `delete from public.employees where id = '${identity.employeeId}'`,
       );
+      cleanup.employees_removed.push(identity.employeeId);
     } catch (error) {
-      removed = { error };
-    }
-    if (removed?.error || removed?.rowCount !== 1) {
       retained.add(identity.employeeId);
       cleanup.employees_retained.push(identity.employeeId);
-      if (removed?.error)
-        cleanup.failures.push(
-          `remove fixture employee ${name}: ${removed.error.message}`,
-        );
-    } else {
-      cleanup.employees_removed.push(identity.employeeId);
+      cleanup.failures.push(
+        `remove fixture employee ${name}: ${error.message}`,
+      );
     }
   }
   const users = [
@@ -334,18 +343,8 @@ async function createFixtures() {
     );
     assert.equal(created.error, null, `create auth user ${name}`);
     const employeeId = randomUUID();
-    await retryThrown(`create employee ${name}`, () =>
-      ownerQuery(
-        'insert into public.employees(id,auth_user_id,email,display_name,role,is_active) values ($1,$2,$3,$4,$5,$6)',
-        [
-          employeeId,
-          created.data.user.id,
-          email,
-          fixtureName(name),
-          role,
-          active,
-        ],
-      ),
+    operatorSql(
+      `insert into public.employees(id,auth_user_id,email,display_name,role,is_active) values ('${employeeId}','${created.data.user.id}','${email}','${fixtureName(name)}','${role}',${active})`,
     );
     manifest.identities[name] = {
       userId: created.data.user.id,
@@ -1226,7 +1225,6 @@ try {
   await stopBrowsers().catch(() => {});
   await stopApp().catch(() => {});
   report.cleanup = await removeFixtures(manifest);
-  await ownerSql.end().catch(() => {});
   report.finished_at = new Date().toISOString();
   report.retries = retryCount;
   if (failure) report.failure = String(failure?.message ?? failure);
