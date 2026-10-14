@@ -1,6 +1,7 @@
 import 'server-only';
 import type { Json } from '@/types/database';
 import { ApiError, uuid, type RouteContext } from '@/lib/supabase/route';
+import { cursorPair } from '@/lib/supabase/query';
 import {
   InputError,
   validateChanges,
@@ -232,17 +233,10 @@ export async function historyPage(
   params: URLSearchParams,
 ) {
   if (!uuid(id)) throw new ApiError(400, 'invalid-input');
-  const before = params.get('before'),
-    beforeId = params.get('beforeId');
+  const cursor = cursorPair(params);
   if (
     [...params.keys()].some((k) => !['before', 'beforeId'].includes(k)) ||
-    !!before !== !!beforeId ||
-    (before &&
-      (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|\+00:00)$/.test(
-        before,
-      ) ||
-        !Number.isFinite(Date.parse(before)) ||
-        !uuid(beforeId)))
+    cursor === 'invalid'
   )
     throw new ApiError(400, 'invalid-input');
   const parent = await context.client
@@ -259,9 +253,9 @@ export async function historyPage(
     .order('occurred_at', { ascending: false })
     .order('id', { ascending: false })
     .limit(31);
-  if (before)
+  if (cursor)
     request = request.or(
-      `occurred_at.lt.${before},and(occurred_at.eq.${before},id.lt.${beforeId})`,
+      `occurred_at.lt.${cursor.before},and(occurred_at.eq.${cursor.before},id.lt.${cursor.beforeId})`,
     );
   const { data, error } = await request;
   databaseError(error);
@@ -294,20 +288,13 @@ export async function priceHistoryPage(
 ) {
   if (!uuid(id)) throw new ApiError(400, 'invalid-input');
   const series = params.get('series'),
-    before = params.get('before'),
-    beforeId = params.get('beforeId');
+    cursor = cursorPair(params);
   if (
     [...params.keys()].some(
       (k) => !['series', 'before', 'beforeId'].includes(k),
     ) ||
     (series !== 'sale' && series !== 'rent') ||
-    !!before !== !!beforeId ||
-    (before &&
-      (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|\+00:00)$/.test(
-        before,
-      ) ||
-        !Number.isFinite(Date.parse(before)) ||
-        !uuid(beforeId)))
+    cursor === 'invalid'
   )
     throw new ApiError(400, 'invalid-input');
   const parent = await context.client
@@ -325,9 +312,9 @@ export async function priceHistoryPage(
     .order('occurred_at', { ascending: false })
     .order('id', { ascending: false })
     .limit(31);
-  if (before)
+  if (cursor)
     request = request.or(
-      `occurred_at.lt.${before},and(occurred_at.eq.${before},id.lt.${beforeId})`,
+      `occurred_at.lt.${cursor.before},and(occurred_at.eq.${cursor.before},id.lt.${cursor.beforeId})`,
     );
   const { data, error } = await request;
   databaseError(error);

@@ -42,6 +42,7 @@ export function useProtectedData<T>(
   }, [conceal]);
   const load = useCallback(async () => {
     invalidate();
+    setBusy(true);
     // The read that just started decides what the surface shows.
     reading.current = true;
     const version = generation.current;
