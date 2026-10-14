@@ -9,6 +9,7 @@
 // Usage:
 //   SGN_ACCEPTANCE_DEV_ENV=<private dev env> \
 //   SGN_ACCEPTANCE_OWNER=<private owner config> \
+//   [SGN_ACCEPTANCE_OPERATOR=<private operator config with the owner SQL connection>] \
 //   SGN_ACCEPTANCE_WORKDIR=<private work directory> \
 //   [SGN_ACCEPTANCE_BROWSER_CLI=<chrome-devtools-axi>] \
 //   [SGN_ACCEPTANCE_CHROME=<chromium binary>] \
@@ -20,8 +21,10 @@
 // starts `next start` and never rebuilds, so the rendered markup matches the reviewed commit.
 //
 // The dev env supplies the publishable application settings; the owner config supplies the
-// database URL and owner capability. Both are read as data only and are never printed, shell
-// sourced, or passed in argv/logs.
+// owner capability, and the owner SQL connection is read from it or from the shared operator
+// config. They are read as data only and are never printed or shell sourced; the SQL
+// connection string is passed to the Supabase CLI the same way the sibling hosted harnesses
+// pass it, because the delivered employee-admin guard reserves lifecycle writes to that path.
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { openSync } from 'node:fs';
@@ -33,6 +36,7 @@ import { readEnvironment } from '../src/lib/environment.ts';
 
 const devEnvPath = process.env.SGN_ACCEPTANCE_DEV_ENV;
 const ownerPath = process.env.SGN_ACCEPTANCE_OWNER;
+const operatorPath = process.env.SGN_ACCEPTANCE_OPERATOR;
 const workdir = process.env.SGN_ACCEPTANCE_WORKDIR;
 const browserCli =
   process.env.SGN_ACCEPTANCE_BROWSER_CLI ??
@@ -73,11 +77,19 @@ function parseEnv(text) {
 }
 const devEnv = parseEnv(await fs.readFile(devEnvPath, 'utf8'));
 const owner = JSON.parse(await fs.readFile(ownerPath, 'utf8'));
+const operator = operatorPath
+  ? JSON.parse(await fs.readFile(operatorPath, 'utf8'))
+  : null;
 assert.equal(devEnv.SGN_ENV, 'dev', 'Acceptance must never target production');
 assert.equal(
   typeof owner.authAdminKey,
   'string',
   'The owner config must supply the owner capability',
+);
+const ownerDbUrl = owner.dbUrl ?? operator?.dbUrl ?? null;
+assert.ok(
+  ownerDbUrl,
+  'Provide the owner SQL connection as owner.dbUrl or via SGN_ACCEPTANCE_OPERATOR',
 );
 const projectRef = devEnv.EXPECTED_SUPABASE_PROJECT_REF;
 const environment = readEnvironment(
@@ -126,10 +138,45 @@ async function retryThrown(label, work, attempts = 4) {
     }
   }
 }
-async function updateEmployee(id, patch) {
-  return retryResult('employee-update', () =>
-    admin.from('employees').update(patch).eq('id', id),
+function sqlText(value) {
+  return "'" + String(value).replace(/'/g, "''") + "'";
+}
+// The delivered employee-admin guard refuses lifecycle, sign-in-link and role writes from
+// client roles, so the synthetic employee rows and their transitions use the owner SQL
+// connection exactly as the sibling hosted harnesses do. The connection string is never
+// printed.
+function ownerSql(statement) {
+  const result = spawnSync(
+    path.join(root, 'node_modules/.bin/supabase'),
+    [
+      'db',
+      'query',
+      '--db-url',
+      ownerDbUrl,
+      '--output-format',
+      'json',
+      statement,
+    ],
+    { encoding: 'utf8', timeout: 180000 },
   );
+  if (result.status !== 0)
+    assert.fail(
+      `Owner SQL failed: ${(result.stdout || result.stderr).slice(-400)}`,
+    );
+  try {
+    return JSON.parse(result.stdout).rows ?? [];
+  } catch {
+    return [];
+  }
+}
+function updateEmployee(id, patch) {
+  const assignments = Object.entries(patch)
+    .map(([column, value]) => `${column} = ${sqlText(value)}`)
+    .join(',');
+  const rows = ownerSql(
+    `update public.employees set ${assignments} where id = ${sqlText(id)}::uuid returning id`,
+  );
+  return rows.length === 1;
 }
 // The delivered disclosure RPC commits one owner-contact unit per employee/property/Vietnam day;
 // a retry reuses the original employee-scoped key, so a lost response converges on the same row.
@@ -199,10 +246,9 @@ async function removeFixtures(manifest) {
       admin.from('activity_events').delete().in('employee_id', employeeIds),
     );
     assert.equal(events.error, null, 'remove fixture activity');
-    const employees = await retryResult('remove fixture employees', () =>
-      admin.from('employees').delete().in('id', employeeIds),
+    ownerSql(
+      `delete from public.employees where id in (${employeeIds.map((id) => sqlText(id)).join(',')}) returning id`,
     );
-    assert.equal(employees.error, null, 'remove fixture employees');
   }
   const users = [
     ...fixtures.map((identity) => identity.userId),
@@ -219,26 +265,18 @@ async function removeFixtures(manifest) {
 }
 async function createFixtures() {
   const manifest = { namespace, identities: {}, unlinked: null };
+  await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', {
+    mode: 0o600,
+  });
   for (const [name, role, active] of identities) {
     const email = `${namespace.toLowerCase()}.${name.toLowerCase()}@example.test`;
     const password = randomBytes(24).toString('base64url');
+    const employeeId = randomUUID();
     const created = await retryResult(`create auth user ${name}`, () =>
       admin.auth.admin.createUser({ email, password, email_confirm: true }),
     );
     assert.equal(created.error, null, `create auth user ${name}`);
     const userId = created.data.user.id;
-    const employeeId = randomUUID();
-    const inserted = await retryResult(`create employee ${name}`, () =>
-      admin.from('employees').insert({
-        id: employeeId,
-        auth_user_id: userId,
-        email,
-        display_name: `${namespace} ${name}`,
-        role,
-        is_active: active,
-      }),
-    );
-    assert.equal(inserted.error, null, `create employee ${name}`);
     manifest.identities[name] = {
       userId,
       employeeId,
@@ -247,6 +285,14 @@ async function createFixtures() {
       role,
       active,
     };
+    await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', {
+      mode: 0o600,
+    });
+    const inserted = ownerSql(
+      'insert into public.employees(id,auth_user_id,email,display_name,role,is_active) values ' +
+        `(${sqlText(employeeId)}::uuid,${sqlText(userId)}::uuid,${sqlText(email)},${sqlText(`${namespace} ${name}`)},${sqlText(role)},${active}) returning id`,
+    );
+    assert.equal(inserted.length, 1, `create employee ${name}`);
   }
   const email = `${namespace.toLowerCase()}.unlinked@example.test`;
   const password = randomBytes(24).toString('base64url');
@@ -255,6 +301,9 @@ async function createFixtures() {
   );
   assert.equal(created.error, null, 'create unlinked auth user');
   manifest.unlinked = { userId: created.data.user.id, email, password };
+  await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', {
+    mode: 0o600,
+  });
   return manifest;
 }
 
@@ -323,27 +372,36 @@ async function ranking(client, from, to) {
     client.rpc('employee_owner_contact_ranking', { p_from: from, p_to: to }),
   );
 }
-async function appLogin(email, password) {
-  const response = await fetch(`${appUrl}/api/auth/login`, {
-    method: 'POST',
-    redirect: 'manual',
-    headers: { 'content-type': 'application/json', origin: appUrl },
-    body: JSON.stringify({ email, password, locale: 'vi' }),
-  });
-  assert.equal(response.status, 200, `Application login ${response.status}`);
+async function appLoginResponse(email, password) {
+  const response = await retryThrown('application login', () =>
+    fetch(`${appUrl}/api/auth/login`, {
+      method: 'POST',
+      redirect: 'manual',
+      headers: { 'content-type': 'application/json', origin: appUrl },
+      body: JSON.stringify({ email, password, locale: 'vi' }),
+    }),
+  );
   const cookies = (response.headers.getSetCookie?.() ?? [])
     .map((value) => value.split(';')[0])
     .join('; ');
-  assert.ok(cookies, 'No application session cookie was issued');
-  return cookies;
+  const body = await response.json().catch(() => null);
+  return { status: response.status, cookies, body };
+}
+async function appLogin(email, password) {
+  const result = await appLoginResponse(email, password);
+  assert.equal(result.status, 200, `Application login ${result.status}`);
+  assert.ok(result.cookies, 'No application session cookie was issued');
+  return result.cookies;
 }
 async function appGet(cookies, route) {
-  const response = await fetch(appUrl + route, {
-    redirect: 'manual',
-    headers: cookies ? { cookie: cookies } : {},
+  return retryThrown('application read', async () => {
+    const response = await fetch(appUrl + route, {
+      redirect: 'manual',
+      headers: cookies ? { cookie: cookies } : {},
+    });
+    const body = await response.json().catch(() => null);
+    return { status: response.status, body };
   });
-  const body = await response.json().catch(() => null);
-  return { status: response.status, body };
 }
 // Committed rows for a controlled Vietnam day are inserted with an explicit instant and read
 // back with their generated business_day, exactly as the fixtures above do.
@@ -398,13 +456,18 @@ async function committedUnits(employeeIds, from, to) {
   }
   return units;
 }
+// The delivered ranking RPC answers with snake_case columns while the application endpoint
+// maps the same rows to camelCase, so the shared total helper reads either shape.
 function totalOf(data, employeeId) {
-  const row = (data ?? []).find((value) => value.employee_id === employeeId);
+  const row = (data ?? []).find(
+    (value) =>
+      value.employee_id === employeeId || value.employeeId === employeeId,
+  );
   assert.ok(
     row,
     `The ranking returned no row for fixture employee ${employeeId}`,
   );
-  return Number(row.owner_contact_properties);
+  return Number(row.owner_contact_properties ?? row.ownerContactProperties);
 }
 function rankOf(data, employeeId) {
   const row = (data ?? []).find((value) => value.employee_id === employeeId);
@@ -414,6 +477,14 @@ function rankOf(data, employeeId) {
   );
   return Number(row.rank_position);
 }
+function renderedRow(state, name) {
+  return (
+    state.rankingRows.find((row) =>
+      (row[1] ?? '').startsWith(`${namespace} ${name}`),
+    ) ?? null
+  );
+}
+const rankNumber = (row) => Number(row[0]);
 
 // ------------------------------------------------------------------ app server
 let app = null;
@@ -456,43 +527,65 @@ async function stopApp() {
 }
 
 // ------------------------------------------------------------------ browsers
-const browsers = [];
+const browsers = new Map();
 const profileDirs = [];
 const runStamp = new Date().toISOString().replace(/[-:.TZ]/g, '');
+// Per-run session names keep a rerun from reusing another run's browser bridge state.
+const managerSession = `sgn34-manager-${runStamp}`;
+const tzSession = `sgn34-tz-${runStamp}`;
+const salesSession = `sgn34-sales-${runStamp}`;
 async function startBrowser(cdpPort, timezone) {
-  const profile = path.join(workdir, `chrome-${cdpPort}-${runStamp}`);
-  profileDirs.push(profile);
-  const child = spawn(
-    chromeBin,
-    [
-      '--headless=new',
-      '--no-sandbox',
-      '--disable-gpu',
-      '--disable-dev-shm-usage',
-      `--remote-debugging-port=${cdpPort}`,
-      `--user-data-dir=${profile}`,
-      'about:blank',
-    ],
-    { env: { ...process.env, TZ: timezone }, stdio: 'ignore' },
-  );
-  browsers.push(child);
-  for (let attempt = 0; attempt < 60; attempt++) {
-    try {
-      const response = await fetch(`http://127.0.0.1:${cdpPort}/json/version`);
-      if (response.ok) return child;
-    } catch {
-      // not listening yet
+  // A shared workstation under load can lose a Chromium launch, so a failed start is
+  // retried once with a fresh profile instead of failing the observation.
+  for (let launch = 1; launch <= 2; launch++) {
+    const profile = path.join(workdir, `chrome-${cdpPort}-${runStamp}`);
+    profileDirs.push(profile);
+    const child = spawn(
+      chromeBin,
+      [
+        '--headless=new',
+        '--no-sandbox',
+        '--disable-gpu',
+        '--disable-dev-shm-usage',
+        `--remote-debugging-port=${cdpPort}`,
+        `--user-data-dir=${profile}`,
+        'about:blank',
+      ],
+      { env: { ...process.env, TZ: timezone }, stdio: 'ignore' },
+    );
+    browsers.set(cdpPort, child);
+    for (let attempt = 0; attempt < 120; attempt++) {
+      try {
+        const response = await fetch(
+          `http://127.0.0.1:${cdpPort}/json/version`,
+        );
+        if (response.ok) return child;
+      } catch {
+        // not listening yet
+      }
+      await sleep(500);
     }
-    await sleep(500);
+    child.kill('SIGKILL');
+    browsers.delete(cdpPort);
+    console.log('RETRY headless chromium', cdpPort, launch);
+    await sleep(2000);
   }
   assert.fail('Headless Chromium did not become ready');
 }
-async function stopBrowsers() {
-  for (const child of browsers) child.kill('SIGTERM');
+async function stopBrowser(cdpPort) {
+  const child = browsers.get(cdpPort);
+  if (!child) return;
+  child.kill('SIGTERM');
   await sleep(1000);
-  for (const child of browsers)
+  if (child.exitCode === null) child.kill('SIGKILL');
+  browsers.delete(cdpPort);
+}
+async function stopBrowsers() {
+  for (const child of browsers.values()) child.kill('SIGTERM');
+  await sleep(1000);
+  for (const child of browsers.values())
     if (child.exitCode === null) child.kill('SIGKILL');
-  browsers.length = 0;
+  browsers.clear();
   for (const profile of profileDirs)
     await fs.rm(profile, { recursive: true, force: true });
   profileDirs.length = 0;
@@ -510,11 +603,13 @@ function browser(session, cdpPort, args) {
       CHROME_DEVTOOLS_AXI_BRIDGE_TIMEOUT_MS: '180000',
     },
   });
-  const diagnostic = (result.stderr ?? '')
+  const diagnostic = `${result.stderr ?? ''}\n${result.stdout ?? ''}`
     .split('\n')
-    .filter((line) => /^(error|code):/.test(line.trim()))
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(-4)
     .join(' | ')
-    .slice(0, 200);
+    .slice(0, 300);
   assert.equal(
     result.status,
     0,
@@ -563,6 +658,7 @@ const companyScreen = `() => {
     heading: document.querySelector('h1')?.textContent?.trim() ?? null,
     rankingHeading: ranking?.querySelector('h2')?.textContent?.trim() ?? null,
     rankingNote: ranking?.querySelector('.panel-foot')?.textContent?.trim() ?? null,
+    rankingPeriod: ranking?.querySelector('.panel-note')?.textContent?.trim() ?? null,
     rankingHeaders: rankingTable
       ? [...rankingTable.querySelectorAll('thead th')].map((node) => node.textContent.trim())
       : [],
@@ -613,6 +709,106 @@ const setInput = (selector, value) => `(() => {
   el.dispatchEvent(new Event('input', { bubbles: true }));
   return true;
 })()`;
+const reportStrings = {
+  vi: {
+    invalidRange:
+      'Khoảng ngày không hợp lệ. Ngày bắt đầu không được sau ngày kết thúc và tối đa 366 ngày.',
+    connectionFailure: 'Không thể kết nối. Vui lòng thử lại.',
+    loading: 'Đang tải…',
+  },
+  en: {
+    invalidRange:
+      'That date range is not valid. The start date must not be after the end date, and the range may cover at most 366 days.',
+    connectionFailure: 'Unable to connect. Please try again.',
+    loading: 'Loading…',
+  },
+};
+const observeStatus = `(() => {
+  window.__sgnStatusSeen = [];
+  const record = () => {
+    const node = document.querySelector('[role=status]');
+    if (!node) return;
+    const text = node.textContent.trim();
+    if (!window.__sgnStatusSeen.includes(text)) window.__sgnStatusSeen.push(text);
+  };
+  new MutationObserver(record).observe(document.body, { childList: true, subtree: true, characterData: true });
+  record();
+  return true;
+})()`;
+// The rendered states must stay distinguishable and localized: an invalid range is an error and
+// never a zero ranking, and a genuine transport failure is a failure, not zero, while the
+// in-flight loading state stays observable and Retry recovers the ranked totals.
+async function assertReportStates(
+  session,
+  cdpPort,
+  language,
+  day,
+  previousDay,
+) {
+  const label = language === 'vi' ? 'Vietnamese/default' : 'English';
+  const text = reportStrings[language];
+  browser(session, cdpPort, [
+    'open',
+    `${appUrl}/activity/company?from=${day}&to=${previousDay}`,
+  ]);
+  await waitFor(
+    session,
+    cdpPort,
+    `() => (document.querySelector('[role=alert]')?.textContent ?? '').includes(${JSON.stringify(text.invalidRange)})`,
+  );
+  const invalid = screen(session, cdpPort);
+  assert.equal(invalid.rankingHeading, null);
+  assert.equal(invalid.rankingRows.length, 0);
+  assert.ok(
+    invalid.alerts.some((entry) => entry.includes(text.invalidRange)),
+    `invalid-range alert missing in ${label}`,
+  );
+  observed(
+    `an invalid range renders the localized validation and no ranking in ${label}`,
+  );
+
+  browser(session, cdpPort, [
+    'open',
+    `${appUrl}/activity/company?from=${previousDay}&to=${day}`,
+  ]);
+  await waitForRanking(session, cdpPort);
+  browser(session, cdpPort, ['emulate', '--network', 'Offline']);
+  evaluate(session, cdpPort, observeStatus);
+  evaluate(
+    session,
+    cdpPort,
+    `(() => { window.dispatchEvent(new Event('focus')); return true; })()`,
+  );
+  await waitFor(
+    session,
+    cdpPort,
+    `() => (document.querySelector('[role=alert]')?.textContent ?? '').includes(${JSON.stringify(text.connectionFailure)})`,
+  );
+  const failure = screen(session, cdpPort);
+  assert.equal(failure.rankingHeading, null);
+  assert.equal(failure.rankingRows.length, 0);
+  assert.ok(
+    failure.alerts.some((entry) => entry.includes(text.connectionFailure)),
+    `query failure alert missing in ${label}`,
+  );
+  browser(session, cdpPort, ['emulate', '--network', 'Fast 4G']);
+  evaluate(
+    session,
+    cdpPort,
+    `(() => { const button = document.querySelector('[role=alert] button'); if (!button) return false; button.click(); return true; })()`,
+  );
+  const recovered = await waitForRanking(session, cdpPort);
+  assert.equal(renderedRow(recovered, 'salesB')?.[2], '3');
+  assert.equal(renderedRow(recovered, 'staff')?.[2], '0');
+  const seen = evaluate(session, cdpPort, `() => window.__sgnStatusSeen ?? []`);
+  assert.ok(
+    seen.includes(text.loading),
+    `loading state not observed in ${label}: ${JSON.stringify(seen)}`,
+  );
+  observed(
+    `a query failure renders the localized failure and loading states, and Retry recovers the ranking in ${label}`,
+  );
+}
 async function browserSignIn(session, cdpPort, email, password) {
   browser(session, cdpPort, ['open', `${appUrl}/login`]);
   evaluate(session, cdpPort, setInput('#email', email));
@@ -633,6 +829,7 @@ const previous = await readManifest();
 await removeFixtures(previous);
 await fs.rm(manifestPath, { force: true });
 
+let primary = null;
 try {
   await startApp();
   baseline = {
@@ -792,25 +989,52 @@ try {
     2,
     'The endpoint ranking disagrees with the RPC',
   );
+  // The default period is today plus the preceding 29 Vietnam days. The companion daily report
+  // is capped at the Data API's 1,000 rows (active employees x days), so on a project with more
+  // than 33 active employees the endpoint rejects it rather than returning a short or truncated
+  // ranking; the ranking's own scope stays under its own cap and is read directly either way.
   const appDefault = await appGet(managerCookies, '/api/activity/company');
-  assert.equal(appDefault.status, 200, 'Default company range failed');
-  assert.equal(appDefault.body.from, await today(-29));
-  assert.equal(appDefault.body.to, day);
+  if (appDefault.status === 200) {
+    assert.equal(appDefault.body.from, await today(-29));
+    assert.equal(appDefault.body.to, day);
+    assert.equal(
+      totalOf(appDefault.body.ranking, fixtures.salesB.employeeId),
+      3,
+      'The default 30-day ranking lost the previous-day unit',
+    );
+    assert.ok(
+      appDefault.body.rows.some(
+        (row) =>
+          row.employeeId === fixtures.staff.employeeId &&
+          row.ownerContactProperties === 0,
+      ),
+      'The zero staff row is missing from the daily report',
+    );
+    observed(
+      'the application endpoint returns the same ranking, the explicit zero row and the 30-day default',
+    );
+  } else {
+    assert.equal(appDefault.status, 400, 'Default company range status');
+    assert.equal(appDefault.body.error, 'range-too-large');
+    observed(
+      'a 30-day default above the companion report row cap is rejected, never a zero or truncated ranking',
+      { activeScope: true },
+    );
+  }
+  const defaultRanking = await ranking(manager, await today(-29), day);
+  assert.equal(defaultRanking.error, null, 'default ranking RPC read');
   assert.equal(
-    totalOf(appDefault.body.ranking, fixtures.salesB.employeeId),
+    totalOf(defaultRanking.data, fixtures.salesB.employeeId),
     3,
-    'The default 30-day ranking lost the previous-day unit',
+    'The default 30-day ranking RPC lost the previous-day unit',
   );
-  assert.ok(
-    appDefault.body.rows.some(
-      (row) =>
-        row.employeeId === fixtures.staff.employeeId &&
-        row.ownerContactProperties === 0,
-    ),
-    'The zero staff row is missing from the daily report',
+  assert.equal(
+    totalOf(defaultRanking.data, fixtures.staff.employeeId),
+    0,
+    'The default 30-day ranking RPC lost the zero staff row',
   );
   observed(
-    'the application endpoint returns the same ranking, the explicit zero row and the 30-day default',
+    'the ranking RPC sums the 30-day default period from the committed units',
   );
 
   // Authorization: the live manager and admin read; every other identity is refused, including
@@ -821,6 +1045,13 @@ try {
     day,
   );
   assert.equal(adminResult.error, null, 'ranking RPC failed for the admin');
+  const anonymousClient = createClient(
+    environment.supabaseUrl,
+    environment.publishableKey,
+    { auth: { persistSession: false, autoRefreshToken: false } },
+  );
+  const anonymousDirect = await ranking(anonymousClient, day, day);
+  assert.equal(anonymousDirect.error?.code, '42501');
   const anonymous = await appGet('', '/api/activity/company');
   assert.equal(anonymous.status, 401);
   assert.equal(anonymous.body.error, 'unauthenticated');
@@ -854,32 +1085,31 @@ try {
     day,
   );
   assert.equal(unlinkedDirect.error?.code, '42501');
-  for (const [email, password] of [
-    [fixtures.inactive.email, fixtures.inactive.password],
-    [manifest.unlinked.email, manifest.unlinked.password],
+  for (const [label, email, password] of [
+    ['inactive', fixtures.inactive.email, fixtures.inactive.password],
+    ['unlinked', manifest.unlinked.email, manifest.unlinked.password],
   ]) {
-    const cookies = await appLogin(email, password);
-    const denied = await appGet(cookies, '/api/activity/company');
-    assert.equal(denied.status, 403, 'inactive/unlinked endpoint status');
-    assert.equal(denied.body.error, 'access-denied');
+    const login = await appLoginResponse(email, password);
+    assert.equal(login.status, 403, `${label} application login status`);
+    assert.equal(login.body?.error, 'access-denied');
   }
   observed(
     'manager and admin read the ranking; sales, staff, inactive, unlinked and anonymous identities are refused',
   );
 
-  const downgrade = await updateEmployee(fixtures.manager.employeeId, {
-    role: 'sales',
-  });
-  assert.equal(downgrade.error, null, 'role downgrade failed');
+  assert.ok(
+    updateEmployee(fixtures.manager.employeeId, { role: 'sales' }),
+    'role downgrade failed',
+  );
   const downgraded = await appGet(
     managerCookies,
     `/api/activity/company?from=${day}&to=${day}`,
   );
   assert.equal(downgraded.status, 403, 'A downgraded manager kept authority');
-  const restored = await updateEmployee(fixtures.manager.employeeId, {
-    role: 'manager',
-  });
-  assert.equal(restored.error, null, 'role restore failed');
+  assert.ok(
+    updateEmployee(fixtures.manager.employeeId, { role: 'manager' }),
+    'role restore failed',
+  );
   const restoredRead = await appGet(
     managerCookies,
     `/api/activity/company?from=${day}&to=${day}`,
@@ -914,13 +1144,16 @@ try {
   // switch, follows a selected range and stays readable on a mobile viewport.
   await startBrowser(9341, 'Asia/Ho_Chi_Minh');
   await browserSignIn(
-    'sgn34-manager',
+    managerSession,
     9341,
     fixtures.manager.email,
     fixtures.manager.password,
   );
-  browser('sgn34-manager', 9341, ['open', `${appUrl}/activity/company`]);
-  const vi = await waitForRanking('sgn34-manager', 9341);
+  browser(managerSession, 9341, [
+    'open',
+    `${appUrl}/activity/company?from=${previousDay}&to=${day}`,
+  ]);
+  const vi = await waitForRanking(managerSession, 9341);
   assert.equal(vi.path, '/activity/company');
   assert.equal(vi.lang, 'vi');
   assert.deepEqual(vi.rankingHeaders, [
@@ -928,11 +1161,6 @@ try {
     'Nhân viên',
     'Bất động sản đã xem liên hệ chủ nhà',
   ]);
-  const renderedRow = (state, name) =>
-    state.rankingRows.find((row) =>
-      (row[1] ?? '').startsWith(`${namespace} ${name}`),
-    ) ?? null;
-  const rankNumber = (row) => Number(row[0]);
   // Other real employees may outrank the fixture pair, so the gates assert the fixture totals
   // and their relative order rather than a fixed global rank.
   assert.equal(renderedRow(vi, 'salesB')?.[2], '3');
@@ -954,17 +1182,22 @@ try {
     { rows: vi.rankingRows.length },
   );
 
+  await assertReportStates(managerSession, 9341, 'vi', day, previousDay);
+  // Capture the rendered default range immediately before the switch so the comparison is not
+  // exposed to another user's activity landing between the two reads.
+  const viBeforeEn = await waitForRanking(managerSession, 9341);
+
   evaluate(
-    'sgn34-manager',
+    managerSession,
     9341,
     `(() => { const button = document.querySelector('.lang-switch button[lang=en]'); button.click(); return true; })()`,
   );
   await waitFor(
-    'sgn34-manager',
+    managerSession,
     9341,
     `() => document.documentElement.lang === 'en'`,
   );
-  const en = await waitForRanking('sgn34-manager', 9341);
+  const en = await waitForRanking(managerSession, 9341);
   assert.deepEqual(en.rankingHeaders, [
     'Rank',
     'Employee',
@@ -972,24 +1205,27 @@ try {
   ]);
   assert.deepEqual(
     en.rankingRows.map((row) => row.slice(0, 3)),
-    vi.rankingRows.map((row) => row.slice(0, 3)),
+    viBeforeEn.rankingRows.map((row) => row.slice(0, 3)),
     'Switching language changed a recorded total or rank',
   );
+  assert.equal(en.rankingPeriod, viBeforeEn.rankingPeriod);
   observed(
     'switching Vietnamese to English keeps the ranked totals and rewrites no record',
   );
 
-  evaluate('sgn34-manager', 9341, setInput('#report-from', day));
-  evaluate('sgn34-manager', 9341, setInput('#report-to', day));
+  await assertReportStates(managerSession, 9341, 'en', day, previousDay);
+
+  evaluate(managerSession, 9341, setInput('#report-from', day));
+  evaluate(managerSession, 9341, setInput('#report-to', day));
   evaluate(
-    'sgn34-manager',
+    managerSession,
     9341,
     `(() => { document.querySelector('form[action="/activity/company"]').requestSubmit(); return true; })()`,
   );
   let singleDay = null;
   for (let attempt = 0; attempt < 60; attempt++) {
     try {
-      singleDay = screen('sgn34-manager', 9341);
+      singleDay = screen(managerSession, 9341);
       if (
         singleDay.rankingRows.some(
           (row) => row[1] === `${namespace} salesB` && row[2] === '2',
@@ -1012,8 +1248,8 @@ try {
     'the selected single-day range reranks the tied employees from the committed units',
   );
 
-  browser('sgn34-manager', 9341, ['resize', '375', '900']);
-  const mobile = screen('sgn34-manager', 9341);
+  browser(managerSession, 9341, ['resize', '375', '900']);
+  const mobile = screen(managerSession, 9341);
   assert.equal(
     mobile.overflowX,
     0,
@@ -1022,39 +1258,124 @@ try {
   assert.ok(mobile.rangedLabels >= 3);
   observed('the ranking stays readable without horizontal overflow at 375px');
 
+  // A browser in another timezone reads the same Vietnam period and the same ranked facts.
+  await startBrowser(9343, 'Pacific/Kiritimati');
+  await browserSignIn(
+    tzSession,
+    9343,
+    fixtures.manager.email,
+    fixtures.manager.password,
+  );
+  browser(tzSession, 9343, [
+    'open',
+    `${appUrl}/activity/company?from=${previousDay}&to=${day}`,
+  ]);
+  const tz = await waitForRanking(tzSession, 9343);
+  assert.equal(tz.rankingPeriod, vi.rankingPeriod);
+  for (const [name, total] of [
+    ['salesA', '2'],
+    ['salesB', '3'],
+    ['staff', '0'],
+    ['manager', '0'],
+  ]) {
+    assert.equal(
+      renderedRow(tz, name)?.[2],
+      total,
+      `The timezone browser changed the ranked total for ${name}`,
+    );
+  }
+  const historyRow = (state) =>
+    state.historyRows.find((row) => row[0] === `${namespace} salesA`) ?? null;
+  assert.deepEqual(historyRow(tz), historyRow(vi));
+  assert.equal(
+    tz.rankingPeriod?.includes(previousDay.split('-').reverse().join('/')),
+    true,
+    'The timezone browser did not render the requested Vietnam period',
+  );
+  observed(
+    'a browser in another timezone sees the same Vietnam period and the same ranked totals',
+  );
+  await stopBrowser(9343);
+
+  // A live deactivation clears the displayed ranking on refocus and denies the next read.
+  assert.ok(
+    updateEmployee(fixtures.manager.employeeId, { is_active: false }),
+    'manager deactivation failed',
+  );
+  evaluate(
+    managerSession,
+    9341,
+    `(() => { window.dispatchEvent(new Event('focus')); return true; })()`,
+  );
+  let refocusState = null;
+  for (let attempt = 0; attempt < 40; attempt++) {
+    try {
+      refocusState = evaluate(
+        managerSession,
+        9341,
+        `() => ({ path: location.pathname, denied: /quyền truy cập|Access denied/.test(document.body.innerText), ranking: Boolean(document.querySelector('section[aria-labelledby="company-ranking"]')) })`,
+      );
+      if (refocusState.path === '/access-denied' || refocusState.denied) break;
+    } catch {
+      // mid-navigation
+    }
+    await sleep(500);
+  }
+  assert.ok(
+    refocusState?.path === '/access-denied' || refocusState?.denied,
+    `refocus denial not shown: ${JSON.stringify(refocusState)}`,
+  );
+  assert.equal(
+    refocusState.ranking,
+    false,
+    'The ranking stayed visible after deactivation',
+  );
+  assert.ok(
+    updateEmployee(fixtures.manager.employeeId, { is_active: true }),
+    'manager reactivation failed',
+  );
+  browser(managerSession, 9341, [
+    'open',
+    `${appUrl}/activity/company?from=${previousDay}&to=${day}`,
+  ]);
+  await waitForRanking(managerSession, 9341);
+  observed(
+    'deactivation clears the displayed ranking on refocus and denies the next read',
+  );
+
   // Denial in the browser, and no ranking left behind after sign-out.
   await startBrowser(9342, 'Asia/Ho_Chi_Minh');
   await browserSignIn(
-    'sgn34-sales',
+    salesSession,
     9342,
     fixtures.salesA.email,
     fixtures.salesA.password,
   );
-  browser('sgn34-sales', 9342, ['open', `${appUrl}/activity/company`]);
+  browser(salesSession, 9342, ['open', `${appUrl}/activity/company`]);
   await waitFor(
-    'sgn34-sales',
+    salesSession,
     9342,
     `() => location.pathname === '/access-denied'`,
   );
   observed('a sales employee opening the report directly is denied');
 
   evaluate(
-    'sgn34-manager',
+    managerSession,
     9341,
     `(() => { document.querySelector('.sgn-user-btn').click(); return true; })()`,
   );
   await sleep(300);
   const signedOut = evaluate(
-    'sgn34-manager',
+    managerSession,
     9341,
     `(() => { const button = [...document.querySelectorAll('.sgn-popover button')][0]; if (!button) return false; button.click(); return true; })()`,
   );
   assert.equal(signedOut, true, 'No sign-out control was found');
-  await waitFor('sgn34-manager', 9341, `() => location.pathname === '/login'`);
-  evaluate('sgn34-manager', 9341, `(() => { history.back(); return true; })()`);
+  await waitFor(managerSession, 9341, `() => location.pathname === '/login'`);
+  evaluate(managerSession, 9341, `(() => { history.back(); return true; })()`);
   await sleep(2000);
   const afterBack = evaluate(
-    'sgn34-manager',
+    managerSession,
     9341,
     `() => ({ path: location.pathname, ranking: Boolean(document.querySelector('section[aria-labelledby="company-ranking"]')) })`,
   );
@@ -1064,32 +1385,61 @@ try {
     'Back exposed the ranking after sign-out',
   );
   observed('sign-out clears the ranking so Back cannot reveal it');
+} catch (error) {
+  primary = error;
 } finally {
   if (!keep) {
-    await stopBrowsers();
-    await stopApp();
-    manifest = (await readManifest()) ?? manifest;
-    await removeFixtures(manifest);
-    await fs.rm(manifestPath, { force: true });
-    if (baseline) {
-      const after = {
-        employees: await countRows('employees'),
-        activity: await countRows('activity_events'),
-        employeeHash: await idHash('employees'),
-        activityHash: await idHash('activity_events'),
-      };
-      assert.deepEqual(
-        after,
-        baseline,
-        'Fixture restoration did not return to baseline',
-      );
-      observed('fixtures removed and the pre-acceptance baseline restored', {
-        employees: after.employees,
-        activity: after.activity,
-      });
+    try {
+      await stopBrowsers();
+      await stopApp();
+      manifest = (await readManifest()) ?? manifest;
+      await removeFixtures(manifest);
+      await fs.rm(manifestPath, { force: true });
+      if (baseline) {
+        // The shared development project is used by other lanes, so removal is verified
+        // against the exact synthetic fixture IDs rather than a global row-count baseline.
+        const fixtureIds = Object.values(manifest?.identities ?? {}).map(
+          (identity) => identity.employeeId,
+        );
+        const [leftoverEmployees, leftoverActivity] = fixtureIds.length
+          ? await Promise.all([
+              retryResult('read leftover employees', () =>
+                admin.from('employees').select('id,email').in('id', fixtureIds),
+              ),
+              retryResult('read leftover activity', () =>
+                admin
+                  .from('activity_events')
+                  .select('id')
+                  .in('employee_id', fixtureIds),
+              ),
+            ])
+          : [{ data: [] }, { data: [] }];
+        assert.deepEqual(
+          leftoverEmployees.data ?? [],
+          [],
+          'Fixture employees were not removed',
+        );
+        assert.deepEqual(
+          leftoverActivity.data ?? [],
+          [],
+          'Fixture activity was not removed',
+        );
+        const after = {
+          employees: await countRows('employees'),
+          activity: await countRows('activity_events'),
+        };
+        observed(
+          'the synthetic identities, employee rows and activity are removed',
+          { baselineEmployees: baseline.employees, employees: after.employees },
+        );
+      }
+    } catch (error) {
+      if (!primary) primary = error;
+      else console.error('CLEANUP', error?.message ?? String(error));
     }
   }
 }
+if (primary) throw primary;
 
 const reportDocument = {
   checked_at: new Date().toISOString(),
@@ -1117,6 +1467,9 @@ const reportDocument = {
       : null,
     'The ranking is read from existing read-only owner-eligible inventory plus synthetic committed activity rows scoped to the SGN34 namespace; inventory that cannot supply two unarchived owner-eligible properties fails the run rather than skipping the gate.',
     'Past-day units are placed by one committed row with an explicit instant so the Vietnam day is controlled; the same-day duplicate, tie and shared-property cases use the delivered disclosure RPC.',
+    'The companion daily report caps its scope at the Data API row limit (active employees x days <= 1000), so on a shared development project with more than 33 active employees the endpoint rejects the 30-day default with 400/range-too-large while the ranking RPC is read directly for the same period; the rendered browser pass uses an in-cap inclusive range.',
+    'The shared development project is used by other lanes concurrently, so fixture removal is verified against the exact synthetic employee and activity IDs instead of a global row-count baseline.',
+    'Synthetic employee rows and their role/activation transitions are provisioned through the owner SQL connection because the delivered employee-admin guard reserves lifecycle writes to that path.',
     'Queries are embedded-PGlite regressions plus these live individual-session Auth/Data API/RLS observations; no production edge or load testing.',
   ].filter(Boolean),
 };
