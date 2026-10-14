@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { readEnvironment } from '../src/lib/environment.ts';
+import { createOwnerSql } from './owner-sql.mjs';
 
 if (process.argv.includes('--help')) {
   console.log(
@@ -71,31 +72,7 @@ assert.ok(
 function sqlText(value) {
   return "'" + String(value).replace(/'/g, "''") + "'";
 }
-function ownerSql(statement) {
-  const result = spawnSync(
-    'npx',
-    [
-      'supabase',
-      'db',
-      'query',
-      '--db-url',
-      operatorConfig.dbUrl,
-      '--output-format',
-      'json',
-      statement,
-    ],
-    { encoding: 'utf8', timeout: 180000 },
-  );
-  if (result.status !== 0)
-    throw new Error(
-      'Owner SQL failed: ' + (result.stdout || result.stderr).slice(-800),
-    );
-  try {
-    return JSON.parse(result.stdout).rows ?? [];
-  } catch {
-    return [];
-  }
-}
+const ownerSql = createOwnerSql(operatorConfig.dbUrl);
 const npmRoot =
   process.platform === 'win32'
     ? spawnSync('cmd.exe', ['/d', '/s', '/c', 'npm root --global'], {

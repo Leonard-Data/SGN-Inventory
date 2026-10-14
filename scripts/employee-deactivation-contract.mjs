@@ -1021,49 +1021,6 @@ export async function employeeDeactivationContract({
       );
     },
   );
-  await asOwner();
-  await check(
-    'two committed transactions cannot both remove the remaining active admins',
-    async () => {
-      await db.query('update public.employees set is_active=true where id=$1', [
-        staff.adminA,
-      ]);
-      await db.query('begin');
-      await db.query(
-        'update public.employees set is_active=false where id=$1',
-        [staff.adminA],
-      );
-      await db.query('commit');
-      assert.equal(
-        (
-          await db.query('select is_active from public.employees where id=$1', [
-            staff.adminA,
-          ])
-        ).rows[0].is_active,
-        false,
-      );
-      await db.query('begin');
-      let refused = null;
-      try {
-        await db.query(
-          'update public.employees set is_active=false where id=$1',
-          [staff.newAdmin],
-        );
-      } catch (error) {
-        refused = error;
-      }
-      await db.query('rollback');
-      assert.equal(refused?.code, 'P0010');
-      assert.equal(
-        (
-          await db.query('select is_active from public.employees where id=$1', [
-            staff.newAdmin,
-          ])
-        ).rows[0].is_active,
-        true,
-      );
-    },
-  );
   await asActor(users.newAdmin);
   await check(
     'the existing own-locale operation remains valid for the last admin',

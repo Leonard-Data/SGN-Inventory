@@ -4,16 +4,17 @@
 
 One Next.js App Router application, TypeScript, React, plain CSS, Supabase Postgres/Auth/private Storage and Vercel. npm is the only JavaScript package manager. Node `24.14.0` and npm `11.13.0` are the reproducible local/CI baseline; Vercel uses Node `24.x`. The project minimum is stricter than the original Node 22+ requirement.
 
-| Tool                             | Exact dependency                                 |
-| -------------------------------- | ------------------------------------------------ |
-| Next.js / React / React DOM      | `16.4.0` / `19.3.0` / `19.3.0`                   |
-| TypeScript                       | `6.0.3`                                          |
-| Supabase JavaScript / SSR        | `2.117.3` / `0.12.7`                             |
-| Supabase CLI / embedded PGlite   | `2.120.0` / `0.5.8`                              |
-| ESLint / Next lint configuration | `9.39.5` / `16.4.0`                              |
-| Prettier / Husky / lint-staged   | `3.9.9` / `9.1.7` / `17.6.0`                     |
-| Vercel CLI                       | `63.1.2`                                         |
-| Workbook tooling                 | Python `3.11+`, pinned `requirements-import.txt` |
+| Tool                               | Exact dependency                                 |
+| ---------------------------------- | ------------------------------------------------ |
+| Next.js / React / React DOM        | `16.4.0` / `19.3.0` / `19.3.0`                   |
+| TypeScript                         | `6.0.3`                                          |
+| Supabase JavaScript / SSR          | `2.117.3` / `0.12.7`                             |
+| Supabase CLI / embedded PGlite     | `2.120.0` / `0.5.8`                              |
+| Embedded PostgreSQL (schema races) | `18.4.0-beta.17`                                 |
+| ESLint / Next lint configuration   | `9.39.5` / `16.4.0`                              |
+| Prettier / Husky / lint-staged     | `3.9.9` / `9.1.7` / `17.6.0`                     |
+| Vercel CLI                         | `63.1.2`                                         |
+| Workbook tooling                   | Python `3.11+`, pinned `requirements-import.txt` |
 
 `package.json` and `package-lock.json` are authoritative. Install with `npm ci`. Commit both when updating dependencies; never use an unpinned `npx ...@latest` in automation. ESLint 9 is intentional: the selected Next lint plugins do not all declare ESLint 10 support. Verify official documentation and peer requirements before upgrades.
 

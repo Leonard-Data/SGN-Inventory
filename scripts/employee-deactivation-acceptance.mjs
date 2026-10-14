@@ -22,8 +22,10 @@
 //
 // The dev env supplies the publishable application settings; the owner config supplies the
 // server-only Auth admin capability, the trusted server adapter's provider boundary and the
-// owner SQL connection (`dbUrl`) used for synthetic employee rows. Both are read as data only
-// and are never printed, shell sourced, or passed in argv/logs.
+// owner SQL connection (`dbUrl`) used for synthetic employee rows. Both are read as data
+// only. The owner URL is passed to the Supabase CLI without its password for the fixture
+// statements and the password is supplied through the environment, so no credential appears
+// in argv; captured CLI output is redacted.
 //
 // Retained evidence: an operation, its events and every employee row they reference are
 // permanent by design. Cleanup un-bans the synthetic Auth identities and removes the
@@ -31,12 +33,12 @@
 // it never fabricates a delete path for the administration evidence. The manifest stays in
 // the work directory and names every retained synthetic row.
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import { randomBytes, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { createClient } from '@supabase/supabase-js';
 import { readEnvironment } from '../src/lib/environment.ts';
+import { createOwnerSql } from './owner-sql.mjs';
 
 const devEnvPath = process.env.SGN_ACCEPTANCE_DEV_ENV;
 const ownerPath = process.env.SGN_ACCEPTANCE_OWNER;
@@ -103,31 +105,7 @@ function sqlText(value) {
 }
 // The owner SQL connection provisions, updates and removes synthetic employee rows; the
 // lifecycle guard refuses those writes to client roles.
-function ownerSql(statement) {
-  const result = spawnSync(
-    'npx',
-    [
-      'supabase',
-      'db',
-      'query',
-      '--db-url',
-      owner.dbUrl,
-      '--output-format',
-      'json',
-      statement,
-    ],
-    { encoding: 'utf8', timeout: 180000 },
-  );
-  if (result.status !== 0)
-    throw new Error(
-      'Owner SQL failed: ' + (result.stdout || result.stderr).slice(-800),
-    );
-  try {
-    return JSON.parse(result.stdout).rows ?? [];
-  } catch {
-    return [];
-  }
-}
+const ownerSql = createOwnerSql(owner.dbUrl);
 function ownerSqlRefusal(statement, code) {
   ownerSql(
     `do $$ begin begin ${statement}; raise exception 'expected refusal'; exception when others then if sqlstate <> '${code}' then raise; end if; end; end $$;`,
