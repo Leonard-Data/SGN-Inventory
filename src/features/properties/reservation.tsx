@@ -120,6 +120,55 @@ function DecisionForm({
   );
 }
 
+function ReleaseForm({
+  locale,
+  busy,
+  error,
+  onSubmit,
+}: {
+  locale: Locale;
+  busy: boolean;
+  error: string | null;
+  onSubmit: (form: HTMLFormElement) => void;
+}) {
+  const text = messages[locale],
+    reasonId = useId(),
+    helpId = useId();
+  return (
+    <form
+      onSubmit={(event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        onSubmit(event.currentTarget);
+      }}
+    >
+      <div className="field">
+        <label className="field-label" htmlFor={reasonId}>
+          {text.reservationReleaseReason}
+        </label>
+        <textarea
+          id={reasonId}
+          className="textarea"
+          name="reason"
+          rows={3}
+          required
+          minLength={RESERVATION_REASON_MIN}
+          maxLength={RESERVATION_REASON_MAX}
+          aria-describedby={helpId}
+          disabled={busy}
+        />
+      </div>
+      <p className="field-hint" id={helpId}>
+        {text.reservationReleaseReasonHint}
+      </p>
+      {error ? <p role="alert">{error}</p> : null}
+      <button className="btn btn-sm btn-ghost" type="submit" disabled={busy}>
+        {busy ? text.loading : text.reservationReleaseSubmit}
+      </button>
+      <p className="field-hint">{text.reservationReleaseNote}</p>
+    </form>
+  );
+}
+
 export function Reservation({
   propertyId,
   locale,
@@ -152,6 +201,8 @@ export function Reservation({
     code: string;
   } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [releasing, setReleasing] = useState(false);
+  const [releaseError, setReleaseError] = useState<string | null>(null);
   const inFlight = useRef<AbortController | null>(null);
   const generation = useRef(0);
   // A mutation's snapshot wins over any read that started before it committed.
@@ -289,10 +340,47 @@ export function Reservation({
     if (code === 'reservation-conflict') return text.reservationConflict;
     if (code === 'reservation-unavailable')
       return text.reservationNotProceeding;
+    if (code === 'reservation-closed') return text.reservationReleaseClosed;
     if (code === 'self-approval-forbidden') return text.reservationSelfApproval;
     if (code === 'not-found') return text.notFound;
     return fallback;
   }
+  // The audited release keeps the original claimant and every recorded event; a completed
+  // sale of another claimant must go through it instead of rewriting the reservation.
+  async function release(lockId: string, form: HTMLFormElement) {
+    if (releasing) return;
+    const data = new FormData(form);
+    setReleasing(true);
+    setReleaseError(null);
+    setNotice(null);
+    try {
+      const next = await api<ReservationState>(
+        '/api/properties/' + propertyId + '/reservations/release',
+        { lockId, reason: data.get('reason') },
+      );
+      apply(next);
+      setNotice(text.reservationReleased);
+    } catch (problem) {
+      if (
+        problem instanceof RequestError &&
+        (problem.status === 401 || problem.status === 403)
+      ) {
+        onDenied(problem.status);
+        return;
+      }
+      if (
+        problem instanceof RequestError &&
+        problem.code === 'reservation-closed'
+      )
+        setRefresh((value) => value + 1);
+      setReleaseError(
+        problem instanceof RequestError ? problem.code : 'unavailable',
+      );
+    } finally {
+      setReleasing(false);
+    }
+  }
+  const effective = state?.effective ?? null;
   return (
     <section
       className="panel reservation"
@@ -318,20 +406,32 @@ export function Reservation({
       ) : null}
       {state ? (
         <>
-          {state.effective ? (
+          {effective ? (
             <div className="reservation-effective">
               <p>
                 <span className="badge">{text.reservationEffective}</span>
               </p>
               <dl>
                 <dt>{text.reservationClaimant}</dt>
-                <dd translate="no">{state.effective.claimantName}</dd>
+                <dd translate="no">{effective.claimantName}</dd>
                 <dt>{text.reservationExpires}</dt>
                 <dd>
-                  {vietnamTimestamp(state.effective.expiresAt, locale)}{' '}
+                  {vietnamTimestamp(effective.expiresAt, locale)}{' '}
                   <span className="field-hint">{text.vietnamTime}</span>
                 </dd>
               </dl>
+              {state.canDecide ? (
+                <ReleaseForm
+                  locale={locale}
+                  busy={releasing}
+                  error={
+                    releaseError
+                      ? message(releaseError, text.reservationReleaseFailed)
+                      : null
+                  }
+                  onSubmit={(form) => void release(effective.id, form)}
+                />
+              ) : null}
             </div>
           ) : null}
           {own ? (

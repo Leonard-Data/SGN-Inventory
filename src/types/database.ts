@@ -358,6 +358,32 @@ export type Database = {
         };
         Relationships: [];
       };
+      vendors: {
+        Row: {
+          contact_name: string | null;
+          created_at: string;
+          created_by: string;
+          display_name: string;
+          email: string | null;
+          id: string;
+          notes: string | null;
+          phones: string[] | null;
+          search_text: string;
+          source_address: string | null;
+          submission_key: string;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [
+          {
+            foreignKeyName: 'vendors_created_by_fkey';
+            columns: ['created_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       document_categories: {
         Row: {
           builtin: string | null;
@@ -1268,6 +1294,104 @@ export type Database = {
           },
         ];
       };
+      sale_completions: {
+        Row: {
+          completed_on: string;
+          confirmed_at: string;
+          confirmed_by: string;
+          credited_employee_id: string;
+          id: string;
+          idempotency_key: string;
+          previous_status: string;
+          property_id: string;
+          reference: string;
+          reversal_reason: string | null;
+          reversed_at: string | null;
+          reversed_by: string | null;
+          version: number;
+        };
+        Insert: {
+          completed_on: string;
+          confirmed_at?: string;
+          confirmed_by: string;
+          credited_employee_id: string;
+          id?: string;
+          idempotency_key: string;
+          previous_status: string;
+          property_id: string;
+          reference: string;
+          reversal_reason?: string | null;
+          reversed_at?: string | null;
+          reversed_by?: string | null;
+          version?: number;
+        };
+        Update: {
+          completed_on?: string;
+          confirmed_at?: string;
+          confirmed_by?: string;
+          credited_employee_id?: string;
+          id?: string;
+          idempotency_key?: string;
+          previous_status?: string;
+          property_id?: string;
+          reference?: string;
+          reversal_reason?: string | null;
+          reversed_at?: string | null;
+          reversed_by?: string | null;
+          version?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'sale_completions_confirmed_by_fkey';
+            columns: ['confirmed_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'sale_completions_confirmed_by_fkey';
+            columns: ['confirmed_by'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+          {
+            foreignKeyName: 'sale_completions_credited_employee_id_fkey';
+            columns: ['credited_employee_id'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'sale_completions_credited_employee_id_fkey';
+            columns: ['credited_employee_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+          {
+            foreignKeyName: 'sale_completions_property_id_fkey';
+            columns: ['property_id'];
+            isOneToOne: false;
+            referencedRelation: 'properties';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'sale_completions_reversed_by_fkey';
+            columns: ['reversed_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'sale_completions_reversed_by_fkey';
+            columns: ['reversed_by'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+        ];
+      };
     };
     Views: {
       property_price_history: {
@@ -1665,6 +1789,18 @@ export type Database = {
         };
         Returns: string;
       };
+      create_vendor: {
+        Args: {
+          p_contact_name?: string | null;
+          p_display_name: string;
+          p_email?: string | null;
+          p_key: string;
+          p_notes?: string | null;
+          p_phones?: string[] | null;
+          p_source_address?: string | null;
+        };
+        Returns: Json;
+      };
       decide_property_lock: {
         Args: {
           p_approve: boolean;
@@ -1705,6 +1841,25 @@ export type Database = {
           property_id: string;
           removed_at: string | null;
           revision: string;
+        }[];
+      };
+      list_vendors: {
+        Args: {
+          p_before_created_at?: string;
+          p_before_id?: string;
+          p_limit?: number;
+          p_query?: string;
+        };
+        Returns: {
+          contact_name: string | null;
+          created_at: string;
+          created_by: string;
+          display_name: string;
+          email: string | null;
+          id: string;
+          notes: string | null;
+          phones: string[] | null;
+          source_address: string | null;
         }[];
       };
       company_employee_daily_activity: {
@@ -1875,6 +2030,20 @@ export type Database = {
       set_property_cover: {
         Args: { p_file_id?: string; p_property_id: string };
         Returns: undefined;
+      };
+      complete_property_sale: {
+        Args: {
+          p_completed_on: string;
+          p_credited_employee_id: string;
+          p_key: string;
+          p_property_id: string;
+          p_reference: string;
+        };
+        Returns: string;
+      };
+      completed_sale_ranking: {
+        Args: { p_from: string; p_to: string };
+        Returns: Json;
       };
     };
     Enums: {

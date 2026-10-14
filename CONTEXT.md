@@ -52,6 +52,10 @@ _Avoid_: Incorrect address, current address
 A separate address under the applicable province/city and commune/ward structure, without a district. Its presence alone does not establish that its mapping is verified.
 _Avoid_: Translated address, automatically converted address
 
+**Administrative-unit reference catalog**:
+The seeded official province/city and commune/ward list carrying official codes, parent links and one half-open validity window per official name from the pinned upstream dataset. It is a reference list for selection and hierarchy validation, not a property's verified address; a renamed unit reports the name in force on the address date.
+_Avoid_: Verified address, property-level mapping
+
 **Address search**:
 A match of a literal, accent-insensitive contiguous fragment against recorded addresses; `%` and `_` are ordinary characters.
 _Avoid_: Fuzzy search, automatic ward mapping
@@ -67,6 +71,10 @@ _Avoid_: Contact inferred from sheet position
 **Contact**:
 A shared named party whose contact details may be used by several properties. Its relationship to each property is recorded separately as a property contact link.
 _Avoid_: Property-specific phone record
+
+**Shared-contact detail correction**:
+A correction of the identity details of an existing linked Contact by any Active employee who can read the property it was opened from. It commits immediately and appears in the change history of every Property linked at that moment, and it is separate from Property-fact authority: it does not create, link, unlink or merge contacts.
+_Avoid_: Property-fact edit, contact creation, approval
 
 **Record verification**:
 An assessment of the accuracy of property facts and contact relationships, distinct from reservation approval. It is not a prerequisite for saving or displaying ordinary inventory changes and does not establish legal ownership.
@@ -95,6 +103,20 @@ _Avoid_: Market valuation, price list, achieved price, projected price
 **Correction explanation**:
 An optional retained note an authorized editor attaches to a recorded price correction. It stays with the revision it explains and never replaces the mistaken value, deletes earlier history or creates an approval step.
 _Avoid_: Approval reason, price justification, replacement value
+
+### Vendors
+
+**Vendor**:
+A company the inventory works with, recorded as its own directory identity and distinct from an owner, broker, contact or employee. Every active employee may read recorded vendors; only staff, manager and admin roles add them. This slice records the company and its contact block only: no property link, edit, procurement or payment record.
+_Avoid_: Supplier contact, owner type, broker record
+
+**Vendor contact block**:
+The one optional set of recorded contact details belonging to a vendor: contact name, phone strings, email, raw address/source text and notes. Each detail is independently known or unknown, and an unknown detail is never filled with an invented default.
+_Avoid_: Required contact, inferred phone, normalized address
+
+**Vendor submission key**:
+An employee-scoped key identifying one vendor creation, so an interrupted or ambiguous create retries the same company identity instead of recording another; reusing it with different details is refused.
+_Avoid_: Draft identity, duplicate check
 
 ### Activity and reservations
 
@@ -125,6 +147,26 @@ _Avoid_: Effective reservation
 **Effective reservation**:
 An approved, unexpired property reservation identifying the claimant for commission attribution, not a commission amount or payout.
 _Avoid_: Pending lock, permanent property lock
+
+**Credited closer**:
+The one employee explicitly credited with a completed sale. A reviewer selects that employee during confirmation; the property creator, updater, reservation claimant or recorded status never infers it.
+_Avoid_: Deal owner, auto-attributed employee
+
+**Sale completion**:
+A reviewed logical record that one actual completed sale happened: its property, credited closer, actual Vietnam completion date, contract/reference, confirmer and recording time. It marks the property sold and closes its outstanding reservations without rewriting their attribution. An imported or manually set sold status, an approved reservation and a pending claim are not sale completions.
+_Avoid_: Sold flag, general transaction, commission record
+
+**Completed-sale ranking**:
+The manager/admin list of effective sale completions grouped by credited closer over a validated Vietnam period, with equal totals sharing a rank and genuinely unknown legacy attribution shown separately rather than assigned to a guessed employee.
+_Avoid_: Commission ranking, composite performance score
+
+**Unknown sale attribution**:
+A property recorded as sold that has no effective sale completion, so no employee is credited. It is counted separately from the ranking and never becomes an invented closer.
+_Avoid_: Unassigned sale, ownerless deal
+
+**Reservation release**:
+The audited closure of a pending or approved reservation with a meaningful reason, retaining the original claimant, request reason and every recorded event. It resolves a conflicting claimant before a sale completion; it is neither a completion nor a transfer of attribution.
+_Avoid_: Reassignment, deletion of a claim
 
 ### Discussion
 

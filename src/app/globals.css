@@ -174,3 +174,13 @@
     margin-bottom: var(--space-2);
   }
 }
+
+/* Vendor directory (#73): an unknown optional detail reads as unknown inside a table
+   cell, and recorded source notes keep their line breaks. Package tokens only. */
+.data-table .is-unknown {
+  color: var(--muted);
+  font-weight: 400;
+}
+.vendor-note {
+  white-space: pre-wrap;
+}

@@ -242,6 +242,45 @@ const vi = {
   employeeAccessActive: 'Đang hoạt động',
   employeeAccessInactive: 'Đã tắt truy cập',
   employeeAccessUnlinked: 'Chưa liên kết đăng nhập',
+  // People → Vendors (#73): the company directory and its one bounded create.
+  vendorsLink: 'Nhà cung cấp',
+  vendorDirectory: 'Danh sách nhà cung cấp',
+  vendorDirectoryNote:
+    'Các công ty được ghi nhận riêng, không phải chủ nhà, môi giới hay nhân viên. Mọi nhân viên đang hoạt động đều xem được; nhân viên, quản lý và quản trị viên ghi nhận nhà cung cấp.',
+  vendorDirectoryEmpty: 'Chưa có nhà cung cấp nào được ghi nhận.',
+  vendorDirectoryEmptyQuery: 'Không tìm thấy nhà cung cấp phù hợp.',
+  vendorDirectoryFailed: 'Không thể tải danh sách nhà cung cấp.',
+  vendorPageInfo: 'Trang này: {n} nhà cung cấp',
+  vendorSearch: 'Tìm nhà cung cấp',
+  vendorSearchHint:
+    'Nhập một đoạn tên liền nhau, không cần dấu; % và _ là ký tự thường. Tối đa 120 ký tự.',
+  vendorCreate: 'Ghi nhận nhà cung cấp',
+  vendorCreateNote:
+    'Một công ty với một khối liên hệ, tách biệt khỏi chủ nhà, môi giới và nhân viên.',
+  vendorCompanyName: 'Tên công ty',
+  vendorCompanyNameHint: 'Tên công ty như được ghi nhận, từ 1 đến 200 ký tự.',
+  vendorContactName: 'Tên người liên hệ',
+  vendorPhones: 'Số điện thoại',
+  vendorPhonesHint:
+    'Mỗi dòng một số, tối đa 5 số. Số được giữ nguyên như đã nhập.',
+  vendorSourceAddress: 'Địa chỉ / văn bản nguồn',
+  vendorOptionalHint:
+    'Ô để trống là chưa rõ, không phải giá trị rỗng. Hệ thống không tự điền.',
+  vendorCreateSubmit: 'Ghi nhận nhà cung cấp',
+  vendorCreateInvalid: 'Vui lòng kiểm tra tên công ty, số điện thoại và email.',
+  vendorCreateConflict:
+    'Lượt gửi này đã được dùng cho thông tin nhà cung cấp khác. Nội dung đã nhập được giữ lại; gửi lại sẽ ghi nhận như một nhà cung cấp mới.',
+  vendorCreateFailed:
+    'Chưa ghi nhận được nhà cung cấp. Thử lại giữ nguyên nội dung đã nhập; lượt gửi trùng không tạo thêm công ty.',
+  vendorMaintainerOnly:
+    'Bạn có thể xem danh sách này. Chỉ nhân viên, quản lý và quản trị viên mới được ghi nhận nhà cung cấp.',
+  vendorDetailTitle: 'Chi tiết nhà cung cấp',
+  vendorDetailFailed: 'Không thể tải chi tiết nhà cung cấp.',
+  vendorNotFound: 'Không tìm thấy nhà cung cấp hoặc không có quyền đọc.',
+  vendorBackToDirectory: 'Về danh sách nhà cung cấp',
+  vendorRecordedAt: 'Ghi nhận lúc',
+  saving: 'Đang lưu…',
+  notes: 'Ghi chú',
   languageName: 'Ngôn ngữ / Language',
   switchToVi: 'Chuyển sang tiếng Việt',
   switchToEn: 'Switch to English',
@@ -313,6 +352,67 @@ const vi = {
   reservationLoadFailed: 'Không tải được tình trạng đặt chỗ.',
   reservationNote:
     'Chỉ đặt chỗ đã được duyệt và còn hiệu lực mới giữ bất động sản.',
+  reservationRelease: 'Giải phóng đặt chỗ',
+  reservationReleaseReason: 'Lý do giải phóng',
+  reservationReleaseReasonHint: 'Từ 10 đến 2.000 ký tự.',
+  reservationReleaseReasonRequired:
+    'Vui lòng nhập lý do từ 10 đến 2.000 ký tự.',
+  reservationReleaseSubmit: 'Giải phóng',
+  reservationReleased:
+    'Đã giải phóng đặt chỗ; người đặt chỗ và lịch sử được giữ nguyên.',
+  reservationReleaseFailed: 'Chưa giải phóng được đặt chỗ. Vui lòng thử lại.',
+  reservationReleaseClosed:
+    'Đặt chỗ này không còn hiệu lực để giải phóng. Trạng thái mới nhất đang được hiển thị.',
+  reservationReleaseNote:
+    'Giải phóng không xoá người đặt chỗ, lý do hay sự kiện đã ghi.',
+  completedSaleTitle: 'Xác nhận bán thành công',
+  completedSaleNote:
+    'Chỉ quản lý hoặc quản trị viên khác nhân viên được ghi nhận mới có thể xác nhận. Một bất động sản chỉ có một thương vụ bán đang hiệu lực.',
+  completedSaleCreditedCloser: 'Nhân viên được ghi nhận',
+  completedSaleSelectCloser: 'Chọn nhân viên',
+  completedSaleSuggestedCloser:
+    'Người đặt chỗ hiệu lực: {name} — bạn phải tự chọn để xác nhận.',
+  completedSaleDate: 'Ngày bán thực tế (Việt Nam)',
+  completedSaleReference: 'Hợp đồng/tham chiếu',
+  completedSaleReferenceHint: 'Từ 1 đến 200 ký tự.',
+  completedSaleReferenceRequired:
+    'Vui lòng chọn nhân viên và nhập ngày, tham chiếu hợp lệ.',
+  completedSaleClosesReservations:
+    'Xác nhận sẽ đóng mọi yêu cầu đặt chỗ đang mở và giữ nguyên người đặt chỗ cùng lịch sử.',
+  completedSaleSubmit: 'Xác nhận đã bán',
+  completedSaleRecorded:
+    'Đã ghi nhận bán thành công; bất động sản chuyển sang Đã bán.',
+  completedSaleFailed: 'Chưa ghi được xác nhận bán. Vui lòng thử lại.',
+  completedSaleSelfCredit: 'Bạn không thể tự ghi nhận thương vụ của mình.',
+  completedSaleFutureDate: 'Ngày bán không được ở tương lai.',
+  completedSaleConflict:
+    'Ghi nhận bán đã thay đổi. Trạng thái mới nhất đang được hiển thị.',
+  completedSaleReservationConflict:
+    'Bất động sản đang có đặt chỗ hiệu lực của nhân viên khác. Hãy giải phóng đặt chỗ đó trước.',
+  completedSaleRentalActive:
+    'Bất động sản đang có hợp đồng thuê hiệu lực; hãy kết thúc hợp đồng thuê trước.',
+  completedSaleUnavailable:
+    'Bất động sản đang ở trạng thái {status}, không thể xác nhận bán.',
+  completedSaleArchived: 'Hồ sơ lưu trữ không thể xác nhận bán.',
+  completedSaleNoCloser:
+    'Không có nhân viên nào khác để ghi nhận thương vụ này.',
+  completedSaleLoadFailed: 'Không tải được trạng thái xác nhận bán.',
+  completedSaleRecordedBy: 'Người xác nhận',
+  completedSaleRecordedAt: 'Thời điểm ghi nhận',
+  completedSalePreviousStatus: 'Trạng thái trước khi bán',
+  navCompletedSales: 'Bán thành công',
+  completedSalesRanking: 'Xếp hạng bán thành công',
+  completedSalesNote:
+    'Chỉ các thương vụ bán đã được xác nhận độc lập mới được tính; đặt chỗ, trạng thái Đã bán thô và hồ sơ cũ chưa có người ghi nhận không tạo thành tích.',
+  completedSales: 'Thương vụ bán đã xác nhận',
+  completedSalesCount: 'Số thương vụ',
+  completedSalesEmpty:
+    'Không có thương vụ bán nào được xác nhận trong khoảng thời gian này.',
+  completedSalesTotal: 'Tổng cộng: {n}',
+  completedSalesUnknown:
+    'Bất động sản đã bán chưa có người được ghi nhận (tính đến {date}): {n} — hiển thị riêng, không gán cho nhân viên nào.',
+  completedSalesFailed: 'Không tải được xếp hạng bán thành công.',
+  rank: 'Hạng',
 };
 export type MessageKey = keyof typeof vi;
 
@@ -546,6 +646,45 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     employeeAccessActive: 'Active',
     employeeAccessInactive: 'Access disabled',
     employeeAccessUnlinked: 'Not linked to sign-in',
+    // People → Vendors (#73): the company directory and its one bounded create.
+    vendorsLink: 'Vendors',
+    vendorDirectory: 'Vendor directory',
+    vendorDirectoryNote:
+      'Recorded companies, distinct from owners, brokers and employees. Every active employee can read the directory; staff, managers and admins record vendors.',
+    vendorDirectoryEmpty: 'No vendors are recorded.',
+    vendorDirectoryEmptyQuery: 'No vendors match this search.',
+    vendorDirectoryFailed: 'The vendor directory could not be loaded.',
+    vendorPageInfo: 'This page: {n} vendors',
+    vendorSearch: 'Search vendors',
+    vendorSearchHint:
+      'Enter a contiguous name fragment; accents are optional and % and _ are ordinary characters. At most 120 characters.',
+    vendorCreate: 'Record a vendor',
+    vendorCreateNote:
+      'One company with one contact block, separate from owners, brokers and employees.',
+    vendorCompanyName: 'Company name',
+    vendorCompanyNameHint: 'The company name as recorded, 1 to 200 characters.',
+    vendorContactName: 'Contact name',
+    vendorPhones: 'Phone numbers',
+    vendorPhonesHint:
+      'One number per line, up to five. Numbers are preserved as typed.',
+    vendorSourceAddress: 'Address / source text',
+    vendorOptionalHint:
+      'A blank field is unknown, not an empty value. Nothing is filled in automatically.',
+    vendorCreateSubmit: 'Record vendor',
+    vendorCreateInvalid: 'Check the company name, phone numbers and email.',
+    vendorCreateConflict:
+      'This submission key was already used for different vendor details. Your draft is kept; submitting again records a new vendor.',
+    vendorCreateFailed:
+      'The vendor was not recorded. Retry keeps your draft; a duplicate submission does not create another company.',
+    vendorMaintainerOnly:
+      'You can read this directory. Only staff, managers and admins may record vendors.',
+    vendorDetailTitle: 'Vendor details',
+    vendorDetailFailed: 'Vendor details could not be loaded.',
+    vendorNotFound: 'The vendor was not found or you cannot read it.',
+    vendorBackToDirectory: 'Back to the vendor directory',
+    vendorRecordedAt: 'Recorded',
+    saving: 'Saving…',
+    notes: 'Notes',
     signInHelp:
       'Access is limited to invited staff whose account has been activated.',
     north: 'North',
@@ -638,6 +777,65 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     reservationLoadFailed: 'Reservation state did not load.',
     reservationNote:
       'Only an approved, unexpired reservation holds the property.',
+    reservationRelease: 'Release reservation',
+    reservationReleaseReason: 'Release reason',
+    reservationReleaseReasonHint: 'Between 10 and 2,000 characters.',
+    reservationReleaseReasonRequired:
+      'Enter a reason between 10 and 2,000 characters.',
+    reservationReleaseSubmit: 'Release',
+    reservationReleased:
+      'Reservation released; the claimant and recorded events are retained.',
+    reservationReleaseFailed: 'The reservation was not released. Try again.',
+    reservationReleaseClosed:
+      'This reservation can no longer be released. The latest state is shown.',
+    reservationReleaseNote:
+      'Release never erases the claimant, reason or recorded events.',
+    completedSaleTitle: 'Confirm completed sale',
+    completedSaleNote:
+      'Only a manager or admin other than the credited employee can confirm. A property has at most one effective completed sale.',
+    completedSaleCreditedCloser: 'Credited closer',
+    completedSaleSelectCloser: 'Select an employee',
+    completedSaleSuggestedCloser:
+      'Effective reservation claimant: {name} — you must select a closer explicitly.',
+    completedSaleDate: 'Actual completion date (Vietnam)',
+    completedSaleReference: 'Contract/reference',
+    completedSaleReferenceHint: 'Between 1 and 200 characters.',
+    completedSaleReferenceRequired:
+      'Select an employee and enter a valid date and reference.',
+    completedSaleClosesReservations:
+      'Confirming closes every open reservation and retains its claimant and events.',
+    completedSaleSubmit: 'Confirm completed sale',
+    completedSaleRecorded:
+      'Completed sale recorded; the property is marked sold.',
+    completedSaleFailed: 'The completion was not recorded. Try again.',
+    completedSaleSelfCredit: 'You cannot credit your own sale.',
+    completedSaleFutureDate: 'The completion date cannot be in the future.',
+    completedSaleConflict:
+      'The completion state changed. The latest state is shown.',
+    completedSaleReservationConflict:
+      'Another employee holds an effective reservation. Release it first.',
+    completedSaleRentalActive:
+      'An active rental commitment blocks this sale; close the rental first.',
+    completedSaleUnavailable:
+      'The property is {status}; a completion can only be recorded from available or negotiating.',
+    completedSaleArchived: 'An archived record cannot be completed.',
+    completedSaleNoCloser: 'No other employee is available to credit.',
+    completedSaleLoadFailed: 'The completion state did not load.',
+    completedSaleRecordedBy: 'Confirmed by',
+    completedSaleRecordedAt: 'Recorded at',
+    completedSalePreviousStatus: 'Pre-sale status',
+    navCompletedSales: 'Completed sales',
+    completedSalesRanking: 'Completed sales ranking',
+    completedSalesNote:
+      'Only independently confirmed completions count; reservations, raw sold statuses and unrecorded legacy sales earn no credit.',
+    completedSales: 'Confirmed completed sales',
+    completedSalesCount: 'Completed sales',
+    completedSalesEmpty: 'No completed sale was confirmed in this period.',
+    completedSalesTotal: 'Total: {n}',
+    completedSalesUnknown:
+      'Sold properties with no recorded closer (as of {date}): {n} — shown separately, never assigned to an employee.',
+    completedSalesFailed: 'The completed-sales ranking did not load.',
+    rank: 'Rank',
   },
 };
 export function label(
