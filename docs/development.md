@@ -4,16 +4,17 @@
 
 One Next.js App Router application, TypeScript, React, plain CSS, Supabase Postgres/Auth/private Storage and Vercel. npm is the only JavaScript package manager. Node `24.14.0` and npm `11.13.0` are the reproducible local/CI baseline; Vercel uses Node `24.x`. The project minimum is stricter than the original Node 22+ requirement.
 
-| Tool                             | Exact dependency                                 |
-| -------------------------------- | ------------------------------------------------ |
-| Next.js / React / React DOM      | `16.4.0` / `19.3.0` / `19.3.0`                   |
-| TypeScript                       | `6.0.3`                                          |
-| Supabase JavaScript / SSR        | `2.117.3` / `0.12.7`                             |
-| Supabase CLI / embedded PGlite   | `2.120.0` / `0.5.8`                              |
-| ESLint / Next lint configuration | `9.39.5` / `16.4.0`                              |
-| Prettier / Husky / lint-staged   | `3.9.9` / `9.1.7` / `17.6.0`                     |
-| Vercel CLI                       | `63.1.2`                                         |
-| Workbook tooling                 | Python `3.11+`, pinned `requirements-import.txt` |
+| Tool                               | Exact dependency                                 |
+| ---------------------------------- | ------------------------------------------------ |
+| Next.js / React / React DOM        | `16.4.0` / `19.3.0` / `19.3.0`                   |
+| TypeScript                         | `6.0.3`                                          |
+| Supabase JavaScript / SSR          | `2.117.3` / `0.12.7`                             |
+| Supabase CLI / embedded PGlite     | `2.120.0` / `0.5.8`                              |
+| Embedded PostgreSQL (schema races) | `18.4.0-beta.17`                                 |
+| ESLint / Next lint configuration   | `9.39.5` / `16.4.0`                              |
+| Prettier / Husky / lint-staged     | `3.9.9` / `9.1.7` / `17.6.0`                     |
+| Vercel CLI                         | `63.1.2`                                         |
+| Workbook tooling                   | Python `3.11+`, pinned `requirements-import.txt` |
 
 `package.json` and `package-lock.json` are authoritative. Install with `npm ci`. Commit both when updating dependencies; never use an unpinned `npx ...@latest` in automation. ESLint 9 is intentional: the selected Next lint plugins do not all declare ESLint 10 support. Verify official documentation and peer requirements before upgrades.
 
@@ -124,7 +125,7 @@ Embedded PostgreSQL and readiness HTTP checks are not real Supabase Auth/Data AP
 
 ### Real employee-access development acceptance
 
-Use an already-running local build against the separately authorized dev project. Keep credentials and the private synthetic fixture manifest outside Git. An ignored `.env.acceptance.local` may contain only `SGN_ACCEPTANCE_FIXTURES=<absolute private manifest path>`; the manifest supplies accepted active/inactive/unlinked/operator identities, their private passwords and exact synthetic property IDs.
+Use an already-running local build against the separately authorized dev project. Keep credentials and the private synthetic fixture manifest outside Git. An ignored `.env.acceptance.local` may contain only `SGN_ACCEPTANCE_FIXTURES=<absolute private manifest path>` and `SGN_ACCEPTANCE_OPERATOR=<absolute private operator config path>`; the manifest supplies accepted active/inactive/unlinked/operator identities, their private passwords and exact synthetic property IDs, and the operator config supplies the owner SQL connection (`dbUrl`) used to toggle the synthetic employee's activation, since the lifecycle guard refuses direct client writes.
 
 Run `node --env-file=.env.local --env-file=.env.acceptance.local scripts/employee-access-acceptance.mjs --allow-deactivation --report docs/employee-access-acceptance.json` only with concrete authorization to deactivate/reactivate the named synthetic employee. The script verifies dev stage/project and fixture ownership, restores activation in `finally`, uses real user/publishable sessions and separate Chrome user-data directories, and never treats mocked RLS or generated recovery links as email delivery. Consult `chrome-devtools-axi --help` before use. Its automated report excludes human-coordinated mailbox recovery; active, inactive and unlinked delivered cases separately passed and the dedicated recovery fixture was restored. Use both evidence sources for scoped issue #1 acceptance; neither establishes full MVP or production completion.
 
