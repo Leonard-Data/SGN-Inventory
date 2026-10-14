@@ -268,6 +268,45 @@ const vi = {
   employeeDeactivateProviderUnavailable:
     'Máy chủ chưa có cấu hình xác nhận chặn đăng nhập. Quyền truy cập đã bị tắt; hãy thử lại sau khi cấu hình được khôi phục.',
   employeeDeactivateLoadFailed: 'Không thể tải trạng thái tắt quyền truy cập.',
+  // People → Vendors (#73): the company directory and its one bounded create.
+  vendorsLink: 'Nhà cung cấp',
+  vendorDirectory: 'Danh sách nhà cung cấp',
+  vendorDirectoryNote:
+    'Các công ty được ghi nhận riêng, không phải chủ nhà, môi giới hay nhân viên. Mọi nhân viên đang hoạt động đều xem được; nhân viên, quản lý và quản trị viên ghi nhận nhà cung cấp.',
+  vendorDirectoryEmpty: 'Chưa có nhà cung cấp nào được ghi nhận.',
+  vendorDirectoryEmptyQuery: 'Không tìm thấy nhà cung cấp phù hợp.',
+  vendorDirectoryFailed: 'Không thể tải danh sách nhà cung cấp.',
+  vendorPageInfo: 'Trang này: {n} nhà cung cấp',
+  vendorSearch: 'Tìm nhà cung cấp',
+  vendorSearchHint:
+    'Nhập một đoạn tên liền nhau, không cần dấu; % và _ là ký tự thường. Tối đa 120 ký tự.',
+  vendorCreate: 'Ghi nhận nhà cung cấp',
+  vendorCreateNote:
+    'Một công ty với một khối liên hệ, tách biệt khỏi chủ nhà, môi giới và nhân viên.',
+  vendorCompanyName: 'Tên công ty',
+  vendorCompanyNameHint: 'Tên công ty như được ghi nhận, từ 1 đến 200 ký tự.',
+  vendorContactName: 'Tên người liên hệ',
+  vendorPhones: 'Số điện thoại',
+  vendorPhonesHint:
+    'Mỗi dòng một số, tối đa 5 số. Số được giữ nguyên như đã nhập.',
+  vendorSourceAddress: 'Địa chỉ / văn bản nguồn',
+  vendorOptionalHint:
+    'Ô để trống là chưa rõ, không phải giá trị rỗng. Hệ thống không tự điền.',
+  vendorCreateSubmit: 'Ghi nhận nhà cung cấp',
+  vendorCreateInvalid: 'Vui lòng kiểm tra tên công ty, số điện thoại và email.',
+  vendorCreateConflict:
+    'Lượt gửi này đã được dùng cho thông tin nhà cung cấp khác. Nội dung đã nhập được giữ lại; gửi lại sẽ ghi nhận như một nhà cung cấp mới.',
+  vendorCreateFailed:
+    'Chưa ghi nhận được nhà cung cấp. Thử lại giữ nguyên nội dung đã nhập; lượt gửi trùng không tạo thêm công ty.',
+  vendorMaintainerOnly:
+    'Bạn có thể xem danh sách này. Chỉ nhân viên, quản lý và quản trị viên mới được ghi nhận nhà cung cấp.',
+  vendorDetailTitle: 'Chi tiết nhà cung cấp',
+  vendorDetailFailed: 'Không thể tải chi tiết nhà cung cấp.',
+  vendorNotFound: 'Không tìm thấy nhà cung cấp hoặc không có quyền đọc.',
+  vendorBackToDirectory: 'Về danh sách nhà cung cấp',
+  vendorRecordedAt: 'Ghi nhận lúc',
+  saving: 'Đang lưu…',
+  notes: 'Ghi chú',
   languageName: 'Ngôn ngữ / Language',
   switchToVi: 'Chuyển sang tiếng Việt',
   switchToEn: 'Switch to English',
@@ -658,6 +697,45 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     employeeDeactivateProviderUnavailable:
       'The server has no sign-in confirmation configuration. Access is disabled; retry after configuration is restored.',
     employeeDeactivateLoadFailed: 'Deactivation state did not load.',
+    // People → Vendors (#73): the company directory and its one bounded create.
+    vendorsLink: 'Vendors',
+    vendorDirectory: 'Vendor directory',
+    vendorDirectoryNote:
+      'Recorded companies, distinct from owners, brokers and employees. Every active employee can read the directory; staff, managers and admins record vendors.',
+    vendorDirectoryEmpty: 'No vendors are recorded.',
+    vendorDirectoryEmptyQuery: 'No vendors match this search.',
+    vendorDirectoryFailed: 'The vendor directory could not be loaded.',
+    vendorPageInfo: 'This page: {n} vendors',
+    vendorSearch: 'Search vendors',
+    vendorSearchHint:
+      'Enter a contiguous name fragment; accents are optional and % and _ are ordinary characters. At most 120 characters.',
+    vendorCreate: 'Record a vendor',
+    vendorCreateNote:
+      'One company with one contact block, separate from owners, brokers and employees.',
+    vendorCompanyName: 'Company name',
+    vendorCompanyNameHint: 'The company name as recorded, 1 to 200 characters.',
+    vendorContactName: 'Contact name',
+    vendorPhones: 'Phone numbers',
+    vendorPhonesHint:
+      'One number per line, up to five. Numbers are preserved as typed.',
+    vendorSourceAddress: 'Address / source text',
+    vendorOptionalHint:
+      'A blank field is unknown, not an empty value. Nothing is filled in automatically.',
+    vendorCreateSubmit: 'Record vendor',
+    vendorCreateInvalid: 'Check the company name, phone numbers and email.',
+    vendorCreateConflict:
+      'This submission key was already used for different vendor details. Your draft is kept; submitting again records a new vendor.',
+    vendorCreateFailed:
+      'The vendor was not recorded. Retry keeps your draft; a duplicate submission does not create another company.',
+    vendorMaintainerOnly:
+      'You can read this directory. Only staff, managers and admins may record vendors.',
+    vendorDetailTitle: 'Vendor details',
+    vendorDetailFailed: 'Vendor details could not be loaded.',
+    vendorNotFound: 'The vendor was not found or you cannot read it.',
+    vendorBackToDirectory: 'Back to the vendor directory',
+    vendorRecordedAt: 'Recorded',
+    saving: 'Saving…',
+    notes: 'Notes',
     signInHelp:
       'Access is limited to invited staff whose account has been activated.',
     north: 'North',

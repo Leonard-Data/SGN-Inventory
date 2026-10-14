@@ -33,3 +33,20 @@ test('the create-property and correction destinations are offered to every role'
     );
   }
 });
+
+// People is not one role boundary (#73): the vendor directory is offered to every
+// active role, while the employee list stays admin-only in the rail and at its route.
+test('the vendor destination is offered to every role and the employee list stays admin-only', () => {
+  const roles = ['sales', 'staff', 'manager', 'admin'] as const;
+  for (const role of roles) {
+    const hrefs = visibleNavGroups(role).flatMap((group) =>
+      group.items.map((item) => item.href),
+    );
+    assert.ok(hrefs.includes('/people/vendors'), `${role}: no vendors`);
+    assert.equal(
+      hrefs.includes('/people/employees'),
+      role === 'admin',
+      `${role}: employee list visibility`,
+    );
+  }
+});

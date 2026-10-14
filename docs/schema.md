@@ -34,6 +34,7 @@ erDiagram
   EMPLOYEES ||--o{ EMPLOYEE_ADMIN_OPERATIONS : targets
   EMPLOYEE_ADMIN_OPERATIONS ||--o{ EMPLOYEE_ADMIN_EVENTS : records
   EMPLOYEES ||--o{ EMPLOYEE_ADMIN_EVENTS : performs
+  EMPLOYEES ||--o{ VENDORS : records
 ```
 
 ## Business tables
@@ -61,6 +62,7 @@ erDiagram
 | `employee_admin_operations` | UUID, target/actor employee FKs, `deactivate` kind, actor-scoped `idempotency_key`, `provider_pending`/`provider_failed`/`completed` state, monotonic revision, membership-disabled time, recorded provider outcome/reference/user/expiry/attempt time | Live-admin `select` under RLS and no client write; at most one open operation per employee and a completed one is terminal history; identity fields are immutable and rows are never deleted; membership is disabled before the provider call |
 | `employee_admin_events` | UUID, operation/target/actor FKs, `begun`/`resumed`/`provider_blocked`/`provider_failed`/`provider_ambiguous`, resumer `idempotency_key`, bounded detail, server time | Live-admin `select` only; append-only, no client write and no delete; records who performed or resumed each step and binds a resuming admin's submission key to the operation |
 | `property_price_history` (view) | Select-only `security_invoker` projection of `property_history`: one row per recorded price revision per `sale`/`rent` series with property, actor name, authoritative time, retained explanation and exact whole-VND `before_value`/`after_value` text | No direct client writes; revisions whose recorded price is unknown on both sides are excluded; keyset-paged on `(occurred_at,id)` per series; reads follow live membership and the archived-property RLS boundary |
+| `vendors` | UUID, company/display name, one optional contact block (contact name, 1–5 verbatim phone strings, email, raw address/source text, notes), stored normalized search projection, creator FK/time and employee-scoped submission key | No direct client writes: `select`-only grant for authenticated, `anon`/`service_role` excluded, and a trigger rejects client inserts plus every update or delete; every optional detail is independently null (unknown); same-key retries converge on one company and conflicting reuse is refused; no property link, deduplication or deletion |
 
 `properties`, `property_addresses`, `contacts` and `property_contacts` each carry a `revision` UUID that guards stale maintenance saves. Issue #7's maintenance RPCs, correction lifecycle and history rules are in [maintenance-contract.md](maintenance-contract.md).
 

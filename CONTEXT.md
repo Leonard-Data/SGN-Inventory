@@ -124,6 +124,20 @@ _Avoid_: Market valuation, price list, achieved price, projected price
 An optional retained note an authorized editor attaches to a recorded price correction. It stays with the revision it explains and never replaces the mistaken value, deletes earlier history or creates an approval step.
 _Avoid_: Approval reason, price justification, replacement value
 
+### Vendors
+
+**Vendor**:
+A company the inventory works with, recorded as its own directory identity and distinct from an owner, broker, contact or employee. Every active employee may read recorded vendors; only staff, manager and admin roles add them. This slice records the company and its contact block only: no property link, edit, procurement or payment record.
+_Avoid_: Supplier contact, owner type, broker record
+
+**Vendor contact block**:
+The one optional set of recorded contact details belonging to a vendor: contact name, phone strings, email, raw address/source text and notes. Each detail is independently known or unknown, and an unknown detail is never filled with an invented default.
+_Avoid_: Required contact, inferred phone, normalized address
+
+**Vendor submission key**:
+An employee-scoped key identifying one vendor creation, so an interrupted or ambiguous create retries the same company identity instead of recording another; reusing it with different details is refused.
+_Avoid_: Draft identity, duplicate check
+
 ### Activity and reservations
 
 **Page view**:

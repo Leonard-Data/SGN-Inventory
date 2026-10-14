@@ -13,6 +13,7 @@ import { commentRemovalContract } from './comment-removal-contract.mjs';
 import { companyActivityContract } from './company-activity-contract.mjs';
 import { myActivityContract } from './my-activity-contract.mjs';
 import { priceHistoryContract } from './price-history-contract.mjs';
+import { vendorContract } from './vendor-contract.mjs';
 import { referenceCatalogContract } from './reference-catalog-contract.mjs';
 import { saleCompletionContract } from './sale-completion-contract.mjs';
 import { employeeDeactivationContract } from './employee-deactivation-contract.mjs';
@@ -581,6 +582,8 @@ await saleCompletionContract({db,asUser,check,fails,employees});
 // reconciliation without losing the record.
 await employeeDeactivationContract({db,asUser,check,fails,employees});
 await employeeDeactivationConcurrency({root,check});
+// Ticket #73: the vendor directory authority, validation, retry and paging rules.
+await vendorContract({db,asUser,check,fails,employees});
 const report={checked_at:new Date().toISOString(),engine:'PGlite embedded PostgreSQL plus an embedded real PostgreSQL engine for the two-connection last-admin race; mocked auth/storage schemas',passed,
  limitations:['Not a live Supabase integration test','HTTP Auth, signed URLs, Vercel and browser flows not exercised','Sustained multi-session contention at production load remains a staging acceptance gate']};
 await fs.writeFile(path.join(root,'docs/validation-results.json'),JSON.stringify(report,null,2)+'\n');

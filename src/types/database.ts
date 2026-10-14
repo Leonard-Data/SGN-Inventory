@@ -336,6 +336,32 @@ export type Database = {
         };
         Relationships: [];
       };
+      vendors: {
+        Row: {
+          contact_name: string | null;
+          created_at: string;
+          created_by: string;
+          display_name: string;
+          email: string | null;
+          id: string;
+          notes: string | null;
+          phones: string[] | null;
+          search_text: string;
+          source_address: string | null;
+          submission_key: string;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [
+          {
+            foreignKeyName: 'vendors_created_by_fkey';
+            columns: ['created_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       document_categories: {
         Row: {
           builtin: string | null;
@@ -1834,6 +1860,18 @@ export type Database = {
         };
         Returns: string;
       };
+      create_vendor: {
+        Args: {
+          p_contact_name?: string | null;
+          p_display_name: string;
+          p_email?: string | null;
+          p_key: string;
+          p_notes?: string | null;
+          p_phones?: string[] | null;
+          p_source_address?: string | null;
+        };
+        Returns: Json;
+      };
       decide_property_lock: {
         Args: {
           p_approve: boolean;
@@ -1873,6 +1911,25 @@ export type Database = {
           property_id: string;
           removed_at: string | null;
           revision: string;
+        }[];
+      };
+      list_vendors: {
+        Args: {
+          p_before_created_at?: string;
+          p_before_id?: string;
+          p_limit?: number;
+          p_query?: string;
+        };
+        Returns: {
+          contact_name: string | null;
+          created_at: string;
+          created_by: string;
+          display_name: string;
+          email: string | null;
+          id: string;
+          notes: string | null;
+          phones: string[] | null;
+          source_address: string | null;
         }[];
       };
       company_employee_daily_activity: {
