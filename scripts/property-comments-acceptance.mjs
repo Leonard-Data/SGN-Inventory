@@ -1,8 +1,9 @@
-// Issue #44/#45 hosted acceptance: shared Property discussion and accountable removal.
+// Issue #44/#45/#46 hosted acceptance: shared Property discussion, accountable removal and
+// author editing with retained revisions.
 //
 // Real development Supabase Auth/Data API/RLS plus the local real Next.js application and
 // real Chrome sessions. Mock, shim and readiness-page results are not acceptance. Mutates
-// only the declared SGN-TEST-44/45 synthetic namespace and restores the declared fixture
+// only the declared SGN-TEST-44/45/46 synthetic namespace and restores the declared fixture
 // activation on every exit path.
 //
 // Usage:
@@ -64,7 +65,7 @@ const operator = JSON.parse(
 );
 assert.match(
   fixtures.namespace,
-  /^SGN-TEST-4[45]$/,
+  /^SGN-TEST-4[456]$/,
   'Only a declared synthetic namespace is allowed',
 );
 for (const name of ['alpha', 'beta', 'reviewer', 'inactive']) {
@@ -2111,8 +2112,32 @@ await settle(secondary);
   });
   assert.equal(
     ordinaryEdit.error?.code,
-    'PT403',
-    'A non-author is refused on an archived Property',
+    '42501',
+    'A non-author is refused without disclosing the archived Property state',
+  );
+  const unknownArchived = await alpha.rpc('edit_property_comment', {
+    p_property_id: archived.id,
+    p_comment_id: '54000000-0000-4000-8000-0000000000fe',
+    p_revision: seededRevision,
+    p_body: 'Không lộ bình luận không tồn tại trên hồ sơ lưu trữ',
+    p_key: randomUUID(),
+  });
+  const unknownLive = await alpha.rpc('edit_property_comment', {
+    p_property_id: second.id,
+    p_comment_id: '54000000-0000-4000-8000-0000000000fe',
+    p_revision: seededRevision,
+    p_body: 'Không lộ bình luận không tồn tại trên hồ sơ hiện tại',
+    p_key: randomUUID(),
+  });
+  assert.equal(
+    unknownArchived.error?.code,
+    '23514',
+    'An unknown comment is refused without disclosing the archived Property state',
+  );
+  assert.equal(
+    unknownLive.error?.code,
+    unknownArchived.error?.code,
+    'An unknown comment answers identically on an unarchived Property',
   );
   const state = await commentState(seededId);
   assert.equal(state.body, 'Thảo luận lưu trữ còn hiệu lực');
@@ -2130,8 +2155,13 @@ await settle(secondary);
      end $$;`,
   );
   observed(
-    'archived Property blocks author edits for every role, including the author',
-    { reviewer: archivedEdit.error?.code, ordinary: ordinaryEdit.error?.code },
+    'archived Property blocks the author edit while non-authors and unknown comments stay indistinguishable',
+    {
+      reviewer: archivedEdit.error?.code,
+      ordinary: ordinaryEdit.error?.code,
+      unknownArchived: unknownArchived.error?.code,
+      unknownLive: unknownLive.error?.code,
+    },
   );
 }
 {

@@ -387,29 +387,37 @@ export async function commentEditContract({
     },
   );
   await check(
-    'archiving blocks author edits for every role while retaining earlier versions',
+    'archiving blocks the author while non-authors and unknown targets stay indistinguishable',
     async () => {
       await asAdmin();
       const revision = await revisionOf(archivedComment);
-      for (const actor of [1, 2, 3, 5]) {
+      for (const actor of [1, 3, 5]) {
         await asUser(actor);
         await fails(
           edit,
           [archived, archivedComment, revision, `Sửa lưu trữ ${actor}`],
-          'PT403',
+          '42501',
         );
       }
-      await asUser(1);
+      await asUser(2);
       await fails(
         edit,
-        [
-          archived,
-          '24000000-0000-4000-8000-00000000dead',
-          revision,
-          'Không lộ bình luận lưu trữ',
-        ],
+        [archived, archivedComment, revision, 'Tác giả sửa trên hồ sơ lưu trữ'],
         'PT403',
       );
+      await asUser(1);
+      for (const property of [archived, live]) {
+        await fails(
+          edit,
+          [
+            property,
+            '24000000-0000-4000-8000-00000000dead',
+            revision,
+            'Không lộ bình luận không tồn tại',
+          ],
+          '23514',
+        );
+      }
       await asAdmin();
       assert.equal(
         (await own(archivedComment)).body,

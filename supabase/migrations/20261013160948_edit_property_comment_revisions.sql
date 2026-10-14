@@ -145,9 +145,6 @@ begin
   -- archive state under that lock rather than trusting the pre-lock snapshot.
   select p.archived_at into archived from public.properties p where p.id = p_property_id for update;
   if not found then raise exception 'property not found' using errcode = '23514'; end if;
-  if archived is not null then
-    raise exception 'archived property blocks author edits' using errcode = 'PT403';
-  end if;
   -- The comment's own parent is authoritative; the caller's Property is only a routing check.
   select * into comment from public.property_comments where id = p_comment_id and property_id = p_property_id for update;
   if comment.id is null then raise exception 'comment not found' using errcode = '23514'; end if;
@@ -156,6 +153,9 @@ begin
   -- manager/admin role grant nothing here.
   if comment.author_id <> me then
     raise exception 'only the author may edit this comment' using errcode = '42501';
+  end if;
+  if archived is not null then
+    raise exception 'archived property blocks author edits' using errcode = 'PT403';
   end if;
   select * into prior_edit
     from public.property_comment_edits e
