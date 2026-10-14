@@ -1,10 +1,10 @@
 {
-  "checked_at": "2026-10-14T12:08:56.619Z",
-  "engine": "PGlite embedded PostgreSQL; mocked auth/storage schemas",
-  "passed": 359,
+  "checked_at": "2026-10-14T12:29:27.857Z",
+  "engine": "PGlite embedded PostgreSQL plus an embedded real PostgreSQL engine for the two-connection last-admin race; mocked auth/storage schemas",
+  "passed": 413,
   "limitations": [
     "Not a live Supabase integration test",
     "HTTP Auth, signed URLs, Vercel and browser flows not exercised",
-    "True multi-session concurrent transaction test remains a staging acceptance gate"
+    "Sustained multi-session contention at production load remains a staging acceptance gate"
   ]
 }

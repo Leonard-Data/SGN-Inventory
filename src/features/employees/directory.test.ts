@@ -4,6 +4,7 @@ import {
   DIRECTORY_PAGE_SIZE,
   DirectoryError,
   accessState,
+  directoryOperations,
   directoryPage,
   directoryQuery,
   mayReadDirectory,
@@ -67,7 +68,41 @@ test('a page is bounded and keeps the database ordering', () => {
     email: rows[0]!.email,
     role: rows[0]!.role,
     access: 'active',
+    deactivation: null,
   });
+});
+
+test('the recorded administration state is attached to its employee', () => {
+  const rows = [row(1), row(2)];
+  // Rows arrive newest-first, so the first row for an employee is the state displayed.
+  const operations = directoryOperations([
+    {
+      employee_id: rows[0]!.id,
+      state: 'provider_failed',
+      revision: 2,
+      updated_at: '2026-10-13T10:00:00Z',
+    },
+    {
+      employee_id: rows[0]!.id,
+      state: 'provider_pending',
+      revision: 1,
+      updated_at: '2026-10-13T09:00:00Z',
+    },
+    {
+      employee_id: rows[1]!.id,
+      state: 'unsupported',
+      revision: 1,
+      updated_at: '2026-10-13T09:00:00Z',
+    },
+  ]);
+  const page = directoryPage(rows, operations);
+  assert.deepEqual(page.employees[0]!.deactivation, {
+    state: 'provider_failed',
+    revision: 2,
+    updatedAt: '2026-10-13T10:00:00Z',
+  });
+  // An unreadable or unknown state is never shown as a lifecycle state.
+  assert.equal(page.employees[1]!.deactivation, null);
 });
 
 test('a last or empty page carries no cursor', () => {
@@ -103,4 +138,15 @@ test('the employee list is admin-only', () => {
   assert.equal(mayReadDirectory('admin'), true);
   for (const role of ['manager', 'staff', 'sales', 'unknown'])
     assert.equal(mayReadDirectory(role), false, role);
+});
+
+test('the recorded deactivation states are distinct in both languages', () => {
+  for (const locale of ['vi', 'en'] as const) {
+    const labels = [
+      messages[locale].employeeDeactivatePendingLabel,
+      messages[locale].employeeDeactivateReconciliationLabel,
+      messages[locale].employeeDeactivateConfirmedLabel,
+    ];
+    assert.equal(new Set(labels).size, 3, `${locale} labels must differ`);
+  }
 });
