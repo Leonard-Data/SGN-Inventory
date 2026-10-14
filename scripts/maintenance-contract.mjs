@@ -803,6 +803,12 @@ export async function maintenanceContract({
         [created, 'link', shared, link.revision, { remove: true }],
         '42501',
       );
+      const identityBefore = (
+        await db.query(
+          'select id,display_name,revision from public.contacts where id in ($1,$2) order by id',
+          [unrelated, unlinkedContact],
+        )
+      ).rows;
       await fails(
         mutate,
         [
@@ -814,13 +820,19 @@ export async function maintenanceContract({
         ],
         '23514',
       );
+      const unlinkedBefore = (
+        await db.query(
+          'select display_name,revision from public.contacts where id=$1',
+          [unlinkedContact],
+        )
+      ).rows[0];
       await fails(
         mutate,
         [
           created,
           'contact',
           unlinkedContact,
-          await revision('contacts', unlinkedContact),
+          unlinkedBefore.revision,
           { display_name: 'forged' },
         ],
         '23514',
@@ -830,11 +842,20 @@ export async function maintenanceContract({
         [unlinkedContact],
         '42501',
       );
+      assert.deepEqual(
+        (
+          await db.query(
+            'select id,display_name,revision from public.contacts where id in ($1,$2) order by id',
+            [unrelated, unlinkedContact],
+          )
+        ).rows,
+        identityBefore,
+      );
     },
   );
   await asUser(5);
   await check(
-    'staff can preview an unlinked identity for maintenance',
+    'staff correct an unlinked identity through the shared boundary without property fan-out',
     async () => {
       const preview = (
         await db.query('select public.contact_impact($1) as impact', [
@@ -843,6 +864,31 @@ export async function maintenanceContract({
       ).rows[0].impact;
       assert.ok(preview.revision);
       assert.deepEqual(preview.properties, []);
+      await db.query(mutate, [
+        created,
+        'contact',
+        unlinkedContact,
+        preview.revision,
+        { display_name: 'Người chưa liên kết đính chính' },
+      ]);
+      assert.equal(
+        (
+          await db.query(
+            'select display_name from public.contacts where id=$1',
+            [unlinkedContact],
+          )
+        ).rows[0].display_name,
+        'Người chưa liên kết đính chính',
+      );
+      assert.equal(
+        (
+          await db.query(
+            "select count(*)::int as n from public.property_history where target='contact' and target_id=$1",
+            [unlinkedContact],
+          )
+        ).rows[0].n,
+        0,
+      );
     },
   );
   await asUser(0);
@@ -896,9 +942,10 @@ export async function maintenanceContract({
       }
       assert.notEqual(
         (
-          await db.query('select display_name from public.contacts where id=$1', [
-            shared,
-          ])
+          await db.query(
+            'select display_name from public.contacts where id=$1',
+            [shared],
+          )
         ).rows[0].display_name,
         'stale parent race',
       );

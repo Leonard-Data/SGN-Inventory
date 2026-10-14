@@ -50,7 +50,8 @@ begin
     if not found or (prop.archived_at is not null and not private.is_reviewer()) then raise exception 'property edit denied' using errcode='42501'; end if;
     if p_expected_revision is null or p_property_revision is null then raise exception 'entity and property revisions required' using errcode='23514'; end if;
     if prop.revision<>p_property_revision then raise exception 'stale property context; reload current state' using errcode='PT409'; end if;
-    if not exists(select 1 from public.property_contacts where property_id=p_property_id and contact_id=p_target_id) then raise exception 'contact is not linked to opened property' using errcode='23514'; end if;
+    if not exists(select 1 from public.property_contacts where property_id=p_property_id and contact_id=p_target_id)
+      and private.employee_role() not in ('staff','manager','admin') then raise exception 'contact is not linked to opened property' using errcode='23514'; end if;
     return private.maintain_contact(p_target_id,p_expected_revision,p_changes);
   end if;
   perform private.validate_maintenance(p_target,p_changes);
