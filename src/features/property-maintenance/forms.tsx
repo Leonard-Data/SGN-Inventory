@@ -9,7 +9,8 @@ import {
 import { api, RequestError } from '@/features/employees/api';
 import type { Locale } from '@/i18n/messages';
 import { fields, formChanges, type Target, type Changes } from './fields';
-import { maintenanceText, optionLabel } from './messages';
+import { maintenanceError, maintenanceText, optionLabel } from './messages';
+import { failureRoute } from './refusal-rules';
 import type { Unit } from './data';
 
 export function MutationForm({
@@ -55,7 +56,7 @@ export function MutationForm({
     } catch (failure) {
       if (
         failure instanceof RequestError &&
-        (failure.status === 401 || failure.status === 403)
+        failureRoute(failure.status, failure.code) === 'denied'
       ) {
         onDenied(failure.status);
         return;
@@ -67,18 +68,7 @@ export function MutationForm({
       setBusy(false);
     }
   }
-  const message =
-    error === 'noChange'
-      ? text.noChange
-      : error === 'stale-edit'
-        ? text.stale
-        : error === 'conflict'
-          ? text.conflict
-          : error === 'explanation-without-price'
-            ? text.correctionExplanationNeedsPrice
-            : error === 'invalid-input'
-              ? text.invalid
-              : text.unavailable;
+  const message = maintenanceError(locale, error);
   return (
     <form onSubmit={submit}>
       <fieldset disabled={busy}>{children}</fieldset>

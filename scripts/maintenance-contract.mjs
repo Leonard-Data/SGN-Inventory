@@ -391,6 +391,15 @@ export async function maintenanceContract({
       assert.equal(
         (
           await db.query(
+            "select id from public.property_history where property_id=$1 and target='contact' and target_id=$2",
+            [other, shared],
+          )
+        ).rows.length,
+        0,
+      );
+      assert.equal(
+        (
+          await db.query(
             'select raw_phone_text from public.contacts where id=$1',
             [unrelated],
           )
@@ -492,6 +501,13 @@ export async function maintenanceContract({
   await check(
     'one primary link is replaced atomically and changed membership invalidates contact preview',
     async () => {
+      await db.query(mutate, [
+        created,
+        'link',
+        null,
+        await revision('properties', created),
+        { contact_id: shared, relation: 'owner' },
+      ]);
       const before = (
         await db.query('select public.contact_impact($1) as impact', [shared])
       ).rows[0].impact;
@@ -548,26 +564,250 @@ export async function maintenanceContract({
         ).rows[0].display_name,
         'Người chung',
       );
+      const cleanupLink = (
+        await db.query(
+          'select revision from public.property_contacts where property_id=$1 and contact_id=$2',
+          [created, shared],
+        )
+      ).rows[0];
+      await db.query(mutate, [
+        created,
+        'link',
+        shared,
+        cleanupLink.revision,
+        { remove: true },
+      ]);
     },
   );
+  // Sales journey fixture: a shared contact linked to two of another employee's readable properties,
+  // plus an unlinked identity that stays outside the settled linked-detail permission.
+  await db.query(mutate, [
+    created,
+    'link',
+    null,
+    await revision('properties', created),
+    { contact_id: shared, relation: 'owner', is_primary: true },
+  ]);
+  await db.query(mutate, [
+    property,
+    'link',
+    null,
+    await revision('properties', property),
+    { contact_id: shared, relation: 'broker' },
+  ]);
+  await db.query(mutate, [
+    other,
+    'link',
+    null,
+    await revision('properties', other),
+    { contact_id: shared, relation: 'representative' },
+  ]);
+  const unlinkedContact = (
+    await db.query('select public.create_contact($1) as id', [
+      { display_name: 'Unlinked person' },
+    ])
+  ).rows[0].id;
   await asUser(0);
   await check(
-    'sales contact creation, contact correction and link mutations remain denied',
+    'any Active employee corrects a shared linked contact with attributable history on every linked property',
     async () => {
-      await fails(
-        'select public.create_contact($1)',
-        [{ display_name: 'forged' }],
-        '42501',
+      const preview = (
+        await db.query('select public.contact_impact($1) as impact', [shared])
+      ).rows[0].impact;
+      assert.deepEqual(
+        preview.properties.map((r) => r.id).sort(),
+        [created, property, other].sort(),
       );
+      // Opened from another employee's property (SGN-002, created_by employees[1]) so the correction
+      // is only possible when contact-detail authority is separate from property-fact authority.
+      await db.query(mutate, [
+        other,
+        'contact',
+        shared,
+        preview.revision,
+        {
+          display_name: 'Người chung đính chính',
+          raw_phone_text: '0900 %_ mới',
+        },
+      ]);
+      assert.deepEqual(
+        (
+          await db.query(
+            'select display_name,raw_phone_text from public.contacts where id=$1',
+            [shared],
+          )
+        ).rows[0],
+        {
+          display_name: 'Người chung đính chính',
+          raw_phone_text: '0900 %_ mới',
+        },
+      );
+      for (const id of [created, property]) {
+        const event = (
+          await db.query(
+            "select actor_id,before_values,after_values from public.property_history where property_id=$1 and target='contact' and target_id=$2 order by occurred_at desc limit 1",
+            [id, shared],
+          )
+        ).rows[0];
+        assert.equal(event.actor_id, employees[0]);
+        assert.equal(event.before_values.display_name, 'Người chung');
+        assert.equal(event.after_values.display_name, 'Người chung đính chính');
+      }
       await fails(
         mutate,
         [
           created,
           'contact',
           shared,
-          await revision('contacts', shared),
-          { display_name: 'forged' },
+          preview.revision,
+          { display_name: 'stale' },
         ],
+        'PT409',
+      );
+      const historyCount = async () =>
+        (
+          await db.query(
+            "select count(*)::int as n from public.property_history where target='contact' and target_id=$1",
+            [shared],
+          )
+        ).rows[0].n;
+      const committed = await historyCount();
+      await db.query(mutate, [
+        property,
+        'contact',
+        shared,
+        await revision('contacts', shared),
+        { display_name: 'Người chung đính chính' },
+      ]);
+      assert.equal(await historyCount(), committed);
+    },
+  );
+  await check(
+    'the intentional shared-contact editor exposes recorded details without owner-contact credit',
+    async () => {
+      const ownerCredit = async () =>
+        (
+          await db.query(
+            "select count(*)::int as n from public.activity_events where kind='owner_contact_access'",
+          )
+        ).rows[0].n;
+      assert.equal(await ownerCredit(), 0);
+      const preview = (
+        await db.query('select public.contact_impact($1) as impact', [shared])
+      ).rows[0].impact;
+      assert.deepEqual(
+        preview.properties.map((r) => r.id).sort(),
+        [created, property, other].sort(),
+      );
+      assert.deepEqual(
+        (
+          await db.query(
+            'select phones,raw_phone_text from public.contacts where id=$1',
+            [shared],
+          )
+        ).rows[0],
+        { phones: ['0900999999'], raw_phone_text: '0900 %_ mới' },
+      );
+      assert.equal(await ownerCredit(), 0);
+    },
+  );
+  await db.exec('reset role');
+  await db.query("select set_config('request.jwt.claim.sub','',false)");
+  await check(
+    'live deactivation removes the shared-contact correction authority of an existing session',
+    async () => {
+      const before = (
+        await db.query(
+          'select display_name,revision from public.contacts where id=$1',
+          [shared],
+        )
+      ).rows[0];
+      await asUser(0);
+      await db.exec('reset role');
+      await db.query(
+        'update public.employees set is_active=false where id=$1',
+        [employees[0]],
+      );
+      await db.exec('set role authenticated');
+      try {
+        await fails('select public.contact_impact($1)', [shared], '42501');
+        await fails(
+          mutate,
+          [
+            created,
+            'contact',
+            shared,
+            before.revision,
+            { display_name: 'forged after deactivation' },
+          ],
+          '42501',
+        );
+      } finally {
+        await db.exec('reset role');
+        await db.query(
+          'update public.employees set is_active=true where id=$1',
+          [employees[0]],
+        );
+      }
+      assert.deepEqual(
+        (
+          await db.query(
+            'select display_name,revision from public.contacts where id=$1',
+            [shared],
+          )
+        ).rows[0],
+        before,
+      );
+    },
+  );
+  await db.exec('reset role');
+  await db.query("select set_config('request.jwt.claim.sub','',false)");
+  await check(
+    'an injected history failure rolls back the shared-contact correction',
+    async () => {
+      const current = (
+        await db.query(
+          'select display_name,revision from public.contacts where id=$1',
+          [shared],
+        )
+      ).rows[0];
+      await db.exec(
+        "create function private.fixture_fail_contact_history() returns trigger language plpgsql as $$ begin raise exception 'synthetic history failure' using errcode='23514'; end $$; create trigger fixture_fail_contact_history before insert on public.property_history for each row execute function private.fixture_fail_contact_history();",
+      );
+      await asUser(0);
+      await fails(
+        mutate,
+        [
+          created,
+          'contact',
+          shared,
+          current.revision,
+          { display_name: 'không được lưu' },
+        ],
+        '23514',
+      );
+      assert.deepEqual(
+        (
+          await db.query(
+            'select display_name,revision from public.contacts where id=$1',
+            [shared],
+          )
+        ).rows[0],
+        current,
+      );
+      await db.exec('reset role');
+      await db.exec(
+        'drop trigger fixture_fail_contact_history on public.property_history;drop function private.fixture_fail_contact_history();',
+      );
+    },
+  );
+  await asUser(0);
+  await check(
+    'sales creation, link, unlink and unlinked-contact correction remain denied',
+    async () => {
+      await fails(
+        'select public.create_contact($1)',
+        [{ display_name: 'forged' }],
         '42501',
       );
       await fails(
@@ -581,6 +821,226 @@ export async function maintenanceContract({
         ],
         '42501',
       );
+      const link = (
+        await db.query(
+          'select revision from public.property_contacts where property_id=$1 and contact_id=$2',
+          [created, shared],
+        )
+      ).rows[0];
+      await fails(
+        mutate,
+        [created, 'link', shared, link.revision, { remove: true }],
+        '42501',
+      );
+      const identityBefore = (
+        await db.query(
+          'select id,display_name,revision from public.contacts where id in ($1,$2) order by id',
+          [unrelated, unlinkedContact],
+        )
+      ).rows;
+      await fails(
+        mutate,
+        [
+          created,
+          'contact',
+          unrelated,
+          await revision('contacts', unrelated),
+          { display_name: 'wrong parent' },
+        ],
+        '23514',
+      );
+      const unlinkedBefore = (
+        await db.query(
+          'select display_name,revision from public.contacts where id=$1',
+          [unlinkedContact],
+        )
+      ).rows[0];
+      await fails(
+        mutate,
+        [
+          created,
+          'contact',
+          unlinkedContact,
+          unlinkedBefore.revision,
+          { display_name: 'forged' },
+        ],
+        '23514',
+      );
+      await fails(
+        'select public.contact_impact($1)',
+        [unlinkedContact],
+        'PT403',
+      );
+      const linkedPreview = (
+        await db.query('select public.contact_impact($1) as impact', [shared])
+      ).rows[0].impact;
+      assert.deepEqual(
+        linkedPreview.properties.map((r) => r.id).sort(),
+        [created, property, other].sort(),
+      );
+      assert.deepEqual(
+        (
+          await db.query(
+            'select id,display_name,revision from public.contacts where id in ($1,$2) order by id',
+            [unrelated, unlinkedContact],
+          )
+        ).rows,
+        identityBefore,
+      );
+    },
+  );
+  await asUser(5);
+  await check(
+    'staff correct an unlinked identity through the shared boundary without property fan-out',
+    async () => {
+      const preview = (
+        await db.query('select public.contact_impact($1) as impact', [
+          unlinkedContact,
+        ])
+      ).rows[0].impact;
+      assert.ok(preview.revision);
+      assert.deepEqual(preview.properties, []);
+      await db.query(mutate, [
+        created,
+        'contact',
+        unlinkedContact,
+        preview.revision,
+        { display_name: 'Người chưa liên kết đính chính' },
+      ]);
+      assert.equal(
+        (
+          await db.query(
+            'select display_name from public.contacts where id=$1',
+            [unlinkedContact],
+          )
+        ).rows[0].display_name,
+        'Người chưa liên kết đính chính',
+      );
+      assert.equal(
+        (
+          await db.query(
+            "select count(*)::int as n from public.property_history where target='contact' and target_id=$1",
+            [unlinkedContact],
+          )
+        ).rows[0].n,
+        0,
+      );
+    },
+  );
+  await asUser(0);
+  await check(
+    'shared-contact edit rejects a stale opened parent after serialization',
+    async () => {
+      const parentRevision = await revision('properties', created);
+      const contactRevision = await revision('contacts', shared);
+      await db.exec('reset role');
+      await db.exec(`
+        create table private.fixture_parent_revision_bump(property_id uuid primary key);
+        create or replace function private.maintenance_gate() returns void language plpgsql security definer set search_path='' as $$
+        declare parent uuid;
+        begin
+          perform pg_advisory_xact_lock(7317,7);
+          select property_id into parent from private.fixture_parent_revision_bump limit 1;
+          if parent is not null then
+            delete from private.fixture_parent_revision_bump;
+            update public.properties set notes=coalesce(notes,'')||' synthetic parent race' where id=parent;
+          end if;
+        end;
+        $$;
+      `);
+      await db.query(
+        'insert into private.fixture_parent_revision_bump(property_id) values($1)',
+        [created],
+      );
+      await asUser(0);
+      try {
+        await fails(
+          'select public.maintain_property($1,$2,$3,$4,$5,$6)',
+          [
+            created,
+            'contact',
+            shared,
+            contactRevision,
+            { display_name: 'stale parent race' },
+            parentRevision,
+          ],
+          'PT409',
+        );
+      } finally {
+        await db.exec('reset role');
+        await db.exec(`
+          create or replace function private.maintenance_gate() returns void language sql security invoker set search_path='' as $$
+            select pg_advisory_xact_lock(7317,7);
+          $$;
+          drop table if exists private.fixture_parent_revision_bump;
+        `);
+        await asUser(0);
+      }
+      assert.notEqual(
+        (
+          await db.query(
+            'select display_name from public.contacts where id=$1',
+            [shared],
+          )
+        ).rows[0].display_name,
+        'stale parent race',
+      );
+    },
+  );
+  await asUser(2);
+  await check(
+    'a shared contact linked to an archived property denies an ordinary employee the preview and the correction',
+    async () => {
+      const archivedParent = (
+        await db.query('select public.create_property($1,$2,$3) as id', [
+          'sale',
+          {},
+          { format: 'legacy', address_text: 'Synthetic archived parent' },
+        ])
+      ).rows[0].id;
+      await db.query(mutate, [
+        archivedParent,
+        'link',
+        null,
+        await revision('properties', archivedParent),
+        { contact_id: shared, relation: 'owner' },
+      ]);
+      await db.query(mutate, [
+        archivedParent,
+        'property',
+        archivedParent,
+        await revision('properties', archivedParent),
+        { archived_at: new Date().toISOString() },
+      ]);
+      const archivedRevision = await revision('properties', archivedParent);
+      await asUser(0);
+      await fails('select public.contact_impact($1)', [shared], 'PT403');
+      await fails(
+        'select public.maintain_property($1,$2,$3,$4,$5,$6)',
+        [
+          archivedParent,
+          'contact',
+          shared,
+          await revision('contacts', shared),
+          { display_name: 'forged' },
+          archivedRevision,
+        ],
+        '42501',
+      );
+      // Unarchived parent: only the affected-set boundary inside the operation can refuse this.
+      await fails(
+        'select public.maintain_property($1,$2,$3,$4,$5,$6)',
+        [
+          created,
+          'contact',
+          shared,
+          await revision('contacts', shared),
+          { display_name: 'forged' },
+          await revision('properties', created),
+        ],
+        'PT403',
+      );
+      await asUser(2);
     },
   );
   await asUser(2);

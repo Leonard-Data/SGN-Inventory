@@ -239,7 +239,7 @@ page-intro · [New category] / [New unit]
 
 ## 6. Cross-cutting states
 
-- **Denied / inactive:** the shell is never rendered. `/access-denied` stays in the `(auth)` group and is shown shell-free; API responses return `403` and a localized access-denied message, never an empty inventory.
+- **Denied / inactive:** the shell is never rendered. `/access-denied` stays in the `(auth)` group and is shown shell-free; a membership or identity denial returns `403` with a localized access-denied message, never an empty inventory. An object-level refusal (`contact-refusal`) keeps the current page and its state with a localized inline message instead ([maintenance contract](maintenance-contract.md#shared-identities-and-local-links)).
 - **Loading / empty / error:** the package's own states — `.busy-line` (+ `.spinner`) and `.busy-bar` for progress, `.skeleton`/`.sk-card` where the final geometry is known, `.state-panel` (with `.state-mark`, `.state-title`, optional `data-tone="danger"`) for empty and error, `.alert` for inline feedback and `.toast` for transient confirmation — each with localized text. Empty ≠ denied and empty ≠ zero: an event-free day is an explicit `0`, not a blank.
 - **Failed saves:** keep the draft, show a localized error, never a false success.
 - **Sign-out / denial after load:** clear displayed inventory, contact and discussion data; Back/refresh must not reveal it.
