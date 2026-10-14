@@ -310,3 +310,35 @@ export function deactivationStatus(
   if (operation.state === 'completed') return 'confirmed';
   return operation.state === 'provider_pending' ? 'pending' : 'reconciliation';
 }
+
+// A definite refusal returned by the guarded action (the database processed it and refused)
+// cannot have committed; a lost, server-side or unavailable response may have. Only the
+// latter reconciles by re-reading the recorded confirmation.
+export type DeactivationFailure = {
+  code: string;
+  ambiguous: boolean;
+};
+
+export function deactivationFailure(
+  failure: {
+    status?: number;
+    code?: string;
+  } | null,
+): DeactivationFailure {
+  const code = failure?.code?.trim() || 'unavailable';
+  const status = failure?.status;
+  return {
+    code,
+    ambiguous:
+      typeof status !== 'number' || status >= 500 || code === 'unavailable',
+  };
+}
+
+// A successful confirmation read reconciles an ambiguous failure's message because the
+// recorded state is now on screen; a definite refusal stays until the admin retries or
+// closes the panel.
+export function deactivationProblemAfterLoad(
+  problem: DeactivationFailure | null,
+): DeactivationFailure | null {
+  return problem && !problem.ambiguous ? problem : null;
+}
