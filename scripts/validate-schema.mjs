@@ -99,6 +99,9 @@ await check('wrong current province/commune hierarchy rejected',()=>fails(mainta
 await check('verified address outside unit validity rejected',()=>fails(maintainSql,[other,'mapping',verifiedId,verifiedRev,{...verifiedChanges,effective_on:'2024-10-10'}],'23514'));
 await db.query(maintainSql,[other,'mapping',verifiedId,verifiedRev,verifiedChanges]);
 await check('analytics uses canonical verified unit name',async()=>assert.ok((await db.query('select * from public.v_admin_inventory_by_area')).rows.some(r=>r.current_commune_label==='Fixture Commune')));
+// The form keeps the official selection alone, so search must reach that address through the
+// official unit name even though no written source label was recorded for it.
+await check('address search reaches an official unit name with no source label',async()=>assert.equal((await db.query("select * from public.search_properties('Fixture Commune')")).rows.length,1));
 await asUser(0);
 await check('salesperson admin analytics return no rows',async()=>assert.equal((await db.query('select * from public.v_admin_inventory_by_area')).rows.length,0));
 await asUser(1);
