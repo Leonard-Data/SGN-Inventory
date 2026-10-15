@@ -33,11 +33,6 @@
   max-width: 100%;
 }
 
-/* A dialog body stacks the same blocks a panel body does, so a workflow moved into a
-   dialog keeps the record page's inset rhythm instead of the panel's own wrapper. */
-.sgn-dialog-body > * + * {
-  margin-top: var(--space-5);
-}
 /* The modal dialog makes the page behind it inert; the document itself must not scroll
    under it either, which the platform does not do on its own. */
 body:has(dialog.sgn-dialog[open]) {
