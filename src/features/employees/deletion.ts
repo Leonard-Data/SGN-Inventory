@@ -259,7 +259,7 @@ export function accountDeletionResult(response: {
   return { outcome: 'deleted', reference: id };
 }
 
-// A presenceread decides convergence: an already-absent account is a completed deletion even
+// A presence read decides convergence: an already-absent account is a completed deletion even
 // when the earlier acknowledgment was lost, and an unreadable answer never counts as absent.
 export function accountPresence(response: {
   user: { id?: unknown } | null;
