@@ -4,7 +4,11 @@ import { messages, label, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { EmployeeDeactivationPanel } from './employee-deactivation';
 import { EmployeeAccountDeletionPanel } from './employee-account-deletion';
-import { deletionResumable } from './deletion';
+import {
+  deletionResumable,
+  deletionStatus,
+  type DeletionStatus,
+} from './deletion';
 import type {
   DirectoryDeactivation,
   DirectoryPage,
@@ -72,15 +76,14 @@ export function EmployeeDirectory({
     provider_failed: 'danger',
     completed: 'success',
   };
-  // A blocked Storage ownership step is its own recorded state, not a generic failure.
-  const deletionLabel = (state: DirectoryDeactivation): string =>
-    state.state === 'provider_failed' && state.outcome === 'storage_blocked'
-      ? text.employeeDeleteStorageBlockedLabel
-      : state.state === 'completed'
-        ? text.employeeDeleteConfirmedLabel
-        : state.state === 'provider_pending'
-          ? text.employeeDeletePendingLabel
-          : text.employeeDeleteReconciliationLabel;
+  // The row badge renders the same classification the confirmation panel uses; a blocked
+  // Storage ownership step is its own recorded state, not a generic failure.
+  const deletionLabel: Record<Exclude<DeletionStatus, 'none'>, string> = {
+    pending: text.employeeDeletePendingLabel,
+    reconciliation: text.employeeDeleteReconciliationLabel,
+    'storage-blocked': text.employeeDeleteStorageBlockedLabel,
+    confirmed: text.employeeDeleteConfirmedLabel,
+  };
   const deletionTone: Record<DirectoryDeactivation['state'], string> = {
     provider_pending: 'muted',
     provider_failed: 'danger',
@@ -163,6 +166,12 @@ export function EmployeeDirectory({
                           state?.state === 'provider_failed';
                         const deletion = employee.deletion;
                         const resumingDeletion = deletionResumable(deletion);
+                        const deletionState = deletionStatus(
+                          deletion && {
+                            state: deletion.state,
+                            providerOutcome: deletion.outcome,
+                          },
+                        );
                         // Only an employee whose sign-in account is still linked has an
                         // account left to delete.
                         const deletable =
@@ -198,12 +207,12 @@ export function EmployeeDirectory({
                                     {deactivationLabel[state.state]}
                                   </span>
                                 ) : null}
-                                {deletion ? (
+                                {deletion && deletionState !== 'none' ? (
                                   <span
                                     className="badge"
                                     data-tone={deletionTone[deletion.state]}
                                   >
-                                    {deletionLabel(deletion)}
+                                    {deletionLabel[deletionState]}
                                   </span>
                                 ) : null}
                               </td>

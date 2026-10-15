@@ -604,3 +604,77 @@ test('a transiently unverifiable Storage step cannot erase the recorded evidence
     assert.equal(request.storageReassigned, 3);
   }
 });
+
+test('an unknown reassignment stays unknown when a resume converges', async () => {
+  const p = provider({
+    async preflight(): Promise<StoragePreflight> {
+      return { supported: true, ownedCount: 0 };
+    },
+    async accountPresence(): Promise<AccountPresence> {
+      return 'absent';
+    },
+  });
+  // The earlier attempt saw three owned objects and never learned how many moved.
+  const g = gateway(
+    operation({
+      state: 'provider_failed',
+      providerOutcome: 'storage_blocked',
+      revision: 2,
+      storageOwnedCount: 3,
+      storageReassignedCount: null,
+    }),
+  );
+  const result = await administerAccountDeletion(g.value, p.value, input());
+  assert.equal(result.providerOutcome, 'deleted');
+  assert.equal(g.recorded[0]!.storageOwned, 3);
+  assert.equal(g.recorded[0]!.storageReassigned, null);
+});
+
+test('an unsupported reassignment on resume keeps an unknown reassignment unknown', async () => {
+  const p = provider({
+    async preflight(): Promise<StoragePreflight> {
+      return { supported: true, ownedCount: 3 };
+    },
+    async reassignStorageOwnership(): Promise<StorageReassignment> {
+      return { supported: false, reassignedCount: 0 };
+    },
+  });
+  const g = gateway(
+    operation({
+      state: 'provider_failed',
+      providerOutcome: 'storage_blocked',
+      revision: 2,
+      storageOwnedCount: 3,
+      storageReassignedCount: null,
+    }),
+  );
+  const result = await administerAccountDeletion(g.value, p.value, input());
+  assert.equal(result.providerOutcome, 'storage_blocked');
+  assert.equal(g.recorded[0]!.storageOwned, 3);
+  assert.equal(g.recorded[0]!.storageReassigned, null);
+});
+
+test('a first attempt records only the counts it observed', async () => {
+  const unavailable = provider({
+    async preflight(): Promise<StoragePreflight> {
+      throw new Error('storage unavailable');
+    },
+  });
+  const unobserved = gateway(operation());
+  await administerAccountDeletion(unobserved.value, unavailable.value, input());
+  assert.equal(unobserved.recorded[0]!.storageOwned, null);
+  assert.equal(unobserved.recorded[0]!.storageReassigned, null);
+
+  const unsupported = provider({
+    async preflight(): Promise<StoragePreflight> {
+      return { supported: true, ownedCount: 3 };
+    },
+    async reassignStorageOwnership(): Promise<StorageReassignment> {
+      return { supported: false, reassignedCount: 0 };
+    },
+  });
+  const observed = gateway(operation());
+  await administerAccountDeletion(observed.value, unsupported.value, input());
+  assert.equal(observed.recorded[0]!.storageOwned, 3);
+  assert.equal(observed.recorded[0]!.storageReassigned, 0);
+});

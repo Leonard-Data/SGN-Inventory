@@ -232,7 +232,9 @@ export function EmployeeAccountDeletionPanel({
                   .replace('{owned}', String(operation.storageOwnedCount))
                   .replace(
                     '{reassigned}',
-                    String(operation.storageReassignedCount ?? 0),
+                    operation.storageReassignedCount === null
+                      ? text.unknown
+                      : String(operation.storageReassignedCount),
                   )}
               </span>
             ) : null}

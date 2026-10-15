@@ -217,11 +217,17 @@ export function parseStorageReassignment(
   return { supported: row.supported, reassignedCount };
 }
 
+export type DeletionStatus =
+  'none' | 'pending' | 'reconciliation' | 'storage-blocked' | 'confirmed';
+
 // The one status the list and the confirmation render. A pending, blocked or failed provider
 // step is a reconciliation state, never displayed as a completed account deletion.
 export function deletionStatus(
-  operation: DeletionOperation | null,
-): 'none' | 'pending' | 'reconciliation' | 'storage-blocked' | 'confirmed' {
+  operation: {
+    state: DeactivationState;
+    providerOutcome: string | null;
+  } | null,
+): DeletionStatus {
   if (!operation) return 'none';
   if (operation.state === 'completed') return 'confirmed';
   if (operation.state === 'provider_pending') return 'pending';
@@ -351,19 +357,24 @@ export async function reassignOwnedStorage(
 }
 
 // The operation keeps the evidence either attempt observed: a preflight that found nothing
-// left to move or could not run must not erase the counts an earlier attempt recorded, and a
-// reassignment that did not run must not replace a recorded non-zero move.
+// left to move or could not run must not erase the counts an earlier attempt recorded, and
+// once ownership was observed, a reassignment that did not run keeps the operation's own
+// count — including an unknown one — instead of reporting a zero.
 function recordedCustody(
   operation: DeletionOperation,
   custody: StorageCustody,
 ): StorageCustody {
+  const observedOwned =
+    operation.storageOwnedCount !== null && operation.storageOwnedCount > 0;
   const ownedCount =
     custody.ownedCount === 0
       ? (operation.storageOwnedCount ?? 0)
       : (custody.ownedCount ?? operation.storageOwnedCount);
   const reassignedCount = custody.reassignedCount
     ? custody.reassignedCount
-    : (operation.storageReassignedCount ?? custody.reassignedCount);
+    : observedOwned
+      ? operation.storageReassignedCount
+      : (operation.storageReassignedCount ?? custody.reassignedCount);
   return { ...custody, ownedCount, reassignedCount };
 }
 
