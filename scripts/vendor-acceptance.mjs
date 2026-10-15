@@ -881,31 +881,25 @@ async function vendorLinkJourney({
     p_expected_property_revision: revision,
   };
   const salesLink = await rpcCall(
-    'sales link refusal',
+    'sales link',
     sales,
     'link_property_vendor',
     linkArgs,
   );
-  assert.equal(
-    salesLink.error?.code,
-    '42501',
-    refusal(salesLink.error, '42501'),
-  );
+  assert.equal(salesLink.error, null, refusal(salesLink.error, 'no error'));
+  assert.equal(salesLink.data.created, true);
   const salesUnlink = await rpcCall(
-    'sales unlink refusal',
+    'sales unlink',
     sales,
     'unlink_property_vendor',
     {
       p_property_id: liveProperty,
       p_vendor_id: vendor.id,
-      p_expected_link_revision: randomUUID(),
+      p_expected_link_revision: salesLink.data.revision,
     },
   );
-  assert.equal(
-    salesUnlink.error?.code,
-    '42501',
-    refusal(salesUnlink.error, '42501'),
-  );
+  assert.equal(salesUnlink.error, null, refusal(salesUnlink.error, 'no error'));
+  assert.equal(salesUnlink.data.removed, true);
   const salesInsert = await sales.from('property_vendors').insert({
     property_id: liveProperty,
     vendor_id: vendor.id,
@@ -938,7 +932,7 @@ async function vendorLinkJourney({
     0,
   );
   observed(
-    'a sales employee is refused every link mutation while direct writes stay blocked',
+    'a sales employee links and unlinks while direct writes stay blocked',
   );
 
   const created = await rpcCall(
@@ -1226,7 +1220,26 @@ async function vendorLinkJourney({
       propertyRevision: revision,
     }),
   );
-  assert.equal(salesLinkRoute.status, 403);
+  assert.equal(salesLinkRoute.status, 200, JSON.stringify(salesLinkRoute.body));
+  assert.equal(salesLinkRoute.body.link.vendorId, vendor.id);
+  const salesRouteSection = await rpcCall(
+    'sales route link read',
+    sales,
+    'list_property_vendors',
+    { p_property_id: liveProperty },
+  );
+  const salesUnlinkRoute = await endpointCall('sales unlink route', () =>
+    appPost(
+      salesCookies,
+      `/api/properties/${liveProperty}/vendors/${vendor.id}`,
+      { revision: salesRouteSection.data[0].revision },
+    ),
+  );
+  assert.equal(
+    salesUnlinkRoute.status,
+    200,
+    JSON.stringify(salesUnlinkRoute.body),
+  );
   const staffLinkRoute = await endpointCall('staff link route', () =>
     appPost(staffCookies, `/api/properties/${liveProperty}/vendors`, {
       vendorId: vendor.id,
@@ -1410,7 +1423,7 @@ async function vendorLinkJourney({
     'The unlink stays visible in the property history',
   );
   observed(
-    'a maintainer removes a mistaken link in the UI and keeps the recorded history',
+    'an active employee removes a mistaken link in the UI and keeps the recorded history',
   );
 
   // Link the company again through the rendered picker.
@@ -1441,7 +1454,7 @@ async function vendorLinkJourney({
     `() => document.querySelector('[data-od-id="panel-vendors"] .record-title')?.textContent?.trim() === ${JSON.stringify(vendor.display_name)}`,
   );
   assert.equal(vendorSection('sgn73-staff', 9336).rows.length, 1);
-  observed('a maintainer links a recorded vendor from the property record');
+  observed('an active employee links a recorded vendor from the property record');
 
   await browserSignIn(
     'sgn73-sales',
@@ -1462,10 +1475,10 @@ async function vendorLinkJourney({
   const salesSection = vendorSection('sgn73-sales', 9336);
   assert.equal(salesSection.rows.length, 1);
   assert.equal(salesSection.rows[0].name, vendor.display_name);
-  assert.equal(salesSection.linkSummary, null);
-  assert.equal(salesSection.unlinkControls, 0);
+  assert.equal(salesSection.linkSummary, 'Liên kết nhà cung cấp đã ghi nhận');
+  assert.equal(salesSection.unlinkControls, 1);
   observed(
-    'a sales employee reads the property vendor section with no link control',
+    'a sales employee sees the property vendor link and unlink controls',
   );
 }
 
@@ -1486,7 +1499,7 @@ const report = {
     'Supabase Auth email delivery and invitation acceptance are outside this slice.',
     'The vendor slice has no deletion path, so the synthetic SGN73 vendor rows are retained; the report lists their exact ids and the fixture identities those rows reference.',
     'Ticket #74 link fixtures are synthetic properties created by this harness, and their link and history rows are removed with them; a retained vendor keeps no property link.',
-    'A real concurrent-session write race remains a staging gate.',
+    'A hosted/staging concurrent-session write race remains a gate; embedded contention is covered by the schema harness.',
   ],
 };
 let failure = null;

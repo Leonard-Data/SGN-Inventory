@@ -40,7 +40,7 @@ import { Reservation } from './reservation';
 import { SaleCompletion } from '@/features/sales/completion';
 import { detailMessages } from './messages';
 import { contactRows } from './contact-rows';
-import { mayMaintainVendors } from '@/features/vendors/directory';
+import { mayLinkPropertyVendors } from '@/features/vendors/directory';
 import { PropertyVendors } from '@/features/vendors/property-vendors';
 // The record screen groups its content the way the design package does: the record's own
 // facts, its documents and its discussion.
@@ -440,10 +440,11 @@ export function Detail({
     (employee.id === property.created_by ||
       ['staff', 'manager', 'admin'].includes(employee.role));
   const coverFileId = property?.cover_file_id ?? null;
-  // Linking a vendor is a vendor-maintenance write (C5): staff, managers and admins, on a
-  // property they may maintain. The route and the database refuse the write independently.
   const canLinkVendor =
-    canEdit && !!employee && mayMaintainVendors(employee.role);
+    !!employee &&
+    !!property &&
+    !property.archived_at &&
+    mayLinkPropertyVendors(employee.role);
   const numberFormat = useMemo(
     () => new Intl.NumberFormat(locale === 'vi' ? 'vi-VN' : 'en-GB'),
     [locale],

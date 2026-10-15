@@ -155,7 +155,7 @@ _Avoid_: Fixed sale-price basis; "area" for province/ward
 ### Vendors
 
 **Vendor**:
-A company the inventory works with, recorded as its own directory identity and distinct from an owner, broker, contact or employee. Every active employee may read recorded vendors; only staff, manager and admin roles add them or link them to a property. The directory slice records the company and its contact block; a separate slice links a recorded vendor to a property, and vendor detail editing remains a further slice.
+A company the inventory works with, recorded as its own directory identity and distinct from an owner, broker, contact or employee. Every active employee may read recorded vendors; only staff, manager and admin roles add vendor directory records, while every active employee may link or unlink a recorded vendor on an unarchived property. The directory slice records the company and its contact block; a separate slice links a recorded vendor to a property, and vendor detail editing remains a further slice.
 _Avoid_: Supplier contact, owner type, broker record
 
 **Vendor link**:

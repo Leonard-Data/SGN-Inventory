@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { objectBody, runRoute } from '@/lib/supabase/route';
 import { activeEmployee } from '@/features/employees/access';
 import {
-  assertVendorMaintainer,
   linkPropertyVendor,
   propertyVendors,
 } from '@/features/vendors/data';
@@ -28,8 +27,7 @@ export function POST(
   route: { params: Promise<{ id: string }> },
 ) {
   return runRoute(request, async (context) => {
-    const employee = await activeEmployee(context);
-    assertVendorMaintainer(employee.role);
+    await activeEmployee(context);
     const link = await linkPropertyVendor(
       context,
       (await route.params).id,
