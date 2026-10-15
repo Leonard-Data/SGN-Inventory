@@ -197,19 +197,35 @@ async function createFixtures() {
         `(${sqlText(employeeId)}::uuid,${sqlText(created.data.user.id)}::uuid,${sqlText(email)},${sqlText(`${namespace} ${name}`)},${sqlText(role)},true) returning id`,
     );
   }
-  const propertyId = randomUUID();
-  manifest.properties.push(propertyId);
-  await persistManifest();
-  const inserted = await ownerClient.from('properties').insert({
-    id: propertyId,
-    property_code: `${namespace}-A-${runToken}`,
-    listing_mode: 'sale',
-    status: 'available',
-    created_by: manifest.identities.adminA.employeeId,
-  });
-  assert.equal(inserted.error, null, 'create property');
-  await persistManifest();
 }
+async function createProperty(adminA) {
+  // `public.properties` deliberately denies every direct client write, so the synthetic fixture
+  // property is created through the same guarded application operation a real employee uses --
+  // never by widening a grant or bypassing a guard. The owner connection is used only for the
+  // employee rows the lifecycle guard reserves for administration.
+  const created = await adminA.rpc('create_property', {
+    p_mode: 'sale',
+    p_facts: {},
+    p_address: {
+      format: 'legacy',
+      address_text: `${namespace} acceptance fixture address ${runToken}`,
+    },
+  });
+  assert.equal(
+    created.error,
+    null,
+    'create property through the guarded operation',
+  );
+  assert.match(
+    String(created.data),
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    'the guarded create returns the new property id',
+  );
+  manifest.properties.push(created.data);
+  await persistManifest();
+  return created.data;
+}
+
 // The target registers and uploads the file with its own session, so the real Storage object
 // is owned by the exact Auth identity that will be deleted.
 async function createOwnedFile(target) {
@@ -316,7 +332,18 @@ async function cleanup() {
     );
   }
   if (manifest.properties.length) {
-    await ownerClient.from('properties').delete().in('id', manifest.properties);
+    // No supported operation archives or removes a property, so the check's own synthetic
+    // fixture is unwound through the owner connection after its dependents: the file metadata,
+    // then the maintenance history and address rows the guarded create produced. No guard is
+    // disabled or bypassed. If a guard refuses any step, it is reported, not worked around.
+    const list = manifest.properties.map(sqlText).join(',');
+    ownerSql(
+      `delete from public.property_history where property_id in (${list})`,
+    );
+    ownerSql(
+      `delete from public.property_addresses where property_id in (${list})`,
+    );
+    ownerSql(`delete from public.properties where id in (${list})`);
   }
   const employeeIds = Object.values(manifest.identities).map(
     (identity) => identity.employeeId,
@@ -332,8 +359,11 @@ async function cleanup() {
   );
   const removable = employeeIds.filter((id) => !referenced.has(id));
   if (removable.length)
+    // The restrictive `employees.auth_user_id` foreign key blocks the provider delete, so the
+    // link is cleared before the synthetic account is removed -- exactly as the product's own
+    // guarded deletion does. Only this check's own synthetic rows are touched.
     ownerSql(
-      `update public.employees set is_active=false where id in (${removable.map(sqlText).join(',')})`,
+      `update public.employees set is_active=false, auth_user_id=null where id in (${removable.map(sqlText).join(',')})`,
     );
   for (const identity of Object.values(manifest.identities)) {
     if (!identity.userId) continue;
@@ -458,6 +488,7 @@ try {
   const adminBEmployee = manifest.identities.adminB;
   const staffEmployee = manifest.identities.staff;
   const targetAuthUserId = targetEmployee.userId;
+  await createProperty(adminA);
   const file = await createOwnedFile(target);
   if (!file.completed)
     limitations.push(
@@ -468,11 +499,8 @@ try {
   const visible = (await target.from('properties').select('id')).data.map(
     (row) => row.id,
   );
-  for (const propertyId of manifest.properties)
-    assert.ok(
-      visible.includes(propertyId),
-      'fixture property visible before deletion',
-    );
+  for (const id of manifest.properties)
+    assert.ok(visible.includes(id), 'fixture property visible before deletion');
   const readable = await target.storage
     .from('property-files')
     .download(file.objectPath);
