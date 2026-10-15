@@ -120,7 +120,7 @@ export function useProtectedData<T>(
       // again, clearing what is displayed when that read fails too.
       void reload();
     }
-  }, [clear, conceal, reload]);
+  }, [clear, reload]);
   useEffect(() => {
     // load() enters the loading state synchronously so a source change (paging)
     // keeps truthful feedback instead of blanking the surface; the rule flags

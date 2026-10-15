@@ -6,7 +6,10 @@ import {
   type DetailAction,
 } from './detail-actions.ts';
 
-type TestEmployee = { id: string; role: 'sales' | 'staff' | 'manager' | 'admin' };
+type TestEmployee = {
+  id: string;
+  role: 'sales' | 'staff' | 'manager' | 'admin';
+};
 type TestProperty = {
   id: string;
   created_by: string;
@@ -19,10 +22,7 @@ const property: TestProperty = {
   archived_at: null,
 };
 
-function employee(
-  id: string,
-  role: TestEmployee['role'],
-): TestEmployee {
+function employee(id: string, role: TestEmployee['role']): TestEmployee {
   return { id, role };
 }
 
