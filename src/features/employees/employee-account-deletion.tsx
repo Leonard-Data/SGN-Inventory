@@ -22,6 +22,13 @@ import {
 } from './deletion';
 import type { DirectoryEntry } from './directory';
 
+const accessLabel = {
+  active: 'employeeAccessActive',
+  inactive: 'employeeAccessInactive',
+  unlinked: 'employeeAccessUnlinked',
+  account_deleted: 'employeeAccessAccountDeleted',
+} as const;
+
 // Issue #67: the permanent-deletion confirmation a live admin opens from the employee list.
 // It names the exact retained employee, states that the sign-in account is permanently
 // removed while business records remain, requires the employee's own email to be typed
@@ -224,7 +231,7 @@ export function EmployeeAccountDeletionPanel({
                 {statusLabel}
               </span>
             ) : (
-              text.employeeAccessActive
+              text[accessLabel[employee.access]]
             )}
             {operation && operation.storageOwnedCount !== null ? (
               <span className="field-hint">
