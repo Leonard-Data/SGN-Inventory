@@ -133,7 +133,7 @@ export async function propertyVendorLinkConcurrency({ root, check }) {
       },
     );
     await check(
-      'two authenticated link sessions converge on one row without property history',
+      'two authenticated link sessions converge on one current row without property history',
       () => {
         assert.equal(secondError, null);
         assert.equal(firstOutcome.created, true);
