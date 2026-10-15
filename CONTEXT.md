@@ -155,8 +155,12 @@ _Avoid_: Fixed sale-price basis; "area" for province/ward
 ### Vendors
 
 **Vendor**:
-A company the inventory works with, recorded as its own directory identity and distinct from an owner, broker, contact or employee. Every active employee may read recorded vendors; only staff, manager and admin roles add them. This slice records the company and its contact block only: no property link, edit, procurement or payment record.
+A company the inventory works with, recorded as its own directory identity and distinct from an owner, broker, contact or employee. Every active employee may read recorded vendors; only staff, manager and admin roles add them or link them to a property. The directory slice records the company and its contact block; a separate slice links a recorded vendor to a property, and vendor detail editing remains a further slice.
 _Avoid_: Supplier contact, owner type, broker record
+
+**Vendor link**:
+An explicit recorded relationship between one property and one recorded vendor. It is not an owner link, a reservation or rental occupancy: it carries no owner-primary marker, no occupancy state and no owner-contact access credit, and a property has at most one link per vendor. Removing a mistaken link keeps the vendor, its other links and the earlier property history.
+_Avoid_: Owner relationship, lock, tenant record
 
 **Vendor contact block**:
 The one optional set of recorded contact details belonging to a vendor: contact name, phone strings, email, raw address/source text and notes. Each detail is independently known or unknown, and an unknown detail is never filled with an invented default.
