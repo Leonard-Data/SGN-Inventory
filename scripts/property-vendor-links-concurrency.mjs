@@ -133,19 +133,14 @@ export async function propertyVendorLinkConcurrency({ root, check }) {
       },
     );
     await check(
-      'two authenticated link sessions converge on one row and one history entry',
+      'two authenticated link sessions converge on one row without property history',
       () => {
         assert.equal(secondError, null);
         assert.equal(firstOutcome.created, true);
         assert.equal(secondOutcome?.created, false);
         assert.equal(secondOutcome?.revision, firstOutcome.revision);
         assert.equal(rows.rows.length, 1);
-        assert.equal(history.rows.length, 1);
-        assert.equal(history.rows[0].actor_id, employeeA);
-        assert.deepEqual(history.rows[0].changed_fields, [
-          'vendor_id',
-          'vendor_name',
-        ]);
+        assert.equal(history.rows.length, 0);
       },
     );
   } finally {
