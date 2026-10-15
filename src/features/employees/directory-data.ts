@@ -27,7 +27,9 @@ export async function listEmployees(
   }
   let request = context.client
     .from('employees')
-    .select('id,display_name,email,role,auth_user_id,is_active')
+    .select(
+      'id,display_name,email,role,auth_user_id,is_active,account_deleted_at',
+    )
     .order('id')
     .limit(DIRECTORY_PAGE_SIZE + 1);
   if (after) request = request.gt('id', after);
@@ -40,10 +42,11 @@ export async function listEmployees(
   const page = directoryPage(data ?? []);
   const ids = page.employees.map((employee) => employee.id);
   if (!ids.length) return page;
-  // Newest first, so the first operation returned for an employee is the one displayed.
+  // Newest first, so the first operation of each kind returned for an employee is the one
+  // displayed. Both lifecycle kinds share the table, so each is projected separately.
   const { data: operations, error: operationError } = await context.client
     .from('employee_admin_operations')
-    .select('employee_id,state,revision,updated_at')
+    .select('employee_id,kind,state,revision,updated_at,provider_outcome')
     .in('employee_id', ids)
     .order('created_at', { ascending: false })
     .order('id', { ascending: false });
@@ -52,12 +55,17 @@ export async function listEmployees(
       operationError.code === '42501' ? 403 : 503,
       operationError.code === '42501' ? 'access-denied' : 'unavailable',
     );
-  const states = directoryOperations(operations ?? []);
+  const rows = operations ?? [];
+  const states = {
+    deactivation: directoryOperations(rows, 'deactivate'),
+    deletion: directoryOperations(rows, 'delete'),
+  };
   return {
     ...page,
     employees: page.employees.map((employee) => ({
       ...employee,
-      deactivation: states.get(employee.id) ?? null,
+      deactivation: states.deactivation.get(employee.id) ?? null,
+      deletion: states.deletion.get(employee.id) ?? null,
     })),
   };
 }

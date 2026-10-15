@@ -63,7 +63,7 @@ export async function saleCompletionState(
       .maybeSingle(),
     context.client
       .from('employees')
-      .select('id,display_name,auth_user_id,is_active')
+      .select('id,display_name,auth_user_id,is_active,account_deleted_at')
       .order('display_name')
       .order('id'),
     context.client

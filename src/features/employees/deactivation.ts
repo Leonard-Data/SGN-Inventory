@@ -36,7 +36,7 @@ export type DeactivationEmployee = {
   displayName: string;
   email: string;
   role: string;
-  access: 'active' | 'inactive' | 'unlinked';
+  access: 'active' | 'inactive' | 'unlinked' | 'account_deleted';
 };
 
 export type DeactivationConfirmation = {

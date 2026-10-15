@@ -3,6 +3,12 @@ import { Fragment, useState } from 'react';
 import { messages, label, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { EmployeeDeactivationPanel } from './employee-deactivation';
+import { EmployeeAccountDeletionPanel } from './employee-account-deletion';
+import {
+  deletionResumable,
+  deletionStatus,
+  type DeletionStatus,
+} from './deletion';
 import type {
   DirectoryDeactivation,
   DirectoryPage,
@@ -37,7 +43,13 @@ export function EmployeeDirectory({
     logout,
     reload,
   } = useProtectedData<DirectoryPage>(endpoint);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [open, setOpen] = useState<{
+    id: string;
+    panel: 'deactivate' | 'delete';
+  } | null>(null);
+  // At most one lifecycle confirmation is open at a time.
+  const toggle = (id: string, panel: 'deactivate' | 'delete') =>
+    setOpen(open?.id === id && open.panel === panel ? null : { id, panel });
   // The sgn-locale cookie is the rendered locale; the shell keeps it equal to the saved
   // preference.
   const locale = initialLocale;
@@ -46,11 +58,13 @@ export function EmployeeDirectory({
     active: text.employeeAccessActive,
     inactive: text.employeeAccessInactive,
     unlinked: text.employeeAccessUnlinked,
+    account_deleted: text.employeeAccessAccountDeleted,
   };
   const accessTone: Record<EmployeeAccess, string> = {
     active: 'success',
     inactive: 'muted',
     unlinked: 'neutral',
+    account_deleted: 'danger',
   };
   const deactivationLabel: Record<DirectoryDeactivation['state'], string> = {
     provider_pending: text.employeeDeactivatePendingLabel,
@@ -58,6 +72,19 @@ export function EmployeeDirectory({
     completed: text.employeeDeactivateConfirmedLabel,
   };
   const deactivationTone: Record<DirectoryDeactivation['state'], string> = {
+    provider_pending: 'muted',
+    provider_failed: 'danger',
+    completed: 'success',
+  };
+  // The row badge renders the same classification the confirmation panel uses; a blocked
+  // Storage ownership step is its own recorded state, not a generic failure.
+  const deletionLabel: Record<Exclude<DeletionStatus, 'none'>, string> = {
+    pending: text.employeeDeletePendingLabel,
+    reconciliation: text.employeeDeleteReconciliationLabel,
+    'storage-blocked': text.employeeDeleteStorageBlockedLabel,
+    confirmed: text.employeeDeleteConfirmedLabel,
+  };
+  const deletionTone: Record<DirectoryDeactivation['state'], string> = {
     provider_pending: 'muted',
     provider_failed: 'danger',
     completed: 'success',
@@ -137,6 +164,24 @@ export function EmployeeDirectory({
                         const resumable =
                           state?.state === 'provider_pending' ||
                           state?.state === 'provider_failed';
+                        const deletion = employee.deletion;
+                        const resumingDeletion = deletionResumable(deletion);
+                        const deletionState = deletionStatus(
+                          deletion && {
+                            state: deletion.state,
+                            providerOutcome: deletion.outcome,
+                          },
+                        );
+                        // Only an employee whose sign-in account is still linked has an
+                        // account left to delete.
+                        const deletable =
+                          employee.access === 'active' ||
+                          employee.access === 'inactive';
+                        const deactivationOpen =
+                          open?.id === employee.id &&
+                          open.panel === 'deactivate';
+                        const deletionOpen =
+                          open?.id === employee.id && open.panel === 'delete';
                         return (
                           <Fragment key={employee.id}>
                             <tr>
@@ -162,19 +207,23 @@ export function EmployeeDirectory({
                                     {deactivationLabel[state.state]}
                                   </span>
                                 ) : null}
+                                {deletion && deletionState !== 'none' ? (
+                                  <span
+                                    className="badge"
+                                    data-tone={deletionTone[deletion.state]}
+                                  >
+                                    {deletionLabel[deletionState]}
+                                  </span>
+                                ) : null}
                               </td>
                               <td data-label={text.employeeActions}>
                                 {employee.access === 'active' || resumable ? (
                                   <button
                                     type="button"
                                     className="btn btn-sm btn-ghost"
-                                    aria-expanded={openId === employee.id}
+                                    aria-expanded={deactivationOpen}
                                     onClick={() =>
-                                      setOpenId(
-                                        openId === employee.id
-                                          ? null
-                                          : employee.id,
-                                      )
+                                      toggle(employee.id, 'deactivate')
                                     }
                                   >
                                     {resumable
@@ -182,9 +231,23 @@ export function EmployeeDirectory({
                                       : text.employeeDeactivate}
                                   </button>
                                 ) : null}
+                                {deletable || resumingDeletion ? (
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-ghost"
+                                    aria-expanded={deletionOpen}
+                                    onClick={() =>
+                                      toggle(employee.id, 'delete')
+                                    }
+                                  >
+                                    {resumingDeletion
+                                      ? text.employeeDeleteReconcile
+                                      : text.employeeDelete}
+                                  </button>
+                                ) : null}
                               </td>
                             </tr>
-                            {openId === employee.id ? (
+                            {deactivationOpen ? (
                               <tr>
                                 <td colSpan={5}>
                                   <EmployeeDeactivationPanel
@@ -193,7 +256,21 @@ export function EmployeeDirectory({
                                     locale={locale}
                                     onChanged={reload}
                                     onDenied={redirectDenied}
-                                    onClose={() => setOpenId(null)}
+                                    onClose={() => setOpen(null)}
+                                  />
+                                </td>
+                              </tr>
+                            ) : null}
+                            {deletionOpen ? (
+                              <tr>
+                                <td colSpan={5}>
+                                  <EmployeeAccountDeletionPanel
+                                    employee={employee}
+                                    actorRole={actor?.role ?? ''}
+                                    locale={locale}
+                                    onChanged={reload}
+                                    onDenied={redirectDenied}
+                                    onClose={() => setOpen(null)}
                                   />
                                 </td>
                               </tr>

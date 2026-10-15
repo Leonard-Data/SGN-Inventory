@@ -13,6 +13,7 @@ import {
   type DeactivationConfirmation,
   type DeactivationGateway,
   type DeactivationOperation,
+  type OutstandingReservation,
 } from './deactivation';
 import {
   createEmployeeAdminClient,
@@ -30,6 +31,7 @@ type EmployeeTargetRow = {
   role: string;
   auth_user_id: string | null;
   is_active: boolean;
+  account_deleted_at: string | null;
 };
 
 function databaseError(error: { code?: string }): ApiError {
@@ -77,7 +79,9 @@ async function employeeTarget(
   if (!isUuid(id)) throw new ApiError(400, 'invalid-input');
   const { data, error } = await context.client
     .from('employees')
-    .select('id,display_name,email,role,auth_user_id,is_active')
+    .select(
+      'id,display_name,email,role,auth_user_id,is_active,account_deleted_at',
+    )
     .eq('id', id)
     .maybeSingle();
   if (error) throw databaseError(error);
@@ -133,6 +137,45 @@ function databaseGateway(
   };
 }
 
+// Approved-unexpired reservations are effective and pending requests do not reserve. Access
+// removal only makes their existence visible; neither is ever reassigned, so release or
+// expiry stays with the existing claimant, reviewer and expiry rules. Shared with account
+// deletion, which removes access the same way.
+export async function outstandingReservationsFor(
+  context: RouteContext,
+  employeeId: string,
+): Promise<OutstandingReservation[]> {
+  const { data, error } = await context.client
+    .from('property_locks')
+    .select('id,property_id,status,expires_at')
+    .eq('requested_by', employeeId)
+    .in('status', ['pending', 'approved'])
+    .gt('expires_at', new Date().toISOString())
+    .order('expires_at');
+  if (error) throw databaseError(error);
+  const lockRows = data ?? [];
+  const propertyIds = [...new Set(lockRows.map((row) => row.property_id))];
+  const codes = new Map<string, string>();
+  if (propertyIds.length) {
+    const { data: properties, error: propertyError } = await context.client
+      .from('properties')
+      .select('id,property_code')
+      .in('id', propertyIds);
+    if (propertyError) throw databaseError(propertyError);
+    for (const row of properties ?? []) codes.set(row.id, row.property_code);
+  }
+  return outstandingReservations(
+    lockRows.map((row) => ({
+      id: row.id,
+      property_id: row.property_id,
+      status: row.status,
+      expires_at: row.expires_at,
+      properties: { property_code: codes.get(row.property_id) ?? '' },
+    })),
+    new Date(),
+  );
+}
+
 // The confirmation the admin list opens: target identity, the recorded administration state
 // and the outstanding reservations. Approved-unexpired reservations are effective and
 // pending requests do not reserve; neither is ever reassigned by deactivation, so release or
@@ -142,37 +185,20 @@ export async function loadDeactivationConfirmation(
   employeeId: string,
 ): Promise<DeactivationConfirmation> {
   const target = await employeeTarget(context, employeeId);
-  const [operations, locks] = await Promise.all([
+  const [operations, reservations] = await Promise.all([
     context.client
       .from('employee_admin_operations')
       .select(
         'id,employee_id,actor_id,kind,state,revision,provider_outcome,provider_detail,provider_ban_until,membership_disabled_at,completed_at',
       )
       .eq('employee_id', employeeId)
+      .eq('kind', 'deactivate')
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
       .limit(1),
-    context.client
-      .from('property_locks')
-      .select('id,property_id,status,expires_at')
-      .eq('requested_by', employeeId)
-      .in('status', ['pending', 'approved'])
-      .gt('expires_at', new Date().toISOString())
-      .order('expires_at'),
+    outstandingReservationsFor(context, employeeId),
   ]);
   if (operations.error) throw databaseError(operations.error);
-  if (locks.error) throw databaseError(locks.error);
-  const lockRows = locks.data ?? [];
-  const propertyIds = [...new Set(lockRows.map((row) => row.property_id))];
-  const codes = new Map<string, string>();
-  if (propertyIds.length) {
-    const { data, error } = await context.client
-      .from('properties')
-      .select('id,property_code')
-      .in('id', propertyIds);
-    if (error) throw databaseError(error);
-    for (const row of data ?? []) codes.set(row.id, row.property_code);
-  }
   const latest = operations.data?.[0] as Record<string, unknown> | undefined;
   return {
     employee: {
@@ -183,16 +209,7 @@ export async function loadDeactivationConfirmation(
       access: accessState(target),
     },
     operation: latest ? operationFromRow(latest) : null,
-    reservations: outstandingReservations(
-      lockRows.map((row) => ({
-        id: row.id,
-        property_id: row.property_id,
-        status: row.status,
-        expires_at: row.expires_at,
-        properties: { property_code: codes.get(row.property_id) ?? '' },
-      })),
-      new Date(),
-    ),
+    reservations,
   };
 }
 

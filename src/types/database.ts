@@ -425,6 +425,7 @@ export type Database = {
       };
       employees: {
         Row: {
+          account_deleted_at: string | null;
           auth_user_id: string | null;
           created_at: string;
           display_name: string;
@@ -436,6 +437,7 @@ export type Database = {
           role: string;
         };
         Insert: {
+          account_deleted_at?: string | null;
           auth_user_id?: string | null;
           created_at?: string;
           display_name: string;
@@ -447,6 +449,7 @@ export type Database = {
           role?: string;
         };
         Update: {
+          account_deleted_at?: string | null;
           auth_user_id?: string | null;
           created_at?: string;
           display_name?: string;
@@ -477,6 +480,9 @@ export type Database = {
           provider_user_id: string | null;
           revision: number;
           state: string;
+          storage_owned_count: number | null;
+          storage_reassigned_count: number | null;
+          target_auth_user_id: string | null;
           updated_at: string;
         };
         Insert: never;
@@ -1780,8 +1786,34 @@ export type Database = {
       };
     };
     Functions: {
+      begin_employee_account_deletion: {
+        Args: { p_employee_id: string; p_key: string };
+        Returns: Json;
+      };
       begin_employee_deactivation: {
         Args: { p_employee_id: string; p_key: string };
+        Returns: Json;
+      };
+      employee_storage_preflight: {
+        Args: { p_auth_user_id: string };
+        Returns: Json;
+      };
+      reassign_employee_storage_ownership: {
+        Args: { p_from_auth_user_id: string; p_to_auth_user_id: string };
+        Returns: Json;
+      };
+      record_employee_account_deletion_result: {
+        Args: {
+          p_operation_id: string;
+          p_revision: number;
+          p_actor_id: string;
+          p_auth_user_id: string;
+          p_outcome: string;
+          p_provider_reference?: string | null;
+          p_storage_owned?: number | null;
+          p_storage_reassigned?: number | null;
+          p_detail?: string | null;
+        };
         Returns: Json;
       };
       record_employee_deactivation_result: {

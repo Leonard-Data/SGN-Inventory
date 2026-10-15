@@ -17,6 +17,7 @@ const accessLabel = {
   active: 'employeeAccessActive',
   inactive: 'employeeAccessInactive',
   unlinked: 'employeeAccessUnlinked',
+  account_deleted: 'employeeAccessAccountDeleted',
 } as const;
 
 // Reviewer-only confirmation of an actual completed sale. The database decides independence,

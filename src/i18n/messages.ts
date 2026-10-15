@@ -262,6 +262,7 @@ const vi = {
   employeeAccessActive: 'Đang hoạt động',
   employeeAccessInactive: 'Đã tắt truy cập',
   employeeAccessUnlinked: 'Chưa liên kết đăng nhập',
+  employeeAccessAccountDeleted: 'Đã xóa tài khoản đăng nhập',
   // Employee deactivation (issue #66).
   employeeActions: 'Thao tác',
   employeeDeactivate: 'Tắt quyền truy cập',
@@ -301,6 +302,48 @@ const vi = {
   employeeDeactivateProviderUnavailable:
     'Máy chủ chưa có cấu hình xác nhận chặn đăng nhập. Quyền truy cập đã bị tắt; hãy thử lại sau khi cấu hình được khôi phục.',
   employeeDeactivateLoadFailed: 'Không thể tải trạng thái tắt quyền truy cập.',
+  // Permanent sign-in account deletion (issue #67).
+  employeeDelete: 'Xóa tài khoản đăng nhập',
+  employeeDeleteReconcile: 'Đối soát xóa tài khoản',
+  employeeDeleteTarget: 'Nhân viên được giữ lại',
+  employeeDeleteNote:
+    'Xóa vĩnh viễn tài khoản đăng nhập của đúng nhân viên này. Hồ sơ nhân viên, họ tên, mã định danh và toàn bộ công việc đã ghi nhận vẫn được giữ nguyên.',
+  employeeDeleteConfirmLabel: 'Nhập email để xác nhận',
+  employeeDeleteConfirmHint:
+    'Nhập chính xác email “{email}” để bật nút xóa vĩnh viễn.',
+  employeeDeleteConfirmRequired: 'Hãy nhập email của nhân viên này.',
+  employeeDeleteConfirmMismatch: 'Email nhập vào không khớp với nhân viên này.',
+  employeeDeleteConfirm: 'Xóa vĩnh viễn tài khoản đăng nhập',
+  employeeDeleteState: 'Trạng thái thao tác',
+  employeeDeleteStorageNote:
+    'Tệp đã tải lên thuộc sở hữu kỹ thuật của tài khoản đăng nhập. Hệ thống kiểm tra trước và chỉ chuyển quyền sở hữu sang một quản trị viên đang hoạt động; nội dung, mã tệp, đường dẫn và người tải lên không thay đổi.',
+  employeeDeleteStorageEvidence:
+    'Tệp thuộc sở hữu: {owned} · đã chuyển quyền sở hữu: {reassigned}',
+  employeeDeletePendingLabel: 'Đang chờ xóa tài khoản đăng nhập',
+  employeeDeleteReconciliationLabel: 'Cần đối soát xóa tài khoản đăng nhập',
+  employeeDeleteStorageBlockedLabel: 'Chưa xóa: còn tệp thuộc sở hữu tài khoản',
+  employeeDeleteConfirmedLabel: 'Đã xác nhận xóa tài khoản đăng nhập',
+  employeeDeleteSuccess:
+    'Đã xác nhận tài khoản đăng nhập không còn tồn tại. Hồ sơ nhân viên và công việc vẫn được giữ nguyên.',
+  employeeDeletePending:
+    'Đã tắt quyền truy cập; tài khoản đăng nhập chưa được xóa.',
+  employeeDeleteFailed:
+    'Thao tác chưa hoàn tất. Quyền truy cập vẫn bị tắt, hồ sơ nhân viên và công việc vẫn nguyên vẹn; hãy thử lại.',
+  employeeDeleteStorageBlocked:
+    'Chưa thể xóa: tài khoản còn sở hữu tệp trong kho lưu trữ và quyền sở hữu chưa được chuyển an toàn. Không có tệp nào bị xóa.',
+  employeeDeleteLastAdmin:
+    'Không thể xóa tài khoản đăng nhập của quản trị viên đang hoạt động cuối cùng.',
+  employeeDeleteNotDeletable:
+    'Nhân viên này không còn có thể xóa tài khoản đăng nhập (chưa liên kết đăng nhập hoặc đã xóa).',
+  employeeDeleteLifecycleConflict:
+    'Một thao tác vòng đời khác đang mở cho nhân viên này. Hãy hoàn tất hoặc đối soát thao tác đó trước.',
+  employeeDeleteKeyConflict:
+    'Mã thao tác đã được dùng cho một hành động khác. Hãy mở lại mục này.',
+  employeeDeleteStale:
+    'Trạng thái thao tác đã thay đổi. Hãy tải lại trước khi thử lại.',
+  employeeDeleteProviderUnavailable:
+    'Máy chủ chưa có cấu hình xóa tài khoản đăng nhập. Quyền truy cập đã bị tắt; hãy thử lại sau khi cấu hình được khôi phục.',
+  employeeDeleteLoadFailed: 'Không thể tải trạng thái xóa tài khoản đăng nhập.',
   // People → Vendors (#73): the company directory and its one bounded create.
   vendorsLink: 'Nhà cung cấp',
   vendorDirectory: 'Danh sách nhà cung cấp',
@@ -725,6 +768,7 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     employeeAccessActive: 'Active',
     employeeAccessInactive: 'Access disabled',
     employeeAccessUnlinked: 'Not linked to sign-in',
+    employeeAccessAccountDeleted: 'Sign-in account deleted',
     // Employee deactivation (issue #66).
     employeeActions: 'Actions',
     employeeDeactivate: 'Deactivate access',
@@ -763,6 +807,50 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     employeeDeactivateProviderUnavailable:
       'The server has no sign-in confirmation configuration. Access is disabled; retry after configuration is restored.',
     employeeDeactivateLoadFailed: 'Deactivation state did not load.',
+    // Permanent sign-in account deletion (issue #67).
+    employeeDelete: 'Delete sign-in account',
+    employeeDeleteReconcile: 'Reconcile account deletion',
+    employeeDeleteTarget: 'Retained employee',
+    employeeDeleteNote:
+      'Permanently removes this exact employee’s sign-in account. The employee record, name, identifier and all recorded work are retained.',
+    employeeDeleteConfirmLabel: 'Type the email to confirm',
+    employeeDeleteConfirmHint:
+      'Type exactly “{email}” to enable the permanent delete button.',
+    employeeDeleteConfirmRequired: 'Type this employee’s email.',
+    employeeDeleteConfirmMismatch:
+      'The typed email does not match this employee.',
+    employeeDeleteConfirm: 'Permanently delete the sign-in account',
+    employeeDeleteState: 'Action state',
+    employeeDeleteStorageNote:
+      'Uploaded files are technically owned by the sign-in account. The system preflights them and only reassigns ownership to an active admin; file content, file id, path and uploader attribution are unchanged.',
+    employeeDeleteStorageEvidence:
+      'Files owned: {owned} · ownership reassigned: {reassigned}',
+    employeeDeletePendingLabel: 'Account deletion confirmation pending',
+    employeeDeleteReconciliationLabel:
+      'Account deletion reconciliation required',
+    employeeDeleteStorageBlockedLabel:
+      'Not deleted: files are still owned by the account',
+    employeeDeleteConfirmedLabel: 'Sign-in account deletion confirmed',
+    employeeDeleteSuccess:
+      'The sign-in account was confirmed absent. The employee record and their work are retained.',
+    employeeDeletePending:
+      'Access is disabled; the sign-in account is not deleted yet.',
+    employeeDeleteFailed:
+      'The action did not complete. Access stays disabled and the employee record and work are intact; retry.',
+    employeeDeleteStorageBlocked:
+      'Deletion could not confirm: the account still owns files and ownership was not safely reassigned. No file was deleted.',
+    employeeDeleteLastAdmin:
+      'The last active admin’s sign-in account cannot be deleted.',
+    employeeDeleteNotDeletable:
+      'This employee’s sign-in account can no longer be deleted (no linked sign-in or already deleted).',
+    employeeDeleteLifecycleConflict:
+      'Another lifecycle action is open for this employee. Finish or reconcile it first.',
+    employeeDeleteKeyConflict:
+      'This action key was already used for a different action. Reopen this entry.',
+    employeeDeleteStale: 'The action state changed. Reload before retrying.',
+    employeeDeleteProviderUnavailable:
+      'The server has no account-deletion configuration. Access is disabled; retry after configuration is restored.',
+    employeeDeleteLoadFailed: 'Deletion state did not load.',
     // People → Vendors (#73): the company directory and its one bounded create.
     vendorsLink: 'Vendors',
     vendorDirectory: 'Vendor directory',

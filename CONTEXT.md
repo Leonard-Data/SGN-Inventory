@@ -23,8 +23,12 @@ An employee whose company inventory access is disabled, regardless of whether th
 _Avoid_: Signed-out employee
 
 **Unlinked employee**:
-An employee record with no confirmed sign-in identity. It is a distinct access state, not a pending invitation, a disabled account or a deleted person; the schema records no invitation.
-_Avoid_: Invited employee, deleted employee
+An employee record with no confirmed sign-in identity that has never had one confirmed and recorded as deleted. It is a distinct access state, not a pending invitation and not a disabled account; the schema records no invitation.
+_Avoid_: Invited employee
+
+**Account-deleted employee**:
+A retained employee whose sign-in account was permanently deleted after the provider confirmed it absent. The employee row, UUID, name, role, locale, every business reference and every uploader attribution remain; the state is terminal in this release, so the person is never presented as merely inactive or as an imported, never-linked record.
+_Avoid_: Deleted employee row, anonymized person, re-invitable account
 
 **Employee interface language**:
 The employee's preferred Vietnamese or English interface language. It is independent of the language of addresses, source records and signed documents.
@@ -33,6 +37,14 @@ _Avoid_: Record language
 **Employee deactivation**:
 The controlled disabling of a linked employee's company inventory access, completed only after the exact sign-in block is confirmed by the sign-in provider. Membership is disabled first and an unconfirmed provider result stays a reconciliation state, not a completed deactivation.
 _Avoid_: Access patching, account deletion
+
+**Employee account deletion**:
+The permanent removal of one employee's sign-in account, completed only after the provider confirms the account is absent. Membership is disabled and the restrictive Auth link cleared first, owned files have their technical ownership reassigned to a live active admin custodian, and the retained employee, their work and their attribution are never erased, reassigned or anonymized. An Auth or Storage failure stays a visible, resumable partial state.
+_Avoid_: Employee deletion, record deletion, document deletion
+
+**Storage ownership custodian**:
+The live active admin whose sign-in identity becomes the technical owner of a departing employee's Storage objects before that employee's account is deleted. Only the ownership columns move; object identity, path, metadata, bytes and uploader attribution are unchanged.
+_Avoid_: File re-upload, document transfer
 
 **Administration operation**:
 The durable, revision-checked record of one employee administration action, carrying the target, the acting admin, the submission key and the provider reconciliation state. It is retained evidence and is never rewritten or deleted.
