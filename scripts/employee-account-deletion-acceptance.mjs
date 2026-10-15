@@ -524,6 +524,48 @@ const setInput = (selector, value) => `(() => {
   return true;
 })()`;
 
+// The admin employee list is a bounded keyset page (30 rows ordered by id), so a fixture row is
+// only guaranteed to exist somewhere in the list, not on the first page. This walks the
+// next-page cursor and reports exactly what it saw, so a genuine absence stays distinguishable
+// from a selector or layout change.
+async function openDirectoryPage(session, cdpPort, email) {
+  const probe = `(() => {
+    const rows = [...document.querySelectorAll('table.data-table tbody tr')];
+    const row = rows.find((tr) => tr.textContent.includes(${JSON.stringify(email)}));
+    const nextLink = [...document.querySelectorAll('a.pager-btn')]
+      .map((a) => a.getAttribute('href'))
+      .find((href) => href && href.includes('after='));
+    return {
+      found: row ? {
+        text: row.textContent.replace(/\\s+/g, ' ').trim(),
+        badges: [...row.querySelectorAll('.badge')].map((b) => b.textContent.trim()),
+        buttons: [...row.querySelectorAll('button')].map((b) => b.textContent.trim()),
+      } : null,
+      rowCount: rows.length,
+      sample: rows.slice(0, 3).map((r) => r.textContent.replace(/\\s+/g, ' ').trim().slice(0, 110)),
+      next: nextLink ?? null,
+      path: location.pathname + location.search,
+    };
+  })()`;
+  let seen = null;
+  for (let page = 0; page < 8; page += 1) {
+    seen = evaluate(session, cdpPort, probe);
+    if (seen.found) return seen.found;
+    if (!seen.next) break;
+    browser(session, cdpPort, ['open', new URL(seen.next, appUrl).toString()]);
+    await sleep(600);
+    await waitFor(
+      session,
+      cdpPort,
+      `() => Boolean(document.querySelector('table.data-table'))`,
+      60,
+    );
+  }
+  assert.fail(
+    `the directory row for ${email} was not rendered: ${JSON.stringify(seen)}`,
+  );
+}
+
 // ---------------------------------------------------------------- checks
 const limitations = [];
 try {
@@ -861,20 +903,11 @@ try {
     `() => Boolean(document.querySelector('main table.data-table'))`,
     120,
   );
-  const listState = evaluate(
+  const listState = await openDirectoryPage(
     browserSession,
     cdpPort,
-    `(() => {
-      const rows = [...document.querySelectorAll('main table.data-table tbody tr')];
-      const row = rows.find((tr) => tr.textContent.includes(${JSON.stringify(targetEmployee.email)}));
-      return row ? {
-        text: row.textContent.replace(/\\s+/g, ' ').trim(),
-        badges: [...row.querySelectorAll('.badge')].map((b) => b.textContent.trim()),
-        buttons: [...row.querySelectorAll('button')].map((b) => b.textContent.trim()),
-      } : null;
-    })()`,
+    targetEmployee.email,
   );
-  assert.ok(listState, 'the retained employee is still listed');
   assert.ok(
     listState.badges.some((badge) => /tài khoản|xóa|deleted/i.test(badge)),
     `the account-deleted state is shown: ${JSON.stringify(listState.badges)}`,
@@ -885,12 +918,14 @@ try {
     'a deleted sign-in account offers no lifecycle action',
   );
   // The confirmation vocabulary for a live account: the destructive control stays disabled
-  // until the employee's own email is typed, and it is never submitted here.
+  // until the employee's own email is typed, and it is never submitted here. The page that
+  // holds the live account is opened first, since the list is paged.
+  await openDirectoryPage(browserSession, cdpPort, adminBEmployee.email);
   evaluate(
     browserSession,
     cdpPort,
     `(() => {
-      const rows = [...document.querySelectorAll('main table.data-table tbody tr')];
+      const rows = [...document.querySelectorAll('table.data-table tbody tr')];
       const row = rows.find((tr) => tr.textContent.includes(${JSON.stringify(adminBEmployee.email)}));
       const button = [...(row?.querySelectorAll('button') ?? [])].find((b) => /xóa tài khoản|delete sign-in/i.test(b.textContent));
       if (button) button.click();
