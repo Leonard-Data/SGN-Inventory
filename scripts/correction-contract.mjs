@@ -125,7 +125,7 @@ export async function correctionContract({
   );
   await asUser(5);
   await check(
-    'staff atomically applies correction with property history and no review handoff',
+    'staff atomically applies a non-price correction with no history and no review handoff',
     async () => {
       const current = await request(id);
       // A pre-existing clock-skew control must never acquire this request's reason.
@@ -157,18 +157,24 @@ export async function correctionContract({
       assert.equal(after.status, 'applied');
       assert.equal(after.outcome_actor_id, employees[5]);
       assert.equal((await row()).notes, 'Đã chỉnh đúng nguồn');
-      const events = (
-        await db.query(
-          'select actor_id,explanation,after_values from public.property_history where property_id=$1 and explanation=$2',
-          [property, 'Applied the supported source correction'],
-        )
-      ).rows;
-      assert.ok(
-        events.some(
-          (e) =>
-            e.actor_id === employees[5] &&
-            e.after_values.notes === 'Đã chỉnh đúng nguồn',
-        ),
+      // A non-price correction changes the record but is no longer recorded anywhere.
+      assert.deepEqual(
+        (
+          await db.query(
+            'select id,explanation from public.property_history where property_id=$1 and explanation=$2',
+            [property, 'Applied the supported source correction'],
+          )
+        ).rows,
+        [],
+      );
+      assert.deepEqual(
+        (
+          await db.query(
+            'select id from public.property_price_history where property_id=$1 and explanation=$2',
+            [property, 'Applied the supported source correction'],
+          )
+        ).rows,
+        [],
       );
       await fails(
         decide,
@@ -182,6 +188,41 @@ export async function correctionContract({
         '23514',
       );
       assert.equal((await row()).notes, 'Đã chỉnh đúng nguồn');
+    },
+  );
+  await asUser(1);
+  await check(
+    'a proposal matching the live observed value is refused without closing the request',
+    async () => {
+      const observed = await row();
+      const noop = (
+        await db.query(submit, [
+          property,
+          'property',
+          property,
+          'incorrect',
+          'Proposal that repeats the live observed value',
+          { notes: observed.notes },
+          observed.revision,
+          observed.revision,
+        ])
+      ).rows[0].id;
+      await asUser(5);
+      const pending = await request(noop);
+      await fails(
+        decide,
+        [
+          noop,
+          pending.revision,
+          'apply',
+          'A proposal that changes nothing must be refused',
+          null,
+        ],
+        '23514',
+      );
+      assert.equal((await request(noop)).status, 'open');
+      assert.deepEqual(await row(), observed);
+      await asUser(1);
     },
   );
   await check(
@@ -394,7 +435,7 @@ export async function correctionContract({
           property,
           'incorrect',
           'Synthetic correction rollback fixture',
-          { notes: 'must roll back' },
+          { sale_price_vnd: '888000' },
           current.revision,
           current.revision,
         ])

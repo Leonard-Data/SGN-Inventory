@@ -591,11 +591,6 @@ function eventsFor(ids) {
       : `select id, lock_id, action, actor_id, reason from public.lock_events where false`,
   );
 }
-function propertyHistory(property, field = 'status') {
-  return operatorSql(
-    `select id, actor_id, changed_fields, before_values, after_values from public.property_history where property_id = '${property.id}' and changed_fields @> '{${field}}' order by occurred_at`,
-  );
-}
 function myLockIds() {
   return operatorSql(
     `select id from public.property_locks where requested_by in (${fixtureIds}) order by id`,
@@ -952,16 +947,16 @@ const manager = await userClient('manager');
   assert.equal(row.previous_status, declaredProperties.main.status);
   assert.equal(row.reversed_at, null);
   assert.equal(row.version, 1);
-  const history = propertyHistory(main);
+  // A status change is no longer recorded in the property history.
   assert.equal(
-    history.length,
-    Number(mainHistoryBefore) + 1,
-    'The sale recorded exactly one new property status change',
+    Number(
+      operatorSql(
+        `select count(*)::int as n from public.property_history where property_id = '${main.id}'`,
+      )[0].n,
+    ),
+    Number(mainHistoryBefore),
+    'The sale recorded no new property history',
   );
-  const change = history[history.length - 1];
-  assert.equal(change.actor_id, employeeIds.manager);
-  assert.equal(change.before_values.status, declaredProperties.main.status);
-  assert.equal(change.after_values.status, 'sold');
   observed('a manager confirms a past-dated sale through the rendered form', {
     form,
   });

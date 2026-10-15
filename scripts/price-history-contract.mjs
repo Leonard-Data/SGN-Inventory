@@ -497,6 +497,62 @@ export async function priceHistoryContract({
     );
   });
   await check(
+    'only an asking-price change is recorded in the property history',
+    async () => {
+      // A retained non-price row from before the rule change stays readable and untouched.
+      await asOwner();
+      const retained = (
+        await db.query(
+          `insert into public.property_history(property_id,actor_id,actor_name,target,target_id,changed_fields,before_values,after_values)
+           select $1,id,display_name,'address',$1,array['address_text'],'{"address_text":"Cũ"}','{"address_text":"Mới"}' from public.employees where id=$2 returning id`,
+          [id, employees[0]],
+        )
+      ).rows[0].id;
+      await asUser(0);
+      const before = (
+        await db.query(
+          'select id from public.property_history where property_id=$1 order by id',
+          [id],
+        )
+      ).rows;
+      await maintain(id, { notes: 'ghi chú không phải giá' });
+      await maintain(id, {
+        sale_price_vnd: '11000',
+        notes: 'giá kèm ghi chú',
+      });
+      const after = (
+        await db.query(
+          'select id from public.property_history where property_id=$1 order by id',
+          [id],
+        )
+      ).rows;
+      // Two edits, but only the one that changed the asking price records anything.
+      assert.equal(after.length, before.length + 1);
+      const event = (
+        await db.query(
+          'select actor_id,changed_fields,before_values,after_values from public.property_history where property_id=$1 order by occurred_at desc,id desc limit 1',
+          [id],
+        )
+      ).rows[0];
+      assert.equal(event.actor_id, employees[0]);
+      assert.deepEqual(event.changed_fields, ['sale_price_vnd']);
+      assert.deepEqual(event.before_values, { sale_price_vnd: '10030' });
+      assert.deepEqual(event.after_values, { sale_price_vnd: '11000' });
+      const ids = after.map((row) => row.id);
+      await maintain(id, { notes: 'ghi chú đơn thuần' });
+      assert.deepEqual(
+        (
+          await db.query(
+            'select id from public.property_history where property_id=$1 order by id',
+            [id],
+          )
+        ).rows.map((row) => row.id),
+        ids,
+      );
+      assert.ok(ids.includes(retained), 'the retained row survives');
+    },
+  );
+  await check(
     'shared-contact history never leaks into a price series',
     async () => {
       await asUser(5);

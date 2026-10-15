@@ -74,7 +74,10 @@ export function BusinessValues({
                 extraLabels[name]?.[locale === 'vi' ? 0 : 1] ??
                 name}
             </dt>
-            <dd translate="no">{content}</dd>
+            {/* One clipped line; the full value stays in the DOM and on the title. */}
+            <dd translate="no" title={content ?? undefined}>
+              {content}
+            </dd>
           </div>
         );
       })}
@@ -179,6 +182,7 @@ export function History({
             </>
           ) : null}
         </div>
+        <p className="field-hint">{text.historyNote}</p>
       </div>
     </section>
   );

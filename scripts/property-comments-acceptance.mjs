@@ -1294,12 +1294,7 @@ await settle(secondary);
     'Fixture comment posted before archiving',
   );
   const revision = await archiveRevision(reviewer, archived.id);
-  const archivedNow = await archive(
-    reviewer,
-    archived.id,
-    revision,
-    `${fixtures.namespace} archived fixture`,
-  );
+  const archivedNow = await archive(reviewer, archived.id, revision);
   assert.equal(
     archivedNow.error,
     null,
@@ -2751,15 +2746,14 @@ async function archiveRevision(client, propertyId) {
   return revision.data.revision;
 }
 // The revision is read beforehand so the archive RPC request itself reaches the database
-// immediately when it is dispatched. The accompanying notes value is the archive's own
-// server-timestamped property-history marker: archiving alone is not a history field.
-function archive(client, propertyId, revision, marker) {
+// immediately when it is dispatched. Archiving alone is not a recorded history field.
+function archive(client, propertyId, revision) {
   return client.rpc('maintain_property', {
     p_property_id: propertyId,
     p_target: 'property',
     p_target_id: propertyId,
     p_expected_revision: revision,
-    p_changes: { archived_at: new Date().toISOString(), notes: marker },
+    p_changes: { archived_at: new Date().toISOString() },
     p_property_revision: revision,
   });
 }
@@ -2783,16 +2777,16 @@ async function waitForMarker(markerKey) {
   }
   return false;
 }
-// Server-side ordering evidence for one round: the archive records its own update in
-// property_history with clock_timestamp(), directly comparable with the comment's
-// clock_timestamp posting time.
-async function raceEvidence(propertyId, marker) {
+// Server-side ordering evidence for one round. Only asking-price changes are recorded, so the
+// archive no longer leaves a history marker; the competing archive is instead bracketed by a
+// server-clock read taken after both requests returned. A comment that committed during the
+// round precedes that read, and so does the archive that closed the property afterwards.
+async function raceEvidence(propertyId) {
   const rows = await operatorSqlAsync(
     `select
        (select count(*)::int from public.property_comments where property_id = '${propertyId}') as comments,
        (select max(created_at) from public.property_comments where property_id = '${propertyId}') as comment_at,
-       (select max(occurred_at) from public.property_history
-          where property_id = '${propertyId}' and after_values->>'notes' = '${marker}') as archived_at`,
+       clock_timestamp() as archived_at`,
   );
   const row = rows[0] ?? {};
   return {
@@ -2806,7 +2800,6 @@ async function raceEvidence(propertyId, marker) {
 async function runRaceRound(round) {
   await resetRaceProperty(race.id);
   const revision = await archiveRevision(reviewer, race.id);
-  const marker = `${fixtures.namespace} race round ${round}`;
   const markerKey = randomUUID();
   // Short hold: both requests must queue and still finish inside the 8s authenticated
   // statement timeout.
@@ -2823,11 +2816,11 @@ async function runRaceRound(round) {
         `Đua số ${round}`,
       ),
     ),
-    Promise.resolve(archive(reviewer, race.id, revision, marker)),
+    Promise.resolve(archive(reviewer, race.id, revision)),
   ]);
   await waitForExit(holder);
   assert.equal(archivedResult.error, null, 'The competing archive commits');
-  const evidence = await raceEvidence(race.id, marker);
+  const evidence = await raceEvidence(race.id);
   assert.equal(
     await isArchived(race.id),
     true,
@@ -2849,7 +2842,7 @@ async function runRaceRound(round) {
     );
     assert.ok(
       evidence.archivedAt !== null,
-      'The archive recorded its own update in the property history',
+      'The round recorded the server time the archive had already reached',
     );
     assert.ok(
       Date.parse(evidence.commentAt) < Date.parse(evidence.archivedAt),
@@ -2900,7 +2893,6 @@ async function runRaceRound(round) {
     );
     assert.equal(posted.error, null, 'The race comment posts before archiving');
     const revision = await archiveRevision(reviewer, race.id);
-    const marker = `${fixtures.namespace} removal race ${round}`;
     const markerKey = randomUUID();
     const holder = holdPropertyLock(race.id, 5, markerKey);
     assert.ok(
@@ -2916,7 +2908,7 @@ async function runRaceRound(round) {
           p_kind: 'author',
         }),
       ),
-      Promise.resolve(archive(reviewer, race.id, revision, marker)),
+      Promise.resolve(archive(reviewer, race.id, revision)),
     ]);
     await waitForExit(holder);
     assert.equal(archivedResult.error, null, 'The competing archive commits');
@@ -2957,7 +2949,6 @@ async function runRaceRound(round) {
   );
   assert.equal(posted.error, null, 'The moderation race comment posts');
   const revision = await archiveRevision(reviewer, race.id);
-  const marker = `${fixtures.namespace} moderation removal race`;
   const markerKey = randomUUID();
   const holder = holdPropertyLock(race.id, 5, markerKey);
   assert.ok(await waitForMarker(markerKey), 'The holder records its marker');
@@ -2971,7 +2962,7 @@ async function runRaceRound(round) {
         p_reason: 'Gỡ nội dung nhạy cảm sau lưu trữ',
       }),
     ),
-    Promise.resolve(archive(reviewer, race.id, revision, marker)),
+    Promise.resolve(archive(reviewer, race.id, revision)),
   ]);
   await waitForExit(holder);
   assert.equal(archivedResult.error, null, 'The competing archive commits');
@@ -3075,7 +3066,6 @@ async function runRaceRound(round) {
     );
     assert.equal(posted.error, null, 'The edit/archive race comment posts');
     const revision = await archiveRevision(reviewer, race.id);
-    const marker = `${fixtures.namespace} edit race ${round}`;
     const markerKey = randomUUID();
     const holder = holdPropertyLock(race.id, 5, markerKey);
     assert.ok(
@@ -3092,7 +3082,7 @@ async function runRaceRound(round) {
           p_key: randomUUID(),
         }),
       ),
-      Promise.resolve(archive(reviewer, race.id, revision, marker)),
+      Promise.resolve(archive(reviewer, race.id, revision)),
     ]);
     await waitForExit(holder);
     assert.equal(archivedResult.error, null, 'The competing archive commits');

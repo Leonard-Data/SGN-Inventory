@@ -12,7 +12,7 @@ export async function maintenanceContract({
   await asUser(0);
   let created;
   await check(
-    'minimal known-address creation assigns stable identity with unknown optional facts and history',
+    'minimal known-address creation assigns stable identity with unknown optional facts and no history',
     async () => {
       created = (
         await db.query('select public.create_property($1,$2,$3) as id', [
@@ -41,21 +41,15 @@ export async function maintenanceContract({
         ).rows[0].address_text,
         'Nhà nguồn 50%_ Lý Thường Kiệt',
       );
-      assert.ok(
-        (
-          await db.query(
-            'select actor_id from public.property_history where property_id=$1',
-            [created],
-          )
-        ).rows.every((r) => r.actor_id === employees[0]),
-      );
-      assert.ok(
+      // An address-only creation carries no asking-price change, so it records no history.
+      assert.deepEqual(
         (
           await db.query(
             'select id from public.property_history where property_id=$1',
             [created],
           )
-        ).rows.length >= 1,
+        ).rows,
+        [],
       );
     },
   );
@@ -326,7 +320,7 @@ export async function maintenanceContract({
   );
   let shared, unrelated, replacementContact;
   await check(
-    'shared contact edit fans out immutable attributable history without touching unrelated identities',
+    'shared contact edit updates the shared identity without touching unrelated identities or property history',
     async () => {
       shared = (
         await db.query('select public.create_contact($1) as id', [
@@ -376,27 +370,27 @@ export async function maintenanceContract({
         preview.revision,
         { raw_phone_text: '0900 mới %_', phones: ['0900999999'] },
       ]);
-      for (const id of [created, property]) {
-        const event = (
-          await db.query(
-            "select actor_id,before_values,after_values from public.property_history where property_id=$1 and target='contact' and target_id=$2",
-            [id, shared],
-          )
-        ).rows;
-        assert.equal(event.length, 1);
-        assert.equal(event[0].actor_id, employees[5]);
-        assert.equal(event[0].before_values.raw_phone_text, '0900 123 456');
-        assert.equal(event[0].after_values.raw_phone_text, '0900 mới %_');
-      }
+      // The shared person row carries the correction; no property records contact history.
       assert.equal(
         (
           await db.query(
-            "select id from public.property_history where property_id=$1 and target='contact' and target_id=$2",
-            [other, shared],
+            'select raw_phone_text from public.contacts where id=$1',
+            [shared],
           )
-        ).rows.length,
-        0,
+        ).rows[0].raw_phone_text,
+        '0900 mới %_',
       );
+      for (const id of [created, property, other]) {
+        assert.equal(
+          (
+            await db.query(
+              "select id from public.property_history where property_id=$1 and target='contact' and target_id=$2",
+              [id, shared],
+            )
+          ).rows.length,
+          0,
+        );
+      }
       assert.equal(
         (
           await db.query(
@@ -420,7 +414,7 @@ export async function maintenanceContract({
     },
   );
   await check(
-    'wrong-person link replacement and unlink preserve shared identity and permanent fan-out evidence',
+    'wrong-person link replacement and unlink preserve the shared identity without property history',
     async () => {
       const link = (
         await db.query(
@@ -494,7 +488,7 @@ export async function maintenanceContract({
             [created, shared],
           )
         ).rows.length,
-        1,
+        0,
       );
     },
   );
@@ -609,7 +603,7 @@ export async function maintenanceContract({
   ).rows[0].id;
   await asUser(0);
   await check(
-    'any Active employee corrects a shared linked contact with attributable history on every linked property',
+    'any Active employee corrects a shared linked contact without property history',
     async () => {
       const preview = (
         await db.query('select public.contact_impact($1) as impact', [shared])
@@ -642,17 +636,16 @@ export async function maintenanceContract({
           raw_phone_text: '0900 %_ mới',
         },
       );
-      for (const id of [created, property]) {
-        const event = (
+      // A contact correction is no longer recorded in any property's history.
+      assert.equal(
+        (
           await db.query(
-            "select actor_id,before_values,after_values from public.property_history where property_id=$1 and target='contact' and target_id=$2 order by occurred_at desc limit 1",
-            [id, shared],
+            "select count(*)::int as n from public.property_history where target='contact' and target_id=$1",
+            [shared],
           )
-        ).rows[0];
-        assert.equal(event.actor_id, employees[0]);
-        assert.equal(event.before_values.display_name, 'Người chung');
-        assert.equal(event.after_values.display_name, 'Người chung đính chính');
-      }
+        ).rows[0].n,
+        0,
+      );
       await fails(
         mutate,
         [
@@ -763,12 +756,12 @@ export async function maintenanceContract({
   await db.exec('reset role');
   await db.query("select set_config('request.jwt.claim.sub','',false)");
   await check(
-    'an injected history failure rolls back the shared-contact correction',
+    'an injected history failure rolls back a price edit',
     async () => {
       const current = (
         await db.query(
-          'select display_name,revision from public.contacts where id=$1',
-          [shared],
+          'select sale_price_vnd::text as price,revision from public.properties where id=$1',
+          [created],
         )
       ).rows[0];
       await db.exec(
@@ -779,18 +772,18 @@ export async function maintenanceContract({
         mutate,
         [
           created,
-          'contact',
-          shared,
+          'property',
+          created,
           current.revision,
-          { display_name: 'không được lưu' },
+          { sale_price_vnd: '7654321' },
         ],
         '23514',
       );
       assert.deepEqual(
         (
           await db.query(
-            'select display_name,revision from public.contacts where id=$1',
-            [shared],
+            'select sale_price_vnd::text as price,revision from public.properties where id=$1',
+            [created],
           )
         ).rows[0],
         current,
@@ -1233,7 +1226,11 @@ export async function maintenanceContract({
       ).rows;
       await fails(
         'select public.create_property($1,$2,$3)',
-        ['rent', {}, { format: 'current', address_text: 'Rollback fixture' }],
+        [
+          'rent',
+          { monthly_rent_vnd: '5000000' },
+          { format: 'current', address_text: 'Rollback fixture' },
+        ],
         '23514',
       );
       assert.deepEqual(
@@ -1349,17 +1346,16 @@ export async function maintenanceContract({
         ).rows[0],
         { address_text: 'Địa chỉ khác chưa phân loại', is_primary: false },
       );
-      const event = (
-        await db.query(
-          "select before_values,after_values from public.property_history where property_id=$1 and target='address' and target_id=$2",
-          [created, successor],
-        )
-      ).rows[0];
+      // An address correction is no longer recorded in the property history.
       assert.equal(
-        event.after_values.address_text,
-        'Địa chỉ khác đã đính chính',
+        (
+          await db.query(
+            "select count(*)::int as n from public.property_history where property_id=$1 and target='address' and target_id=$2",
+            [created, successor],
+          )
+        ).rows[0].n,
+        0,
       );
-      assert.equal(event.after_values.format, 'alternate');
     },
   );
   await check(
