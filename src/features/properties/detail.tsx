@@ -46,7 +46,7 @@ const RECORD_TABS = ['overview', 'docs', 'comments'] as const;
 type RecordTab = (typeof RECORD_TABS)[number];
 function DetailActionDialog({
   title,
-  description,
+  headTitle = false,
   closeLabel,
   children,
   open,
@@ -54,7 +54,7 @@ function DetailActionDialog({
   size = 'wide',
 }: {
   title: string;
-  description?: string;
+  headTitle?: boolean;
   closeLabel: string;
   children: ReactNode;
   open: boolean;
@@ -81,7 +81,7 @@ function DetailActionDialog({
     >
       <div className="sgn-dialog-panel">
         <div className="sgn-dialog-head">
-          {description ? <p>{description}</p> : null}
+          {headTitle ? <h2>{title}</h2> : null}
           <button
             className="sgn-dialog-close"
             type="button"
@@ -1108,7 +1108,6 @@ export function Detail({
                     open={actionDialog === 'sale'}
                     onClose={() => setActionDialog(null)}
                     title={text.completedSaleTitle}
-                    description={text.completedSaleNote}
                     closeLabel={text.close}
                   >
                     <SaleCompletion
@@ -1157,6 +1156,7 @@ export function Detail({
                   open={actionDialog === 'correction'}
                   onClose={() => setActionDialog(null)}
                   title={text.navCorrections}
+                  headTitle
                   closeLabel={text.close}
                 >
                   <CorrectionReport

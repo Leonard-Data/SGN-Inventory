@@ -659,7 +659,7 @@ dialog.sgn-dialog::backdrop { background: color-mix(in oklab, var(--fg) 46%, tra
 }
 .sgn-dialog[data-size="wide"] .sgn-dialog-panel { width: min(1040px, calc(100vw - 32px)); }
 .sgn-dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); padding: var(--space-6); border-bottom: 1px solid var(--border-soft); }
-.sgn-dialog-head p { margin-top: var(--space-2); font-size: var(--text-sm); color: var(--muted); }
+.sgn-dialog-head h2 { font-family: var(--font-body); font-size: var(--text-lg); font-weight: 600; line-height: 1.3; }
 .sgn-dialog-close { width: var(--btn-h-sm); height: var(--btn-h-sm); display: grid; place-items: center; flex: 0 0 auto; margin-left: auto; background: transparent; border: 1px solid transparent; border-radius: var(--radius-md); color: var(--muted); }
 .sgn-dialog-close:hover { background: var(--surface-warm); color: var(--fg); border-color: var(--border); }
 .sgn-dialog-body { flex: 1; overflow-y: auto; padding: var(--space-6); }
