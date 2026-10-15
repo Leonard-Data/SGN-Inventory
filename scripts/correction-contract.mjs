@@ -321,15 +321,15 @@ export async function correctionContract({
     'an unchanged price alongside a real non-price correction applies without history',
     async () => {
       const observed = await row();
-      const price = (
+      const beforePrice = (
         await db.query(
           'select sale_price_vnd::text as price from public.properties where id=$1',
           [property],
         )
       ).rows[0].price;
-      const beforeHistory = (
+      const beforeHistoryIds = (
         await db.query(
-          'select id,explanation from public.property_history where property_id=$1 order by id',
+          'select id from public.property_history where property_id=$1 order by id',
           [property],
         )
       ).rows;
@@ -340,7 +340,10 @@ export async function correctionContract({
           property,
           'incorrect',
           'Price is unchanged but the note needs correction',
-          { sale_price_vnd: price, notes: 'Mixed correction note' },
+          {
+            sale_price_vnd: beforePrice,
+            notes: 'Mixed correction note',
+          },
           observed.revision,
           observed.revision,
         ])
@@ -356,14 +359,23 @@ export async function correctionContract({
       ]);
       assert.equal((await request(mixed)).status, 'applied');
       assert.equal((await row()).notes, 'Mixed correction note');
+      assert.equal(
+        (
+          await db.query(
+            'select sale_price_vnd::text as price from public.properties where id=$1',
+            [property],
+          )
+        ).rows[0].price,
+        beforePrice,
+      );
       assert.deepEqual(
         (
           await db.query(
-            'select id,explanation from public.property_history where property_id=$1 order by id',
+            'select id from public.property_history where property_id=$1 order by id',
             [property],
           )
         ).rows,
-        beforeHistory,
+        beforeHistoryIds,
       );
       assert.deepEqual(
         (

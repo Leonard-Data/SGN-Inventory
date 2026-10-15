@@ -2777,26 +2777,17 @@ async function waitForMarker(markerKey) {
   }
   return false;
 }
-// Server-side ordering evidence for one round. Only asking-price changes are recorded, so the
-// archive no longer leaves a history marker; the competing archive is instead bracketed by a
-// server-clock read taken after both requests returned. A comment that committed during the
-// round precedes that read, and so does the archive that closed the property afterwards.
+// The archive/comment commit ordering is not observable after the price-only history change, so
+// this evidence keeps only durable outcomes and post-archive retry behavior.
 async function raceEvidence(propertyId) {
   const rows = await operatorSqlAsync(
-    `select
-       (select count(*)::int from public.property_comments where property_id = '${propertyId}') as comments,
-       (select max(created_at) from public.property_comments where property_id = '${propertyId}') as comment_at,
-       clock_timestamp() as archived_at`,
+    `select (select count(*)::int from public.property_comments where property_id = '${propertyId}') as comments`,
   );
   const row = rows[0] ?? {};
-  return {
-    comments: Number(row.comments ?? 0),
-    commentAt: row.comment_at ?? null,
-    archivedAt: row.archived_at ?? null,
-  };
+  return { comments: Number(row.comments ?? 0) };
 }
 // One round: the parent Property row is held, then both real sessions compete for it. The two
-// requests serialize on that row, and the server timestamps prove which one committed first.
+// requests serialize on that row, but this harness does not expose which one committed first.
 async function runRaceRound(round) {
   await resetRaceProperty(race.id);
   const revision = await archiveRevision(reviewer, race.id);
@@ -2839,14 +2830,6 @@ async function runRaceRound(round) {
       evidence.comments,
       1,
       'The winning post left exactly one comment',
-    );
-    assert.ok(
-      evidence.archivedAt !== null,
-      'The round recorded the server time the archive had already reached',
-    );
-    assert.ok(
-      Date.parse(evidence.commentAt) < Date.parse(evidence.archivedAt),
-      'A committed comment always precedes the archive that later closed the property',
     );
     const lateRetry = await attempt(
       race.id,
