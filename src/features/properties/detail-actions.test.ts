@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   activeDetailAction,
   canEditDetail,
+  canOpenEditDetail,
   type DetailAction,
 } from './detail-actions.ts';
 
@@ -26,19 +27,38 @@ function employee(id: string, role: TestEmployee['role']): TestEmployee {
   return { id, role };
 }
 
-test('an employee without property edit authority cannot open Edit', () => {
+test('an employee with shared-contact authority can open Edit', () => {
   const colleague = employee('colleague', 'sales');
 
   assert.equal(canEditDetail(colleague, property), false);
+  assert.equal(canOpenEditDetail(colleague, property), true);
   assert.equal(
     activeDetailAction(
       { tool: 'edit', forEmployee: colleague, propertyId: property.id },
       colleague,
       property,
     ),
-    null,
+    'edit',
   );
 });
+
+test(
+  'shared-contact Edit stays closed for a non-reviewer on an archived property',
+  () => {
+    const colleague = employee('colleague', 'sales');
+    const archived = { ...property, archived_at: '2026-01-01T00:00:00Z' };
+
+    assert.equal(canOpenEditDetail(colleague, archived), false);
+    assert.equal(
+      activeDetailAction(
+        { tool: 'edit', forEmployee: colleague, propertyId: archived.id },
+        colleague,
+        archived,
+      ),
+      null,
+    );
+  },
+);
 
 test('a tool opened by an earlier employee session stays closed after revalidation', () => {
   const opener = employee('editor', 'staff');

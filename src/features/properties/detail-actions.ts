@@ -27,6 +27,27 @@ export function canEditDetail(
   );
 }
 
+export function canEditContactDetail(
+  employee: DetailEmployee | null,
+  property: DetailProperty | null,
+) {
+  return (
+    !!employee &&
+    !!property &&
+    (!property.archived_at || ['manager', 'admin'].includes(employee.role))
+  );
+}
+
+export function canOpenEditDetail(
+  employee: DetailEmployee | null,
+  property: DetailProperty | null,
+) {
+  return (
+    canEditDetail(employee, property) ||
+    canEditContactDetail(employee, property)
+  );
+}
+
 export function activeDetailAction(
   action: DetailAction | null,
   employee: DetailEmployee | null,
@@ -40,7 +61,7 @@ export function activeDetailAction(
     action.propertyId !== property.id
   )
     return null;
-  if (action.tool === 'edit' && !canEditDetail(employee, property)) return null;
+  if (action.tool === 'edit' && !canOpenEditDetail(employee, property)) return null;
   if (action.tool === 'sale' && !['manager', 'admin'].includes(employee.role))
     return null;
   return action.tool;
