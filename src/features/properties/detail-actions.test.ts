@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   activeDetailAction,
+  activeDetailDisclosure,
   canEditDetail,
   canOpenEditDetail,
   type DetailAction,
@@ -59,6 +60,23 @@ test(
     );
   },
 );
+
+test('owner disclosure cannot be reused by another employee session', () => {
+  const disclosure = {
+    propertyId: property.id,
+    employeeId: 'employee-a',
+    value: '0900000000',
+  };
+
+  assert.equal(
+    activeDetailDisclosure(disclosure, property.id, 'employee-a'),
+    '0900000000',
+  );
+  assert.equal(
+    activeDetailDisclosure(disclosure, property.id, 'employee-b'),
+    null,
+  );
+});
 
 test('a tool opened by an earlier employee session stays closed after revalidation', () => {
   const opener = employee('editor', 'staff');

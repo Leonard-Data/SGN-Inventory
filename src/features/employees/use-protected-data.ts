@@ -11,6 +11,7 @@ import {
 
 export function useProtectedData<T>(
   source: string | ((signal: AbortSignal) => Promise<T>),
+  onClear?: () => void,
 ) {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [data, setData] = useState<T | null>(null);
@@ -40,7 +41,8 @@ export function useProtectedData<T>(
     renderedFor.current = null;
     setData(null);
     setEmployee(null);
-  }, [conceal]);
+    onClear?.();
+  }, [conceal, onClear]);
   const load = useCallback(async () => {
     invalidate();
     setBusy(true);
@@ -60,6 +62,7 @@ export function useProtectedData<T>(
             renderedFor.current = null;
             setData(null);
             setEmployee(null);
+            onClear?.();
           },
         });
       if (version !== generation.current) return;
@@ -73,6 +76,7 @@ export function useProtectedData<T>(
       renderedFor.current = null;
       setData(null);
       setEmployee(null);
+      onClear?.();
       if (
         failure instanceof RequestError &&
         (failure.status === 401 || failure.status === 403)
@@ -89,7 +93,7 @@ export function useProtectedData<T>(
         setBusy(false);
       }
     }
-  }, [source, invalidate]);
+  }, [source, invalidate, onClear]);
   const reload = useCallback(() => {
     setBusy(true);
     setError(null);

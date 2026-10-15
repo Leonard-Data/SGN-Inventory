@@ -14,6 +14,21 @@ export type DetailAction = {
   propertyId: string;
 };
 
+export function activeDetailDisclosure<T>(
+  disclosure: {
+    propertyId: string;
+    employeeId: string;
+    value: T;
+  } | null,
+  propertyId: string,
+  employeeId: string | null,
+): T | null {
+  return disclosure?.propertyId === propertyId &&
+    disclosure.employeeId === employeeId
+    ? disclosure.value
+    : null;
+}
+
 export function canEditDetail(
   employee: DetailEmployee | null,
   property: DetailProperty | null,
@@ -61,7 +76,11 @@ export function activeDetailAction(
     action.propertyId !== property.id
   )
     return null;
-  if (action.tool === 'edit' && !canOpenEditDetail(employee, property)) return null;
+  if (
+    action.tool === 'edit' &&
+    !canOpenEditDetail(employee, property)
+  )
+    return null;
   if (action.tool === 'sale' && !['manager', 'admin'].includes(employee.role))
     return null;
   return action.tool;
