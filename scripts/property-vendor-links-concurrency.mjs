@@ -65,7 +65,10 @@ export async function propertyVendorLinkConcurrency({ root, check }) {
       root,
       exec: (sql) => owner.query(sql),
     });
-    await owner.query('insert into auth.users values ($1),($2)', [authA, authB]);
+    await owner.query('insert into auth.users values ($1),($2)', [
+      authA,
+      authB,
+    ]);
     await owner.query(
       'insert into public.employees(id,auth_user_id,email,display_name,role,is_active) ' +
         "values ($1,$2,'vendor-race-a@example.test','Vendor Race A','sales',true)," +
@@ -93,7 +96,8 @@ export async function propertyVendorLinkConcurrency({ root, check }) {
 
     const link =
       'select public.link_property_vendor($1,$2,(select revision from public.properties where id=$1)) as link';
-    const firstOutcome = (await first.query(link, [property, vendor])).rows[0].link;
+    const firstOutcome = (await first.query(link, [property, vendor])).rows[0]
+      .link;
     let secondSettled = false;
     let secondOutcome = null;
     let secondError = null;
@@ -122,9 +126,12 @@ export async function propertyVendorLinkConcurrency({ root, check }) {
       [property],
     );
 
-    await check('a concurrent second link waits for the first transaction', () => {
-      assert.equal(waited, true);
-    });
+    await check(
+      'a concurrent second link waits for the first transaction',
+      () => {
+        assert.equal(waited, true);
+      },
+    );
     await check(
       'two authenticated link sessions converge on one row and one history entry',
       () => {
