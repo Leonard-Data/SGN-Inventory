@@ -683,7 +683,26 @@ async function waitFor(session, cdpPort, expression, attempts = 60) {
     }
     await sleep(500);
   }
-  assert.fail('Timed out waiting for browser state');
+  // A timed-out wait must say what the browser actually showed; naming only the missing
+  // state leaves a real integration failure indistinguishable from a slow read.
+  let state;
+  try {
+    state = evaluate(
+      session,
+      cdpPort,
+      `() => ({
+        path: location.pathname,
+        title: document.title,
+        signedOut: Boolean(document.querySelector('#email')),
+        vendorPanel: Boolean(document.querySelector('[data-od-id="panel-vendors"]')),
+        recordBody: Boolean(document.querySelector('.detail-body')),
+        text: (document.body.innerText || '').replace(/\s+/g, ' ').slice(0, 200),
+      })`,
+    );
+  } catch {
+    state = 'unreadable';
+  }
+  assert.fail(`Timed out waiting for browser state: ${JSON.stringify(state)}`);
 }
 const setInput = (selector, value) => `(() => {
   const el = document.querySelector(${JSON.stringify(selector)});
@@ -1290,6 +1309,26 @@ async function vendorLinkJourney({
       await propertyRevisionOf(staff, liveProperty)
     ).revision,
   });
+  // The same read through the application first: the rendered page must not be the only
+  // evidence that the record is readable for this session.
+  const staffDetailRoute = await endpointCall('staff record route', () =>
+    appGet(staffCookies, `/api/properties/${liveProperty}`),
+  );
+  assert.equal(
+    staffDetailRoute.status,
+    200,
+    JSON.stringify(staffDetailRoute.body),
+  );
+  assert.equal(staffDetailRoute.body.property.id, liveProperty);
+  // Every CDP session shares one browser profile and cookie jar, so the last sign-in wins:
+  // this journey signs in again instead of assuming the directory journey left it signed in.
+  await browserSignIn(
+    'sgn73-staff',
+    9336,
+    manifest.identities.staff.email,
+    manifest.identities.staff.password,
+    '/properties',
+  );
   browser('sgn73-staff', 9336, [
     'open',
     `${appUrl}/properties/${liveProperty}`,
@@ -1298,6 +1337,20 @@ async function vendorLinkJourney({
     'sgn73-staff',
     9336,
     `() => Boolean(document.querySelector('[data-od-id="panel-vendors"]'))`,
+    120,
+  );
+  // The shell keeps the employee's saved locale, which the directory journey left on
+  // English, so the VI/default assertions below select Vietnamese explicitly first.
+  evaluate(
+    'sgn73-staff',
+    9336,
+    `(() => { document.querySelector('.lang-switch button[lang=vi]').click(); return true; })()`,
+  );
+  await waitFor(
+    'sgn73-staff',
+    9336,
+    `() => document.querySelector('[data-od-id="panel-vendors"] h2')?.textContent?.trim() === 'Nhà cung cấp'`,
+    120,
   );
   const staffSection = vendorSection('sgn73-staff', 9336);
   assert.equal(staffSection.heading, 'Nhà cung cấp');
@@ -1390,6 +1443,13 @@ async function vendorLinkJourney({
   assert.equal(vendorSection('sgn73-staff', 9336).rows.length, 1);
   observed('a maintainer links a recorded vendor from the property record');
 
+  await browserSignIn(
+    'sgn73-sales',
+    9336,
+    manifest.identities.sales.email,
+    manifest.identities.sales.password,
+    '/properties',
+  );
   browser('sgn73-sales', 9336, [
     'open',
     `${appUrl}/properties/${liveProperty}`,
