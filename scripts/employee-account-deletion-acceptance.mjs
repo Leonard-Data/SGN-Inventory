@@ -45,6 +45,7 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
 import { readEnvironment } from '../src/lib/environment.ts';
+import { messages } from '../src/i18n/messages.ts';
 import { createOwnerSql } from './owner-sql.mjs';
 
 const devEnvPath = process.env.SGN_ACCEPTANCE_DEV_ENV;
@@ -547,6 +548,7 @@ async function openDirectoryPage(session, cdpPort, email) {
         text: row.textContent.replace(/\\s+/g, ' ').trim(),
         badges: [...row.querySelectorAll('.badge')].map((b) => b.textContent.trim()),
         buttons: [...row.querySelectorAll('button')].map((b) => b.textContent.trim()),
+        locale: document.documentElement.lang || '',
       } : null,
       rowCount: rows.length,
       sample: rows.slice(0, 3).map((r) => r.textContent.replace(/\\s+/g, ' ').trim().slice(0, 110)),
@@ -919,8 +921,17 @@ try {
     targetEmployee.email,
   );
   assert.ok(
-    listState.badges.some((badge) => /tài khoản|xóa|deleted/i.test(badge)),
-    `the account-deleted state is shown: ${JSON.stringify(listState.badges)}`,
+    listState.locale === 'vi' || listState.locale === 'en',
+    `the rendered document locale is on <html lang>: ${JSON.stringify(listState.locale)}`,
+  );
+  const listText = messages[listState.locale];
+  assert.ok(
+    listState.badges.includes(listText.employeeAccessAccountDeleted),
+    `the account-deleted access badge is shown: ${JSON.stringify(listState.badges)}`,
+  );
+  assert.ok(
+    !listState.badges.includes(listText.employeeAccessInactive),
+    `the deleted account row is not labelled as merely access-disabled: ${JSON.stringify(listState.badges)}`,
   );
   assert.equal(
     listState.buttons.length,

@@ -419,6 +419,92 @@ export async function employeeAccountDeletionContract({
       );
     },
   );
+  await check(
+    'an object owned only through the legacy owner column is preflighted and reassigned',
+    async () => {
+      const legacyObject = randomUUID();
+      await asOwner();
+      await db.query(
+        "insert into storage.objects(id,bucket_id,name,owner_id,owner) values ($1,'property-files',$2,null,$3::uuid)",
+        [
+          legacyObject,
+          `${property}/${legacyObject}/legacy-only.pdf`,
+          users.target,
+        ],
+      );
+      await asService();
+      assert.deepEqual(await preflight(users.target), {
+        supported: true,
+        ownedCount: 1,
+      });
+      assert.deepEqual(await reassign(users.target, users.admin), {
+        supported: true,
+        reassignedCount: 1,
+      });
+      await asOwner();
+      const moved = (
+        await db.query(
+          'select id,owner_id,owner from storage.objects where id=$1',
+          [legacyObject],
+        )
+      ).rows[0];
+      assert.equal(moved.owner_id, users.admin);
+      assert.equal(moved.owner, users.admin);
+      await db.query('delete from storage.objects where id=$1', [legacyObject]);
+    },
+  );
+  await check(
+    'the preflight counts through the legacy owner column when owner_id is absent',
+    async () => {
+      await asOwner();
+      await db.query(
+        'alter table storage.objects rename column owner_id to owner_id_parked',
+      );
+      try {
+        await asService();
+        assert.deepEqual(await preflight(users.admin), {
+          supported: true,
+          ownedCount: 1,
+        });
+      } finally {
+        await asOwner();
+        await db.query(
+          'alter table storage.objects rename column owner_id_parked to owner_id',
+        );
+      }
+    },
+  );
+  await check(
+    'the preflight and reassignment both fail closed without an ownership column',
+    async () => {
+      await asOwner();
+      await db.query(
+        'alter table storage.objects rename column owner_id to owner_id_parked',
+      );
+      await db.query(
+        'alter table storage.objects rename column owner to owner_parked',
+      );
+      try {
+        await asService();
+        assert.deepEqual(await preflight(users.admin), {
+          supported: false,
+          ownedCount: 0,
+        });
+        assert.deepEqual(await reassign(users.admin, users.secondAdmin), {
+          supported: false,
+          reassignedCount: 0,
+        });
+      } finally {
+        await asOwner();
+        await db.query(
+          'alter table storage.objects rename column owner_parked to owner',
+        );
+        await db.query(
+          'alter table storage.objects rename column owner_id_parked to owner_id',
+        );
+      }
+    },
+  );
 
   // --- Truthful partial states ------------------------------------------------------------
   await asService();
