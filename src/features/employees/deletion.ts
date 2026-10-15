@@ -350,21 +350,21 @@ export async function reassignOwnedStorage(
   };
 }
 
-// A resume that finds nothing left to move keeps the counts its earlier attempt recorded: once
-// an earlier attempt already reassigned the objects, the fresh preflight reports zero, and the
-// completed deletion must not then report that it owned none.
+// The operation keeps the evidence either attempt observed: a preflight that found nothing
+// left to move or could not run must not erase the counts an earlier attempt recorded, and a
+// reassignment that did not run must not replace a recorded non-zero move.
 function recordedCustody(
   operation: DeletionOperation,
   custody: StorageCustody,
 ): StorageCustody {
-  if (custody.ownedCount !== 0 || operation.storageOwnedCount === null)
-    return custody;
-  return {
-    ...custody,
-    ownedCount: operation.storageOwnedCount,
-    reassignedCount:
-      operation.storageReassignedCount ?? custody.reassignedCount,
-  };
+  const ownedCount =
+    custody.ownedCount === 0
+      ? (operation.storageOwnedCount ?? 0)
+      : (custody.ownedCount ?? operation.storageOwnedCount);
+  const reassignedCount = custody.reassignedCount
+    ? custody.reassignedCount
+    : (operation.storageReassignedCount ?? custody.reassignedCount);
+  return { ...custody, ownedCount, reassignedCount };
 }
 
 // The deleter is the only path that may claim a provider deletion. An unexpected failure is a

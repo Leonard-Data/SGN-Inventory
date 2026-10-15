@@ -51,15 +51,16 @@ function operation(patch: Partial<DeletionOperation> = {}): DeletionOperation {
 function gateway(beginResult: DeletionOperation) {
   const recorded: DeletionRecordRequest[] = [];
   let begins = 0;
+  let current = beginResult;
   const value: AccountDeletionGateway = {
     async begin() {
       begins += 1;
-      return beginResult;
+      return current;
     },
     async record(request) {
       recorded.push(request);
       const outcome = request.result.outcome;
-      return operation({
+      current = operation({
         id: beginResult.id,
         revision: request.revision + 1,
         state: outcome === 'deleted' ? 'completed' : 'provider_failed',
@@ -68,6 +69,7 @@ function gateway(beginResult: DeletionOperation) {
         storageReassignedCount: request.storageReassigned,
         completedAt: outcome === 'deleted' ? '2026-10-15T05:00:00Z' : null,
       });
+      return current;
     },
   };
   return { value, recorded, begins: () => begins };
@@ -548,4 +550,57 @@ test('a resume that still finds owned objects records the fresh counts', async (
   await administerAccountDeletion(g.value, p.value, input());
   assert.equal(g.recorded[0]!.storageOwned, 2);
   assert.equal(g.recorded[0]!.storageReassigned, 2);
+});
+
+test('an unsupported reassignment on resume keeps a recorded non-zero reassignment', async () => {
+  const p = provider({
+    async preflight(): Promise<StoragePreflight> {
+      return { supported: true, ownedCount: 3 };
+    },
+    async reassignStorageOwnership(): Promise<StorageReassignment> {
+      return { supported: false, reassignedCount: 0 };
+    },
+  });
+  const g = gateway(
+    operation({
+      state: 'provider_failed',
+      providerOutcome: 'ambiguous',
+      revision: 2,
+      storageOwnedCount: 3,
+      storageReassignedCount: 3,
+    }),
+  );
+  const result = await administerAccountDeletion(g.value, p.value, input());
+  assert.equal(result.providerOutcome, 'storage_blocked');
+  assert.equal(g.recorded[0]!.storageOwned, 3);
+  assert.equal(g.recorded[0]!.storageReassigned, 3);
+});
+
+test('a transiently unverifiable Storage step cannot erase the recorded evidence', async () => {
+  let preflights = 0;
+  const p = provider({
+    async preflight(): Promise<StoragePreflight> {
+      preflights += 1;
+      if (preflights === 1) return { supported: true, ownedCount: 3 };
+      if (preflights <= 3) throw new Error('storage unavailable');
+      return { supported: true, ownedCount: 0 };
+    },
+    async reassignStorageOwnership(): Promise<StorageReassignment> {
+      return { supported: true, reassignedCount: 3 };
+    },
+    async accountPresence(): Promise<AccountPresence> {
+      return 'absent';
+    },
+  });
+  const g = gateway(operation());
+  const first = await administerAccountDeletion(g.value, p.value, input());
+  assert.equal(first.providerOutcome, 'storage_blocked');
+  const second = await administerAccountDeletion(g.value, p.value, input());
+  assert.equal(second.providerOutcome, 'storage_blocked');
+  const third = await administerAccountDeletion(g.value, p.value, input());
+  assert.equal(third.providerOutcome, 'deleted');
+  for (const request of g.recorded) {
+    assert.equal(request.storageOwned, 3);
+    assert.equal(request.storageReassigned, 3);
+  }
 });
