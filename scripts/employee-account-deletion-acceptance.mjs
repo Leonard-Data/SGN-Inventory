@@ -134,6 +134,13 @@ function sqlText(value) {
   return "'" + String(value).replace(/'/g, "''") + "'";
 }
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// The shared development directory keeps growing as lanes run, and the admin list is a bounded
+// keyset page ordered by id. A fixture keyed on a random UUID can land on any page, so the
+// employee fixtures are deliberately the lowest-sorting ids and therefore always on the first
+// page the browser opens -- the browser assertions are about how a row renders, not about
+// walking an arbitrarily deep directory.
+const fixtureEmployeeId = () =>
+  `00000000-0000-4000-8000-${randomBytes(6).toString('hex')}`;
 
 // ---------------------------------------------------------------- fixtures
 const namespace = 'SGN67';
@@ -181,7 +188,7 @@ async function createFixtures() {
   for (const [name, role] of identities) {
     const email = `${namespace.toLowerCase()}.${runToken}.${name.toLowerCase()}@example.test`;
     const password = randomBytes(24).toString('base64url');
-    const employeeId = randomUUID();
+    const employeeId = fixtureEmployeeId();
     manifest.identities[name] = { employeeId, email, password, role };
     await persistManifest();
     const created = await ownerClient.auth.admin.createUser({
@@ -543,13 +550,16 @@ async function openDirectoryPage(session, cdpPort, email) {
       } : null,
       rowCount: rows.length,
       sample: rows.slice(0, 3).map((r) => r.textContent.replace(/\\s+/g, ' ').trim().slice(0, 110)),
+      emails: rows.map((r) => (r.textContent.match(/[a-z0-9][a-z0-9._-]*@[a-z0-9.-]+/i) ?? ['(none)'])[0]),
       next: nextLink ?? null,
       path: location.pathname + location.search,
     };
   })()`;
   let seen = null;
+  const emails = [];
   for (let page = 0; page < 8; page += 1) {
     seen = evaluate(session, cdpPort, probe);
+    emails.push(...seen.emails);
     if (seen.found) return seen.found;
     if (!seen.next) break;
     browser(session, cdpPort, ['open', new URL(seen.next, appUrl).toString()]);
@@ -562,7 +572,7 @@ async function openDirectoryPage(session, cdpPort, email) {
     );
   }
   assert.fail(
-    `the directory row for ${email} was not rendered: ${JSON.stringify(seen)}`,
+    `the directory row for ${email} was not rendered across ${emails.length} listed rows: ${JSON.stringify(emails.slice(0, 40))}`,
   );
 }
 
