@@ -1418,9 +1418,9 @@ async function vendorLinkJourney({
   const linkEvents = historyRoute.body.events.filter(
     (event) => event.target === 'vendor_link',
   );
-  assert.equal(linkEvents.length, 0, 'Link changes stay out of property history');
+  assert.equal(linkEvents.length, 0);
   observed(
-    'the endpoints bound the link bodies and keep property history unchanged',
+    'the endpoints bind the link bodies without writing property history',
   );
 
   // ---------------------------------------------------------------- browser
