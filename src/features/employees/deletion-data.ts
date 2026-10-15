@@ -5,10 +5,10 @@ import type { Database } from '@/types/database';
 import type { Employee } from './types';
 import { activeEmployee } from './access';
 import { accessState } from './directory';
+import { isUuid } from './deactivation';
 import { outstandingReservationsFor } from './deactivation-data';
 import {
   administerAccountDeletion,
-  isUuid,
   parseDeletionOperation,
   type AccountDeletionGateway,
   type DeletionConfirmation,

@@ -9,6 +9,7 @@
 // interface.
 
 import {
+  isUuid,
   mayAdministerEmployees,
   providerDetail,
   type DeactivationState,
@@ -106,13 +107,6 @@ export type DeletionRecordRequest = {
 export interface AccountDeletionGateway {
   begin(employeeId: string, key: string): Promise<DeletionOperation>;
   record(request: DeletionRecordRequest): Promise<DeletionOperation>;
-}
-
-const uuidPattern =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-export function isUuid(value: unknown): value is string {
-  return typeof value === 'string' && uuidPattern.test(value);
 }
 
 // The submission body is exactly `{key: UUID}` for both lifecycle actions: the browser never
@@ -273,16 +267,13 @@ export function accountPresence(response: {
   return response.user ? 'present' : 'absent';
 }
 
-// Pending or failed provider steps can be resumed by a currently authorized admin.
+// Pending or failed provider steps can be resumed by a currently authorized admin: only a
+// recorded completed deletion is terminal, whether the caller holds the full operation or
+// the list projection.
 export function deletionResumable(
-  operation: DeletionOperation | null,
+  operation: Pick<DeletionOperation, 'state'> | null,
 ): boolean {
-  const status = deletionStatus(operation);
-  return (
-    status === 'pending' ||
-    status === 'reconciliation' ||
-    status === 'storage-blocked'
-  );
+  return operation !== null && operation.state !== 'completed';
 }
 
 // Preflight, then reassign only what is owned. A preflight or reassignment that cannot be
@@ -359,6 +350,23 @@ export async function reassignOwnedStorage(
   };
 }
 
+// A resume that finds nothing left to move keeps the counts its earlier attempt recorded: once
+// an earlier attempt already reassigned the objects, the fresh preflight reports zero, and the
+// completed deletion must not then report that it owned none.
+function recordedCustody(
+  operation: DeletionOperation,
+  custody: StorageCustody,
+): StorageCustody {
+  if (custody.ownedCount !== 0 || operation.storageOwnedCount === null)
+    return custody;
+  return {
+    ...custody,
+    ownedCount: operation.storageOwnedCount,
+    reassignedCount:
+      operation.storageReassignedCount ?? custody.reassignedCount,
+  };
+}
+
 // The deleter is the only path that may claim a provider deletion. An unexpected failure is a
 // truthful partial state, never a completed deletion.
 export async function attemptAccountDeletion(
@@ -389,10 +397,9 @@ export async function administerAccountDeletion(
   if (operation.state === 'completed') return operation;
   // The operation's recorded identity is authoritative after the unlink.
   const authUserId = operation.targetAuthUserId;
-  const custody = await reassignOwnedStorage(
-    provider,
-    authUserId,
-    input.custodianAuthUserId,
+  const custody = recordedCustody(
+    operation,
+    await reassignOwnedStorage(provider, authUserId, input.custodianAuthUserId),
   );
   if (custody.blocked)
     return gateway.record({

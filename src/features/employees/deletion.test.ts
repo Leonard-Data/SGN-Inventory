@@ -496,3 +496,56 @@ test('the recorded Storage counts are reported with the outcome', async () => {
   assert.equal(g.recorded[0]!.storageOwned, 4);
   assert.equal(g.recorded[0]!.storageReassigned, 4);
 });
+
+test('a resume that finds nothing left to move keeps the recorded Storage counts', async () => {
+  const p = provider({
+    async accountPresence(): Promise<AccountPresence> {
+      return 'absent';
+    },
+  });
+  // The earlier attempt already reassigned three objects and failed afterwards, so this
+  // attempt's preflight reports none left; the completed evidence must keep the three.
+  const g = gateway(
+    operation({
+      state: 'provider_failed',
+      providerOutcome: 'ambiguous',
+      revision: 2,
+      storageOwnedCount: 3,
+      storageReassignedCount: 3,
+    }),
+  );
+  const result = await administerAccountDeletion(g.value, p.value, input());
+  assert.equal(result.providerOutcome, 'deleted');
+  assert.equal(g.recorded[0]!.storageOwned, 3);
+  assert.equal(g.recorded[0]!.storageReassigned, 3);
+});
+
+test('a resume that still finds owned objects records the fresh counts', async () => {
+  let preflights = 0;
+  const p = provider({
+    async preflight(): Promise<StoragePreflight> {
+      preflights += 1;
+      return preflights === 1
+        ? { supported: true, ownedCount: 2 }
+        : { supported: true, ownedCount: 0 };
+    },
+    async reassignStorageOwnership(): Promise<StorageReassignment> {
+      return { supported: true, reassignedCount: 2 };
+    },
+    async accountPresence(): Promise<AccountPresence> {
+      return 'absent';
+    },
+  });
+  const g = gateway(
+    operation({
+      state: 'provider_failed',
+      providerOutcome: 'ambiguous',
+      revision: 2,
+      storageOwnedCount: 5,
+      storageReassignedCount: 5,
+    }),
+  );
+  await administerAccountDeletion(g.value, p.value, input());
+  assert.equal(g.recorded[0]!.storageOwned, 2);
+  assert.equal(g.recorded[0]!.storageReassigned, 2);
+});

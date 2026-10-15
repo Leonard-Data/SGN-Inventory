@@ -4,6 +4,7 @@ import { messages, label, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { EmployeeDeactivationPanel } from './employee-deactivation';
 import { EmployeeAccountDeletionPanel } from './employee-account-deletion';
+import { deletionResumable } from './deletion';
 import type {
   DirectoryDeactivation,
   DirectoryPage,
@@ -161,9 +162,7 @@ export function EmployeeDirectory({
                           state?.state === 'provider_pending' ||
                           state?.state === 'provider_failed';
                         const deletion = employee.deletion;
-                        const deletionResumable =
-                          deletion?.state === 'provider_pending' ||
-                          deletion?.state === 'provider_failed';
+                        const resumingDeletion = deletionResumable(deletion);
                         // Only an employee whose sign-in account is still linked has an
                         // account left to delete.
                         const deletable =
@@ -223,7 +222,7 @@ export function EmployeeDirectory({
                                       : text.employeeDeactivate}
                                   </button>
                                 ) : null}
-                                {deletable || deletionResumable ? (
+                                {deletable || resumingDeletion ? (
                                   <button
                                     type="button"
                                     className="btn btn-sm btn-ghost"
@@ -232,7 +231,7 @@ export function EmployeeDirectory({
                                       toggle(employee.id, 'delete')
                                     }
                                   >
-                                    {deletionResumable
+                                    {resumingDeletion
                                       ? text.employeeDeleteReconcile
                                       : text.employeeDelete}
                                   </button>

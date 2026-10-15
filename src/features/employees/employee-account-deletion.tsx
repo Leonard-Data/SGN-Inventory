@@ -15,6 +15,7 @@ import {
   type DeactivationFailure,
 } from './deactivation';
 import {
+  deletionResumable,
   deletionStatus,
   mayAdministerEmployees,
   type DeletionConfirmation,
@@ -130,11 +131,7 @@ export function EmployeeAccountDeletionPanel({
   // A failed, blocked or still-pending provider step can be resumed by a currently
   // authorized admin, so the action stays available while the account is unlinked.
   const resumable =
-    status === 'pending' ||
-    status === 'reconciliation' ||
-    status === 'storage-blocked'
-      ? mayAdministerEmployees(actorRole)
-      : false;
+    deletionResumable(operation) && mayAdministerEmployees(actorRole);
   // Only a linked employee has an account left to delete, and only while the action is not
   // already recorded as completed.
   const linked = employee.access === 'active' || employee.access === 'inactive';
