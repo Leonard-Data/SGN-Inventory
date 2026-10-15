@@ -228,17 +228,17 @@ export async function propertyVendorLinkContract({
       await fails(
         'select public.link_property_vendor($1,$2,$3)',
         [property, '30000000-0000-4000-8000-0000000000fe', randomUUID()],
-        '40001',
+        'PT409',
       );
       await fails(
         'select public.link_property_vendor($1,$2,(select revision from public.properties where id=$3))',
         [property, '30000000-0000-4000-8000-0000000000fe', other],
-        '40001',
+        'PT409',
       );
       await fails(
         'select public.unlink_property_vendor($1,$2,$3)',
         [property, vendor, randomUUID()],
-        '40001',
+        'PT409',
       );
       await fails(
         'select public.unlink_property_vendor($1,$2,$3)',
