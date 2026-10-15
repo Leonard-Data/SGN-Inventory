@@ -11,7 +11,7 @@ This is an application data model derived from those sources. It does not establ
 | Situation | Data captured | UI behavior |
 | --- | --- | --- |
 | New property with current address | Current province and ward selections, house number, street, entered text; save provenance | Default form; dependent ward list; hide district; show candidate until reviewed |
-| New property known only by old address | Legacy city, district, ward, street, house number, original text | Explicit “Địa chỉ cũ”; save successfully; request mapping review |
+| New property known only by old address | Legacy province/city and ward/commune picked from the same official lists, free-text district, street, house number, original text | Explicit “Địa chỉ cũ”; save successfully; request mapping review |
 | Imported legacy row | Preserve original full address and raw structured labels | Show “Địa chỉ cũ”; current address may be absent |
 | One whole verified unit transition | Build a current candidate from official lineage and unchanged local address | Reviewer validates property/street evidence before marking verified |
 | Partial unit transition | Store several crosswalk candidates; no automatic target assignment | “Cần xác minh phường mới”; require boundary/location/document/manual evidence |
@@ -47,7 +47,7 @@ Migration `20261014075435_vietnamese_admin_units_reference.sql` seeds the nation
 
 The catalog is a reference list, not a property-level verification. Selecting a province and commune from it does not establish a property's current address; a manager/admin still records evidence before `mapping_status = 'verified'`. The seed is idempotent and never rewrites a recorded address string.
 
-Not seeded by this package: any district-level catalog (the upstream two-tier release carries none, so the delivered legacy district picker stays empty — use the free-text `district_text` label for a historical district), any old→new crosswalk or blanket mapping, and any HCMC-specific transition. Crosswalks remain reviewed evidence under the verification workflow above.
+Not seeded by this package: any district-level catalog (the upstream two-tier release carries none, so the address form has no district picker and a historical district stays the free-text `district_text` label), any old→new crosswalk or blanket mapping, and any HCMC-specific transition. Crosswalks remain reviewed evidence under the verification workflow above.
 
 ## Analytics and search
 

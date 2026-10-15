@@ -11,6 +11,7 @@ import type { Locale } from '@/i18n/messages';
 import { fields, formChanges, type Target, type Changes } from './fields';
 import { maintenanceError, maintenanceText, optionLabel } from './messages';
 import { failureRoute } from './refusal-rules';
+import { unitOptionLabels } from './units';
 import type { Unit } from './data';
 
 export function MutationForm({
@@ -219,7 +220,8 @@ function UnitPicker({
       });
     return () => abort.abort();
   }, [level, parent, onDenied]);
-  const text = maintenanceText(locale);
+  const text = maintenanceText(locale),
+    labels = unitOptionLabels(units);
   return (
     <div className="field">
       <label className="field-label" htmlFor={id}>
@@ -236,9 +238,9 @@ function UnitPicker({
         {value && !units.some((u) => u.id === value) ? (
           <option value={value}>{value}</option>
         ) : null}
-        {units.map((unit) => (
+        {units.map((unit, index) => (
           <option key={unit.id} value={unit.id}>
-            {unit.name_vi} ({unit.valid_from} – {unit.valid_to ?? ''})
+            {labels[index]}
           </option>
         ))}
       </select>
@@ -260,7 +262,6 @@ export function AddressFields({
   const id = useId(),
     [format, setFormat] = useState(String(values.format ?? '')),
     [province, setProvince] = useState(String(values.province_unit_id ?? '')),
-    [district, setDistrict] = useState(String(values.district_unit_id ?? '')),
     [commune, setCommune] = useState(String(values.commune_unit_id ?? ''));
   const text = maintenanceText(locale),
     current = variant === 'mapping' || format === 'current';
@@ -281,7 +282,6 @@ export function AddressFields({
               value={format}
               onChange={(event) => {
                 setFormat(event.target.value);
-                setDistrict('');
                 setCommune('');
               }}
               disabled={!!values.id}
@@ -304,9 +304,9 @@ export function AddressFields({
               'address_text',
               'house_number',
               'street',
-              'province_text',
+              // The legacy district is the one source label the form still holds: the
+              // official catalog has no district level to choose from.
               ...(!current ? ['district_text'] : []),
-              'commune_text',
               'is_primary',
             ]}
           />
@@ -333,32 +333,16 @@ export function AddressFields({
         value={province}
         onChange={(value) => {
           setProvince(value);
-          setDistrict('');
           setCommune('');
         }}
         locale={locale}
         onDenied={onDenied}
       />
-      {!current ? (
-        <UnitPicker
-          key={'district' + province}
-          name="district_unit_id"
-          level="district"
-          parent={province}
-          value={district}
-          onChange={(value) => {
-            setDistrict(value);
-            setCommune('');
-          }}
-          locale={locale}
-          onDenied={onDenied}
-        />
-      ) : null}
       <UnitPicker
-        key={'commune' + province + district + current}
+        key={'commune' + province}
         name="commune_unit_id"
         level="commune"
-        parent={current ? province : district || province}
+        parent={province}
         value={commune}
         onChange={setCommune}
         locale={locale}
