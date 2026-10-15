@@ -1222,8 +1222,8 @@ async function vendorLinkJourney({
     'an archived property refuses a new link and hides its links outside reviewer authority',
   );
 
-  // Unlink: only the current relationship goes; the vendor, another property's link and
-  // the earlier history stay.
+  // Unlink: only the current relationship goes; the vendor and another property's link
+  // stay, and link changes do not write property-history rows.
   const secondLink = await rpcCall(
     'second property link',
     staff,
@@ -1245,16 +1245,7 @@ async function vendorLinkJourney({
       .eq('target', 'vendor_link')
       .order('occurred_at'),
   );
-  assert.equal(historyBefore.length, 3);
-  assert.deepEqual(historyBefore[2].changed_fields, [
-    'vendor_id',
-    'vendor_name',
-  ]);
-  assert.deepEqual(historyBefore[2].after_values, {
-    vendor_id: vendor.id,
-    vendor_name: vendor.display_name,
-  });
-  assert.ok(historyBefore[2].actor_name);
+  assert.equal(historyBefore.length, 0);
   const removed = await rpcCall(
     'confirmed unlink',
     staff,
@@ -1308,14 +1299,9 @@ async function vendorLinkJourney({
       .eq('target', 'vendor_link')
       .order('occurred_at'),
   );
-  assert.equal(historyAfter.length, 4);
-  assert.deepEqual(historyAfter[3].before_values, {
-    vendor_id: vendor.id,
-    vendor_name: vendor.display_name,
-  });
-  assert.deepEqual(historyAfter[3].after_values, {});
+  assert.equal(historyAfter.length, 0);
   observed(
-    'unlink keeps the vendor, the unrelated link and the earlier link history',
+    'unlink keeps the vendor and the unrelated link without property-history rows',
     { vendor: vendor.id },
   );
 
@@ -1432,10 +1418,9 @@ async function vendorLinkJourney({
   const linkEvents = historyRoute.body.events.filter(
     (event) => event.target === 'vendor_link',
   );
-  assert.ok(linkEvents.length >= 2, 'The unlink history stays readable');
-  assert.ok(linkEvents.some((event) => event.actor_name));
+  assert.equal(linkEvents.length, 0, 'Link changes stay out of property history');
   observed(
-    'the endpoints bound the link bodies and keep the link history readable',
+    'the endpoints bound the link bodies and keep property history unchanged',
   );
 
   // ---------------------------------------------------------------- browser
@@ -1534,19 +1519,15 @@ async function vendorLinkJourney({
     9336,
     `() => document.querySelectorAll('[data-od-id="panel-vendors"] .record').length === 0`,
   );
-  await waitFor(
-    'sgn73-staff',
-    9336,
-    `() => [...document.querySelectorAll('.hist-row .hist-field')].some((node) => node.textContent.trim() === 'Liên kết nhà cung cấp')`,
-  );
   const afterUnlink = vendorSection('sgn73-staff', 9336);
   assert.equal(afterUnlink.rows.length, 0);
-  assert.ok(
+  assert.equal(
     afterUnlink.history.some((row) => row.target === 'Liên kết nhà cung cấp'),
-    'The unlink stays visible in the property history',
+    false,
+    'The unlink stays out of property history',
   );
   observed(
-    'an active employee removes a mistaken link in the UI and keeps the recorded history',
+    'an active employee removes a mistaken link in the UI without writing property history',
   );
 
   // Link the company again through the rendered picker.
