@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 
 // Ticket #74 embedded regressions: the property–vendor link's authority, duplicate-pair
 // convergence, stale-context refusal, archived boundary, retained unlink and the property
-// business-history projection. Real individual-session Data API/browser acceptance stays a
+// current relationship trail. Real individual-session Data API/browser acceptance stays a
 // hosted gate; this proves the database rules the application depends on.
 export async function propertyVendorLinkContract({
   db,
@@ -232,7 +232,7 @@ export async function propertyVendorLinkContract({
   );
 
   await check(
-    'a duplicate link converges on the recorded relationship and writes one history entry',
+    'a duplicate link converges on the recorded relationship without property history',
     async () => {
       await asUser(5);
       const first = (await db.query(link, [property, vendor])).rows[0].link;
@@ -243,15 +243,7 @@ export async function propertyVendorLinkContract({
       assert.equal((await db.query(links, [property])).rows.length, 1);
       await asAdmin();
       const events = (await db.query(history, [property, 'vendor_link'])).rows;
-      assert.equal(events.length, 1);
-      assert.equal(events[0].actor_id, employees[2]);
-      assert.ok(events[0].actor_name);
-      assert.deepEqual(events[0].changed_fields, ['vendor_id', 'vendor_name']);
-      assert.deepEqual(events[0].before_values, {});
-      assert.deepEqual(events[0].after_values, {
-        vendor_id: vendor,
-        vendor_name: 'Công ty Vật tư Test',
-      });
+      assert.equal(events.length, 0);
     },
   );
 
@@ -396,7 +388,7 @@ export async function propertyVendorLinkContract({
   );
 
   await check(
-    'unlinking removes only the current relationship and keeps the vendor and earlier history',
+    'unlinking removes only the current relationship and keeps the vendor and other property relationship',
     async () => {
       await asUser(5);
       const before = (
@@ -430,19 +422,7 @@ export async function propertyVendorLinkContract({
       assert.ok(company.submission_key);
       await asAdmin();
       const events = (await db.query(history, [property, 'vendor_link'])).rows;
-      assert.equal(events.length, 2);
-      assert.deepEqual(events[0].after_values, {
-        vendor_id: vendor,
-        vendor_name: 'Công ty Vật tư Test',
-      });
-      assert.deepEqual(events[1].changed_fields, ['vendor_id', 'vendor_name']);
-      assert.deepEqual(events[1].before_values, {
-        vendor_id: vendor,
-        vendor_name: 'Công ty Vật tư Test',
-      });
-      assert.deepEqual(events[1].after_values, {});
-      assert.equal(events[1].actor_id, employees[5]);
-      assert.ok(events[1].actor_name);
+      assert.equal(events.length, 0);
     },
   );
 }
