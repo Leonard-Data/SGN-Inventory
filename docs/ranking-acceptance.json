@@ -1,0 +1,140 @@
+{
+  "checkedAt": "2026-10-14T12:58:30.692Z",
+  "projectRef": "tneucwzcrzteeixvttpu",
+  "testedHead": "beef9969c5795923f6583c8900052d829ee7c2c7 (dirty worktree)",
+  "namespace": "SGN34",
+  "environment": "authorized hosted development Supabase / local production Next.js build",
+  "observations": [
+    {
+      "name": "real development project and synthetic identities established",
+      "namespace": "SGN34",
+      "employees": 6,
+      "unlinked": 1,
+      "ownerEligibleProperties": 2,
+      "controlPageViewProperty": true
+    },
+    {
+      "name": "committed owner-contact activity recorded through the delivered RPCs and one controlled previous Vietnam day",
+      "unit": "one employee/property/Vietnam day"
+    },
+    {
+      "name": "the daily ranking equals the committed units, keeps the explicit zero row and shares the tied rank"
+    },
+    {
+      "name": "the same property on the next Vietnam day adds a further ranked unit"
+    },
+    {
+      "name": "Page views on a third property stay outside the ranked total"
+    },
+    {
+      "name": "the application endpoint returns the same ranking and the explicit zero daily row"
+    },
+    {
+      "name": "the default 30-day open returns real ranked totals while the daily table keeps its own row cap",
+      "dailyScope": "over-cap"
+    },
+    {
+      "name": "the ranking RPC sums the 30-day default period from the committed units"
+    },
+    {
+      "name": "manager and admin read the ranking; sales, staff, inactive, unlinked and anonymous identities are refused"
+    },
+    {
+      "name": "a role downgrade removes ranking authority on the next request with the already-issued session"
+    },
+    {
+      "name": "invalid and partial ranges are rejected, never shown as zeros; a whole-year scope keeps the ranking and names the daily cap in place"
+    },
+    {
+      "name": "the manager browser opens the 30-day default and renders the ranked totals and ranks",
+      "dailyScope": "over-cap"
+    },
+    {
+      "name": "the manager browser renders the ranked totals, the explicit zero row and the daily history",
+      "rows": 54
+    },
+    {
+      "name": "an invalid range renders the localized validation and no ranking in Vietnamese/default"
+    },
+    {
+      "name": "a query failure renders the localized failure and loading states, and Retry recovers the ranking in Vietnamese/default"
+    },
+    {
+      "name": "switching Vietnamese to English keeps the ranked totals and rewrites no record"
+    },
+    {
+      "name": "an invalid range renders the localized validation and no ranking in English"
+    },
+    {
+      "name": "a query failure renders the localized failure and loading states, and Retry recovers the ranking in English"
+    },
+    {
+      "name": "the selected single-day range reranks the tied employees from the committed units"
+    },
+    {
+      "name": "the ranking stays readable without horizontal overflow at 375px"
+    },
+    {
+      "name": "a browser in another timezone sees the same Vietnam period and the same ranked totals"
+    },
+    {
+      "name": "deactivation clears the displayed ranking on refocus and denies the next read"
+    },
+    {
+      "name": "a sales employee opening the report directly is denied"
+    },
+    {
+      "name": "sign-out clears the ranking so Back cannot reveal it"
+    },
+    {
+      "name": "the synthetic identities, employee rows and activity are removed",
+      "baselineEmployees": 127,
+      "employees": 127
+    }
+  ],
+  "screenshots": [
+    "ranking-default-30-day.png",
+    "ranking-invalid-range-vi.png",
+    "ranking-failure-vi.png",
+    "ranking-english.png",
+    "ranking-invalid-range-en.png",
+    "ranking-failure-en.png",
+    "ranking-single-day.png",
+    "ranking-mobile-375.png",
+    "ranking-timezone-pacific-kiritimati.png",
+    "ranking-deactivated-denied.png",
+    "ranking-sales-denied.png",
+    "ranking-after-sign-out.png"
+  ],
+  "screenshotsSkipped": [],
+  "transientRetries": 1,
+  "bridgeRetries": 0,
+  "pageRetries": 0,
+  "sessionRecoveries": 0,
+  "created": {
+    "identities": [
+      "SGN34 manager",
+      "SGN34 admin",
+      "SGN34 salesA",
+      "SGN34 salesB",
+      "SGN34 staff",
+      "SGN34 inactive"
+    ],
+    "unlinked": 1,
+    "activity_events": 7
+  },
+  "removed": {
+    "identities": 6,
+    "unlinked": 1,
+    "activity_events": 7
+  },
+  "limits": [
+    "1 transient transport retries were needed for idempotent fixture/read steps; no assertion was retried.",
+    "The ranking is read from existing read-only owner-eligible inventory plus synthetic committed activity rows scoped to the SGN34 namespace; inventory that cannot supply two unarchived owner-eligible properties fails the run rather than skipping the gate.",
+    "Past-day units are placed by one committed row with an explicit instant so the Vietnam day is controlled; the same-day duplicate, tie and shared-property cases use the delivered disclosure RPC.",
+    "The companion daily table keeps its own Data API row cap (active employees x days <= 1000): on a shared development project with more than 33 active employees it reports range-too-large in place for the 30-day default, while the ranking - an aggregate read over the committed daily units - still returns real totals and ranks. The rendered browser pass observes both that 30-day default and an in-cap inclusive range.",
+    "The shared development project is used by other lanes concurrently, so fixture removal is verified against the exact synthetic employee and activity IDs instead of a global row-count baseline.",
+    "Synthetic employee rows and their role/activation transitions are provisioned through the owner SQL connection because the delivered employee-admin guard reserves lifecycle writes to that path.",
+    "Queries are embedded-PGlite regressions plus these live individual-session Auth/Data API/RLS observations; no production edge or load testing."
+  ]
+}

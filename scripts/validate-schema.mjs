@@ -10,28 +10,22 @@ import { maintenanceContract } from './maintenance-contract.mjs';
 import { correctionContract } from './correction-contract.mjs';
 import { commentsContract } from './comments-contract.mjs';
 import { commentRemovalContract } from './comment-removal-contract.mjs';
+import { commentEditContract } from './comment-edit-contract.mjs';
 import { companyActivityContract } from './company-activity-contract.mjs';
 import { myActivityContract } from './my-activity-contract.mjs';
+import { rankingContract } from './ranking-contract.mjs';
+import { priceHistoryContract } from './price-history-contract.mjs';
+import { inventoryAgeContract } from './inventory-age-contract.mjs';
+import { vendorContract } from './vendor-contract.mjs';
+import { referenceCatalogContract } from './reference-catalog-contract.mjs';
+import { saleCompletionContract } from './sale-completion-contract.mjs';
+import { employeeDeactivationContract } from './employee-deactivation-contract.mjs';
+import { employeeAccountDeletionContract } from './employee-account-deletion-contract.mjs';
+import { employeeDeactivationConcurrency } from './employee-deactivation-concurrency.mjs';
+import { applyEmbeddedSchema } from './embedded-schema.mjs';
 const root = process.env.SGN_PROJECT_ROOT || process.cwd();
 const db = new PGlite({extensions:{unaccent,pg_trgm,pgcrypto}});
-await db.exec(`
-  create role anon; create role authenticated; create role service_role bypassrls;
-  create schema auth; create table auth.users(id uuid primary key);
-  create function auth.uid() returns uuid language sql stable as $$
-    select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid;
-  $$;
-  grant usage on schema auth to authenticated,anon,service_role;
-  create schema storage;
-  create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
-  create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text,unique(bucket_id,name));
-  alter table storage.objects enable row level security;
-  grant usage on schema storage to authenticated,anon;
-  grant select,insert,update,delete on storage.objects to authenticated;
-`);
-for(const f of (await fs.readdir(path.join(root,'supabase/migrations'))).filter(f=>f.endsWith('.sql')).sort()) {
-  await db.exec(await fs.readFile(path.join(root,'supabase/migrations',f),'utf8'));
-  console.log('Applied',f);
-}
+await applyEmbeddedSchema({root,exec:(sql)=>db.exec(sql)});
 // Supabase defaults may grant privileges on future objects. Test our explicit revokes.
 const users = ['00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000003','00000000-0000-4000-8000-000000000004','00000000-0000-4000-8000-000000000005','00000000-0000-4000-8000-000000000006'];
 const employees = ['10000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000002','10000000-0000-4000-8000-000000000003','10000000-0000-4000-8000-000000000004','10000000-0000-4000-8000-000000000005','10000000-0000-4000-8000-000000000006'];
@@ -500,6 +494,8 @@ await db.exec('reset role');await db.query("select set_config('request.jwt.claim
 assert.deepEqual((await db.query(`select ${coverSourceColumns} from public.property_files where property_id=$1 order by id`,[coverProperty])).rows,coverBefore);
 const maintainedProperty=await maintenanceContract({db,asUser,check,fails,employees,property,other});
 await correctionContract({db,asUser,check,fails,employees,property:maintainedProperty});
+// Ticket #36: recorded Asking-price history over the allowlisted business-history seam.
+await priceHistoryContract({db,asUser,check,fails,employees});
 // Ticket #29: a deliberate disclosure commits one property per employee/Vietnam day.
 const ownerProperty='20000000-0000-4000-8000-00000000000b';
 const ownerProperty2='20000000-0000-4000-8000-00000000000c';
@@ -578,11 +574,30 @@ await check('inactive owner disclosure denied',()=>fails('select public.reveal_o
 await commentsContract({db,asUser,check,fails,employees,property});
 // Ticket #45: accountable Property comment removal.
 await commentRemovalContract({db,asUser,check,fails,employees});
+// Ticket #46: author editing with retained revisions, composed with removal and posting retry.
+await commentEditContract({db,asUser,check,fails,employees});
 // Ticket #31: company employee-by-day activity for live manager/admin readers.
 await companyActivityContract({db,asUser,check,fails,employees});
 // Ticket #30: the employee's own activity over an explicit Vietnam date range.
 await myActivityContract({db,asUser,check,fails,employees});
-const report={checked_at:new Date().toISOString(),engine:'PGlite embedded PostgreSQL; mocked auth/storage schemas',passed,
- limitations:['Not a live Supabase integration test','HTTP Auth, signed URLs, Vercel and browser flows not exercised','True multi-session concurrent transaction test remains a staging acceptance gate']};
+// Ticket #34: the reviewer-only Employee owner-contact activity ranking.
+await rankingContract({db,asUser,check,fails,employees});
+// Issue #37: explicit original inventory entry dates and eligible chronological ordering.
+await inventoryAgeContract({db,asUser,check,fails,employees});
+// Seeded Vietnamese province/city and ward/commune reference catalogue.
+await referenceCatalogContract({db,asUser,check,fails,employees,root});
+// Issue #38: one reviewed logical sale completion and the completed-sale ranking.
+await saleCompletionContract({db,asUser,check,fails,employees});
+// Issue #66: guarded employee administration, last-active-admin protection and provider
+// reconciliation without losing the record.
+await employeeDeactivationContract({db,asUser,check,fails,employees});
+// Issue #67: permanent sign-in-account deletion with the retained employee, every business
+// reference and the historical Auth attribution preserved.
+await employeeAccountDeletionContract({db,asUser,check,fails});
+await employeeDeactivationConcurrency({root,check});
+// Ticket #73: the vendor directory authority, validation, retry and paging rules.
+await vendorContract({db,asUser,check,fails,employees});
+const report={checked_at:new Date().toISOString(),engine:'PGlite embedded PostgreSQL plus an embedded real PostgreSQL engine for the two-connection last-admin race; mocked auth/storage schemas',passed,
+ limitations:['Not a live Supabase integration test','HTTP Auth, signed URLs, Vercel and browser flows not exercised','Sustained multi-session contention at production load remains a staging acceptance gate']};
 await fs.writeFile(path.join(root,'docs/validation-results.json'),JSON.stringify(report,null,2)+'\n');
 console.log(`${passed} assertions passed`);await db.close();

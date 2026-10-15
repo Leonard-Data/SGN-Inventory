@@ -143,6 +143,42 @@ export async function requestReservation(
   return reservationState(context, employee, id);
 }
 
+export async function releaseReservation(
+  context: RouteContext,
+  employee: Employee,
+  id: string,
+  body: Record<string, unknown>,
+): Promise<ReservationState> {
+  const reason = reservationReason(body.reason);
+  if (
+    !uuid(id) ||
+    !uuid(body.lockId) ||
+    !reason ||
+    Object.keys(body).some((key) => !['lockId', 'reason'].includes(key))
+  )
+    throw new ApiError(400, 'invalid-input');
+  const { data: lock, error: lockError } = await context.client
+    .from('property_locks')
+    .select('id,property_id,status')
+    .eq('id', body.lockId)
+    .maybeSingle();
+  if (lockError) throw databaseError(lockError);
+  if (!lock || lock.property_id !== id) throw new ApiError(404, 'not-found');
+  const { error } = await context.client.rpc('release_property_lock', {
+    p_lock_id: body.lockId,
+    p_reason: reason,
+  });
+  if (error) {
+    if (error.code === '42501') throw new ApiError(403, 'access-denied');
+    // The definer reports both an already-closed lock and a short reason without an errcode;
+    // the route validated the reason, so a remaining refusal is a closed reservation.
+    if (error.code === 'P0001') throw new ApiError(409, 'reservation-closed');
+    if (error.code === '23514') throw new ApiError(400, 'invalid-input');
+    throw new ApiError(503, 'unavailable');
+  }
+  return reservationState(context, employee, id);
+}
+
 export async function decideReservation(
   context: RouteContext,
   employee: Employee,

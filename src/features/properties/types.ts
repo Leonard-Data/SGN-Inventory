@@ -5,6 +5,8 @@ export type AddressSummary = {
   mappingStatus: string;
   isPrimary: boolean;
 };
+import type { InventoryOrder } from './age-cursor';
+
 export type PropertySummary = {
   id: string;
   propertyCode: string;
@@ -12,6 +14,11 @@ export type PropertySummary = {
   status: string;
   addresses: AddressSummary[];
   coverFileId: string | null;
+  // Present only in the chronological inventory views. An absent field means the ordering does
+  // not apply here; null entryOn with entrySource 'unknown' is the explicit unknown date.
+  entryOn?: string | null;
+  entrySource?: string | null;
+  ageDays?: number | null;
   // Plot and floor fields the site plate draws from, kept exactly as the
   // database returns them. search_properties returns setof public.properties, so
   // these need no schema change.
@@ -26,6 +33,7 @@ export type PropertySummary = {
 export type PropertyPage = {
   properties: PropertySummary[];
   nextCursor: string | null;
+  order?: InventoryOrder;
 };
 // A pending request never reserves the property; only an approved, unexpired reservation is
 // effective and it carries the claimant and the expiry the browser displays.

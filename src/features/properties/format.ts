@@ -14,6 +14,13 @@ export function formatVnd(value: string, locale: Locale): string {
     throw new Error('Whole VND decimal string required');
   return numberFormats[locale].format(BigInt(value)) + ' VND';
 }
+// A whole count the database derived (an inventory age in days) is never parsed from text,
+// so no locale number string can turn it into a different day count.
+export function formatInteger(value: number, locale: Locale): string {
+  if (!Number.isInteger(value) || value < 0)
+    throw new Error('Non-negative integer required');
+  return numberFormats[locale].format(value);
+}
 export function formatDecimal(value: string, locale: Locale): string {
   if (!/^\d+(?:\.\d{1,2})?$/.test(value))
     throw new Error('Exact decimal string required');

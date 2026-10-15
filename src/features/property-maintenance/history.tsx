@@ -2,10 +2,12 @@
 import { useState } from 'react';
 import type { Json } from '@/types/database';
 import type { Locale } from '@/i18n/messages';
+import { label } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import {
   formatVnd,
   formatDecimal,
+  vietnamDate,
   vietnamTimestamp,
 } from '@/features/properties/format';
 import type { HistoryPage } from './data';
@@ -13,6 +15,8 @@ import { fields } from './fields';
 import { maintenanceText, optionLabel } from './messages';
 const extraLabels: Record<string, readonly [string, string]> = {
   property_code: ['Mã bất động sản', 'Property code'],
+  entry_on: ['Ngày nhập kho gốc', 'Original inventory entry date'],
+  entry_source: ['Nguồn ngày nhập kho gốc', 'Original entry provenance'],
   verified_by: ['Người chỉ định ánh xạ', 'Mapping designator'],
   verified_at: ['Thời điểm xác minh', 'Verification time'],
   supersedes_address_id: [
@@ -47,11 +51,22 @@ export function BusinessValues({
                   ? formatDecimal(value, locale)
                   : typeof value === 'string' && field?.options
                     ? optionLabel(locale, value)
-                    : name === 'verified_at' && typeof value === 'string'
-                      ? vietnamTimestamp(value, locale)
-                      : Array.isArray(value)
-                        ? value.join(' / ')
-                        : String(value);
+                    : name === 'entry_source' && typeof value === 'string'
+                      ? label(
+                          locale,
+                          value === 'legacy'
+                            ? 'entryDateLegacy'
+                            : value === 'recorded'
+                              ? 'entrySourceRecorded'
+                              : 'entryDateUnknown',
+                        )
+                      : name === 'entry_on' && typeof value === 'string'
+                        ? vietnamDate(value)
+                        : name === 'verified_at' && typeof value === 'string'
+                          ? vietnamTimestamp(value, locale)
+                          : Array.isArray(value)
+                            ? value.join(' / ')
+                            : String(value);
         return (
           <div className="history-field" key={name}>
             <dt>

@@ -19,6 +19,8 @@ const vi = {
   agent: 'Môi giới',
   representative: 'Đại diện',
   primary: 'Liên hệ chính',
+  recordActions: 'Thao tác hồ sơ',
+  myRequests: 'Yêu cầu của tôi',
 };
 
 const en: Record<keyof typeof vi, string> = {
@@ -40,6 +42,8 @@ const en: Record<keyof typeof vi, string> = {
   agent: 'Agent',
   representative: 'Representative',
   primary: 'Primary contact',
+  recordActions: 'Record actions',
+  myRequests: 'My requests',
 };
 
 export const detailMessages: Record<Locale, Record<keyof typeof vi, string>> = {

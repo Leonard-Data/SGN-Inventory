@@ -202,6 +202,7 @@ export default function AppPreviewPage() {
               locale={locale}
               resultLocation=""
               onDenied={() => {}}
+              showEntry={record.entryOn !== undefined}
             />
           ))}
         </div>

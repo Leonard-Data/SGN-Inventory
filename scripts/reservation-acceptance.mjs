@@ -327,6 +327,35 @@ async function settle(session = primary) {
   await new Promise((resolve) => setTimeout(resolve, 600));
   await waitUntil(settled, session);
 }
+// The record's action bar opens the reservation panel in a dialog, so the journey enters the
+// panel through that rendered control. The dialog blocks the rest of the record: it is closed
+// through its own control before the header is used again, and reopened the same way.
+const reservationAction = '^(Đặt chỗ|Reservations)$';
+const reservationActionReady = `() => [...document.querySelectorAll('.detail-actions button')].some((button) => new RegExp(${JSON.stringify(reservationAction)}).test(button.textContent.trim()))`;
+async function openReservationPanel(session = primary) {
+  await waitUntil(reservationActionReady, session);
+  act(
+    clickMatching(reservationAction, '.detail-actions button'),
+    session,
+    'open the reservation panel',
+  );
+  await settle(session);
+}
+async function openReservationDetail(property, session = primary) {
+  browser(['open', detail(property)], session);
+  await openReservationPanel(session);
+}
+async function closeReservationPanel(session = primary) {
+  act(
+    "(() => { const button = document.querySelector('dialog.sgn-dialog[open] .sgn-dialog-close'); if (!button) return false; button.click(); return true; })()",
+    session,
+    'close the reservation panel',
+  );
+  await waitUntil(
+    "() => !document.querySelector('dialog.sgn-dialog[open]')",
+    session,
+  );
+}
 async function userClient(name) {
   const fixture = fixtures.identities[name];
   const client = createClient(
@@ -589,8 +618,7 @@ const manager = await userClient('manager');
 initializeBrowser(primary);
 initializeBrowser(secondary);
 await browserLogin('claimant', primary, 'vi');
-browser(['open', detail(main)], primary);
-await settle(primary);
+await openReservationDetail(main, primary);
 {
   const page = screen(primary);
   assert.equal(page.locale, 'vi', 'VI is the default interface language');
@@ -795,8 +823,7 @@ let managerLock;
     'The refused self approval changed no committed state',
   );
   await browserLogin('manager', secondary, 'vi');
-  browser(['open', detail(main)], secondary);
-  await settle(secondary);
+  await openReservationDetail(main, secondary);
   const page = screen(secondary);
   assert.equal(page.effective, null);
   assert.ok(
@@ -835,8 +862,7 @@ let rejectedLock;
   });
   assert.equal(requested.status, 200);
   rejectedLock = requested.body.pending[0].id;
-  browser(['open', detail(reject)], secondary);
-  await settle(secondary);
+  await openReservationDetail(reject, secondary);
   const before = screen(secondary);
   assert.equal(before.effective, null);
   assert.equal(
@@ -985,8 +1011,7 @@ let rejectedLock;
 // ------------------------------------------------------------------ fresh detail and language journey
 {
   const winner = effectiveRows(main)[0];
-  browser(['open', detail(main)], primary);
-  await settle(primary);
+  await openReservationDetail(main, primary);
   const page = screen(primary);
   assert.ok(
     page.effective?.includes('Đã có đặt chỗ hiệu lực'),
@@ -1022,9 +1047,10 @@ let rejectedLock;
     "() => { document.documentElement.dataset.probe = 'reservation'; return true; }",
     primary,
   );
+  await closeReservationPanel(primary);
   act(clickMatching('English', 'header button'), primary, 'switch to English');
   await waitUntil(`() => document.documentElement.lang === 'en'`, primary);
-  await settle(primary);
+  await openReservationPanel(primary);
   const english = screen(primary);
   assert.equal(english.heading, 'Reservations');
   assert.ok(english.effective?.includes('Effective reservation'));
@@ -1034,13 +1060,14 @@ let rejectedLock;
       'Only an approved, unexpired reservation holds the property.',
     ),
   );
+  await closeReservationPanel(primary);
   act(
     clickMatching('Tiếng Việt', 'header button'),
     primary,
     'switch to Vietnamese',
   );
   await waitUntil(`() => document.documentElement.lang === 'vi'`, primary);
-  await settle(primary);
+  await openReservationPanel(primary);
   const vietnamese = screen(primary);
   assert.equal(vietnamese.heading, 'Đặt chỗ');
   assert.ok(vietnamese.effective?.includes('Đã có đặt chỗ hiệu lực'));
@@ -1057,8 +1084,7 @@ let rejectedLock;
 
 // ------------------------------------------------------------------ inherited live deactivation
 {
-  browser(['open', detail(main)], primary);
-  await settle(primary);
+  await openReservationDetail(main, primary);
   const open = screen(primary);
   assert.ok(
     open.effective || open.pending,
@@ -1121,12 +1147,12 @@ let rejectedLock;
 // ------------------------------------------------------------------ sign-out clears the surface
 {
   const winner = effectiveRows(main)[0];
-  browser(['open', detail(main)], secondary);
-  await settle(secondary);
+  await openReservationDetail(main, secondary);
   assert.ok(
     screen(secondary).effective,
     'The signed-in reviewer still reads the reservation',
   );
+  await closeReservationPanel(secondary);
   act(
     "(() => { const button = document.querySelector('.sgn-user-btn'); if (!button) return false; button.click(); return true; })()",
     secondary,

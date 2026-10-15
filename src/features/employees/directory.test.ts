@@ -4,6 +4,7 @@ import {
   DIRECTORY_PAGE_SIZE,
   DirectoryError,
   accessState,
+  directoryOperations,
   directoryPage,
   directoryQuery,
   mayReadDirectory,
@@ -19,6 +20,7 @@ function row(index: number, patch: Partial<DirectoryRow> = {}): DirectoryRow {
     role: 'sales',
     auth_user_id: `${String(index).padStart(8, '0')}-0000-4000-8000-0000000000ff`,
     is_active: true,
+    account_deleted_at: null,
     ...patch,
   };
 }
@@ -33,16 +35,29 @@ test('recorded link and activation decide the access state', () => {
     accessState(row(4, { auth_user_id: null, is_active: false })),
     'unlinked',
   );
+  // A retained employee whose sign-in account was deleted is its own state: it is never
+  // shown as an imported person who was never linked, nor as a merely disabled account.
+  assert.equal(
+    accessState(
+      row(5, {
+        auth_user_id: null,
+        is_active: false,
+        account_deleted_at: '2026-10-15T04:00:00Z',
+      }),
+    ),
+    'account_deleted',
+  );
 });
 
-test('the three access states stay distinguishable in both languages', () => {
+test('the four access states stay distinguishable in both languages', () => {
   for (const locale of ['vi', 'en'] as const) {
     const labels = [
       messages[locale].employeeAccessActive,
       messages[locale].employeeAccessInactive,
       messages[locale].employeeAccessUnlinked,
+      messages[locale].employeeAccessAccountDeleted,
     ];
-    assert.equal(new Set(labels).size, 3, `${locale} labels must differ`);
+    assert.equal(new Set(labels).size, 4, `${locale} labels must differ`);
     assert.ok(
       !/invit|mời/i.test(messages[locale].employeeAccessUnlinked),
       `${locale} must not call an unlinked employee invited`,
@@ -67,7 +82,93 @@ test('a page is bounded and keeps the database ordering', () => {
     email: rows[0]!.email,
     role: rows[0]!.role,
     access: 'active',
+    deactivation: null,
+    deletion: null,
   });
+});
+
+test('the recorded administration state is attached to its employee', () => {
+  const rows = [row(1), row(2)];
+  // Rows arrive newest-first, so the first row of a kind for an employee is the state
+  // displayed, and the two lifecycle kinds are projected separately.
+  const operations = directoryOperations(
+    [
+      {
+        employee_id: rows[0]!.id,
+        kind: 'deactivate',
+        state: 'provider_failed',
+        revision: 2,
+        updated_at: '2026-10-13T10:00:00Z',
+        provider_outcome: 'ambiguous',
+      },
+      {
+        employee_id: rows[0]!.id,
+        kind: 'deactivate',
+        state: 'provider_pending',
+        revision: 1,
+        updated_at: '2026-10-13T09:00:00Z',
+        provider_outcome: null,
+      },
+      {
+        employee_id: rows[0]!.id,
+        kind: 'delete',
+        state: 'provider_failed',
+        revision: 1,
+        updated_at: '2026-10-14T09:00:00Z',
+        provider_outcome: 'storage_blocked',
+      },
+      {
+        employee_id: rows[1]!.id,
+        kind: 'deactivate',
+        state: 'unsupported',
+        revision: 1,
+        updated_at: '2026-10-13T09:00:00Z',
+        provider_outcome: null,
+      },
+    ],
+    'deactivate',
+  );
+  const deletions = directoryOperations(
+    [
+      {
+        employee_id: rows[0]!.id,
+        kind: 'delete',
+        state: 'provider_failed',
+        revision: 1,
+        updated_at: '2026-10-14T09:00:00Z',
+        provider_outcome: 'storage_blocked',
+      },
+      {
+        employee_id: rows[0]!.id,
+        kind: 'deactivate',
+        state: 'completed',
+        revision: 2,
+        updated_at: '2026-10-13T10:00:00Z',
+        provider_outcome: 'blocked',
+      },
+    ],
+    'delete',
+  );
+  const page = directoryPage(rows, {
+    deactivation: operations,
+    deletion: deletions,
+  });
+  assert.deepEqual(page.employees[0]!.deactivation, {
+    state: 'provider_failed',
+    revision: 2,
+    updatedAt: '2026-10-13T10:00:00Z',
+    outcome: 'ambiguous',
+  });
+  assert.deepEqual(page.employees[0]!.deletion, {
+    state: 'provider_failed',
+    revision: 1,
+    updatedAt: '2026-10-14T09:00:00Z',
+    outcome: 'storage_blocked',
+  });
+  // An unreadable or unknown state is never shown as a lifecycle state, and a deactivation
+  // is never projected as a deletion or the reverse.
+  assert.equal(page.employees[1]!.deactivation, null);
+  assert.equal(page.employees[1]!.deletion, null);
 });
 
 test('a last or empty page carries no cursor', () => {
@@ -103,4 +204,29 @@ test('the employee list is admin-only', () => {
   assert.equal(mayReadDirectory('admin'), true);
   for (const role of ['manager', 'staff', 'sales', 'unknown'])
     assert.equal(mayReadDirectory(role), false, role);
+});
+
+test('the recorded deactivation states are distinct in both languages', () => {
+  for (const locale of ['vi', 'en'] as const) {
+    const labels = [
+      messages[locale].employeeDeactivatePendingLabel,
+      messages[locale].employeeDeactivateReconciliationLabel,
+      messages[locale].employeeDeactivateConfirmedLabel,
+    ];
+    assert.equal(new Set(labels).size, 3, `${locale} labels must differ`);
+  }
+});
+
+test('the recorded deletion states are distinct in both languages', () => {
+  for (const locale of ['vi', 'en'] as const) {
+    const labels = [
+      messages[locale].employeeDeletePendingLabel,
+      messages[locale].employeeDeleteReconciliationLabel,
+      messages[locale].employeeDeleteStorageBlockedLabel,
+      messages[locale].employeeDeleteConfirmedLabel,
+      messages[locale].employeeAccessInactive,
+      messages[locale].employeeAccessAccountDeleted,
+    ];
+    assert.equal(new Set(labels).size, 6, `${locale} labels must differ`);
+  }
 });
