@@ -233,9 +233,47 @@ async function removeFixtures(manifest) {
     employees_retained: [],
     auth_users_removed: [],
     auth_users_retained: [],
+    properties_removed: [],
+    properties_retained: [],
     failures: [],
   };
   if (!manifest) return cleanup;
+  // Ticket #74 fixture properties first: their creator FK would otherwise keep the fixture
+  // employees, and the synthetic history/link rows they own are removed with them. Every
+  // statement is scoped to the recorded ids and a failure is recorded, never thrown.
+  const propertyIds = manifest.propertyIds ?? [];
+  if (propertyIds.length) {
+    const list = propertyIds.map((id) => `'${id}'`).join(',');
+    for (const statement of [
+      `delete from public.property_history where property_id in (${list})`,
+      `delete from public.property_vendors where property_id in (${list})`,
+      `delete from public.activity_events where property_id in (${list})`,
+      `delete from public.property_contacts where property_id in (${list})`,
+      `delete from public.property_addresses where property_id in (${list})`,
+      `delete from public.properties where id in (${list})`,
+    ]) {
+      try {
+        operatorSql(statement);
+      } catch (error) {
+        cleanup.failures.push(`remove fixture property rows: ${error.message}`);
+        break;
+      }
+    }
+    let remaining = propertyIds;
+    try {
+      remaining = operatorSql(
+        `select id::text as id from public.properties where id in (${list})`,
+      ).map((row) => row.id);
+    } catch (error) {
+      cleanup.failures.push(`read fixture properties: ${error.message}`);
+    }
+    cleanup.properties_removed = propertyIds.filter(
+      (id) => !remaining.includes(id),
+    );
+    cleanup.properties_retained = propertyIds.filter((id) =>
+      remaining.includes(id),
+    );
+  }
   const identities = Object.entries(manifest.identities ?? {});
   const employeeIds = identities
     .map(([, identity]) => identity.employeeId)
@@ -335,6 +373,9 @@ async function createFixtures() {
     identities: {},
     unlinked: null,
     retainedVendorIds: [],
+    // Ticket #74 link fixtures: synthetic properties this run created, removed before the
+    // fixture employees their creator FK would otherwise keep.
+    propertyIds: [],
   };
   for (const [name, role, active] of identities) {
     const email = `${filePrefix}.${name}.${runToken}@example.test`;
@@ -675,20 +716,552 @@ const detailScreen = (session, cdpPort) => {
   return value;
 };
 
+// ------------------------------------------------------------------ ticket #74 links
+// A synthetic property created through the guarded operation, so the link fixtures never
+// touch a real record's history.
+async function createLinkProperty(client, address) {
+  const result = await retryResult('create link fixture property', () =>
+    client.rpc('create_property', {
+      p_mode: 'sale',
+      p_facts: {},
+      p_address: { format: 'legacy', address_text: address },
+    }),
+  );
+  assert.equal(result.error, null, 'create link fixture property');
+  return result.data;
+}
+async function propertyRevisionOf(client, id) {
+  const result = await retryResult('read fixture property revision', () =>
+    client
+      .from('properties')
+      .select('revision,status,record_review_status')
+      .eq('id', id)
+      .single(),
+  );
+  assert.equal(result.error, null, 'read fixture property revision');
+  return result.data;
+}
+const vendorSection = (session, cdpPort) => {
+  const value = evaluate(
+    session,
+    cdpPort,
+    `() => {
+      const panel = document.querySelector('[data-od-id="panel-vendors"]');
+      return {
+        path: location.pathname,
+        lang: document.documentElement.lang,
+        heading: panel?.querySelector('h2')?.textContent?.trim() ?? null,
+        rows: panel
+          ? [...panel.querySelectorAll('.record')].map((row) => ({
+              name: row.querySelector('.record-title')?.textContent?.trim() ?? null,
+              meta: row.querySelector('.record-meta')?.textContent?.trim() ?? null,
+            }))
+          : [],
+        linkSummary: panel?.querySelector('details.maintenance summary')?.textContent?.trim() ?? null,
+        unlinkControls: panel
+          ? [...panel.querySelectorAll('button')].filter((node) => /Gỡ liên kết|Unlink/.test(node.textContent)).length
+          : 0,
+        history: [...document.querySelectorAll('.hist-row')].map((row) => ({
+          target: row.querySelector('.hist-field')?.textContent?.trim() ?? null,
+          when: row.querySelector('.hist-when')?.textContent?.trim() ?? null,
+        })),
+      };
+    }`,
+  );
+  assert.equal(typeof value, 'object', 'Unexpected vendor section payload');
+  return value;
+};
+const clickPanelButton = (text) => `(() => {
+  const panel = document.querySelector('[data-od-id="panel-vendors"]');
+  const button = [...panel.querySelectorAll('button')].find((node) => node.textContent.trim() === ${JSON.stringify(text)});
+  if (!button) return false;
+  button.click();
+  return true;
+})()`;
+
+// Ticket #74 through real independent sessions, the real application endpoints and the
+// rendered property record: link visibility, duplicate/stale/archive refusal and the
+// retained unlink history.
+async function vendorLinkJourney({
+  manifest,
+  staff,
+  admin,
+  sales,
+  staffCookies,
+  salesCookies,
+}) {
+  const liveProperty = await createLinkProperty(
+    staff,
+    fixtureName('liên kết A'),
+  );
+  const otherProperty = await createLinkProperty(
+    staff,
+    fixtureName('liên kết B'),
+  );
+  const archivedProperty = await createLinkProperty(
+    staff,
+    fixtureName('liên kết C'),
+  );
+  manifest.propertyIds.push(liveProperty, otherProperty, archivedProperty);
+  operatorSql(
+    `update public.properties set archived_at = now() where id = '${archivedProperty}'`,
+  );
+  const vendor = await createVendor(staff, {
+    displayName: fixtureName('nhà cung cấp liên kết'),
+    contactName: 'Phạm Văn Kỹ',
+    phones: ['090 555 6677'],
+  });
+  manifest.retainedVendorIds.push(vendor.id);
+  report.retained_properties = [...manifest.propertyIds];
+  await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', {
+    mode: 0o600,
+  });
+
+  const revision = (await propertyRevisionOf(staff, liveProperty)).revision;
+  const linkArgs = {
+    p_property_id: liveProperty,
+    p_vendor_id: vendor.id,
+    p_expected_property_revision: revision,
+  };
+  const salesLink = await sales.rpc('link_property_vendor', linkArgs);
+  assert.equal(salesLink.error?.code, '42501');
+  const salesUnlink = await sales.rpc('unlink_property_vendor', {
+    p_property_id: liveProperty,
+    p_vendor_id: vendor.id,
+    p_expected_link_revision: randomUUID(),
+  });
+  assert.equal(salesUnlink.error?.code, '42501');
+  const salesInsert = await sales.from('property_vendors').insert({
+    property_id: liveProperty,
+    vendor_id: vendor.id,
+    created_by: manifest.identities.sales.employeeId,
+  });
+  assert.ok(salesInsert.error, 'A direct link insert must fail');
+  const salesDelete = await sales
+    .from('property_vendors')
+    .delete()
+    .eq('property_id', liveProperty)
+    .select('vendor_id');
+  assert.ok(salesDelete.error || (salesDelete.data ?? []).length === 0);
+  assert.equal(
+    (
+      await sales
+        .from('property_vendors')
+        .select('vendor_id')
+        .eq('property_id', liveProperty)
+    ).data.length,
+    0,
+  );
+  observed(
+    'a sales employee is refused every link mutation while direct writes stay blocked',
+  );
+
+  const created = await staff.rpc('link_property_vendor', linkArgs);
+  assert.equal(created.error, null);
+  assert.equal(created.data.created, true);
+  assert.equal(created.data.display_name, vendor.display_name);
+  const converged = await staff.rpc('link_property_vendor', linkArgs);
+  assert.equal(converged.error, null);
+  assert.equal(converged.data.created, false);
+  assert.equal(converged.data.revision, created.data.revision);
+  const section = await sales.rpc('list_property_vendors', {
+    p_property_id: liveProperty,
+  });
+  assert.equal(section.error, null);
+  assert.deepEqual(
+    section.data.map((row) => row.vendor_id),
+    [vendor.id],
+  );
+  assert.equal(section.data[0].contact_name, 'Phạm Văn Kỹ');
+  assert.deepEqual(section.data[0].phones, ['090 555 6677']);
+  observed(
+    'a duplicate link converges on the recorded relationship and a property reader sees it',
+    { vendor: vendor.id, property: liveProperty },
+  );
+
+  // A vendor link is not ownership, a reservation or rental occupancy, and it credits no
+  // owner-contact access on the property it is linked to.
+  const credits = await admin
+    .from('activity_events')
+    .select('id')
+    .eq('property_id', liveProperty)
+    .eq('kind', 'owner_contact_access');
+  assert.equal((credits.data ?? []).length, 0);
+  const locks = await admin
+    .from('property_locks')
+    .select('id')
+    .eq('property_id', liveProperty);
+  assert.equal((locks.data ?? []).length, 0);
+  const ownership = await sales
+    .from('property_contacts')
+    .select('contact_id')
+    .eq('property_id', liveProperty);
+  assert.equal((ownership.data ?? []).length, 0);
+  const facts = await propertyRevisionOf(staff, liveProperty);
+  assert.equal(facts.record_review_status, 'pending');
+  assert.equal(facts.status, 'available');
+  observed(
+    'linking writes no owner link, lock, owner-contact credit or property-fact change',
+  );
+
+  const stale = await staff.rpc('link_property_vendor', {
+    ...linkArgs,
+    p_expected_property_revision: randomUUID(),
+  });
+  assert.equal(stale.error?.code, '40001');
+  const staleUnlink = await staff.rpc('unlink_property_vendor', {
+    p_property_id: liveProperty,
+    p_vendor_id: vendor.id,
+    p_expected_link_revision: randomUUID(),
+  });
+  assert.equal(staleUnlink.error?.code, '40001');
+  const missingVendor = await staff.rpc('link_property_vendor', {
+    ...linkArgs,
+    p_vendor_id: '00000000-0000-4000-8000-00000000dead',
+  });
+  assert.equal(missingVendor.error?.code, '23503');
+  assert.equal(
+    (
+      await sales
+        .from('property_vendors')
+        .select('vendor_id')
+        .eq('property_id', liveProperty)
+    ).data.length,
+    1,
+  );
+  observed('a stale or missing-company link context changes nothing');
+
+  // The archived boundary: a new link is refused, and the existing projection hides the
+  // archived property from a reader who is not a reviewer.
+  const archivedRevision = (await propertyRevisionOf(admin, archivedProperty))
+    .revision;
+  const archivedLink = await staff.rpc('link_property_vendor', {
+    p_property_id: archivedProperty,
+    p_vendor_id: vendor.id,
+    p_expected_property_revision: archivedRevision,
+  });
+  assert.equal(archivedLink.error?.code, '42501');
+  operatorSql(
+    `insert into public.property_vendors(property_id,vendor_id,created_by) values ('${archivedProperty}','${vendor.id}','${manifest.identities.staff.employeeId}')`,
+  );
+  const salesArchivedSection = await sales.rpc('list_property_vendors', {
+    p_property_id: archivedProperty,
+  });
+  assert.equal(salesArchivedSection.error, null);
+  assert.equal(salesArchivedSection.data.length, 0);
+  const adminArchivedSection = await admin.rpc('list_property_vendors', {
+    p_property_id: archivedProperty,
+  });
+  assert.equal(adminArchivedSection.data.length, 1);
+  const salesReach = await sales.rpc('list_vendor_properties', {
+    p_vendor_id: vendor.id,
+  });
+  assert.equal(salesReach.error, null);
+  assert.ok(
+    !salesReach.data.some((row) => row.property_id === archivedProperty),
+    'The archived property stays out of the sales projection',
+  );
+  const adminReach = await admin.rpc('list_vendor_properties', {
+    p_vendor_id: vendor.id,
+  });
+  assert.ok(
+    adminReach.data.some((row) => row.property_id === archivedProperty),
+    'A reviewer sees the archived linked property',
+  );
+  observed(
+    'an archived property refuses a new link and hides its links outside reviewer authority',
+  );
+
+  // Unlink: only the current relationship goes; the vendor, another property's link and
+  // the earlier history stay.
+  const secondLink = await staff.rpc('link_property_vendor', {
+    p_property_id: otherProperty,
+    p_vendor_id: vendor.id,
+    p_expected_property_revision: (
+      await propertyRevisionOf(staff, otherProperty)
+    ).revision,
+  });
+  assert.equal(secondLink.error, null);
+  const historyBefore = await sales
+    .from('property_history')
+    .select('target,actor_name,changed_fields,before_values,after_values')
+    .eq('property_id', liveProperty)
+    .eq('target', 'vendor_link')
+    .order('occurred_at');
+  assert.equal((historyBefore.data ?? []).length, 1);
+  assert.deepEqual(historyBefore.data[0].changed_fields, [
+    'vendor_id',
+    'vendor_name',
+  ]);
+  assert.deepEqual(historyBefore.data[0].after_values, {
+    vendor_id: vendor.id,
+    vendor_name: vendor.display_name,
+  });
+  assert.ok(historyBefore.data[0].actor_name);
+  const removed = await staff.rpc('unlink_property_vendor', {
+    p_property_id: liveProperty,
+    p_vendor_id: vendor.id,
+    p_expected_link_revision: section.data[0].revision,
+  });
+  assert.equal(removed.error, null);
+  assert.equal(removed.data.removed, true);
+  assert.equal(
+    (
+      await sales
+        .from('property_vendors')
+        .select('vendor_id')
+        .eq('property_id', liveProperty)
+    ).data.length,
+    0,
+  );
+  const retainedVendor = await sales
+    .from('vendors')
+    .select(VENDOR_COLUMNS)
+    .eq('id', vendor.id)
+    .single();
+  assert.equal(retainedVendor.data.display_name, vendor.display_name);
+  assert.equal(retainedVendor.data.contact_name, 'Phạm Văn Kỹ');
+  const otherSection = await sales.rpc('list_property_vendors', {
+    p_property_id: otherProperty,
+  });
+  assert.deepEqual(
+    otherSection.data.map((row) => row.vendor_id),
+    [vendor.id],
+  );
+  const historyAfter = await sales
+    .from('property_history')
+    .select('target,changed_fields,before_values,after_values')
+    .eq('property_id', liveProperty)
+    .eq('target', 'vendor_link')
+    .order('occurred_at');
+  assert.equal((historyAfter.data ?? []).length, 2);
+  assert.deepEqual(historyAfter.data[1].before_values, {
+    vendor_id: vendor.id,
+    vendor_name: vendor.display_name,
+  });
+  assert.deepEqual(historyAfter.data[1].after_values, {});
+  observed(
+    'unlink keeps the vendor, the unrelated link and the earlier link history',
+    { vendor: vendor.id },
+  );
+
+  // ---------------------------------------------------------------- application
+  const salesSectionRoute = await appGet(
+    salesCookies,
+    `/api/properties/${liveProperty}/vendors`,
+  );
+  assert.equal(salesSectionRoute.status, 200);
+  assert.deepEqual(salesSectionRoute.body.vendors, []);
+  const salesLinkRoute = await appPost(
+    salesCookies,
+    `/api/properties/${liveProperty}/vendors`,
+    { vendorId: vendor.id, propertyRevision: revision },
+  );
+  assert.equal(salesLinkRoute.status, 403);
+  const staffLinkRoute = await appPost(
+    staffCookies,
+    `/api/properties/${liveProperty}/vendors`,
+    { vendorId: vendor.id, propertyRevision: revision },
+  );
+  assert.equal(staffLinkRoute.status, 200);
+  assert.equal(staffLinkRoute.body.link.vendorId, vendor.id);
+  const malformedRoute = await appPost(
+    staffCookies,
+    `/api/properties/${liveProperty}/vendors`,
+    { vendorId: vendor.id },
+  );
+  assert.equal(malformedRoute.status, 400);
+  const staleUnlinkRoute = await appPost(
+    staffCookies,
+    `/api/properties/${liveProperty}/vendors/${vendor.id}`,
+    { revision: randomUUID() },
+  );
+  assert.equal(staleUnlinkRoute.status, 409);
+  assert.equal(staleUnlinkRoute.body.error, 'stale-edit');
+  const currentLink = await sales.rpc('list_property_vendors', {
+    p_property_id: liveProperty,
+  });
+  const unlinkRoute = await appPost(
+    staffCookies,
+    `/api/properties/${liveProperty}/vendors/${vendor.id}`,
+    { revision: currentLink.data[0].revision },
+  );
+  assert.equal(unlinkRoute.status, 200);
+  const vendorDetailRoute = await appGet(
+    salesCookies,
+    '/api/vendors/' + vendor.id,
+  );
+  assert.equal(vendorDetailRoute.status, 200);
+  assert.equal(vendorDetailRoute.body.vendor.displayName, vendor.display_name);
+  assert.ok(Array.isArray(vendorDetailRoute.body.properties));
+  assert.ok(
+    !vendorDetailRoute.body.properties.some(
+      (property) => property.propertyId === archivedProperty,
+    ),
+    'The sales projection hides the archived linked property',
+  );
+  assert.ok(
+    vendorDetailRoute.body.properties.some(
+      (property) => property.propertyId === otherProperty,
+    ),
+  );
+  const historyRoute = await appGet(
+    salesCookies,
+    `/api/properties/${liveProperty}/history`,
+  );
+  assert.equal(historyRoute.status, 200);
+  const linkEvents = historyRoute.body.events.filter(
+    (event) => event.target === 'vendor_link',
+  );
+  assert.ok(linkEvents.length >= 2, 'The unlink history stays readable');
+  assert.ok(linkEvents.some((event) => event.actor_name));
+  observed(
+    'the endpoints bound the link bodies and keep the link history readable',
+  );
+
+  // ---------------------------------------------------------------- browser
+  await staff.rpc('link_property_vendor', {
+    ...linkArgs,
+    p_expected_property_revision: (
+      await propertyRevisionOf(staff, liveProperty)
+    ).revision,
+  });
+  browser('sgn73-staff', 9336, [
+    'open',
+    `${appUrl}/properties/${liveProperty}`,
+  ]);
+  await waitFor(
+    'sgn73-staff',
+    9336,
+    `() => Boolean(document.querySelector('[data-od-id="panel-vendors"]'))`,
+  );
+  const staffSection = vendorSection('sgn73-staff', 9336);
+  assert.equal(staffSection.heading, 'Nhà cung cấp');
+  assert.equal(staffSection.rows.length, 1);
+  assert.equal(staffSection.rows[0].name, vendor.display_name);
+  assert.equal(staffSection.rows[0].meta.includes('Phạm Văn Kỹ'), true);
+  assert.equal(staffSection.linkSummary, 'Liên kết nhà cung cấp đã ghi nhận');
+  assert.equal(staffSection.unlinkControls, 1);
+  evaluate(
+    'sgn73-staff',
+    9336,
+    `(() => { document.querySelector('.lang-switch button[lang=en]').click(); return true; })()`,
+  );
+  await waitFor(
+    'sgn73-staff',
+    9336,
+    `() => document.querySelector('[data-od-id="panel-vendors"] h2')?.textContent?.trim() === 'Vendors'`,
+  );
+  const englishSection = vendorSection('sgn73-staff', 9336);
+  assert.equal(englishSection.lang, 'en');
+  assert.equal(englishSection.linkSummary, 'Link a recorded vendor');
+  assert.equal(englishSection.unlinkControls, 1);
+  evaluate(
+    'sgn73-staff',
+    9336,
+    `(() => { document.querySelector('.lang-switch button[lang=vi]').click(); return true; })()`,
+  );
+  await waitFor(
+    'sgn73-staff',
+    9336,
+    `() => document.querySelector('[data-od-id="panel-vendors"] h2')?.textContent?.trim() === 'Nhà cung cấp'`,
+  );
+  observed('the property vendor section renders equivalent English labels');
+
+  // Remove the mistaken link through the rendered confirmation.
+  evaluate('sgn73-staff', 9336, clickPanelButton('Gỡ liên kết'));
+  await waitFor(
+    'sgn73-staff',
+    9336,
+    `() => [...document.querySelectorAll('[data-od-id="panel-vendors"] button')].some((node) => node.textContent.trim() === 'Xác nhận gỡ liên kết')`,
+  );
+  evaluate('sgn73-staff', 9336, clickPanelButton('Xác nhận gỡ liên kết'));
+  await waitFor(
+    'sgn73-staff',
+    9336,
+    `() => document.querySelectorAll('[data-od-id="panel-vendors"] .record').length === 0`,
+  );
+  await waitFor(
+    'sgn73-staff',
+    9336,
+    `() => [...document.querySelectorAll('.hist-row .hist-field')].some((node) => node.textContent.trim() === 'Liên kết nhà cung cấp')`,
+  );
+  const afterUnlink = vendorSection('sgn73-staff', 9336);
+  assert.equal(afterUnlink.rows.length, 0);
+  assert.ok(
+    afterUnlink.history.some((row) => row.target === 'Liên kết nhà cung cấp'),
+    'The unlink stays visible in the property history',
+  );
+  observed(
+    'a maintainer removes a mistaken link in the UI and keeps the recorded history',
+  );
+
+  // Link the company again through the rendered picker.
+  evaluate(
+    'sgn73-staff',
+    9336,
+    `(() => { const details = document.querySelector('[data-od-id="panel-vendors"] details'); details.open = true; return details.open; })()`,
+  );
+  evaluate(
+    'sgn73-staff',
+    9336,
+    setInput('#vendor-link-search', vendor.display_name),
+  );
+  evaluate('sgn73-staff', 9336, clickPanelButton('Tìm nhà cung cấp'));
+  await waitFor(
+    'sgn73-staff',
+    9336,
+    `() => document.querySelectorAll('#vendor-link-choose option').length === 1`,
+  );
+  evaluate(
+    'sgn73-staff',
+    9336,
+    clickPanelButton('Liên kết với bất động sản này'),
+  );
+  await waitFor(
+    'sgn73-staff',
+    9336,
+    `() => document.querySelector('[data-od-id="panel-vendors"] .record-title')?.textContent?.trim() === ${JSON.stringify(vendor.display_name)}`,
+  );
+  assert.equal(vendorSection('sgn73-staff', 9336).rows.length, 1);
+  observed('a maintainer links a recorded vendor from the property record');
+
+  browser('sgn73-sales', 9336, [
+    'open',
+    `${appUrl}/properties/${liveProperty}`,
+  ]);
+  await waitFor(
+    'sgn73-sales',
+    9336,
+    `() => Boolean(document.querySelector('[data-od-id="panel-vendors"] .record'))`,
+  );
+  const salesSection = vendorSection('sgn73-sales', 9336);
+  assert.equal(salesSection.rows.length, 1);
+  assert.equal(salesSection.rows[0].name, vendor.display_name);
+  assert.equal(salesSection.linkSummary, null);
+  assert.equal(salesSection.unlinkControls, 0);
+  observed(
+    'a sales employee reads the property vendor section with no link control',
+  );
+}
+
 // ------------------------------------------------------------------ run
 const before = { vendors: null, employees: null };
 let manifest = null;
 const report = {
   issue: 73,
+  issues: [73, 74],
   namespace,
   run_token: runToken,
   started_at: new Date().toISOString(),
   observations,
   retained_vendors: [],
+  retained_properties: [],
   before,
   limitations: [
     'Supabase Auth email delivery and invitation acceptance are outside this slice.',
     'The vendor slice has no deletion path, so the synthetic SGN73 vendor rows are retained; the report lists their exact ids and the fixture identities those rows reference.',
+    'Ticket #74 link fixtures are synthetic properties created by this harness, and their link and history rows are removed with them; a retained vendor keeps no property link.',
     'A real concurrent-session write race remains a staging gate.',
   ],
 };
@@ -1224,6 +1797,16 @@ try {
   observed(
     'inactive and unlinked identities are refused before the directory renders',
   );
+
+  // ---------------------------------------------------------------- ticket #74
+  await vendorLinkJourney({
+    manifest,
+    staff,
+    admin,
+    sales,
+    staffCookies,
+    salesCookies,
+  });
 } catch (error) {
   failure = error;
 } finally {
