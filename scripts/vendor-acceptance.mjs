@@ -1577,7 +1577,9 @@ async function vendorLinkJourney({
     `() => document.querySelector('[data-od-id="panel-vendors"] .record-title')?.textContent?.trim() === ${JSON.stringify(vendor.display_name)}`,
   );
   assert.equal(vendorSection('sgn73-staff', 9336).rows.length, 1);
-  observed('an active employee links a recorded vendor from the property record');
+  observed(
+    'an active employee links a recorded vendor from the property record',
+  );
 
   await browserSignIn(
     'sgn73-sales',
