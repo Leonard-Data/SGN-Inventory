@@ -188,8 +188,8 @@ const copy = {
   more: ['Trang tiếp theo', 'Next page'],
   first: ['Trang đầu', 'First page'],
   immediate: [
-    'Bảo trì được lưu ngay và ghi lịch sử; yêu cầu giữ chỗ vẫn cần phê duyệt độc lập.',
-    'Maintenance saves immediately with history; reservations still require independent approval.',
+    'Bảo trì được lưu ngay; chỉ thay đổi giá chào được ghi vào lịch sử. Yêu cầu giữ chỗ vẫn cần phê duyệt độc lập.',
+    'Maintenance saves immediately; only asking-price changes are recorded in the history. Reservations still require independent approval.',
   ],
   primary: ['Địa chỉ / liên kết chính', 'Primary address / link'],
 } as const;
