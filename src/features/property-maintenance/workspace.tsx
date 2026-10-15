@@ -11,6 +11,45 @@ import { maintenanceError, maintenanceText, optionLabel } from './messages';
 import { ContactPicker } from './contact-picker';
 import { failureRoute } from './refusal-rules';
 import { useNarrowSections } from './narrow-view';
+import {
+  SECTIONS,
+  DEFAULT_SECTION,
+  nextSection,
+  type Section,
+} from './sections';
+import { shouldAdoptFactsSnapshot } from './facts-snapshot';
+type Editor = {
+  target: Target;
+  targetId: string | null;
+  revision: string;
+  propertyRevision: string;
+  values: Record<string, unknown>;
+  impact?: ContactDetail['impact'];
+};
+export function Maintenance({
+  detail,
+  employee,
+  locale,
+  onSaved,
+  onDenied,
+}: {
+  detail: PropertyDetail;
+  employee: Employee;
+  locale: Locale;
+  onSaved: () => void | Promise<void>;
+  onDenied: (status: number) => void;
+}) {
+  const text = maintenanceText(locale),
+    property = detail.property,
+    staff = ['staff', 'manager', 'admin'].includes(employee.role),
+    reviewer = ['manager', 'admin'].includes(employee.role),
+    canEdit =
+      !property.archived_at && (staff || property.created_by === employee.id),
+    // Shared-contact detail correction is its own permission: any live employee on a readable
+    // property, independent of property-fact authority. Links, creation and unlink stay staff-only.
+    canEditContact = !property.archived_at || reviewer;
+  const [section, setSection] = useState<Section>(DEFAULT_SECTION),
+    narrow = useNarrowSections(),
     [editor, setEditor] = useState<Editor | null>(null),
     [selected, setSelected] = useState(''),
     [contactBusy, setContactBusy] = useState(false),
