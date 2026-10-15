@@ -16,6 +16,7 @@ import {
   nextSection,
   type Section,
 } from './sections';
+import { shouldAdoptFactsSnapshot } from './facts-snapshot';
 type Editor = {
   target: Target;
   targetId: string | null;
@@ -52,7 +53,20 @@ export function Maintenance({
     [contactBusy, setContactBusy] = useState(false),
     [contactError, setContactError] = useState<string | null>(null),
     [notice, setNotice] = useState(false);
-  const controller = useRef<AbortController | null>(null);
+  const controller = useRef<AbortController | null>(null),
+    factsSnapshot = useRef(property),
+    factsSavedRevision = useRef<string | null>(null);
+  if (
+    shouldAdoptFactsSnapshot(
+      factsSavedRevision.current,
+      factsSnapshot.current.revision,
+      property.revision,
+    )
+  ) {
+    factsSnapshot.current = property;
+    factsSavedRevision.current = null;
+  }
+  const facts = factsSnapshot.current;
   useEffect(() => () => controller.current?.abort(), []);
   // Roving tabindex: the arrow keys move both focus and selection across the three tabs.
   function onSectionKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
@@ -130,17 +144,17 @@ export function Maintenance({
     setNotice(true);
     await onSaved();
   }
-  // The facts section renders its form immediately, so it submits the record's current
-  // revision instead of a revision captured when an editor was opened.
-  function saveFacts(changes: Changes, explanation?: string) {
-    return api('/api/properties/' + property.id + '/maintenance', {
+  async function saveFacts(changes: Changes, explanation?: string) {
+    const result = await api('/api/properties/' + facts.id + '/maintenance', {
       target: 'property',
-      targetId: property.id,
-      revision: property.revision,
-      propertyRevision: property.revision,
+      targetId: facts.id,
+      revision: facts.revision,
+      propertyRevision: facts.revision,
       changes,
       ...(explanation ? { explanation } : {}),
     });
+    factsSavedRevision.current = facts.revision;
+    return result;
   }
   async function savedFacts() {
     setNotice(true);
@@ -197,9 +211,10 @@ export function Maintenance({
                 {text.current}
               </a>
               <MutationForm
+                key={'facts' + facts.revision}
                 locale={locale}
                 target="property"
-                values={property}
+                values={facts}
                 save={saveFacts}
                 onSaved={savedFacts}
                 onDenied={onDenied}
@@ -207,11 +222,11 @@ export function Maintenance({
               >
                 <RecordFields
                   locale={locale}
-                  values={property}
+                  values={facts}
                   names={targetFields.property.filter(
                     (k) =>
                       k !== 'status' ||
-                      !['sold', 'rented'].includes(String(property.status)),
+                      !['sold', 'rented'].includes(String(facts.status)),
                   )}
                 />
                 {/* A mistaken price keeps its own revision; this note is optional. */}
