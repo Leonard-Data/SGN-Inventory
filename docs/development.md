@@ -64,6 +64,7 @@ scripts/
   release-guard.mjs             # Branch/project isolation, pending migrations and release smoke
   release-guard.test.mjs        # Cross-stage regression risks
   validate-schema.mjs           # Existing embedded SQL assertions
+  audit-retention-contract.mjs  # Embedded private audit-retention regressions
   maintenance-contract.mjs      # Embedded maintenance/history regressions
   correction-contract.mjs       # Embedded correction-workflow regressions
   comments-contract.mjs         # Embedded discussion role/validation/retry/paging regressions
