@@ -1073,6 +1073,32 @@ const manager = await userClient('manager');
   // The validated manager release interaction resolves the conflict through the rendered UI.
   await browserLogin('manager', secondary, 'vi');
   await openSaleDetail(conflict, secondary);
+  // The conflict message is the rendered outcome of a refused submit, so the journey
+  // exercises the real 409 path before asserting what the reviewer sees.
+  selected(
+    'section.sale-completion select[name="creditedEmployeeId"]',
+    employeeIds.claimant,
+    secondary,
+    'select the credited closer',
+  );
+  filled(
+    'section.sale-completion input[name="completedOn"]',
+    today,
+    secondary,
+    'fill the actual completion date',
+  );
+  filled(
+    'section.sale-completion input[name="reference"]',
+    reference,
+    secondary,
+    'fill the contract reference',
+  );
+  submitted(
+    'section.sale-completion form',
+    secondary,
+    'attempt the blocked confirmation',
+  );
+  await waitForText('Bất động sản đang có đặt chỗ hiệu lực', secondary);
   const before = saleScreen(secondary);
   assert.ok(
     before.text.includes('Bất động sản đang có đặt chỗ hiệu lực'),
