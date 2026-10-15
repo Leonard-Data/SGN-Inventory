@@ -95,6 +95,10 @@ const copy = {
   contactSearch: ['Tìm tên người liên hệ', 'Find contact name'],
   chooseContact: ['Chọn người liên hệ', 'Choose a contact'],
   history: ['Lịch sử thay đổi bất động sản', 'Property change history'],
+  historyNote: [
+    'Chỉ ghi nhận thay đổi giá chào; thay đổi địa chỉ, người liên hệ và thông tin khác không còn được ghi vào lịch sử này.',
+    'Only asking-price changes are recorded; address, contact and other field changes are no longer recorded here.',
+  ],
   emptyHistory: [
     'Chưa có thay đổi nghiệp vụ được ghi nhận; lịch sử nhập cũ không được suy đoán.',
     'No recorded business changes yet; imported historical changes are not invented.',
@@ -184,8 +188,8 @@ const copy = {
   more: ['Trang tiếp theo', 'Next page'],
   first: ['Trang đầu', 'First page'],
   immediate: [
-    'Bảo trì được lưu ngay và ghi lịch sử; yêu cầu giữ chỗ vẫn cần phê duyệt độc lập.',
-    'Maintenance saves immediately with history; reservations still require independent approval.',
+    'Bảo trì được lưu ngay; chỉ thay đổi giá chào được ghi vào lịch sử. Yêu cầu giữ chỗ vẫn cần phê duyệt độc lập.',
+    'Maintenance saves immediately; only asking-price changes are recorded in the history. Reservations still require independent approval.',
   ],
   primary: ['Địa chỉ / liên kết chính', 'Primary address / link'],
 } as const;

@@ -105,7 +105,7 @@ A shared named party whose contact details may be used by several properties. It
 _Avoid_: Property-specific phone record
 
 **Shared-contact detail correction**:
-A correction of the identity details of an existing linked Contact by any Active employee who can read the property it was opened from. It commits immediately and appears in the change history of every Property linked at that moment, and it is separate from Property-fact authority: it does not create, link, unlink or merge contacts.
+A correction of the identity details of an existing linked Contact by any Active employee who can read the property it was opened from. It commits immediately and applies to the shared person for every Property linked at that moment; it is no longer recorded in the property change history, and it is separate from Property-fact authority: it does not create, link, unlink or merge contacts.
 _Avoid_: Property-fact edit, contact creation, approval
 
 **Record verification**:
@@ -125,7 +125,7 @@ A separately attributed addition to an open Correction request's explanation, pr
 _Avoid_: Replacement request, edited original
 
 **Property change history**:
-The record of who changed information affecting a property, when, and its before/after values, including property facts, addresses, contact links and shared-contact details displayed on that property.
+The record of who changed a Property's asking price, when, and its before/after values. Only recorded asking-price changes add rows; creation, address, contact, link, note and status changes are not recorded, and rows recorded before this rule was applied are retained and stay readable.
 _Avoid_: Approval queue, page-view history
 
 **Asking-price history**:
