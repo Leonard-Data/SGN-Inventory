@@ -116,7 +116,7 @@ Shipped: the card cover is the site plate drawn from the record's own fields; a 
 ```
 .sgn-content
   quiet back link (.link-quiet) → returnTo (keeps the filtered result position)
-  detail-head: .example eyebrow · h1 (record code) · .chips.head-chips (status + review status badges)
+  detail-head: .example eyebrow · h1 (record code) · .chips.head-chips (status + review status badges) · .detail-actions (record action bar: completed-sale confirmation for manager/admin, Reservation, Edit facts, Correction requests, My requests)
   archived notice: .alert[data-tone="neutral"] with the archive mark
   detail-body (two-column grid, single column under 1180px): main column + aside.detail-rail
     main column:
@@ -127,22 +127,25 @@ Shipped: the card cover is the site plate drawn from the record's own fields; a 
         panel Price history → two .price-series groups (sale asking price / monthly asking rent) of .price-row (.price-when, .price-change, .price-note, .price-who), newest-first with per-series paging
         panel Addresses  → .record rows + mapping .badge, .addrNote policy line
         panel Contacts   → .record rows + owner-contact disclosure (.owner-disclosure/.owner-phone)
-        panel Completed sale → reviewer-only confirmation form (credited closer, actual Vietnam date, contract reference) or the recorded completion (.sale-completion/.sale-completion-recorded), manager/admin only
-        panel Reservation→ effective/pending states (.reservation-effective/.reservation-pending) + request and decision forms; a manager/admin also gets the reasoned release control on an effective reservation
-        panel Maintenance→ in-page maintenance workspace (revision-checked)
-        panel Corrections→ report + role-scoped queue
       .tabpanel "Tài liệu": panel Files → property-files Workspace (.doc-row vocabulary, cover, dropzone)
       .tabpanel "Thảo luận": Discussion → 30-item list newest-first, .composer, author edit and withdrawal with reasoned manager/admin removal (.comment-actions, .comment-edited marker, .comment-edit editor, .comment-removed marker, .comment-moderation)
     aside.detail-rail (sticky):
       panel History    → maintenance history rows (.hist-row)
       page-view note, then panel Activity → today's own counts
+  record action dialogs (siblings of .detail-body, content mounted only while open), opened from the action bar:
+    dialog "Completed sale" → reviewer-only confirmation form (credited closer, actual Vietnam date, contract reference) or the recorded completion (.sale-completion/.sale-completion-recorded), manager/admin only
+    dialog "Reservation" → effective/pending states (.reservation-effective/.reservation-pending) + request and decision forms; a manager/admin also gets the reasoned release control on an effective reservation
+    dialog "Edit facts" → maintenance workspace (revision-checked)
+    dialog "Correction requests" → correction report (the .maintenance disclosure)
+    dialog "My requests" → role-scoped correction queue
 ```
 Shipped as above. The three groups and the main/rail split follow the package's own record screen
 (`ui_kits/app/components/App.jsx`: `overview | docs | comments` inside a `<div>`, beside `<aside class="detail-rail">`).
 Before this the panels were direct children of `.detail-body`, so the two-column grid placed them in alternating
 columns and the facts panel rendered inside the 344 px rail. Inactive tabpanels stay mounted but `hidden`, so a
-tab switch neither refetches nor loses an in-flight upload. **Not implemented:** the record's Edit action —
-there is no `/properties/[id]/edit` route, so editing stays the in-page maintenance disclosure. No new route was added.
+tab switch neither refetches nor loses an in-flight upload. **Not implemented:** a dedicated record-edit route —
+there is no `/properties/[id]/edit`; the record's *Edit facts* action opens the maintenance workspace in a dialog instead.
+No new route was added.
 
 ### 5.3 `/requests` — my requests (new)
 
@@ -251,7 +254,7 @@ footnote: historical rankings can change after cancellation/correction
 ```
 Three separate rankings, no composite score; no geographic map (per the confirmed analytics plan).
 
-Shipped for issue #38: the completed-sales ranking alone is delivered at `/reports/completed-sales` — a manager/admin rail entry with the validated Vietnam range filter, tied ranks, an explicit total and the separate unknown-attribution note; the reviewer-only confirmation form lives on the property detail beside the reservation panel rather than as a `/reviews/sale-completions` queue, and the province and completed-rental panels above remain planned, while the owner-contact activity ranking ships on the delivered company-activity report at `/activity/company` (see the shipped-route note below, #34).
+Shipped for issue #38: the completed-sales ranking alone is delivered at `/reports/completed-sales` — a manager/admin rail entry with the validated Vietnam range filter, tied ranks, an explicit total and the separate unknown-attribution note; the reviewer-only confirmation form lives on the property detail in a dialog opened from the record action bar rather than as a `/reviews/sale-completions` queue, and the province and completed-rental panels above remain planned, while the owner-contact activity ranking ships on the delivered company-activity report at `/activity/company` (see the shipped-route note below, #34).
 
 ### 5.10 `/admin/categories` · `/admin/units` (new, admin)
 
@@ -286,7 +289,7 @@ page-intro · [New category] / [New unit]
 - Navigation renders four groups: Inventory (`/properties` and `/properties/new`, every role), Reservations & Reviews (`/reviews/corrections`, every role — the queue reads the caller's own requests while only staff/manager/admin decide), People (`/people/employees`, admin) and Reports (`/activity/me`, every role; `/activity/company` and `/reports/completed-sales`, manager/admin). The ADR's other two groups (Rentals, Admin) ship with their routes.
 - The inventory results have **cards only**: the package's Cards/List/Table `.seg` switch is not implemented, so `.cell-plate` table thumbnails have no consumer yet; `.seg` renders the chronological oldest/newest ordering control (#37) instead.
 - The card shows the record's existing fact set (code, mode, address, status), plus the original inventory entry date, legacy marker and Vietnam age in the chronological views (#37), or the explicit unknown date and unknown age. The prototype's card also prints area and price lines; adding them would be new data display beyond this restyle, so they were left out.
-- The record page has no Edit action (no edit route exists; editing stays the in-page maintenance disclosure).
+- The record page's *Edit facts* action opens the maintenance workspace in a dialog; no dedicated edit route exists.
 - The change timeline (`.timeline`/`.tl-item`) and the **Nhân sự & liên hệ** screen (employee accounts + contact book, `.directory-tabs`, `.cell-person`, `.sgn-avatar-sm`) are rendered in the design review route `/design/app-preview` from fictional fixtures: the app has no contact-book endpoint, and the review route is where that unused vocabulary is inspectable. The asking-price timeline (`.price-row`) now ships on the record from the recorded sale/rent series (#36); the employee list ships separately (§5.6). The remaining product route (`/people/contacts`) and its data contract are separate, unauthorized work.
 - The personal activity report (#30) shipped at **`/activity/me`** rather than this document's planned `/reports/activity`, with its own acceptance evidence and API path (`/api/activity/me`), and the company employee-by-day report (#57) shipped at **`/activity/company`** rather than the planned `/reports/company` with API path (`/api/activity/company`); both routes were left where the features shipped and the rail's Reports group points at them. Issue #34 added the owner-contact activity ranking to that shipped report as the `# · employee · owner-contact properties` table above the daily history, read through `employee_owner_contact_ranking` behind the same endpoint, range filter and denial states; the planned Province activity and completed-rental rankings remain unbuilt. `/requests`, the rest of `/reviews/*`, `/rentals*`, `/people/contacts`, `/admin/*` remain unbuilt and are only described above.
 - The auth surfaces keep their own layout sheet (`.sgn-auth` + `sgn-auth.css`); they share the token layer and the control vocabulary but they are shell-free by design (ADR 0001).

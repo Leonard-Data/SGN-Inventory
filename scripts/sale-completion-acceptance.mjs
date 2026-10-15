@@ -322,6 +322,49 @@ async function settle(session = primary) {
   await new Promise((resolve) => setTimeout(resolve, 600));
   await waitUntil(settledSale, session);
 }
+// The record's action bar opens the confirmation and reservation panels in dialogs, so the
+// journey enters each panel through that rendered control. A dialog blocks the rest of the
+// record: it is closed through its own control before the header is used again.
+const saleAction = '^(Xác nhận bán thành công|Confirm completed sale)$';
+const reservationAction = '^(Đặt chỗ|Reservations)$';
+const headerActionReady = (pattern) =>
+  `() => [...document.querySelectorAll('.detail-actions button')].some((button) => new RegExp(${JSON.stringify(pattern)}).test(button.textContent.trim()))`;
+async function openSalePanel(session = primary) {
+  await waitUntil(headerActionReady(saleAction), session);
+  act(
+    clickMatching(saleAction, '.detail-actions button'),
+    session,
+    'open the confirmation panel',
+  );
+  await settle(session);
+}
+async function openSaleDetail(property, session = primary) {
+  browser(['open', detail(property)], session);
+  await openSalePanel(session);
+}
+async function openReservationPanel(session = primary) {
+  await waitUntil(headerActionReady(reservationAction), session);
+  act(
+    clickMatching(reservationAction, '.detail-actions button'),
+    session,
+    'open the reservation panel',
+  );
+  await waitUntil(
+    "() => document.querySelector('section.reservation')?.dataset.loaded === 'yes'",
+    session,
+  );
+}
+async function closeActionPanel(session = primary) {
+  act(
+    "(() => { const button = document.querySelector('dialog.sgn-dialog[open] .sgn-dialog-close'); if (!button) return false; button.click(); return true; })()",
+    session,
+    'close the open panel',
+  );
+  await waitUntil(
+    "() => !document.querySelector('dialog.sgn-dialog[open]')",
+    session,
+  );
+}
 async function userClient(name) {
   const fixture = fixtures.identities[name];
   const client = createClient(
@@ -857,8 +900,7 @@ const manager = await userClient('manager');
   initializeBrowser(primary);
   initializeBrowser(secondary);
   await browserLogin('manager', primary, 'vi');
-  browser(['open', detail(main)], primary);
-  await settle(primary);
+  await openSaleDetail(main, primary);
   const page = saleScreen(primary);
   assert.equal(page.locale, 'vi', 'VI is the default interface language');
   assert.equal(page.heading, 'Xác nhận bán thành công');
@@ -1029,13 +1071,43 @@ const manager = await userClient('manager');
     { error: refused.body.error },
   );
   // The validated manager release interaction resolves the conflict through the rendered UI.
-  browser(['open', detail(conflict)], secondary);
-  await settle(secondary);
+  await browserLogin('manager', secondary, 'vi');
+  await openSaleDetail(conflict, secondary);
+  // The conflict message is the rendered outcome of a refused submit, so the journey
+  // exercises the real 409 path before asserting what the reviewer sees.
+  selected(
+    'section.sale-completion select[name="creditedEmployeeId"]',
+    employeeIds.claimant,
+    secondary,
+    'select the credited closer',
+  );
+  filled(
+    'section.sale-completion input[name="completedOn"]',
+    today,
+    secondary,
+    'fill the actual completion date',
+  );
+  filled(
+    'section.sale-completion input[name="reference"]',
+    reference,
+    secondary,
+    'fill the contract reference',
+  );
+  submitted(
+    'section.sale-completion form',
+    secondary,
+    'attempt the blocked confirmation',
+  );
+  await waitForText('Bất động sản đang có đặt chỗ hiệu lực', secondary);
   const before = saleScreen(secondary);
   assert.ok(
     before.text.includes('Bất động sản đang có đặt chỗ hiệu lực'),
     'The reviewer sees the conflicting effective reservation',
   );
+  // The release control lives in the reservation panel, which replaces the closed
+  // confirmation panel in the record's dialog.
+  await closeActionPanel(secondary);
+  await openReservationPanel(secondary);
   filled(
     'section.reservation textarea[name="reason"]',
     releaseReason,
@@ -1202,26 +1274,27 @@ const manager = await userClient('manager');
 
 // ------------------------------------------------------------------ language switch on the panel
 {
-  browser(['open', detail(main)], primary);
-  await settle(primary);
+  await openSaleDetail(main, primary);
   assert.ok(
     saleScreen(primary).recorded,
     'The recorded completion stays visible on a fresh detail',
   );
+  await closeActionPanel(primary);
   act(clickMatching('English', 'header button'), primary, 'switch to English');
   await waitUntil(`() => document.documentElement.lang === 'en'`, primary);
-  await settle(primary);
+  await openSalePanel(primary);
   const english = saleScreen(primary);
   assert.equal(english.heading, 'Confirm completed sale');
   assert.ok(english.text.includes(reference));
   assert.ok(english.text.includes(declaredBy('claimant').display_name));
+  await closeActionPanel(primary);
   act(
     clickMatching('Tiếng Việt', 'header button'),
     primary,
     'switch to Vietnamese',
   );
   await waitUntil(`() => document.documentElement.lang === 'vi'`, primary);
-  await settle(primary);
+  await openSalePanel(primary);
   const vietnamese = saleScreen(primary);
   assert.equal(vietnamese.heading, 'Xác nhận bán thành công');
   assert.ok(vietnamese.text.includes(reference));
