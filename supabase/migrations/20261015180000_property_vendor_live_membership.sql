@@ -78,9 +78,8 @@ begin
   select * into actor from public.employees where id = p_employee_id for update;
   if not found
     or not actor.is_active
-    or actor.auth_user_id is distinct from auth.uid()
-    or actor.role not in ('staff','manager','admin') then
-    raise exception 'active staff, manager or admin required' using errcode = '42501';
+    or actor.auth_user_id is distinct from auth.uid() then
+    raise exception 'active employee required' using errcode = '42501';
   end if;
   return actor.id;
 end;
@@ -99,9 +98,6 @@ declare
   created_here boolean := false;
 begin
   if me is null then raise exception 'active employee required' using errcode = '42501'; end if;
-  if private.employee_role() not in ('staff','manager','admin') then
-    raise exception 'vendor link requires staff, manager or admin' using errcode = '42501';
-  end if;
   if p_property_id is null or p_vendor_id is null then
     raise exception 'property and vendor required' using errcode = '23514';
   end if;
@@ -115,7 +111,7 @@ begin
     raise exception 'expected property revision required' using errcode = '23514';
   end if;
   if prop.revision <> p_expected_property_revision then
-    raise exception 'stale property context; reload current state' using errcode = '40001';
+    raise exception 'stale property context; reload current state' using errcode = 'PT409';
   end if;
   select * into company from public.vendors where id = p_vendor_id for update;
   if not found then raise exception 'vendor not found' using errcode = '23503'; end if;
@@ -153,9 +149,6 @@ declare
   link public.property_vendors;
 begin
   if me is null then raise exception 'active employee required' using errcode = '42501'; end if;
-  if private.employee_role() not in ('staff','manager','admin') then
-    raise exception 'vendor link requires staff, manager or admin' using errcode = '42501';
-  end if;
   if p_property_id is null or p_vendor_id is null then
     raise exception 'property and vendor required' using errcode = '23514';
   end if;
@@ -173,7 +166,7 @@ begin
     raise exception 'expected link revision required' using errcode = '23514';
   end if;
   if link.revision <> p_expected_link_revision then
-    raise exception 'stale link; reload current state' using errcode = '40001';
+    raise exception 'stale link; reload current state' using errcode = 'PT409';
   end if;
   delete from public.property_vendors where property_id = p_property_id and vendor_id = p_vendor_id;
   return jsonb_build_object(
@@ -239,6 +232,9 @@ begin
   end if;
   perform private.maintenance_gate();
   me := private.require_live_vendor_actor(me);
+  if private.employee_role() not in ('staff','manager','admin') then
+    raise exception 'vendor creation requires staff, manager or admin' using errcode = '42501';
+  end if;
   insert into public.vendors(
     display_name, contact_name, phones, email, source_address, notes, created_by, submission_key
   ) values (
