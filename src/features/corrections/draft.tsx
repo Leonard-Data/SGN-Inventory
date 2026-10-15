@@ -100,8 +100,10 @@ export function CorrectionDraft({
     (name) =>
       (staff || !['contact_id', 'remove'].includes(name)) &&
       !(name === 'status' && ['sold', 'rented'].includes(property.status)) &&
-      !(target === 'address' &&
-        ['province_text', 'commune_text', 'district_unit_id'].includes(name)) &&
+      !(
+        target === 'address' &&
+        ['province_text', 'commune_text', 'district_unit_id'].includes(name)
+      ) &&
       !(
         target === 'address' &&
         (observed?.values as Record<string, unknown>)?.format === 'current' &&

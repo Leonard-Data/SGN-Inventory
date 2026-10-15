@@ -18,7 +18,7 @@ This is an application data model derived from those sources. It does not establ
 | Old/new address on a certificate | Store address exactly as printed as evidence; retain uploaded document | Display beside current inventory address; never rewrite file contents |
 | New official change after initial release | Insert new dated unit versions and transition records | Keep earlier addresses; update primary current address only after reviewed mapping |
 
-Both old and new strings are searched through `property_addresses.search_text`. The first release displays a verified current address as primary when available; otherwise the old address remains the usable address. A current candidate can be displayed with a warning, but must not appear as verified in area analytics.
+Recorded address text and selected official unit names are searched through `property_addresses.search_text`, so a dropdown-only address remains searchable even without a source label. Address entry uses the same official province/city and commune/ward selectors for current and legacy formats; recorded source labels remain provenance rather than separate editable replacement fields, and a legacy district stays free text. Picker options show the official name alone, adding validity dates only when duplicate names in one list need disambiguation. The first release displays a verified current address as primary when available; otherwise the old address remains the usable address. A current candidate can be displayed with a warning, but must not appear as verified in area analytics.
 
 ## Model example (illustrative)
 
