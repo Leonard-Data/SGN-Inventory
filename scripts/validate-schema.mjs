@@ -20,6 +20,7 @@ import { vendorContract } from './vendor-contract.mjs';
 import { referenceCatalogContract } from './reference-catalog-contract.mjs';
 import { saleCompletionContract } from './sale-completion-contract.mjs';
 import { employeeDeactivationContract } from './employee-deactivation-contract.mjs';
+import { employeeAccountDeletionContract } from './employee-account-deletion-contract.mjs';
 import { employeeDeactivationConcurrency } from './employee-deactivation-concurrency.mjs';
 import { applyEmbeddedSchema } from './embedded-schema.mjs';
 const root = process.env.SGN_PROJECT_ROOT || process.cwd();
@@ -590,6 +591,9 @@ await saleCompletionContract({db,asUser,check,fails,employees});
 // Issue #66: guarded employee administration, last-active-admin protection and provider
 // reconciliation without losing the record.
 await employeeDeactivationContract({db,asUser,check,fails,employees});
+// Issue #67: permanent sign-in-account deletion with the retained employee, every business
+// reference and the historical Auth attribution preserved.
+await employeeAccountDeletionContract({db,asUser,check,fails});
 await employeeDeactivationConcurrency({root,check});
 // Ticket #73: the vendor directory authority, validation, retry and paging rules.
 await vendorContract({db,asUser,check,fails,employees});
