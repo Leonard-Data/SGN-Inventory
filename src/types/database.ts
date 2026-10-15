@@ -1913,6 +1913,16 @@ export type Database = {
         Args: { p_action: string; p_payment_id: string; p_reason: string };
         Returns: undefined;
       };
+      employee_owner_contact_ranking: {
+        Args: { p_from: string; p_to: string };
+        Returns: {
+          employee_active: boolean;
+          employee_id: string;
+          employee_name: string;
+          owner_contact_properties: number;
+          rank_position: number;
+        }[];
+      };
       list_document_categories: {
         Args: never;
         Returns: {

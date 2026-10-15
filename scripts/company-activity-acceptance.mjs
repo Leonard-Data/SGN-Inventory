@@ -1017,14 +1017,16 @@ try {
     `/api/activity/company?from=${await today(-365)}&to=${day}`,
   );
   if (subjects.size * capDays > 1000) {
-    assert.equal(capApp.status, 400);
-    assert.equal(capApp.body?.error, 'range-too-large');
+    assert.equal(capApp.status, 200);
+    assert.equal(capApp.body?.rowsError, 'range-too-large');
+    assert.deepEqual(capApp.body.rows, []);
   } else {
     assert.equal(capApp.status, 200);
+    assert.equal(capApp.body.rowsError, null);
     assert.equal(capApp.body.rows.length, subjects.size * capDays);
   }
   observed(
-    'a scope above the Data API row cap is rejected, never returned as short history',
+    'a daily scope above the Data API row cap is reported in place, never returned as short history',
   );
 
   // Browser journey.
