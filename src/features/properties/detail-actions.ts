@@ -8,7 +8,7 @@ export type DetailTool =
 type DetailEmployee = { id: string; role: string };
 type DetailProperty = {
   id: string;
-  created_by: string;
+  created_by: string | null;
   archived_at: string | null;
 };
 
