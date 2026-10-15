@@ -5,6 +5,13 @@ const copy = {
   unknown: ['Chưa biết', 'Unknown'],
   create: ['Thêm bất động sản', 'Create property'],
   editFacts: ['Sửa thông tin', 'Edit facts'],
+  tabFacts: ['Thông tin bất động sản', 'Property facts'],
+  tabAddresses: ['Đính chính địa chỉ', 'Address corrections'],
+  tabContacts: ['Đính chính liên hệ', 'Contact corrections'],
+  notEditable: [
+    'Bạn không có quyền sửa phần này. Gửi yêu cầu đính chính nếu thông tin sai.',
+    'You cannot edit this section. Report a correction request if the information is wrong.',
+  ],
   newAddress: ['Thêm địa chỉ đã biết', 'Add a known address'],
   correctAddress: ['Đính chính địa chỉ', 'Correct address'],
   preserveSource: [

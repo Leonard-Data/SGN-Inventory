@@ -135,7 +135,7 @@ Shipped: the card cover is the site plate drawn from the record's own fields; a 
   record action dialogs (siblings of .detail-body, content mounted only while open), opened from the action bar:
     dialog "Completed sale" → reviewer-only confirmation form (credited closer, actual Vietnam date, contract reference) or the recorded completion (.sale-completion/.sale-completion-recorded), manager/admin only
     dialog "Reservation" → effective/pending states (.reservation-effective/.reservation-pending) + request and decision forms; a manager/admin also gets the reasoned release control on an effective reservation
-    dialog "Edit facts" → maintenance workspace (revision-checked)
+    dialog "Edit facts" → maintenance workspace (revision-checked) in three tabs (roving tabindex, arrow/Home/End): *Property facts*, the default opening tab, then *Address corrections* and *Contact corrections*. Address rows and their correction controls live only in the address section, so the page's own address panel is not repeated here.
     dialog "Correction requests" → correction report (the .maintenance disclosure)
     dialog "My requests" → role-scoped correction queue
 ```
