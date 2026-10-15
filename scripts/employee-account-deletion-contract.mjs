@@ -200,7 +200,7 @@ export async function employeeAccountDeletionContract({
     [lockId, property, staff.target],
   );
   await db.query(
-    "insert into storage.objects(id,bucket_id,name,owner_id,owner) values ($1,'property-files',$2,$3,$3)",
+    "insert into storage.objects(id,bucket_id,name,owner_id,owner) values ($1,'property-files',$2,$3::text,$3::uuid)",
     [objectId, objectPath, users.target],
   );
 
@@ -558,6 +558,23 @@ export async function employeeAccountDeletionContract({
   const ledgerBefore = await ledgerCounts(staff.target);
   assert.equal(ledgerBefore.operations, 1);
   assert.equal(ledgerBefore.events, 2);
+  await check(
+    'the fixture Storage schema models the live mixed ownership column types',
+    async () => {
+      // The hosted development project has a legacy `owner uuid` beside a text `owner_id`, which
+      // is exactly what made a text-only comparison fail closed with 42883. Modelling both here
+      // keeps the adapter's type handling under the embedded regressions.
+      const columns = (
+        await db.query(
+          "select column_name, data_type from information_schema.columns where table_schema='storage' and table_name='objects' and column_name in ('owner','owner_id') order by column_name",
+        )
+      ).rows;
+      assert.deepEqual(columns, [
+        { column_name: 'owner', data_type: 'uuid' },
+        { column_name: 'owner_id', data_type: 'text' },
+      ]);
+    },
+  );
   await asService();
   await check(
     'a confirmed deletion completes and records the absent account',

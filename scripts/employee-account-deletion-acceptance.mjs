@@ -358,16 +358,15 @@ async function cleanup() {
     ).map((row) => row.id),
   );
   const removable = employeeIds.filter((id) => !referenced.has(id));
-  if (removable.length)
-    // The restrictive `employees.auth_user_id` foreign key blocks the provider delete, so the
-    // link is cleared before the synthetic account is removed -- exactly as the product's own
-    // guarded deletion does. Only this check's own synthetic rows are touched.
+  if (employeeIds.length)
+    // Every synthetic sign-in link is cleared, referenced or not: the restrictive
+    // `employees.auth_user_id` foreign key would otherwise block the provider delete, exactly as
+    // the product's own guarded deletion clears it first. Only this check's own rows are touched.
     ownerSql(
-      `update public.employees set is_active=false, auth_user_id=null where id in (${removable.map(sqlText).join(',')})`,
+      `update public.employees set is_active=false, auth_user_id=null where id in (${list})`,
     );
   for (const identity of Object.values(manifest.identities)) {
     if (!identity.userId) continue;
-    if (referenced.has(identity.employeeId)) continue;
     const removed = await ownerClient.auth.admin
       .deleteUser(identity.userId)
       .catch((error) => ({ error }));
@@ -376,11 +375,53 @@ async function cleanup() {
   }
   // The synthetic employee rows are removed too, but only the ones no retained operation
   // references: the account-deleted target and any employee the ledger carries stay by design.
+  // `employee_admin_operations` and `employee_admin_events` are append-only for EVERY role --
+  // their guards raise 42501 on any update or delete -- so the ledger rows this check created
+  // are not removable and are disclosed in the report instead of being worked around.
   if (removable.length)
     ownerSql(
       `delete from public.employees where id in (${removable.map(sqlText).join(',')})`,
     );
   await persistManifest();
+}
+
+// What is left after cleanup, measured rather than assumed. Everything removable is removed;
+// the ledger rows the guards make append-only, and the employee rows their foreign keys
+// require, are reported here instead of being worked around.
+async function residueCounts() {
+  const employeeIds = Object.values(manifest.identities).map(
+    (identity) => identity.employeeId,
+  );
+  const list = employeeIds.map(sqlText).join(',') || "''";
+  let authUsers = 0;
+  for (const identity of Object.values(manifest.identities)) {
+    if (!identity.userId) continue;
+    const found = await ownerClient.auth.admin
+      .getUserById(identity.userId)
+      .catch(() => ({ error: true }));
+    if (!found?.error) authUsers += 1;
+  }
+  return {
+    synthetic_employees: ownerSql(
+      `select count(*)::int as n from public.employees where id in (${list})`,
+    )[0].n,
+    synthetic_auth_users: authUsers,
+    synthetic_operations: ownerSql(
+      `select count(*)::int as n from public.employee_admin_operations where employee_id in (${list}) or actor_id in (${list})`,
+    )[0].n,
+    synthetic_operations_events: ownerSql(
+      `select count(*)::int as n from public.employee_admin_events where employee_id in (${list}) or actor_id in (${list})`,
+    )[0].n,
+    synthetic_properties: ownerSql(
+      `select count(*)::int as n from public.property_addresses where address_text like '${namespace}%'`,
+    )[0].n,
+    synthetic_files: ownerSql(
+      `select count(*)::int as n from public.property_files where object_path like '%acceptance-${runToken}%'`,
+    )[0].n,
+    synthetic_storage_objects: ownerSql(
+      `select count(*)::int as n from storage.objects where name like '%acceptance-${runToken}%'`,
+    )[0].n,
+  };
 }
 
 // ---------------------------------------------------------------- browsers
@@ -892,6 +933,7 @@ try {
   await stopBrowsers();
 
   await cleanup();
+  const residue = await residueCounts();
   const report = {
     checked_at: new Date().toISOString(),
     namespace,
@@ -905,8 +947,10 @@ try {
     limits: [
       'Previously delivered signed links remain usable until expiry; the check does not claim instant recall.',
       'The synthetic Auth identity consumed by this check is deleted and cannot be restored.',
+      'employee_admin_operations and employee_admin_events are append-only for every role, so any ledger row this check created (and the employee rows its foreign keys require) is retained by design and cannot be removed without bypassing a guard.',
       ...limitations,
     ],
+    residue,
   };
   await fs.writeFile(reportPath, JSON.stringify(report, null, 2) + '\n');
   console.log(
