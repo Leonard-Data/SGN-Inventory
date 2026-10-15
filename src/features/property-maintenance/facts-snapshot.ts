@@ -3,5 +3,7 @@ export function shouldAdoptFactsSnapshot(
   snapshotRevision: string,
   incomingRevision: string,
 ) {
-  return savedRevision === snapshotRevision && incomingRevision !== snapshotRevision;
+  return (
+    savedRevision === snapshotRevision && incomingRevision !== snapshotRevision
+  );
 }

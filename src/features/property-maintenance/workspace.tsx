@@ -54,20 +54,23 @@ export function Maintenance({
     [contactError, setContactError] = useState<string | null>(null),
     [notice, setNotice] = useState(false);
   const controller = useRef<AbortController | null>(null),
-    factsSnapshot = useRef(property),
-    factsSavedRevision = useRef<string | null>(null);
-  if (
-    shouldAdoptFactsSnapshot(
-      factsSavedRevision.current,
-      factsSnapshot.current.revision,
-      property.revision,
-    )
-  ) {
-    factsSnapshot.current = property;
-    factsSavedRevision.current = null;
-  }
-  const facts = factsSnapshot.current;
+    [facts, setFacts] = useState(property),
+    [factsSavedRevision, setFactsSavedRevision] = useState<string | null>(null);
   useEffect(() => () => controller.current?.abort(), []);
+  useEffect(() => {
+    if (
+      shouldAdoptFactsSnapshot(
+        factsSavedRevision,
+        facts.revision,
+        property.revision,
+      )
+    ) {
+      // Adopt a new snapshot only after this dialog's own save; external reloads keep the draft.
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional draft snapshot sync
+      setFacts(property);
+      setFactsSavedRevision(null);
+    }
+  }, [facts, factsSavedRevision, property]);
   // Roving tabindex: the arrow keys move both focus and selection across the three tabs.
   function onSectionKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
     const next = nextSection(section, event.key);
@@ -153,7 +156,7 @@ export function Maintenance({
       changes,
       ...(explanation ? { explanation } : {}),
     });
-    factsSavedRevision.current = facts.revision;
+    setFactsSavedRevision(facts.revision);
     return result;
   }
   async function savedFacts() {
