@@ -1,9 +1,5 @@
 export type DetailTool =
-  | 'sale'
-  | 'reservation'
-  | 'edit'
-  | 'correction'
-  | 'requests';
+  'sale' | 'reservation' | 'edit' | 'correction' | 'requests';
 
 type DetailEmployee = { id: string; role: string };
 type DetailProperty = {
@@ -45,10 +41,7 @@ export function activeDetailAction(
   )
     return null;
   if (action.tool === 'edit' && !canEditDetail(employee, property)) return null;
-  if (
-    action.tool === 'sale' &&
-    !['manager', 'admin'].includes(employee.role)
-  )
+  if (action.tool === 'sale' && !['manager', 'admin'].includes(employee.role))
     return null;
   return action.tool;
 }
