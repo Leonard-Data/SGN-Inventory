@@ -104,7 +104,7 @@ begin
   perform private.maintenance_gate();
   me := private.require_live_vendor_actor(me);
   select * into prop from public.properties where id = p_property_id for update;
-  if not found or not private.can_edit_property(p_property_id) then
+  if not found or prop.archived_at is not null then
     raise exception 'property edit denied' using errcode = '42501';
   end if;
   if p_expected_property_revision is null then
@@ -155,7 +155,7 @@ begin
   perform private.maintenance_gate();
   me := private.require_live_vendor_actor(me);
   select * into prop from public.properties where id = p_property_id for update;
-  if not found or not private.can_edit_property(p_property_id) then
+  if not found or prop.archived_at is not null then
     raise exception 'property edit denied' using errcode = '42501';
   end if;
   perform 1 from public.vendors where id = p_vendor_id for update;
