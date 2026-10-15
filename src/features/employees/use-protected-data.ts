@@ -4,6 +4,7 @@ import type { Employee } from './types';
 import { api, RequestError } from './api';
 import {
   loadProtected,
+  recoverAfterIdentityChange,
   refocusAction,
   renderedSession,
 } from './protected-load';
@@ -102,8 +103,7 @@ export function useProtectedData<T>(
     try {
       const session = await api<{ employee: Employee }>('/api/session');
       if (renderedSession(session.employee) !== renderedFor.current) {
-        conceal();
-        void reload();
+        recoverAfterIdentityChange(clear, reload);
       }
     } catch (failure) {
       if (

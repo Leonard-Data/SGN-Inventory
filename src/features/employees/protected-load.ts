@@ -19,6 +19,14 @@ export function refocusAction(
   return renderedFor ? 'recheck' : 'reload';
 }
 
+export function recoverAfterIdentityChange(
+  clear: () => void,
+  reload: () => void | Promise<unknown>,
+) {
+  clear();
+  void reload();
+}
+
 export async function loadProtected<T>(options: {
   source: string | ((signal: AbortSignal) => Promise<T>);
   signal: AbortSignal;

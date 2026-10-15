@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   loadProtected,
+  recoverAfterIdentityChange,
   refocusAction,
   renderedSession,
 } from './protected-load.ts';
@@ -139,6 +140,22 @@ test('a denied session rejects without publishing or concealing', async (t) => {
       failure instanceof RequestError && failure.status === 403,
   );
   assert.equal(concealed, 0);
+});
+
+test('identity changes clear the rendered surface before reloading it', () => {
+  let rendered = true;
+  let reloadSawRendered = true;
+
+  recoverAfterIdentityChange(
+    () => {
+      rendered = false;
+    },
+    () => {
+      reloadSawRendered = rendered;
+    },
+  );
+
+  assert.equal(reloadSawRendered, false);
 });
 
 test('a read in flight owns the surface, a displayed session is rechecked and a cleared one is read again', () => {
