@@ -6,7 +6,10 @@ import type { Employee } from '@/features/employees/types';
 import { ContactPicker } from '@/features/property-maintenance/contact-picker';
 import { api, RequestError } from '@/features/employees/api';
 import type { PropertyDetail } from '@/features/properties/detail-data';
-import { RecordFields } from '@/features/property-maintenance/forms';
+import {
+  AddressFields,
+  RecordFields,
+} from '@/features/property-maintenance/forms';
 import {
   formChanges,
   fields,
@@ -97,9 +100,11 @@ export function CorrectionDraft({
     (name) =>
       (staff || !['contact_id', 'remove'].includes(name)) &&
       !(name === 'status' && ['sold', 'rented'].includes(property.status)) &&
+      !(target === 'address' &&
+        ['province_text', 'commune_text', 'district_unit_id'].includes(name)) &&
       !(
         target === 'address' &&
-        (observed?.values as Record<string, unknown>)?.format !== 'legacy' &&
+        (observed?.values as Record<string, unknown>)?.format === 'current' &&
         name.startsWith('district_')
       ),
   );
@@ -111,6 +116,9 @@ export function CorrectionDraft({
           : {}),
       }
     : {};
+  const replacementNames = selected.filter(
+    (name) => name !== 'contact_id' && available.includes(name),
+  );
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy || !observed) return;
@@ -274,13 +282,20 @@ export function CorrectionDraft({
               ))}
             </div>
             <div key={token}>
-              <RecordFields
-                names={selected.filter(
-                  (n) => n !== 'contact_id' && available.includes(n),
-                )}
-                locale={locale}
-                values={starting}
-              />
+              {target === 'address' ? (
+                <AddressFields
+                  names={replacementNames}
+                  locale={locale}
+                  values={starting}
+                  onDenied={onDenied}
+                />
+              ) : (
+                <RecordFields
+                  names={replacementNames}
+                  locale={locale}
+                  values={starting}
+                />
+              )}
             </div>
           </details>
         </fieldset>
