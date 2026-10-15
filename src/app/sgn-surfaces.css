@@ -117,3 +117,17 @@
 .discussion > .panel-body > ol {
   margin-block: 0;
 }
+
+/* The People directory renders the package's tab vocabulary as a filter navigation. An
+   anchor is inline by default, so the tab box is restored, and the current view is marked
+   with aria-current instead of the tablist's aria-selected. */
+.tabs a.tab {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+.tabs a.tab[aria-current='page'] {
+  color: var(--fg);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}

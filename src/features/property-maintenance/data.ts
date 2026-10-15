@@ -144,52 +144,47 @@ export async function maintainProperty(
 }
 export async function contactDetail(context: RouteContext, id: string) {
   if (!uuid(id)) throw new ApiError(400, 'invalid-input');
-  // Guarded impact RPC denies incomplete affected-property disclosure before returning contact data.
-  const impact = await context.client.rpc('contact_impact', {
-    p_contact_id: id,
-  });
+  // The guarded impact RPC denies incomplete affected-property disclosure before the
+  // response is built; the two reads it describes are independent, so they go out with it
+  // in one round trip rather than a waterfall.
+  const [impact, contact, links] = await Promise.all([
+    context.client.rpc('contact_impact', { p_contact_id: id }),
+    context.client
+      .from('contacts')
+      .select(
+        'id,revision,display_name,phones,raw_phone_text,contact_type,notes',
+      )
+      .eq('id', id)
+      .maybeSingle(),
+    // The relationship is property-scoped: the same identity may be an owner on one
+    // property and a broker on another. The links read shares the impact read boundary, so
+    // the two always describe the same affected set.
+    context.client
+      .from('property_contacts')
+      .select('property_id,relation,is_primary')
+      .eq('contact_id', id),
+  ]);
   databaseError(impact.error);
-  const contact = await context.client
-    .from('contacts')
-    .select('id,revision,display_name,phones,raw_phone_text,contact_type,notes')
-    .eq('id', id)
-    .maybeSingle();
   databaseError(contact.error);
+  databaseError(links.error);
   if (!contact.data) throw new ApiError(404, 'not-found');
+  const byProperty = new Map(
+    (links.data ?? []).map((row) => [row.property_id, row]),
+  );
   return {
     contact: contact.data,
     impact: impact.data as {
       revision: string;
       properties: { id: string; property_code: string }[];
     },
-  };
-}
-export async function listContacts(
-  context: RouteContext,
-  params: URLSearchParams,
-) {
-  const query = params.get('query') ?? '',
-    after = params.get('after');
-  if (
-    [...params.keys()].some((k) => !['query', 'after'].includes(k)) ||
-    [...query].length > 120 ||
-    (after && !uuid(after))
-  )
-    throw new ApiError(400, 'invalid-input');
-  const literal = query.replace(/[\\%_]/g, '\\$&');
-  let request = context.client
-    .from('contacts')
-    .select('id,display_name,contact_type,phones,raw_phone_text')
-    .order('id')
-    .limit(31);
-  if (query) request = request.ilike('display_name', '%' + literal + '%');
-  if (after) request = request.gt('id', after);
-  const { data, error } = await request;
-  databaseError(error);
-  const page = (data ?? []).slice(0, 30);
-  return {
-    contacts: page,
-    nextCursor: (data?.length ?? 0) > 30 ? page.at(-1)!.id : null,
+    links: (
+      impact.data as { properties: { id: string; property_code: string }[] }
+    ).properties.map((property) => ({
+      propertyId: property.id,
+      propertyCode: property.property_code,
+      relation: byProperty.get(property.id)?.relation ?? 'unknown',
+      isPrimary: byProperty.get(property.id)?.is_primary ?? false,
+    })),
   };
 }
 export async function createContact(

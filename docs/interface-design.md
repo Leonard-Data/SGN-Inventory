@@ -61,7 +61,7 @@ The shell replaces the per-page `SessionHeader`. Locale switch and sign-out move
 | Inventory | Search (`/properties`); New property (`/properties/new`, shipped) | all |
 | Reservations & Reviews | My requests (`/requests`); Reviews hub (`/reviews/…`, corrections shipped) | all; queues per role |
 | Rentals | Agreements (`/rentals`) | staff, manager, admin |
-| People | Employees (`/people/employees`, shipped: list only, admin); Vendors (`/people/vendors`, shipped, all roles); Contacts (`/people/contacts`) | admin; all; staff/manager/admin |
+| People | Employees (`/people/employees`, shipped: list only, admin); Vendors (`/people/vendors`, shipped, all roles); Contacts (`/people/contacts`, shipped: directory, Owners view and shared-detail correction, all roles) | admin; all; all |
 | Reports | My activity (`/activity/me`, shipped); Company (`/activity/company`, shipped) | all; manager/admin |
 | Admin | Categories (`/admin/categories`); Units (`/admin/units`) | admin |
 
@@ -227,15 +227,22 @@ detail: quiet back link · .detail-head · panel .facts (recorded contact block;
 ```
 Shipped: `GET /api/vendors` serves the newest-first bounded directory through `list_vendors` (at most 30 rows, keyset cursor pair); `POST /api/vendors` creates one company through the guarded `create_vendor` operation for a live staff/manager/admin, keeping the draft and the submission key on failure; `GET /api/vendors/[id]` reads one recorded identity. Every active role sees the People → Vendors destination; only maintainers see the create panel, and the route and database refuse the mutation independently. Detail has no edit control in this slice.
 
-### 5.7 `/people/contacts` (new, staff/manager/admin)
+### 5.7 `/people/contacts` (shipped, issue #71, all roles)
 
 ```
-page-intro · [New contact]
-search input (name / phone, accent-insensitive)
-.data-table: name · role/relationship · phone · linked properties
-  expanding row → .maintenance-editor to correct the shared contact (with affected-properties confirmation)
+page-intro: People · Contacts · shared-identity note
+panel: .tabs.directory-tabs filter navigation (All contacts · Owners) → .toolbar > .search
+  (name only, literal fragment) + .search-hint
+panel Contact directory → .data-table.stackable: contact (row name + classification) ·
+  property relationship · recorded phone · linked properties · [Open and correct]
+  expanding row → .row-detail > .row-editor: recorded details (.facts) · affected properties
+  (.impact + .chips) · same-person confirmation + allowlisted fields (MutationForm)
+  .panel-foot → .pagination (.page-info + .page-buttons > .pager-btn)
+  states: .panel-note[role=status] (loading) · .state-panel (empty / no match, per view) ·
+  .alert[data-tone=danger] (read failure, contact-refusal, correction failure)
 ```
-Reuses the maintenance edit-in-place pattern.
+
+Shipped: `GET /api/contacts?query=&after=&view=` serves the ascending-id bounded page (at most 30 rows and a follow-page cursor) through `list_contacts`; every active employee reads it. The Owners view keeps only identities with a readable recorded `relation='owner'` link, so an identity classified as an owner without that link is not listed and a broker on one property may be listed as an owner of another. Each row shows its readable per-property relationships, the recorded phone strings (or the recorded source text) and the linked properties; a relationship hidden by the archived-property boundary is simply not presented, and the correction refuses rather than leaking it. `GET /api/contacts/[id]` returns the recorded identity, the revision and the readable affected properties; the expansion shows them and saves through `POST /api/contacts/[id]` — the same revision-checked shared-identity operation the property maintenance panel uses, with the affected-property preview and the explicit same-person confirmation. Changed values appear immediately after the save and on each affected property's fresh read, and the correction records no property history entry (issue #109). Creating a shared contact and creating/replacing/unlinking a property relationship remain staff/manager/admin controls and are not offered here; the unlinked-identity editor is not offered to sales.
 
 ### 5.8 `/activity/me` (shipped, all)
 
@@ -294,11 +301,11 @@ page-intro · [New category] / [New unit]
 
 ### Shipped-state gaps (deliberate, not silent)
 
-- Navigation renders four groups: Inventory (`/properties` and `/properties/new`, every role), Reservations & Reviews (`/reviews/corrections`, every role — the queue reads the caller's own requests while only staff/manager/admin decide), People (`/people/employees`, admin) and Reports (`/activity/me`, every role; `/activity/company` and `/reports/completed-sales`, manager/admin). The ADR's other two groups (Rentals, Admin) ship with their routes.
+- Navigation renders four groups: Inventory (`/properties` and `/properties/new`, every role), Reservations & Reviews (`/reviews/corrections`, every role — the queue reads the caller's own requests while only staff/manager/admin decide), People (`/people/employees`, admin; `/people/vendors` and `/people/contacts`, every role) and Reports (`/activity/me`, every role; `/activity/company` and `/reports/completed-sales`, manager/admin). The ADR's other two groups (Rentals, Admin) ship with their routes.
 - The inventory results have **cards only**: the package's Cards/List/Table `.seg` switch is not implemented, so `.cell-plate` table thumbnails have no consumer yet; the chronological oldest/newest ordering is the toolbar's order select (#37).
 - The card shows the record's existing fact set (code, mode, address, status), plus the original inventory entry date, legacy marker and Vietnam age in the chronological views (#37), or the explicit unknown date and unknown age. The prototype's card also prints area and price lines; adding them would be new data display beyond this restyle, so they were left out.
 - The record page's *Edit facts* action opens the maintenance workspace in a dialog; no dedicated edit route exists.
-- The change timeline (`.timeline`/`.tl-item`) and the **Nhân sự & liên hệ** screen (employee accounts + contact book, `.directory-tabs`, `.cell-person`, `.sgn-avatar-sm`) are rendered in the design review route `/design/app-preview` from fictional fixtures: the app has no contact-book endpoint, and the review route is where that unused vocabulary is inspectable. The asking-price timeline (`.price-row`) now ships on the record from the recorded sale/rent series (#36); the employee list ships separately (§5.6). The remaining product route (`/people/contacts`) and its data contract are separate, unauthorized work.
+- The change timeline (`.timeline`/`.tl-item`) and the **Nhân sự & liên hệ** screen (employee accounts + contact book, `.directory-tabs`, `.cell-person`, `.sgn-avatar-sm`) are rendered in the design review route `/design/app-preview` from fictional fixtures. The asking-price timeline (`.price-row`) now ships on the record from the recorded sale/rent series (#36); the employee list ships separately (§5.6), and the contact book's `.directory-tabs`, `.cell-person` and expanding `.row-detail`/`.row-editor` vocabulary now ships on the real directory (§5.7) — only the fictional fixtures stay in the review route. `/requests`, the rest of `/reviews/*`, `/rentals*`, `/admin/*` remain unbuilt and are only described above.
 - The personal activity report (#30) shipped at **`/activity/me`** rather than this document's planned `/reports/activity`, with its own acceptance evidence and API path (`/api/activity/me`), and the company employee-by-day report (#57) shipped at **`/activity/company`** rather than the planned `/reports/company` with API path (`/api/activity/company`); both routes were left where the features shipped and the rail's Reports group points at them. Issue #34 added the owner-contact activity ranking to that shipped report as the `# · employee · owner-contact properties` table above the daily history, read through `employee_owner_contact_ranking` behind the same endpoint, range filter and denial states; the planned Province activity and completed-rental rankings remain unbuilt. `/requests`, the rest of `/reviews/*`, `/rentals*`, `/people/contacts`, `/admin/*` remain unbuilt and are only described above.
 - The auth surfaces keep their own layout sheet (`.sgn-auth` + `sgn-auth.css`); they share the token layer and the control vocabulary but they are shell-free by design (ADR 0001).
 - **Not in scope:** no geographic map, no physical-visit UI, no threads/reactions/mentions, no dashboards beyond §5.9, and no archived-property exception beyond the existing reviewer read boundary and the reasoned manager/admin discussion removal in §5.2.

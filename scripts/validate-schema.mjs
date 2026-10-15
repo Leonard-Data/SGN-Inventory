@@ -18,6 +18,7 @@ import { priceHistoryContract } from './price-history-contract.mjs';
 import { inventoryAgeContract } from './inventory-age-contract.mjs';
 import { inventoryFilterContract } from './inventory-filter-contract.mjs';
 import { vendorContract } from './vendor-contract.mjs';
+import { contactDirectoryContract } from './contact-directory-contract.mjs';
 import { referenceCatalogContract } from './reference-catalog-contract.mjs';
 import { saleCompletionContract } from './sale-completion-contract.mjs';
 import { employeeDeactivationContract } from './employee-deactivation-contract.mjs';
@@ -615,6 +616,8 @@ await vendorContract({db,asUser,check,fails,employees});
 // Audit-trail retention: the window boundary, repeat safety, own-table binding and the
 // application/API denial around the administrative trim.
 await auditRetentionContract({db,asUser,check,fails,employees});
+// Ticket #71: the shared Contact directory read and its contact-scoped correction.
+await contactDirectoryContract({db,asUser,check,fails,employees});
 const report={checked_at:new Date().toISOString(),engine:'PGlite embedded PostgreSQL plus an embedded real PostgreSQL engine for the two-connection last-admin race; mocked auth/storage schemas',passed,
  limitations:['Not a live Supabase integration test','HTTP Auth, signed URLs, Vercel and browser flows not exercised','Sustained multi-session contention at production load remains a staging acceptance gate']};
 await fs.writeFile(path.join(root,'docs/validation-results.json'),JSON.stringify(report,null,2)+'\n');

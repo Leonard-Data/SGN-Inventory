@@ -50,3 +50,16 @@ test('the vendor destination is offered to every role and the employee list stay
     );
   }
 });
+
+// The shared-contact directory carries the settled contact scope (#71): every active role
+// reads it, because the same roles may correct a contact linked to a readable property.
+// The widened local link/create authority is a separate decision and is not implied.
+test('the contact directory destination is offered to every role', () => {
+  const roles = ['sales', 'staff', 'manager', 'admin'] as const;
+  for (const role of roles) {
+    const hrefs = visibleNavGroups(role).flatMap((group) =>
+      group.items.map((item) => item.href),
+    );
+    assert.ok(hrefs.includes('/people/contacts'), `${role}: no contacts`);
+  }
+});
