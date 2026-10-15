@@ -1245,16 +1245,16 @@ async function vendorLinkJourney({
       .eq('target', 'vendor_link')
       .order('occurred_at'),
   );
-  assert.equal(historyBefore.length, 1);
-  assert.deepEqual(historyBefore[0].changed_fields, [
+  assert.equal(historyBefore.length, 3);
+  assert.deepEqual(historyBefore[2].changed_fields, [
     'vendor_id',
     'vendor_name',
   ]);
-  assert.deepEqual(historyBefore[0].after_values, {
+  assert.deepEqual(historyBefore[2].after_values, {
     vendor_id: vendor.id,
     vendor_name: vendor.display_name,
   });
-  assert.ok(historyBefore[0].actor_name);
+  assert.ok(historyBefore[2].actor_name);
   const removed = await rpcCall(
     'confirmed unlink',
     staff,
@@ -1308,12 +1308,12 @@ async function vendorLinkJourney({
       .eq('target', 'vendor_link')
       .order('occurred_at'),
   );
-  assert.equal(historyAfter.length, 2);
-  assert.deepEqual(historyAfter[1].before_values, {
+  assert.equal(historyAfter.length, 4);
+  assert.deepEqual(historyAfter[3].before_values, {
     vendor_id: vendor.id,
     vendor_name: vendor.display_name,
   });
-  assert.deepEqual(historyAfter[1].after_values, {});
+  assert.deepEqual(historyAfter[3].after_values, {});
   observed(
     'unlink keeps the vendor, the unrelated link and the earlier link history',
     { vendor: vendor.id },
