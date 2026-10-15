@@ -830,11 +830,11 @@ Scope: the owner-run retention trim for `private.audit_events` ([database-contra
 | Gate | Required observation |
 | --- | --- |
 | Window boundary on a real project | Rows at or newer than the retained window are still present as evidence after the trim and only older rows are gone; the returned count matches the rows actually removed |
-| Repeat safety | A second run returns `0` and changes nothing; a capped run stays consistent and auditing after the trim is visible as newly recorded rows |
+| Repeat safety | A second run returns `0` and changes nothing; auditing after the trim is visible as newly recorded rows |
 | Privilege | Only the owner session can execute the trim; application, anonymous and trusted-server callers are refused, and no audit content becomes reachable |
 | Measured effect | Record `pg_total_relation_size('private.audit_events')` before the trim, after it and after any `VACUUM FULL`, and state plainly that the file shrinks only on a rewrite |
 
-Embedded coverage: `scripts/audit-retention-contract.mjs` (invoked by `npm run test:schema`) asserts the 364-day inside / 366-day outside boundary with the retained row surviving, repeat runs removing nothing, the per-call row cap with incremental progress, the refused windows and caps, the literal own-table target with no dynamic SQL and another private table left untouched, the employee/anonymous/service-role denial for both the trim and the table, and a guarded write still recorded after a trim.
+Embedded coverage: `scripts/audit-retention-contract.mjs` (invoked by `npm run test:schema`) asserts the 89-day inside / 91-day outside boundary with the retained row surviving, repeat runs removing nothing, the parameterless signature refusing a table identity, another private table left untouched, the employee/anonymous/service-role denial for both the trim and the table, and a guarded write still recorded after a trim.
 
 **Hosted run pending.** This lane holds no development credentials and the trim is destructive, so no hosted observation, size measurement or file-shrink claim is made here; the development project's 7,568 KB audit table within 25 MB total is the operator-supplied before figure.
 
