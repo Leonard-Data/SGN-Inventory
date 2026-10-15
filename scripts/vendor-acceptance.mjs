@@ -597,6 +597,14 @@ async function readAllPages(cookies) {
 const browsers = [];
 const profileDirs = [];
 const runStamp = new Date().toISOString().replace(/[-:.TZ]/g, '');
+// Named bridge ports are hashed into a small range, so stale bridges from another run can collide.
+const bridgePorts = new Map();
+let nextBridgePort = 20000 + (Number.parseInt(runToken, 16) % 40000);
+function allocateBridgePort() {
+  const port = nextBridgePort;
+  nextBridgePort = nextBridgePort >= 59999 ? 20000 : nextBridgePort + 1;
+  return port;
+}
 async function startBrowser(cdpPort) {
   const profile = path.join(workdir, `chrome-${cdpPort}-${runStamp}`);
   profileDirs.push(profile);
@@ -636,18 +644,36 @@ async function stopBrowsers() {
   profileDirs.length = 0;
 }
 function browser(session, cdpPort, args) {
-  const result = spawnSync(process.execPath, [browserCli, ...args], {
-    encoding: 'utf8',
-    timeout: 120000,
-    env: {
-      ...process.env,
-      CHROME_DEVTOOLS_AXI_SESSION: `${session}-${runStamp}`,
-      CHROME_DEVTOOLS_AXI_AUTO_CONNECT: '0',
-      CHROME_DEVTOOLS_AXI_BROWSER_URL: `http://127.0.0.1:${cdpPort}`,
-      CHROME_DEVTOOLS_AXI_MCP_SERVER_URL: '',
-      CHROME_DEVTOOLS_AXI_BRIDGE_TIMEOUT_MS: '180000',
-    },
-  });
+  const sessionName = `${session}-${runStamp}`;
+  let bridgePort = bridgePorts.get(sessionName) ?? allocateBridgePort();
+  let result;
+  for (let attempt = 0; attempt < 16; attempt++) {
+    result = spawnSync(process.execPath, [browserCli, ...args], {
+      encoding: 'utf8',
+      timeout: 120000,
+      env: {
+        ...process.env,
+        CHROME_DEVTOOLS_AXI_SESSION: sessionName,
+        CHROME_DEVTOOLS_AXI_PORT: String(bridgePort),
+        CHROME_DEVTOOLS_AXI_AUTO_CONNECT: '0',
+        CHROME_DEVTOOLS_AXI_BROWSER_URL: `http://127.0.0.1:${cdpPort}`,
+        CHROME_DEVTOOLS_AXI_MCP_SERVER_URL: '',
+        CHROME_DEVTOOLS_AXI_BRIDGE_TIMEOUT_MS: '180000',
+      },
+    });
+    const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+    if (result.status === 0) {
+      bridgePorts.set(sessionName, bridgePort);
+      return result.stdout;
+    }
+    if (
+      !/BRIDGE_NOT_READY/.test(output) ||
+      !/(code 48|already in use)/i.test(output) ||
+      attempt === 15
+    )
+      break;
+    bridgePort = allocateBridgePort();
+  }
   const diagnostic = `${result.stdout ?? ''}\n${result.stderr ?? ''}`
     .split('\n')
     .filter((line) => /^(error|code):/.test(line.trim()))
