@@ -1071,6 +1071,7 @@ const manager = await userClient('manager');
     { error: refused.body.error },
   );
   // The validated manager release interaction resolves the conflict through the rendered UI.
+  await browserLogin('manager', secondary, 'vi');
   await openSaleDetail(conflict, secondary);
   const before = saleScreen(secondary);
   assert.ok(

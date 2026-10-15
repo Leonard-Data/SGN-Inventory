@@ -354,7 +354,11 @@ export function Detail({
           ) : null}
         </div>
         {property && employee ? (
-          <div className="detail-actions" aria-label={dt.recordActions}>
+          <div
+            className="detail-actions"
+            role="group"
+            aria-label={dt.recordActions}
+          >
             {employee.role === 'manager' || employee.role === 'admin' ? (
               <button
                 className="btn btn-primary"
