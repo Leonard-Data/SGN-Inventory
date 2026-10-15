@@ -844,8 +844,13 @@ async function vendorLinkJourney({
   staff,
   admin,
   sales,
+  inactive,
+  unlinked,
+  anonymous,
   staffCookies,
   salesCookies,
+  inactiveCookies,
+  unlinkedCookies,
 }) {
   const liveProperty = await createLinkProperty(
     staff,
@@ -966,6 +971,86 @@ async function vendorLinkJourney({
   );
   assert.equal(section.data[0].contact_name, 'Phạm Văn Kỹ');
   assert.deepEqual(section.data[0].phones, ['090 555 6677']);
+
+  assert.ok(
+    inactiveCookies,
+    'Inactive login must retain its Auth session cookie',
+  );
+  assert.ok(
+    unlinkedCookies,
+    'Unlinked login must retain its Auth session cookie',
+  );
+  for (const caller of [
+    { name: 'unlinked', client: unlinked, cookies: unlinkedCookies },
+    { name: 'inactive', client: inactive, cookies: inactiveCookies },
+    { name: 'anonymous', client: anonymous, cookies: null },
+  ]) {
+    const deniedLink = await rpcCall(
+      `${caller.name} link refusal`,
+      caller.client,
+      'link_property_vendor',
+      linkArgs,
+    );
+    assert.equal(
+      deniedLink.error?.code,
+      '42501',
+      refusal(deniedLink.error, '42501'),
+    );
+    const deniedUnlink = await rpcCall(
+      `${caller.name} unlink refusal`,
+      caller.client,
+      'unlink_property_vendor',
+      {
+        p_property_id: liveProperty,
+        p_vendor_id: vendor.id,
+        p_expected_link_revision: section.data[0].revision,
+      },
+    );
+    assert.equal(
+      deniedUnlink.error?.code,
+      '42501',
+      refusal(deniedUnlink.error, '42501'),
+    );
+    const deniedLinkRoute = await endpointCall(
+      `${caller.name} link endpoint refusal`,
+      () =>
+        appPost(caller.cookies, `/api/properties/${liveProperty}/vendors`, {
+          vendorId: vendor.id,
+          propertyRevision: revision,
+        }),
+    );
+    assert.ok(
+      [401, 403].includes(deniedLinkRoute.status),
+      JSON.stringify(deniedLinkRoute.body),
+    );
+    const deniedUnlinkRoute = await endpointCall(
+      `${caller.name} unlink endpoint refusal`,
+      () =>
+        appPost(
+          caller.cookies,
+          `/api/properties/${liveProperty}/vendors/${vendor.id}`,
+          { revision: section.data[0].revision },
+        ),
+    );
+    assert.ok(
+      [401, 403].includes(deniedUnlinkRoute.status),
+      JSON.stringify(deniedUnlinkRoute.body),
+    );
+  }
+  const unchanged = await readRows(
+    'denied callers leave the link unchanged',
+    () =>
+      sales
+        .from('property_vendors')
+        .select('vendor_id,revision')
+        .eq('property_id', liveProperty),
+  );
+  assert.deepEqual(unchanged, [
+    { vendor_id: vendor.id, revision: section.data[0].revision },
+  ]);
+  observed(
+    'anonymous, unlinked and inactive callers are refused by both link paths without changing the relationship',
+  );
   observed(
     'a duplicate link converges on the recorded relationship and a property reader sees it',
     { vendor: vendor.id, property: liveProperty },
@@ -2041,8 +2126,13 @@ try {
     staff,
     admin,
     sales,
+    inactive,
+    unlinked,
+    anonymous: anonClient,
     staffCookies,
     salesCookies,
+    inactiveCookies: inactiveLogin.cookies,
+    unlinkedCookies: unlinkedLogin.cookies,
   });
 } catch (error) {
   failure = error;
