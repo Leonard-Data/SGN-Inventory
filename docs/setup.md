@@ -39,14 +39,15 @@ Windows PowerShell: `py -3.11 -m venv .venv`, then `.\.venv\Scripts\Activate.ps1
 
 Copy `.env.example` to ignored `.env.local` (`cp` on POSIX, `Copy-Item` in PowerShell). Supply local or isolated dev values, never production values. Examples are placeholders, not credentials. No live credentials are required for CI, tests or compilation.
 
-| Variable                               | Required value                                                                               |
-| -------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `SGN_ENV`                              | `dev` for local/previews/dev, `prod` for production                                          |
-| `NEXT_PUBLIC_SUPABASE_URL`             | Selected Supabase HTTPS origin; HTTP loopback is allowed only locally in dev                 |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Matching publishable key (local legacy `anon` JWT accepted); never secret/service-role       |
-| `NEXT_PUBLIC_APP_URL`                  | Canonical HTTPS origin of that stage; local example is `http://localhost:3000`               |
-| `EXPECTED_SUPABASE_PROJECT_REF`        | Selected 20-letter hosted ref; optional locally, required for release checks                 |
-| `SGN_FILE_VALIDATION_KEY`              | Server-only 64 lowercase hex characters, unique per stage, matching the private DB singleton |
+| Variable                               | Required value                                                                                                                                                 |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SGN_ENV`                              | `dev` for local/previews/dev, `prod` for production                                                                                                            |
+| `NEXT_PUBLIC_SUPABASE_URL`             | Selected Supabase HTTPS origin; HTTP loopback is allowed only locally in dev                                                                                   |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Matching publishable key (local legacy `anon` JWT accepted); never secret/service-role                                                                         |
+| `NEXT_PUBLIC_APP_URL`                  | Canonical HTTPS origin of that stage; local example is `http://localhost:3000`                                                                                 |
+| `EXPECTED_SUPABASE_PROJECT_REF`        | Selected 20-letter hosted ref; optional locally, required for release checks                                                                                   |
+| `SGN_FILE_VALIDATION_KEY`              | Server-only 64 lowercase hex characters, unique per stage, matching the private DB singleton                                                                   |
+| `SUPABASE_SERVICE_ROLE_KEY`            | Server-only Auth admin capability used only for the provider sign-in block during employee deactivation; never `NEXT_PUBLIC_`, never read by ordinary requests |
 
 ```bash
 npm run check:env
@@ -58,6 +59,8 @@ npm run dev
 For a Vercel **Preview** deployment, `SGN_ENV` must be `dev`. Runtime redirects and password-recovery links use Vercel's server-supplied `VERCEL_URL` hostname, so they remain on the deployment that initiated the request instead of jumping to the stable dev site. Enable Vercel's automatic system environment variables; do not override `VERCEL_ENV` or `VERCEL_URL`. Local/prebuilt compilation has no deployment URL yet and uses the configured dev origin. Production and the stable dev deployment keep their canonical `NEXT_PUBLIC_APP_URL`. This does not trust request Host headers or widen the production redirect allowlist.
 
 File completion requires a separately authorized operator to generate a random 32-byte key privately, configure its hex value as `SGN_FILE_VALIDATION_KEY` in Vercel, and install the identical value in `private.file_validation_keys` (`id=1`, `key_hex`) through an owner-authorized connection. Never print, commit or expose this key through `NEXT_PUBLIC_`; ordinary users and service-role clients have no key-table access. Missing configuration fails file completion closed. Production key provisioning/rotation is separate authorization.
+
+Employee deactivation's provider step requires `SUPABASE_SERVICE_ROLE_KEY` as a server-only environment variable in the stage that runs the trusted adapter. It is used only to call the exact employee's Auth admin API and the server-only `record_employee_deactivation_result` RPC; ordinary requests keep using the request-scoped publishable-key session, and the employee administration tables grant that client no write. Never prefix it with `NEXT_PUBLIC_`, print it, commit it or return it in a response. Missing or placeholder configuration fails the provider step closed: membership is disabled first and the operation stays a recorded `provider_pending` reconciliation state, so no browser can claim provider success. Configuring or rotating this key is a separate authorization.
 
 Optional local Supabase: inspect the pinned CLI help before `supabase start`, `supabase status`, `supabase test db`, or an explicitly authorized **local-only** `supabase db reset --local`. Never reset a linked hosted database. Embedded `npm run test:schema` does not replace real Auth/Data API/RLS/Storage verification.
 
@@ -141,7 +144,7 @@ If the default branch is renamed, update the trigger, branch guards, environment
 
 Manual **Release application and database** remains available on `develop`/`dev` or `main`/`prod`, each requiring its own stage switch. `migration=apply` explicitly applies reviewed pending migrations before deploying (existing manual default); `migration=verify` never writes and fails if any remain. A main push always selects verify, never inherits that manual default. Do not dispatch `apply` without concrete migration authorization. After separately applying a reviewed migration, re-run the failed automatic release for the same commit or dispatch `migration=verify`. Never bypass the guard or rewrite deployed migrations.
 
-**Review database migrations** (`migrate.yml`, shared `migration.yml`) remains the database-only operation. Default `apply=false` lists pending migrations and fails if any remain. With separate authorization, `apply=true` repeats the guarded dry run and applies through the pinned Supabase CLI. Neither flow imports, seeds, resets, restores, changes Auth/Storage settings or provisions resources.
+**Review database migrations** (`migrate.yml`, shared `migration.yml`) remains the database-only operation. Default `apply=false` lists pending migrations and fails if any remain. With separate authorization, `apply=true` repeats the guarded dry run and applies through the pinned Supabase CLI. Both the dry run and the push pass `--include-all` deliberately: a branch ticket migration can be versioned before migrations already applied on the stage, and the reviewed path must list and apply it instead of refusing or silently omitting it. Recorded migration versions are never renamed or repaired. Neither flow imports, seeds, resets, restores, changes Auth/Storage settings or provisions resources.
 
 ### Activation evidence still required
 

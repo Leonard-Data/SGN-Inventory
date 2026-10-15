@@ -1,8 +1,9 @@
-// Issue #44/#45 hosted acceptance: shared Property discussion and accountable removal.
+// Issue #44/#45/#46 hosted acceptance: shared Property discussion, accountable removal and
+// author editing with retained revisions.
 //
 // Real development Supabase Auth/Data API/RLS plus the local real Next.js application and
 // real Chrome sessions. Mock, shim and readiness-page results are not acceptance. Mutates
-// only the declared SGN-TEST-44/45 synthetic namespace and restores the declared fixture
+// only the declared SGN-TEST-44/45/46 synthetic namespace and restores the declared fixture
 // activation on every exit path.
 //
 // Usage:
@@ -64,7 +65,7 @@ const operator = JSON.parse(
 );
 assert.match(
   fixtures.namespace,
-  /^SGN-TEST-4[45]$/,
+  /^SGN-TEST-4[456]$/,
   'Only a declared synthetic namespace is allowed',
 );
 for (const name of ['alpha', 'beta', 'reviewer', 'inactive']) {
@@ -303,17 +304,23 @@ function screen(session) {
           time: node.querySelector('time')?.dateTime ?? null,
           body: node.querySelector('.comment-body')?.textContent ?? null,
           removed: Boolean(node.querySelector('.comment-removed')),
+          edited: Boolean(node.querySelector('.comment-edited')),
           actions: Boolean(node.querySelector('.comment-actions')),
         })),
         removeControls: discussion ? [...discussion.querySelectorAll('button')].filter(node => /Gỡ bình luận|^Remove$/.test(node.textContent.trim())).length : 0,
         moderateControls: discussion ? [...discussion.querySelectorAll('button')].filter(node => /Gỡ kèm lý do|Remove with reason/.test(node.textContent)).length : 0,
         moderationReason: discussion?.querySelector('.comment-moderation textarea')?.value ?? null,
+        commentEditControls: discussion ? [...discussion.querySelectorAll('button')].filter(node => /Chỉnh sửa bình luận|^Edit comment$/.test(node.textContent.trim())).length : 0,
+        editedMarkers: discussion ? discussion.querySelectorAll('.comment-edited').length : 0,
+        editDraft: discussion?.querySelector('.comment-edit textarea')?.value ?? null,
+        editCurrent: discussion?.querySelector('.comment-current .comment-body')?.textContent ?? null,
+        editError: discussion?.querySelector('.comment-edit [role=alert]')?.textContent ?? null,
         statuses: [...(discussion?.querySelectorAll('[role=status],[role=alert]') ?? [])].map(node => node.textContent),
         empty: discussion ? discussion.innerText.includes('Chưa có bình luận nào.') || discussion.innerText.includes('No comments yet.') : null,
         more: discussion ? Boolean([...discussion.querySelectorAll('button')].find(node => /Xem bình luận cũ hơn|More comments/.test(node.textContent))) : null,
         refresh: discussion ? Boolean([...discussion.querySelectorAll('button')].find(node => /Làm mới|Refresh/.test(node.textContent))) : null,
         postButton: discussion ? Boolean([...discussion.querySelectorAll('button[type=submit]')].length) : null,
-        editControls: Boolean(document.querySelector('.maintenance-actions')),
+        maintenanceActions: Boolean(document.querySelector('.maintenance-actions')),
         injected: Boolean(document.querySelector('script[data-injected], img[data-injected]')),
         hasDiscussionText: discussion ? discussion.innerText.trim().length > 0 : false,
       };
@@ -620,6 +627,60 @@ await settle(primary);
     tiedTimes: true,
   });
 }
+{
+  // Posting while an editor is open on the oldest rendered row must keep that row and its draft.
+  const seededId = randomUUID();
+  await operatorSqlAsync(
+    `insert into public.property_comments(id,property_id,author_id,author_name,body,created_at,revision,idempotency_key) values('${seededId}','${paging.id}','${alphaEmployee}','${names.alpha.replace(/'/g, "''")}','Bình luận cũ đang sửa','2000-01-01T00:00:00Z','${randomUUID()}','${randomUUID()}')`,
+  );
+  browser(['open', detail(paging)], primary);
+  await settle(primary);
+  click('Xem bình luận cũ hơn', primary);
+  await waitUntil(
+    `() => document.querySelectorAll('section.discussion .comment').length === 36`,
+    primary,
+  );
+  evaluate(
+    `() => {
+      const target = [...document.querySelectorAll('section.discussion .comment')].find((node) => (node.querySelector('.comment-body')?.textContent ?? '') === 'Bình luận cũ đang sửa');
+      [...target.querySelectorAll('.comment-actions button')].find((button) => button.textContent.trim() === 'Chỉnh sửa bình luận').click();
+      return true;
+    }`,
+    primary,
+  );
+  await waitUntil(
+    `() => Boolean(document.querySelector('section.discussion .comment-edit textarea'))`,
+    primary,
+  );
+  fill('Chỉnh sửa bình luận', 'Bản nháp đang mở', primary);
+  fill('Bình luận', 'Bình luận mới trong khi đang sửa', primary);
+  click('Gửi bình luận', primary);
+  await waitUntil(
+    `() => [...document.querySelectorAll('section.discussion .comment-body')].some((node) => node.textContent === 'Bình luận mới trong khi đang sửa')`,
+    primary,
+  );
+  const afterPost = screen(primary);
+  assert.equal(
+    afterPost.editDraft,
+    'Bản nháp đang mở',
+    'Posting keeps the open editor and its draft',
+  );
+  assert.ok(
+    afterPost.comments.some(
+      (comment) => comment.body === 'Bình luận mới trong khi đang sửa',
+    ),
+    'The new comment is rendered',
+  );
+  observed('posting while an editor is open keeps the edited row and draft', {
+    entries: afterPost.comments.length,
+    draftKept: afterPost.editDraft === 'Bản nháp đang mở',
+  });
+  click('Huỷ', primary);
+  await waitUntil(
+    `() => !document.querySelector('section.discussion .comment-edit textarea')`,
+    primary,
+  );
+}
 browser(['open', detail(discussion)], primary);
 await settle(primary);
 {
@@ -672,7 +733,7 @@ await settle(secondary);
     'Colleague reads the shared discussion',
   );
   assert.equal(
-    page.editControls,
+    page.maintenanceActions,
     false,
     'No property-edit authority is granted',
   );
@@ -688,12 +749,16 @@ await settle(secondary);
     1,
     'Colleague comment is attributed to the colleague',
   );
-  assert.equal(after.editControls, false, 'Still no property-edit authority');
+  assert.equal(
+    after.maintenanceActions,
+    false,
+    'Still no property-edit authority',
+  );
   observed(
     'colleague posts on another employee property without edit authority',
     {
       comments: after.comments.length,
-      editControls: after.editControls,
+      maintenanceActions: after.maintenanceActions,
     },
   );
 }
@@ -754,6 +819,70 @@ await settle(secondary);
     pathBefore: before.path,
     commentsBefore: before.comments.length,
     cachedText: leaked,
+  });
+  setBetaActive(true);
+}
+{
+  const seeded = await beta.rpc('post_property_comment', {
+    p_property_id: second.id,
+    p_body: 'Bình luận beta để kiểm tra mất quyền',
+    p_key: randomUUID(),
+  });
+  assert.equal(seeded.error, null, 'The beta reconciliation comment posts');
+  browser(['open', detail(second)], secondary);
+  await settle(secondary);
+  click('Chỉnh sửa bình luận', secondary);
+  await waitUntil(
+    `() => Boolean(document.querySelector('section.discussion .comment-edit textarea'))`,
+    secondary,
+  );
+  fill('Chỉnh sửa bình luận', 'Bản nháp khi quyền thay đổi', secondary);
+  const competingBeta = await userClient('beta');
+  const competingEdit = await competingBeta.rpc('edit_property_comment', {
+    p_property_id: second.id,
+    p_comment_id: seeded.data.id,
+    p_revision: seeded.data.revision,
+    p_body: 'Phiên beta khác đã sửa',
+    p_key: randomUUID(),
+  });
+  assert.equal(competingEdit.error, null, 'The competing beta edit commits');
+  evaluate(
+    `() => {
+      const original = window.fetch.bind(window);
+      let release;
+      window.__editPatchPaused = false;
+      window.__releaseEditPatch = () => release?.();
+      window.fetch = async (...args) => {
+        const input = args[0];
+        const options = args[1] ?? {};
+        const url = typeof input === 'string' ? input : input.url;
+        const method = String(options.method ?? input?.method ?? 'GET').toUpperCase();
+        const response = await original(...args);
+        if (method === 'PATCH' && url.includes('/comments/')) {
+          window.__editPatchPaused = true;
+          await new Promise(resolve => { release = resolve; });
+          window.fetch = original;
+        }
+        return response;
+      };
+      return true;
+    }`,
+    secondary,
+  );
+  click('Lưu thay đổi', secondary);
+  await waitUntil(`() => window.__editPatchPaused === true`, secondary);
+  setBetaActive(false);
+  evaluate(`() => { window.__releaseEditPatch(); return true; }`, secondary);
+  await waitUntil(
+    `() => location.pathname === '/access-denied'`,
+    secondary,
+    30,
+  );
+  const denied = screen(secondary);
+  assert.equal(denied.hasDiscussionText, false);
+  observed('stale reconciliation denial clears the protected discussion', {
+    path: denied.path,
+    cachedText: denied.hasDiscussionText,
   });
   setBetaActive(true);
 }
@@ -1779,6 +1908,763 @@ await settle(secondary);
   });
 }
 
+// ------------------------------------------------------- author edit journey
+{
+  browser(['open', detail(discussion)], primary);
+  await settle(primary);
+  const before = screen(primary);
+  const liveAuthorComments = before.comments.filter(
+    (comment) => comment.author === names.alpha && !comment.removed,
+  );
+  assert.equal(
+    before.commentEditControls,
+    liveAuthorComments.length,
+    'The author sees one edit control per live own comment and no other entry offers one',
+  );
+  assert.equal(before.editedMarkers, 0, 'No entry is marked edited yet');
+  const targetIndex = before.comments.findIndex(
+    (comment) => comment.author === names.alpha && !comment.removed,
+  );
+  assert.ok(targetIndex >= 0, 'The author has a live comment to edit');
+  click('Chỉnh sửa bình luận', primary);
+  await waitUntil(
+    `() => Boolean(document.querySelector('section.discussion .comment-edit textarea'))`,
+    primary,
+  );
+  const editedVi = '  Nội dung đã sửa\nGiá 12 tỷ — còn thương lượng.  ';
+  fill('Chỉnh sửa bình luận', editedVi, primary);
+  click('Lưu thay đổi', primary);
+  await waitUntil(
+    `() => document.querySelectorAll('section.discussion .comment-edited').length === 1`,
+    primary,
+  );
+  await settle(primary);
+  const after = screen(primary);
+  assert.equal(
+    after.comments.length,
+    before.comments.length,
+    'An edit adds no entry and removes none',
+  );
+  assert.equal(
+    after.comments[targetIndex].body,
+    editedVi.trim(),
+    'Trimming preserves accents and line breaks',
+  );
+  assert.equal(
+    after.comments[targetIndex].edited,
+    true,
+    'The entry is marked edited',
+  );
+  assert.equal(
+    after.comments[targetIndex].time,
+    before.comments[targetIndex].time,
+    'The original posting time and position are preserved',
+  );
+  assert.ok(
+    after.statuses.some((status) => /Đã cập nhật bình luận/.test(status)),
+    'A committed edit is reported in VI',
+  );
+  observed(
+    'VI author edit replaces the live text in place with an edited marker',
+    {
+      position: targetIndex,
+      entries: after.comments.length,
+      originalTimeRetained: true,
+    },
+  );
+}
+{
+  switchLocale('en', primary);
+  await waitUntil(
+    `() => document.querySelector('section.discussion h2')?.textContent === 'Property discussion'`,
+    primary,
+  );
+  await settle(primary);
+  const english = screen(primary);
+  assert.ok(
+    english.commentEditControls >= 1,
+    'The edit control is localized in EN',
+  );
+  assert.equal(
+    english.editedMarkers,
+    1,
+    'The edited marker survives the language switch',
+  );
+  assert.ok(
+    english.comments.some((comment) =>
+      (comment.body ?? '').includes('Nội dung đã sửa'),
+    ),
+    'Source comment text is not translated',
+  );
+  click('Edit comment', primary);
+  await waitUntil(
+    `() => Boolean(document.querySelector('section.discussion .comment-edit textarea'))`,
+    primary,
+  );
+  // Saving the unchanged text is an explicit no-op, not a silent success.
+  click('Save changes', primary);
+  await waitUntil(
+    `() => /No changes to save/.test(document.querySelector('section.discussion .comment-edit [role=alert]')?.textContent ?? '')`,
+    primary,
+  );
+  const noop = screen(primary);
+  assert.equal(
+    noop.editDraft,
+    'Nội dung đã sửa\nGiá 12 tỷ — còn thương lượng.',
+    'The editor keeps the unchanged draft',
+  );
+  assert.ok(
+    !noop.statuses.some((status) => /Comment updated/.test(status)),
+    'A no-op claims no success',
+  );
+  assert.equal(noop.editedMarkers, 1, 'A no-op adds no version');
+  click('Cancel', primary);
+  await waitUntil(
+    `() => !document.querySelector('section.discussion .comment-edit textarea')`,
+    primary,
+  );
+  switchLocale('vi', primary);
+  await waitUntil(
+    `() => document.querySelector('section.discussion h2')?.textContent === 'Thảo luận bất động sản'`,
+    primary,
+  );
+  await settle(primary);
+  observed(
+    'EN edit control, edited marker and no-op keep source text and claim no success',
+    { markerEn: 'edited', noOp: true },
+  );
+}
+{
+  const rows = await operatorSqlAsync(
+    `select id, revision from public.property_comments where property_id='${discussion.id}' and author_id='${alphaEmployee}' and removed_at is null order by created_at desc limit 1`,
+  );
+  assert.ok(rows[0]?.id, 'The author still has one live comment to race');
+  browser(['open', detail(discussion)], primary);
+  await settle(primary);
+  click('Chỉnh sửa bình luận', primary);
+  await waitUntil(
+    `() => Boolean(document.querySelector('section.discussion .comment-edit textarea'))`,
+    primary,
+  );
+  fill('Chỉnh sửa bình luận', 'Bản nháp chưa gửi', primary);
+  // A second real session of the same author commits first; the open editor is now stale.
+  const competing = await userClient('alpha');
+  const competingEdit = await competing.rpc('edit_property_comment', {
+    p_property_id: discussion.id,
+    p_comment_id: rows[0].id,
+    p_revision: rows[0].revision,
+    p_body: 'Bản nháp chưa gửi',
+    p_key: randomUUID(),
+  });
+  assert.equal(
+    competingEdit.error,
+    null,
+    'A competing author session commits first',
+  );
+  click('Làm mới', primary);
+  await waitUntil(
+    `() => document.querySelector('section.discussion .comment-current .comment-body')?.textContent === 'Bản nháp chưa gửi'`,
+    primary,
+  );
+  const refreshedEditor = screen(primary);
+  assert.equal(
+    refreshedEditor.editDraft,
+    'Bản nháp chưa gửi',
+    'Refresh keeps the unsent edit draft',
+  );
+  assert.equal(
+    refreshedEditor.editCurrent,
+    'Bản nháp chưa gửi',
+    'Refresh presents the current committed text beside the draft',
+  );
+  click('Lưu thay đổi', primary);
+  await waitUntil(
+    `() => /đã thay đổi|đã bị gỡ/.test(document.querySelector('section.discussion .comment-edit [role=alert]')?.textContent ?? '')`,
+    primary,
+  );
+  const stale = screen(primary);
+  assert.equal(
+    stale.editDraft,
+    'Bản nháp chưa gửi',
+    'The unsent edit draft is kept',
+  );
+  assert.equal(
+    stale.editCurrent,
+    'Bản nháp chưa gửi',
+    'A same-text stale save keeps the authoritative committed text visible',
+  );
+  assert.ok(
+    !stale.statuses.some((status) => /Đã cập nhật bình luận/.test(status)),
+    'A stale save claims no success',
+  );
+  click('Làm mới', primary);
+  await waitUntil(
+    `() => /đã thay đổi|đã bị gỡ/.test(document.querySelector('section.discussion .comment-edit [role=alert]')?.textContent ?? '') && document.querySelector('section.discussion .comment-current .comment-body')?.textContent === 'Bản nháp chưa gửi'`,
+    primary,
+  );
+  const staleRefresh = screen(primary);
+  assert.equal(staleRefresh.editDraft, 'Bản nháp chưa gửi');
+  assert.equal(staleRefresh.editCurrent, 'Bản nháp chưa gửi');
+  click('Huỷ', primary);
+  await waitUntil(
+    `() => !document.querySelector('section.discussion .comment-edit textarea')`,
+    primary,
+  );
+  observed(
+    'same-text competing edit stays stale after refresh with draft and current text visible',
+    { conflict: true, draftKept: true, currentVisible: true },
+  );
+}
+{
+  // A save in flight cannot be orphaned: the author cannot open a second editor, so a failure
+  // stays visible in the session that sent it with its unsent draft.
+  browser(['open', detail(discussion)], primary);
+  await settle(primary);
+  const editable = screen(primary).comments.filter(
+    (comment) => comment.author === names.alpha && !comment.removed,
+  );
+  assert.ok(
+    editable.length >= 2,
+    'The author has two editable comments for the in-flight save check',
+  );
+  click('Chỉnh sửa bình luận', primary);
+  await waitUntil(
+    `() => Boolean(document.querySelector('section.discussion .comment-edit textarea'))`,
+    primary,
+  );
+  fill('Chỉnh sửa bình luận', 'Bản nháp đang lưu', primary);
+  evaluate(
+    `() => {
+      const original = window.fetch.bind(window);
+      let release;
+      window.__editSaveHeld = false;
+      window.__releaseEditSave = () => release?.();
+      window.fetch = async (...args) => {
+        const input = args[0];
+        const options = args[1] ?? {};
+        const url = typeof input === 'string' ? input : input.url;
+        const method = String(options.method ?? input?.method ?? 'GET').toUpperCase();
+        if (method === 'PATCH' && url.includes('/comments/')) {
+          window.__editSaveHeld = true;
+          await new Promise((resolve) => { release = resolve; });
+          window.fetch = original;
+          return new Response(JSON.stringify({ error: 'unavailable' }), {
+            status: 503,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        return original(...args);
+      };
+      return true;
+    }`,
+    primary,
+  );
+  click('Lưu thay đổi', primary);
+  await waitUntil(`() => window.__editSaveHeld === true`, primary);
+  await waitUntil(
+    `() => {
+      const buttons = [...document.querySelectorAll('section.discussion .comment-actions button')]
+        .filter((button) => /Chỉnh sửa bình luận|^Edit comment$/.test(button.textContent.trim()));
+      return buttons.length > 0 && buttons.every((button) => button.disabled);
+    }`,
+    primary,
+  );
+  const held = screen(primary);
+  assert.equal(
+    held.editDraft,
+    'Bản nháp đang lưu',
+    'The in-flight save keeps its draft',
+  );
+  evaluate(
+    `() => {
+      const button = [...document.querySelectorAll('section.discussion .comment-actions button')]
+        .find((node) => /Chỉnh sửa bình luận|^Edit comment$/.test(node.textContent.trim()));
+      button?.click();
+      return true;
+    }`,
+    primary,
+  );
+  assert.equal(
+    screen(primary).editDraft,
+    'Bản nháp đang lưu',
+    'The attempted second editor does not replace the open draft',
+  );
+  assert.equal(
+    evaluate(
+      `() => document.querySelectorAll('section.discussion .comment-edit textarea').length`,
+      primary,
+    ),
+    1,
+    'Only the session that sent the save stays open',
+  );
+  evaluate(`() => { window.__releaseEditSave(); return true; }`, primary);
+  await waitUntil(
+    `() => Boolean(document.querySelector('section.discussion .comment-edit [role=alert]'))`,
+    primary,
+  );
+  const failed = screen(primary);
+  assert.equal(
+    failed.editDraft,
+    'Bản nháp đang lưu',
+    'A failed save keeps the unsent draft in its own editor',
+  );
+  assert.ok(
+    /Chưa lưu được thay đổi/.test(failed.editError ?? ''),
+    'A failed save shows the localized error where the save was sent',
+  );
+  assert.ok(
+    !failed.statuses.some((status) => /Đã cập nhật bình luận/.test(status)),
+    'A failed save claims no success',
+  );
+  observed(
+    'in-flight edit save blocks a second editor and keeps the failed draft and error',
+    {
+      otherEditors: editable.length - 1,
+      draftKept: failed.editDraft === 'Bản nháp đang lưu',
+      localizedError: true,
+    },
+  );
+  click('Huỷ', primary);
+  await waitUntil(
+    `() => !document.querySelector('section.discussion .comment-edit textarea')`,
+    primary,
+  );
+}
+{
+  // A lost edit response leaves the key open; a withdrawal before the retry is not an update.
+  const seeded = await alpha.rpc('post_property_comment', {
+    p_property_id: discussion.id,
+    p_body: 'Nội dung phát lại sau khi gỡ',
+    p_key: '55000000-0000-4000-8000-000000000201',
+  });
+  assert.equal(
+    seeded.error,
+    null,
+    'Fixture comment posted for a replayed withdrawal',
+  );
+  browser(['open', detail(discussion)], primary);
+  await settle(primary);
+  evaluate(
+    `() => {
+      const target = [...document.querySelectorAll('section.discussion .comment')].find((node) => (node.querySelector('.comment-body')?.textContent ?? '') === 'Nội dung phát lại sau khi gỡ');
+      [...target.querySelectorAll('.comment-actions button')].find((button) => button.textContent.trim() === 'Chỉnh sửa bình luận').click();
+      return true;
+    }`,
+    primary,
+  );
+  await waitUntil(
+    `() => Boolean(document.querySelector('section.discussion .comment-edit textarea'))`,
+    primary,
+  );
+  fill('Chỉnh sửa bình luận', 'Bản nháp phát lại được giữ', primary);
+  evaluate(
+    `() => {
+      const original = window.fetch.bind(window);
+      window.__replayedEdit = false;
+      window.fetch = async (...args) => {
+        const input = args[0];
+        const options = args[1] ?? {};
+        const url = typeof input === 'string' ? input : input.url;
+        const method = String(options.method ?? input?.method ?? 'GET').toUpperCase();
+        const response = await original(...args);
+        if (method === 'PATCH' && url.includes('/comments/')) {
+          window.__replayedEdit = true;
+          window.fetch = original;
+          throw new TypeError('simulated lost edit response');
+        }
+        return response;
+      };
+      return true;
+    }`,
+    primary,
+  );
+  click('Lưu thay đổi', primary);
+  await waitUntil(`() => window.__replayedEdit === true`, primary);
+  await waitUntil(
+    `() => /Chưa lưu được thay đổi/.test(document.querySelector('section.discussion .comment-edit [role=alert]')?.textContent ?? '')`,
+    primary,
+  );
+  const committed = await commentState(seeded.data.id);
+  assert.equal(
+    committed.body,
+    'Bản nháp phát lại được giữ',
+    'The lost-response edit committed on the server',
+  );
+  const withdrawn = await alpha.rpc('remove_property_comment', {
+    p_property_id: discussion.id,
+    p_comment_id: seeded.data.id,
+    p_revision: committed.revision,
+    p_kind: 'author',
+  });
+  assert.equal(
+    withdrawn.error,
+    null,
+    'A competing author session withdraws the comment',
+  );
+  click('Lưu thay đổi', primary);
+  await waitUntil(
+    `() => /đã thay đổi|đã bị gỡ/.test(document.querySelector('section.discussion .comment-edit [role=alert]')?.textContent ?? '')`,
+    primary,
+  );
+  await waitUntil(
+    `() => document.querySelector('section.discussion .comment-current .comment-body')?.textContent === 'Bình luận đã được gỡ.'`,
+    primary,
+  );
+  const replayed = screen(primary);
+  assert.equal(
+    replayed.editDraft,
+    'Bản nháp phát lại được giữ',
+    'The unsent draft survives the replayed withdrawal',
+  );
+  assert.ok(
+    !replayed.statuses.some((status) => /Đã cập nhật bình luận/.test(status)),
+    'A replayed edit on a withdrawn comment claims no success',
+  );
+  assert.equal(
+    await editVersionCount(seeded.data.id),
+    1,
+    'The replay adds no further retained version',
+  );
+  observed(
+    'replayed edit key after withdrawal keeps the draft and reports the removal',
+    { draftKept: true, versions: 1 },
+  );
+  click('Huỷ', primary);
+  await waitUntil(
+    `() => !document.querySelector('section.discussion .comment-edit textarea')`,
+    primary,
+  );
+}
+{
+  browser(['open', detail(discussion)], primary);
+  await settle(primary);
+  const page = screen(primary);
+  const live = page.comments.filter(
+    (comment) => comment.author === names.alpha && !comment.removed,
+  );
+  assert.equal(
+    page.commentEditControls,
+    live.length,
+    'Only live own comments offer an edit control',
+  );
+  assert.ok(
+    page.comments
+      .filter((comment) => comment.removed)
+      .every((comment) => !comment.edited),
+    'A removed entry carries no edited marker and no edit control',
+  );
+  observed('removed entries expose no edit control or edited marker', {
+    removed: page.comments.filter((comment) => comment.removed).length,
+  });
+}
+{
+  // An archived Property blocks author edits for every role, including the author.
+  const reviewerEmployee = fixtures.identities.reviewer.employeeId;
+  const seededId = randomUUID();
+  const seededRevision = randomUUID();
+  await operatorSqlAsync(
+    `insert into public.property_comments(id,property_id,author_id,author_name,body,revision,idempotency_key) values('${seededId}','${archived.id}','${reviewerEmployee}','${names.reviewer.replace(/'/g, "''")}','Thảo luận lưu trữ còn hiệu lực','${seededRevision}','${randomUUID()}')`,
+  );
+  const archivedEdit = await reviewer.rpc('edit_property_comment', {
+    p_property_id: archived.id,
+    p_comment_id: seededId,
+    p_revision: seededRevision,
+    p_body: 'Sửa trên hồ sơ lưu trữ',
+    p_key: randomUUID(),
+  });
+  assert.equal(
+    archivedEdit.error?.code,
+    'PT403',
+    'An archived Property blocks an author edit for a reviewer too',
+  );
+  const ordinaryEdit = await alpha.rpc('edit_property_comment', {
+    p_property_id: archived.id,
+    p_comment_id: seededId,
+    p_revision: seededRevision,
+    p_body: 'Người khác sửa trên hồ sơ lưu trữ',
+    p_key: randomUUID(),
+  });
+  assert.equal(
+    ordinaryEdit.error?.code,
+    '42501',
+    'A non-author is refused without disclosing the archived Property state',
+  );
+  const unknownArchived = await alpha.rpc('edit_property_comment', {
+    p_property_id: archived.id,
+    p_comment_id: '54000000-0000-4000-8000-0000000000fe',
+    p_revision: seededRevision,
+    p_body: 'Không lộ bình luận không tồn tại trên hồ sơ lưu trữ',
+    p_key: randomUUID(),
+  });
+  const unknownLive = await alpha.rpc('edit_property_comment', {
+    p_property_id: second.id,
+    p_comment_id: '54000000-0000-4000-8000-0000000000fe',
+    p_revision: seededRevision,
+    p_body: 'Không lộ bình luận không tồn tại trên hồ sơ hiện tại',
+    p_key: randomUUID(),
+  });
+  assert.equal(
+    unknownArchived.error?.code,
+    '23514',
+    'An unknown comment is refused without disclosing the archived Property state',
+  );
+  assert.equal(
+    unknownLive.error?.code,
+    unknownArchived.error?.code,
+    'An unknown comment answers identically on an unarchived Property',
+  );
+  const state = await commentState(seededId);
+  assert.equal(state.body, 'Thảo luận lưu trữ còn hiệu lực');
+  assert.equal(state.edited_at, null);
+  assert.equal(
+    await editVersionCount(seededId),
+    0,
+    'A refused archived edit retains no version',
+  );
+  await operatorSqlAsync(
+    `do $$ begin
+       execute 'alter table public.property_comments disable trigger comment_original';
+       delete from public.property_comments where id='${seededId}';
+       execute 'alter table public.property_comments enable trigger comment_original';
+     end $$;`,
+  );
+  observed(
+    'archived Property blocks the author edit while non-authors and unknown comments stay indistinguishable',
+    {
+      reviewer: archivedEdit.error?.code,
+      ordinary: ordinaryEdit.error?.code,
+      unknownArchived: unknownArchived.error?.code,
+      unknownLive: unknownLive.error?.code,
+    },
+  );
+}
+{
+  const seeded = await alpha.rpc('post_property_comment', {
+    p_property_id: second.id,
+    p_body: 'Nội dung để sửa',
+    p_key: '54000000-0000-4000-8000-000000000001',
+  });
+  assert.equal(seeded.error, null, 'Fixture comment posted for editing');
+  const id = seeded.data.id;
+  const revision = seeded.data.revision;
+  assert.equal(seeded.data.edited_at, null, 'A new comment is not edited');
+  for (const [name, client] of [
+    ['colleague', beta],
+    ['reviewer', reviewer],
+  ]) {
+    const denied = await client.rpc('edit_property_comment', {
+      p_property_id: second.id,
+      p_comment_id: id,
+      p_revision: revision,
+      p_body: `${name} rewrite attempt`,
+      p_key: randomUUID(),
+    });
+    assert.equal(
+      denied.error?.code,
+      '42501',
+      `${name} cannot rewrite another author comment`,
+    );
+  }
+  const stale = await alpha.rpc('edit_property_comment', {
+    p_property_id: second.id,
+    p_comment_id: id,
+    p_revision: '54000000-0000-4000-8000-0000000000ff',
+    p_body: 'Sửa sai phiên bản',
+    p_key: randomUUID(),
+  });
+  assert.equal(stale.error?.code, 'PT409', 'A stale edit is refused');
+  const noop = await alpha.rpc('edit_property_comment', {
+    p_property_id: second.id,
+    p_comment_id: id,
+    p_revision: revision,
+    p_body: 'Nội dung để sửa',
+    p_key: randomUUID(),
+  });
+  assert.equal(
+    noop.error?.code,
+    'PT400',
+    'Identical text is refused as unchanged',
+  );
+  for (const bad of ['', '   ', 'x'.repeat(2001)]) {
+    const invalid = await alpha.rpc('edit_property_comment', {
+      p_property_id: second.id,
+      p_comment_id: id,
+      p_revision: revision,
+      p_body: bad,
+      p_key: randomUUID(),
+    });
+    assert.equal(invalid.error?.code, '23514', 'Invalid edit text is rejected');
+  }
+  const editKey = randomUUID();
+  const updated = await alpha.rpc('edit_property_comment', {
+    p_property_id: second.id,
+    p_comment_id: id,
+    p_revision: revision,
+    p_body: '  Nội dung đã sửa\nGiữ dấu — và dòng.  ',
+    p_key: editKey,
+  });
+  assert.equal(updated.error, null, 'The author edit commits');
+  assert.equal(updated.data.id, id, 'Comment identity is preserved');
+  assert.equal(
+    updated.data.body,
+    'Nội dung đã sửa\nGiữ dấu — và dòng.',
+    'Trimmed text preserves accents and line breaks',
+  );
+  assert.equal(updated.data.author_id, alphaEmployee, 'Author is preserved');
+  assert.equal(
+    updated.data.created_at,
+    seeded.data.created_at,
+    'Original posting time is preserved',
+  );
+  assert.ok(
+    !Number.isNaN(new Date(updated.data.edited_at).getTime()),
+    'The edited marker is set',
+  );
+  assert.notEqual(updated.data.revision, revision, 'The revision advances');
+  assert.equal(
+    Object.hasOwn(updated.data, 'previous_body'),
+    false,
+    'No preceding version reaches the ordinary projection',
+  );
+  const recovered = await alpha.rpc('edit_property_comment', {
+    p_property_id: second.id,
+    p_comment_id: id,
+    p_revision: revision,
+    p_body: 'Nội dung đã sửa\nGiữ dấu — và dòng.',
+    p_key: editKey,
+  });
+  assert.equal(recovered.error, null, 'An exact edit-key retry recovers');
+  assert.equal(
+    recovered.data.revision,
+    updated.data.revision,
+    'An exact edit-key retry returns the committed revision',
+  );
+  assert.equal(
+    await editVersionCount(id),
+    1,
+    'An exact edit-key retry adds no retained version',
+  );
+  const sameTextOtherKey = await alpha.rpc('edit_property_comment', {
+    p_property_id: second.id,
+    p_comment_id: id,
+    p_revision: revision,
+    p_body: 'Nội dung đã sửa\nGiữ dấu — và dòng.',
+    p_key: randomUUID(),
+  });
+  assert.equal(
+    sameTextOtherKey.error?.code,
+    'PT409',
+    'The same text under another edit key stays stale',
+  );
+  const inactive = await userClient('inactive');
+  for (const [name, client] of [
+    ['author', alpha],
+    ['colleague', beta],
+    ['inactive', inactive],
+  ]) {
+    const hidden = await client
+      .from('property_comment_edits')
+      .select('comment_id')
+      .eq('comment_id', id);
+    assert.ok(
+      hidden.error || hidden.data.length === 0,
+      `${name} cannot read prior versions`,
+    );
+  }
+  const anonymous = createClient(
+    environment.supabaseUrl,
+    environment.publishableKey,
+    { auth: { persistSession: false, autoRefreshToken: false } },
+  );
+  const anonymousRows = await anonymous
+    .from('property_comment_edits')
+    .select('comment_id');
+  assert.ok(
+    anonymousRows.error || anonymousRows.data.length === 0,
+    'Anonymous reads no prior versions',
+  );
+  const reviewerRows = await reviewer
+    .from('property_comment_edits')
+    .select('comment_id,version,previous_body,body')
+    .eq('comment_id', id);
+  assert.equal(
+    reviewerRows.error,
+    null,
+    'A reviewer reads the retained versions',
+  );
+  assert.equal(reviewerRows.data.length, 1);
+  assert.equal(reviewerRows.data[0].previous_body, 'Nội dung để sửa');
+  assert.equal(
+    reviewerRows.data[0].body,
+    'Nội dung đã sửa\nGiữ dấu — và dòng.',
+  );
+  const forged = await alpha.from('property_comment_edits').insert({
+    comment_id: id,
+    property_id: second.id,
+    author_id: alphaEmployee,
+    author_name: 'Forged',
+    edited_by: alphaEmployee,
+    edited_actor_name: 'Forged',
+    version: 9,
+    previous_body: 'forged',
+    body: 'forged',
+    previous_revision: randomUUID(),
+    revision: randomUUID(),
+  });
+  assert.ok(forged.error, 'A direct retained-edit insert is denied');
+  const rewritten = await alpha
+    .from('property_comments')
+    .update({ body: 'rewritten' })
+    .eq('id', id)
+    .select('id');
+  assert.ok(
+    rewritten.error || rewritten.data.length === 0,
+    'A direct comment update is denied',
+  );
+  const purged = await alpha
+    .from('property_comment_edits')
+    .delete()
+    .eq('comment_id', id)
+    .select('comment_id');
+  assert.ok(
+    purged.error || purged.data.length === 0,
+    'Retained versions are never deleted',
+  );
+  // Posting-key replay compares against the original submission after an edit.
+  const replayed = await alpha.rpc('post_property_comment', {
+    p_property_id: second.id,
+    p_body: 'Nội dung để sửa',
+    p_key: '54000000-0000-4000-8000-000000000001',
+  });
+  assert.equal(replayed.error, null, 'The original posting key still recovers');
+  assert.equal(replayed.data.id, id);
+  assert.equal(
+    replayed.data.body,
+    'Nội dung đã sửa\nGiữ dấu — và dòng.',
+    'Recovery reports the current committed text',
+  );
+  assert.ok(!Number.isNaN(new Date(replayed.data.edited_at).getTime()));
+  const conflicting = await alpha.rpc('post_property_comment', {
+    p_property_id: second.id,
+    p_body: 'Nội dung đã sửa\nGiữ dấu — và dòng.',
+    p_key: '54000000-0000-4000-8000-000000000001',
+  });
+  assert.equal(
+    conflicting.error?.code,
+    '23505',
+    'The latest edited text is not the retained original submission',
+  );
+  observed(
+    'author edit retains versions, refuses stale/no-op and keeps posting-key replay on the original',
+    {
+      stale: stale.error?.code,
+      noOp: noop.error?.code,
+      versions: reviewerRows.data.length,
+      replay: replayed.data.id === id,
+    },
+  );
+}
+
 // --------------------------------------------------------- post and archive race
 // The holder takes the parent Property row lock and only then records its marker, so the
 // marker is proof the lock is held; the competing requests are dispatched inside that window.
@@ -1811,6 +2697,18 @@ async function removalCount(commentId) {
   );
   return Number(rows[0]?.n ?? 0);
 }
+async function editVersionCount(commentId) {
+  const rows = await operatorSqlAsync(
+    `select count(*)::int as n from public.property_comment_edits where comment_id = '${commentId}'`,
+  );
+  return Number(rows[0]?.n ?? 0);
+}
+async function commentState(commentId) {
+  const rows = await operatorSqlAsync(
+    `select body, removed_at, edited_at, revision from public.property_comments where id = '${commentId}'`,
+  );
+  return rows[0] ?? {};
+}
 async function isArchived(propertyId) {
   const rows = await operatorSqlAsync(
     `select archived_at is not null as archived from public.properties where id = '${propertyId}'`,
@@ -1826,10 +2724,13 @@ async function resetRaceProperty(propertyId) {
      begin
        execute 'alter table public.property_comments disable trigger comment_original';
        execute 'alter table public.property_comment_removals disable trigger comment_removal_guard';
+       execute 'alter table public.property_comment_edits disable trigger comment_edit_guard';
        delete from public.property_comment_removals where property_id = '${propertyId}';
+       delete from public.property_comment_edits where property_id = '${propertyId}';
        delete from public.property_comments where property_id = '${propertyId}';
        execute 'alter table public.property_comments enable trigger comment_original';
        execute 'alter table public.property_comment_removals enable trigger comment_removal_guard';
+       execute 'alter table public.property_comment_edits enable trigger comment_edit_guard';
        update public.properties set archived_at = null where id = '${propertyId}';
      end $$;`,
   );
@@ -2101,6 +3002,206 @@ async function runRaceRound(round) {
   observed(
     'archived moderation survives an archive/removal race with one retained record',
     { committed: 1, records: 1 },
+  );
+}
+
+// ------------------------------------------------------- edit and edit race
+// Two independent real sessions of the same author submit against one revision. They serialize
+// on the parent Property row, so exactly one edit commits and one retained version exists.
+{
+  await resetRaceProperty(race.id);
+  const posted = await attempt(
+    race.id,
+    '54000000-0000-4000-8000-000000000010',
+    'Đua sửa nội dung',
+  );
+  assert.equal(posted.error, null, 'The edit race comment posts');
+  const firstSession = await userClient('alpha');
+  const secondSession = await userClient('alpha');
+  const [firstAttempt, secondAttempt] = await Promise.all([
+    firstSession.rpc('edit_property_comment', {
+      p_property_id: race.id,
+      p_comment_id: posted.data.id,
+      p_revision: posted.data.revision,
+      p_body: 'Phiên sửa thứ nhất',
+      p_key: randomUUID(),
+    }),
+    secondSession.rpc('edit_property_comment', {
+      p_property_id: race.id,
+      p_comment_id: posted.data.id,
+      p_revision: posted.data.revision,
+      p_body: 'Phiên sửa thứ hai',
+      p_key: randomUUID(),
+    }),
+  ]);
+  const committed = [firstAttempt, secondAttempt].filter(
+    (result) => !result.error,
+  ).length;
+  const refused = [firstAttempt, secondAttempt]
+    .filter((result) => result.error)
+    .map((result) => result.error.code);
+  assert.equal(committed, 1, 'Exactly one competing edit commits');
+  assert.ok(
+    refused.every((code) => code === 'PT409'),
+    'The losing edit is refused as stale',
+  );
+  const state = await commentState(posted.data.id);
+  assert.ok(
+    ['Phiên sửa thứ nhất', 'Phiên sửa thứ hai'].includes(state.body),
+    'The committed edit is one of the two submitted texts',
+  );
+  assert.equal(
+    await editVersionCount(posted.data.id),
+    1,
+    'One accepted edit retains exactly one version',
+  );
+  observed(
+    'competing author sessions serialize into one edit and one retained version',
+    { committed, refused: refused.join(','), versions: 1 },
+  );
+}
+
+// ---------------------------------------------------- edit and archive race
+// The held parent lock serializes an author edit against an archive. An edit is legal only while
+// unarchived, so a losing edit is denied without leaving text or a version behind.
+{
+  const outcomes = { edited: 0, denied: 0 };
+  for (let round = 0; round < 3; round++) {
+    await resetRaceProperty(race.id);
+    const posted = await attempt(
+      race.id,
+      `54000000-0000-4000-8000-00000000002${round}`,
+      `Đua sửa lưu trữ ${round}`,
+    );
+    assert.equal(posted.error, null, 'The edit/archive race comment posts');
+    const revision = await archiveRevision(reviewer, race.id);
+    const marker = `${fixtures.namespace} edit race ${round}`;
+    const markerKey = randomUUID();
+    const holder = holdPropertyLock(race.id, 5, markerKey);
+    assert.ok(
+      await waitForMarker(markerKey),
+      'The holder records its marker before releasing the parent lock',
+    );
+    const [editResult, archivedResult] = await Promise.all([
+      Promise.resolve(
+        alpha.rpc('edit_property_comment', {
+          p_property_id: race.id,
+          p_comment_id: posted.data.id,
+          p_revision: posted.data.revision,
+          p_body: `Đã sửa trước lưu trữ ${round}`,
+          p_key: randomUUID(),
+        }),
+      ),
+      Promise.resolve(archive(reviewer, race.id, revision, marker)),
+    ]);
+    await waitForExit(holder);
+    assert.equal(archivedResult.error, null, 'The competing archive commits');
+    assert.equal(await isArchived(race.id), true, 'The property ends archived');
+    const state = await commentState(posted.data.id);
+    if (editResult.error) {
+      assert.equal(
+        editResult.error.code,
+        'PT403',
+        'A losing edit is denied as archived',
+      );
+      assert.equal(
+        state.body,
+        `Đua sửa lưu trữ ${round}`,
+        'A denied edit leaves the original text',
+      );
+      assert.equal(
+        await editVersionCount(posted.data.id),
+        0,
+        'A denied edit retains no version',
+      );
+      outcomes.denied++;
+    } else {
+      assert.equal(
+        state.body,
+        `Đã sửa trước lưu trữ ${round}`,
+        'The winning edit committed its text',
+      );
+      assert.equal(
+        await editVersionCount(posted.data.id),
+        1,
+        'The winning edit retains exactly one version',
+      );
+      outcomes.edited++;
+    }
+  }
+  observed(
+    'held parent lock: competing author edit and archive serialize with the archive exception honoured',
+    { rounds: 3, ...outcomes },
+  );
+}
+
+// ---------------------------------------------------- edit and removal race
+// Edit and removal are both author transitions on the same revision. The parent lock serializes
+// them into exactly one accepted transition with exactly one retained record.
+{
+  const outcomes = { edited: 0, removed: 0 };
+  for (let round = 0; round < 3; round++) {
+    await resetRaceProperty(race.id);
+    const posted = await attempt(
+      race.id,
+      `54000000-0000-4000-8000-00000000003${round}`,
+      `Đua sửa gỡ ${round}`,
+    );
+    assert.equal(posted.error, null, 'The edit/removal race comment posts');
+    const markerKey = randomUUID();
+    const holder = holdPropertyLock(race.id, 5, markerKey);
+    assert.ok(
+      await waitForMarker(markerKey),
+      'The holder records its marker before releasing the parent lock',
+    );
+    const [editResult, removalResult] = await Promise.all([
+      Promise.resolve(
+        alpha.rpc('edit_property_comment', {
+          p_property_id: race.id,
+          p_comment_id: posted.data.id,
+          p_revision: posted.data.revision,
+          p_body: `Đã sửa khi đua ${round}`,
+          p_key: randomUUID(),
+        }),
+      ),
+      Promise.resolve(
+        alpha.rpc('remove_property_comment', {
+          p_property_id: race.id,
+          p_comment_id: posted.data.id,
+          p_revision: posted.data.revision,
+          p_kind: 'author',
+        }),
+      ),
+    ]);
+    await waitForExit(holder);
+    const committed = [editResult, removalResult].filter(
+      (result) => !result.error,
+    ).length;
+    const refused = [editResult, removalResult]
+      .filter((result) => result.error)
+      .map((result) => result.error.code);
+    assert.equal(committed, 1, 'Exactly one competing transition commits');
+    assert.ok(
+      refused.every((code) => code === 'PT409'),
+      'The losing transition is refused as stale',
+    );
+    const state = await commentState(posted.data.id);
+    if (!editResult.error) {
+      assert.equal(state.body, `Đã sửa khi đua ${round}`);
+      assert.equal(await editVersionCount(posted.data.id), 1);
+      assert.equal(await removalCount(posted.data.id), 0);
+      outcomes.edited++;
+    } else {
+      assert.equal(state.body, null);
+      assert.equal(state.removed_at !== null, true);
+      assert.equal(await removalCount(posted.data.id), 1);
+      assert.equal(await editVersionCount(posted.data.id), 0);
+      outcomes.removed++;
+    }
+  }
+  observed(
+    'held parent lock: competing author edit and removal serialize into exactly one transition',
+    { rounds: 3, ...outcomes },
   );
 }
 

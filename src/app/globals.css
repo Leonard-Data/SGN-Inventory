@@ -174,3 +174,61 @@
     margin-bottom: var(--space-2);
   }
 }
+
+/* ── employee deactivation (issue #66) ───────────────────────────────────── */
+
+/* The confirmation panel is a second table row under the employee it acts on. It shows the
+   recorded pending/reconciliation/confirmed state and the outstanding reservations; release
+   or expiry is never offered as an automatic consequence of deactivation. */
+.deactivation-panel {
+  padding: var(--space-4);
+  border-top: 1px dashed var(--border);
+}
+.deactivation-panel h3 {
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.deactivation-panel dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
+  margin: 0 0 var(--space-3);
+}
+.deactivation-panel dt {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.deactivation-panel dd {
+  margin: 0;
+}
+.deactivation-reservations {
+  margin: 0 0 var(--space-2);
+  padding-left: 1.1rem;
+}
+.deactivation-reservations li {
+  margin-bottom: var(--space-1);
+}
+.deactivation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.deactivation-actions form {
+  margin: 0;
+}
+.data-table td .badge + .badge {
+  margin-left: var(--space-2);
+}
+/* Vendor directory (#73): an unknown optional detail reads as unknown inside a table
+   cell, and recorded source notes keep their line breaks. Package tokens only. */
+.data-table .is-unknown {
+  color: var(--muted);
+  font-weight: 400;
+}
+.vendor-note {
+  white-space: pre-wrap;
+}

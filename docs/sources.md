@@ -1,10 +1,15 @@
 # Sources and evidence
 
-Reviewed 10 October 2026. Government sources describe the policy baseline; the database design and verification workflow are application decisions. Check for later official changes when ingesting catalogs.
+Reviewed 14 October 2026. Government sources describe the policy baseline; the database design and verification workflow are application decisions. Check for later official changes when ingesting catalogs.
 
 | Source | Use in this design |
 | --- | --- |
 | [Decision 19/2025/QĐ-TTg — official government record](https://chinhphu.vn/?classid=1&docid=214409&orggroupid=3&pageid=27160) | Official administrative code lists and 1 July 2025 effective baseline |
+| [thanglequoc/vietnamese-provinces-database v3.0.2](https://github.com/thanglequoc/vietnamese-provinces-database/tree/v3.0.2) | Seeded 2025-07-01 baseline official names: pre-2026 codes, names and parent links (data-file md5 `d2a3372d23480d75d2d32710707df98b`) |
+| [thanglequoc/vietnamese-provinces-database v5.2.0](https://github.com/thanglequoc/vietnamese-provinces-database/tree/v5.2.0) | Seeded 2026 dated province/city and ward/commune names: official codes, names and parent links (tag commit `62b1abdfe39625289c37a58ef6678e9db3d37f84`) |
+| [Nghị quyết 36/2026/QH16](https://thuvienphapluat.vn/van-ban/Bo-may-hanh-chinh/Nghi-quyet-36-2026-QH16-thanh-lap-thanh-pho-Quang-Ninh-722881.aspx), [Nghị quyết 39/2026/QH16](https://thuvienphapluat.vn/van-ban/bo-may-hanh-chinh/Nghi-quyet-39-2026-QH16-thanh-lap-thanh-pho-Bac-Ninh-722250.aspx) | 2026-09-01 Quảng Ninh and 2026-09-20 Bắc Ninh city promotions recorded as dated catalog versions |
+| [Nghị quyết 30/2026/QH16](https://thuvienphapluat.vn/van-ban/Bo-may-hanh-chinh/Nghi-quyet-30-2026-QH16-thanh-lap-thanh-pho-Dong-Nai-703888.aspx), [Nghị quyết 237/NQ-UBTVQH16](https://thuvienphapluat.vn/van-ban/Bo-may-hanh-chinh/Nghi-quyet-237-NQ-UBTVQH16-2026-thanh-lap-10-phuong-thuoc-tinh-Dong-Nai-702513.aspx) | 2026-04-30 Đồng Nai city promotion and ten Đồng Nai ward promotions recorded as dated catalog versions |
+| [Nghị quyết 388/NQ-UBTVQH16](https://thuvienphapluat.vn/van-ban/Bo-may-hanh-chinh/Nghi-quyet-388-NQ-UBTVQH16-2026-thanh-lap-cac-phuong-thuoc-tinh-Bac-Ninh-720767.aspx) | 2026-09-20 twelve Bắc Ninh ward promotions recorded as dated catalog versions |
 | [Official government explanation of two-tier operation](https://media.chinhphu.vn/van-hanh-chinh-quyen-dia-phuong-hai-cap-chinh-phu-chu-dong-dia-phuong-san-sang-102250620174201678.htm) | Current form hierarchy without district |
 | [Resolution 1685/NQ-UBTVQH15 — official HCMC reorganization text](https://xaydungchinhsach.chinhphu.vn/toan-van-nghi-quyet-so-1685-nq-ubtvqh15-sap-xep-cac-dvhc-cap-xa-cua-thanh-pho-ho-chi-minh-nam-2025-119250616211341304.htm) | Whole/partial changes; property-level verification for split wards |
 | [Supabase row-level security](https://supabase.com/docs/guides/database/postgres/row-level-security) | Explicit grants + RLS and invoker views |
@@ -15,4 +20,4 @@ Reviewed 10 October 2026. Government sources describe the policy baseline; the d
 | [Vercel Next.js integration](https://vercel.com/docs/frameworks/full-stack/nextjs) | Next.js hosting architecture and preview/production separation |
 | Uploaded Databases.xlsx, SHA-256 in `workbook-profile.json` | Actual columns, sheet counts and relation/data-quality findings |
 
-The official code list is not embedded in this package. Its ingestion and verification are separate migration deliverables. Raw workbook content, employee password values, owner contacts and attachment bytes are not included in the repository package.
+The national two-tier province/commune code list is embedded as an idempotent seed migration (`20261014075435_vietnamese_admin_units_reference.sql`) drawn from the pinned upstream releases above: the 2025-07-01 baseline window carries the pre-2026 official names (later upstream diacritic corrections are kept), and the dated 2026-04-30, 2026-09-01 and 2026-09-20 windows carry the v5.2.0 names, each with one half-open validity window per official name. A district catalog and old→new HCMC crosswalks are not embedded and remain separate reviewed migration deliverables. Raw workbook content, employee password values, owner contacts and attachment bytes are not included in the repository package.

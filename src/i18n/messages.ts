@@ -48,6 +48,19 @@ const vi = {
   searchHint:
     'Nhập một đoạn địa chỉ liền nhau; không cần dấu. % và _ là ký tự thường, không phải ký tự đại diện.',
   queryTooLong: 'Địa chỉ tìm kiếm tối đa 120 ký tự.',
+  sortLabel: 'Thứ tự theo ngày nhập kho',
+  sortDefault: 'Mặc định',
+  sortOldest: 'Cũ nhất trước',
+  sortNewest: 'Mới nhất trước',
+  ageHint:
+    'Chỉ gồm hồ sơ đang chào hoặc đang thương lượng, chưa lưu trữ. Thứ tự dùng ngày nhập kho gốc, không đổi khi cập nhật, đổi giá hoặc đăng lại. Hồ sơ chưa xác định ngày nhập kho được liệt kê sau cùng, không bị ẩn.',
+  entryDate: 'Ngày nhập kho gốc',
+  entryDateUnknown: 'Chưa xác định',
+  entryDateLegacy: 'Theo hồ sơ gốc',
+  entrySourceRecorded: 'Ghi nhận khi tạo hồ sơ',
+  entryAge: 'ngày trong kho',
+  entryAgeOne: 'ngày trong kho',
+  entryAgeUnknown: 'Tuổi kho chưa xác định',
   propertyCode: 'Mã bất động sản',
   details: 'Chi tiết bất động sản',
   back: 'Về kết quả',
@@ -123,12 +136,19 @@ const vi = {
     'Khoảng ngày không hợp lệ. Ngày bắt đầu không được sau ngày kết thúc và tối đa 366 ngày.',
   rangeTooLarge:
     'Khoảng ngày {from} – {to} vượt giới hạn 1.000 dòng của báo cáo (giới hạn = số nhân viên đang hoạt động × số ngày). Hãy thu hẹp khoảng ngày.',
+  rankingTooLarge:
+    'Khoảng ngày {from} – {to} vượt giới hạn 1.000 dòng của bảng xếp hạng (số nhân viên trong phạm vi báo cáo). Hãy thu hẹp khoảng ngày.',
   todaySummary: 'Tổng hợp hôm nay',
   companyHistory: 'Lịch sử theo ngày',
   companyEmployee: 'Nhân viên',
   companyActivityNote:
     'Lượt truy cập liên hệ chủ nhà là số bất động sản mà mỗi nhân viên đã mở liên hệ chủ nhà trong ngày (giờ Việt Nam): không phải điểm danh, giờ làm việc, cuộc gọi đã kết nối hay lượt thăm bất động sản.',
   noEmployees: 'Chưa có nhân viên đang hoạt động.',
+  rankingTitle: 'Xếp hạng hoạt động liên hệ chủ nhà',
+  rankingRank: 'Hạng',
+  rankingInactive: 'Không còn hoạt động',
+  rankingNote:
+    'Hạng dựa trên tổng số bất động sản mà mỗi nhân viên đã mở liên hệ chủ nhà trong khoảng đã chọn, cộng theo từng ngày (giờ Việt Nam): mỗi bất động sản tính một lần cho mỗi nhân viên mỗi ngày và các tổng bằng nhau dùng chung một hạng. Lượt xem trang và số bất động sản đã xem không tính vào hạng và được xem riêng ở bảng lịch sử theo ngày. Nhân viên đã ngừng hoạt động vẫn giữ hoạt động đã ghi nhận trong khoảng.',
   myActivity: 'Hoạt động của tôi',
   myActivityLink: 'Hoạt động của tôi',
   myActivityNote:
@@ -149,6 +169,19 @@ const vi = {
     'Khóa gửi này đã được ghi với nội dung khác. Hãy làm mới để xem bình luận đã ghi.',
   commentPostRemoved:
     'Bình luận đã được gỡ trước đó. Nội dung đã nhập được giữ lại; gửi lại sẽ tạo bình luận mới.',
+  editComment: 'Chỉnh sửa bình luận',
+  commentCurrent: 'Nội dung hiện đang được lưu',
+  editHint: 'Chỉnh sửa nội dung bình luận chung. Tối đa 2.000 ký tự.',
+  saveComment: 'Lưu thay đổi',
+  savingComment: 'Đang lưu…',
+  commentEdited: 'Đã cập nhật bình luận.',
+  commentEditedMarker: 'đã chỉnh sửa',
+  commentUnchanged: 'Nội dung chưa thay đổi.',
+  editStale:
+    'Bình luận đã thay đổi hoặc đã bị gỡ. Bản nháp đang sửa được giữ lại; hãy làm mới để đối chiếu.',
+  editFailed: 'Chưa lưu được thay đổi. Bản nháp đang sửa được giữ lại.',
+  editDenied:
+    'Chưa lưu được thay đổi. Quyền truy cập hoặc trạng thái lưu trữ của bất động sản đã thay đổi; hãy làm mới để xem trạng thái hiện tại.',
   noComments: 'Chưa có bình luận nào.',
   moreComments: 'Xem bình luận cũ hơn',
   removeComment: 'Gỡ bình luận',
@@ -229,6 +262,127 @@ const vi = {
   employeeAccessActive: 'Đang hoạt động',
   employeeAccessInactive: 'Đã tắt truy cập',
   employeeAccessUnlinked: 'Chưa liên kết đăng nhập',
+  employeeAccessAccountDeleted: 'Đã xóa tài khoản đăng nhập',
+  // Employee deactivation (issue #66).
+  employeeActions: 'Thao tác',
+  employeeDeactivate: 'Tắt quyền truy cập',
+  employeeDeactivateTarget: 'Nhân viên',
+  employeeDeactivateNote:
+    'Thao tác này tắt quyền truy cập nội bộ trước, sau đó xác nhận chặn đăng nhập của đúng tài khoản. Hồ sơ, lịch sử và công việc vẫn giữ nguyên.',
+  employeeDeactivateConfirm: 'Xác nhận tắt quyền truy cập',
+  employeeDeactivateReconcile: 'Đối soát chặn đăng nhập',
+  employeeDeactivateState: 'Trạng thái thao tác',
+  employeeDeactivateOutstanding: 'Đặt chỗ đang mở',
+  employeeDeactivateNoOutstanding:
+    'Không có yêu cầu đặt chỗ hoặc đặt chỗ hiệu lực nào đang mở.',
+  employeeDeactivateReservationEffective: 'Đặt chỗ đã duyệt',
+  employeeDeactivateReservationPending: 'Yêu cầu đang chờ',
+  employeeDeactivateReservationExpires: 'Hết hạn',
+  employeeDeactivateReservationNote:
+    'Việc giải phóng hoặc hết hạn vẫn theo đúng người yêu cầu, người duyệt và thời hạn hiện có; hệ thống không tự chuyển hay đổi người được ghi nhận.',
+  employeeDeactivatePendingLabel: 'Đang chờ xác nhận chặn đăng nhập',
+  employeeDeactivateReconciliationLabel: 'Cần đối soát chặn đăng nhập',
+  employeeDeactivateConfirmedLabel: 'Đã xác nhận chặn đăng nhập',
+  employeeDeactivateBanNote:
+    'Chặn đăng nhập có thời hạn do nhà cung cấp xác nhận (khoảng 100 năm) và chỉ được gia hạn bằng một lần đối soát rõ ràng; đây không phải trạng thái vô hạn.',
+  employeeDeactivateSuccess:
+    'Đã tắt quyền truy cập và xác nhận chặn đăng nhập.',
+  employeeDeactivatePending:
+    'Đã tắt quyền truy cập; chặn đăng nhập chưa được xác nhận.',
+  employeeDeactivateFailed:
+    'Thao tác chưa hoàn tất. Quyền truy cập vẫn bị tắt và trạng thái đã ghi vẫn được giữ nguyên.',
+  employeeDeactivateLastAdmin:
+    'Không thể tắt quyền truy cập của quản trị viên đang hoạt động cuối cùng.',
+  employeeDeactivateNotDeactivable:
+    'Nhân viên này không còn có thể tắt quyền truy cập (chưa liên kết đăng nhập hoặc đã tắt).',
+  employeeDeactivateConflict:
+    'Mã thao tác đã được dùng cho một hành động khác. Hãy mở lại mục này.',
+  employeeDeactivateStale:
+    'Trạng thái thao tác đã thay đổi. Hãy tải lại trước khi thử lại.',
+  employeeDeactivateProviderUnavailable:
+    'Máy chủ chưa có cấu hình xác nhận chặn đăng nhập. Quyền truy cập đã bị tắt; hãy thử lại sau khi cấu hình được khôi phục.',
+  employeeDeactivateLoadFailed: 'Không thể tải trạng thái tắt quyền truy cập.',
+  // Permanent sign-in account deletion (issue #67).
+  employeeDelete: 'Xóa tài khoản đăng nhập',
+  employeeDeleteReconcile: 'Đối soát xóa tài khoản',
+  employeeDeleteTarget: 'Nhân viên được giữ lại',
+  employeeDeleteNote:
+    'Xóa vĩnh viễn tài khoản đăng nhập của đúng nhân viên này. Hồ sơ nhân viên, họ tên, mã định danh và toàn bộ công việc đã ghi nhận vẫn được giữ nguyên.',
+  employeeDeleteConfirmLabel: 'Nhập email để xác nhận',
+  employeeDeleteConfirmHint:
+    'Nhập chính xác email “{email}” để bật nút xóa vĩnh viễn.',
+  employeeDeleteConfirmRequired: 'Hãy nhập email của nhân viên này.',
+  employeeDeleteConfirmMismatch: 'Email nhập vào không khớp với nhân viên này.',
+  employeeDeleteConfirm: 'Xóa vĩnh viễn tài khoản đăng nhập',
+  employeeDeleteState: 'Trạng thái thao tác',
+  employeeDeleteStorageNote:
+    'Tệp đã tải lên thuộc sở hữu kỹ thuật của tài khoản đăng nhập. Hệ thống kiểm tra trước và chỉ chuyển quyền sở hữu sang một quản trị viên đang hoạt động; nội dung, mã tệp, đường dẫn và người tải lên không thay đổi.',
+  employeeDeleteStorageEvidence:
+    'Tệp thuộc sở hữu: {owned} · đã chuyển quyền sở hữu: {reassigned}',
+  employeeDeletePendingLabel: 'Đang chờ xóa tài khoản đăng nhập',
+  employeeDeleteReconciliationLabel: 'Cần đối soát xóa tài khoản đăng nhập',
+  employeeDeleteStorageBlockedLabel: 'Chưa xóa: còn tệp thuộc sở hữu tài khoản',
+  employeeDeleteConfirmedLabel: 'Đã xác nhận xóa tài khoản đăng nhập',
+  employeeDeleteSuccess:
+    'Đã xác nhận tài khoản đăng nhập không còn tồn tại. Hồ sơ nhân viên và công việc vẫn được giữ nguyên.',
+  employeeDeletePending:
+    'Đã tắt quyền truy cập; tài khoản đăng nhập chưa được xóa.',
+  employeeDeleteFailed:
+    'Thao tác chưa hoàn tất. Quyền truy cập vẫn bị tắt, hồ sơ nhân viên và công việc vẫn nguyên vẹn; hãy thử lại.',
+  employeeDeleteStorageBlocked:
+    'Chưa thể xóa: tài khoản còn sở hữu tệp trong kho lưu trữ và quyền sở hữu chưa được chuyển an toàn. Không có tệp nào bị xóa.',
+  employeeDeleteLastAdmin:
+    'Không thể xóa tài khoản đăng nhập của quản trị viên đang hoạt động cuối cùng.',
+  employeeDeleteNotDeletable:
+    'Nhân viên này không còn có thể xóa tài khoản đăng nhập (chưa liên kết đăng nhập hoặc đã xóa).',
+  employeeDeleteLifecycleConflict:
+    'Một thao tác vòng đời khác đang mở cho nhân viên này. Hãy hoàn tất hoặc đối soát thao tác đó trước.',
+  employeeDeleteKeyConflict:
+    'Mã thao tác đã được dùng cho một hành động khác. Hãy mở lại mục này.',
+  employeeDeleteStale:
+    'Trạng thái thao tác đã thay đổi. Hãy tải lại trước khi thử lại.',
+  employeeDeleteProviderUnavailable:
+    'Máy chủ chưa có cấu hình xóa tài khoản đăng nhập. Quyền truy cập đã bị tắt; hãy thử lại sau khi cấu hình được khôi phục.',
+  employeeDeleteLoadFailed: 'Không thể tải trạng thái xóa tài khoản đăng nhập.',
+  // People → Vendors (#73): the company directory and its one bounded create.
+  vendorsLink: 'Nhà cung cấp',
+  vendorDirectory: 'Danh sách nhà cung cấp',
+  vendorDirectoryNote:
+    'Các công ty được ghi nhận riêng, không phải chủ nhà, môi giới hay nhân viên. Mọi nhân viên đang hoạt động đều xem được; nhân viên, quản lý và quản trị viên ghi nhận nhà cung cấp.',
+  vendorDirectoryEmpty: 'Chưa có nhà cung cấp nào được ghi nhận.',
+  vendorDirectoryEmptyQuery: 'Không tìm thấy nhà cung cấp phù hợp.',
+  vendorDirectoryFailed: 'Không thể tải danh sách nhà cung cấp.',
+  vendorPageInfo: 'Trang này: {n} nhà cung cấp',
+  vendorSearch: 'Tìm nhà cung cấp',
+  vendorSearchHint:
+    'Nhập một đoạn tên liền nhau, không cần dấu; % và _ là ký tự thường. Tối đa 120 ký tự.',
+  vendorCreate: 'Ghi nhận nhà cung cấp',
+  vendorCreateNote:
+    'Một công ty với một khối liên hệ, tách biệt khỏi chủ nhà, môi giới và nhân viên.',
+  vendorCompanyName: 'Tên công ty',
+  vendorCompanyNameHint: 'Tên công ty như được ghi nhận, từ 1 đến 200 ký tự.',
+  vendorContactName: 'Tên người liên hệ',
+  vendorPhones: 'Số điện thoại',
+  vendorPhonesHint:
+    'Mỗi dòng một số, tối đa 5 số. Số được giữ nguyên như đã nhập.',
+  vendorSourceAddress: 'Địa chỉ / văn bản nguồn',
+  vendorOptionalHint:
+    'Ô để trống là chưa rõ, không phải giá trị rỗng. Hệ thống không tự điền.',
+  vendorCreateSubmit: 'Ghi nhận nhà cung cấp',
+  vendorCreateInvalid: 'Vui lòng kiểm tra tên công ty, số điện thoại và email.',
+  vendorCreateConflict:
+    'Lượt gửi này đã được dùng cho thông tin nhà cung cấp khác. Nội dung đã nhập được giữ lại; gửi lại sẽ ghi nhận như một nhà cung cấp mới.',
+  vendorCreateFailed:
+    'Chưa ghi nhận được nhà cung cấp. Thử lại giữ nguyên nội dung đã nhập; lượt gửi trùng không tạo thêm công ty.',
+  vendorMaintainerOnly:
+    'Bạn có thể xem danh sách này. Chỉ nhân viên, quản lý và quản trị viên mới được ghi nhận nhà cung cấp.',
+  vendorDetailTitle: 'Chi tiết nhà cung cấp',
+  vendorDetailFailed: 'Không thể tải chi tiết nhà cung cấp.',
+  vendorNotFound: 'Không tìm thấy nhà cung cấp hoặc không có quyền đọc.',
+  vendorBackToDirectory: 'Về danh sách nhà cung cấp',
+  vendorRecordedAt: 'Ghi nhận lúc',
+  saving: 'Đang lưu…',
+  notes: 'Ghi chú',
   languageName: 'Ngôn ngữ / Language',
   switchToVi: 'Chuyển sang tiếng Việt',
   switchToEn: 'Switch to English',
@@ -300,6 +454,67 @@ const vi = {
   reservationLoadFailed: 'Không tải được tình trạng đặt chỗ.',
   reservationNote:
     'Chỉ đặt chỗ đã được duyệt và còn hiệu lực mới giữ bất động sản.',
+  reservationRelease: 'Giải phóng đặt chỗ',
+  reservationReleaseReason: 'Lý do giải phóng',
+  reservationReleaseReasonHint: 'Từ 10 đến 2.000 ký tự.',
+  reservationReleaseReasonRequired:
+    'Vui lòng nhập lý do từ 10 đến 2.000 ký tự.',
+  reservationReleaseSubmit: 'Giải phóng',
+  reservationReleased:
+    'Đã giải phóng đặt chỗ; người đặt chỗ và lịch sử được giữ nguyên.',
+  reservationReleaseFailed: 'Chưa giải phóng được đặt chỗ. Vui lòng thử lại.',
+  reservationReleaseClosed:
+    'Đặt chỗ này không còn hiệu lực để giải phóng. Trạng thái mới nhất đang được hiển thị.',
+  reservationReleaseNote:
+    'Giải phóng không xoá người đặt chỗ, lý do hay sự kiện đã ghi.',
+  completedSaleTitle: 'Xác nhận bán thành công',
+  completedSaleNote:
+    'Chỉ quản lý hoặc quản trị viên khác nhân viên được ghi nhận mới có thể xác nhận. Một bất động sản chỉ có một thương vụ bán đang hiệu lực.',
+  completedSaleCreditedCloser: 'Nhân viên được ghi nhận',
+  completedSaleSelectCloser: 'Chọn nhân viên',
+  completedSaleSuggestedCloser:
+    'Người đặt chỗ hiệu lực: {name} — bạn phải tự chọn để xác nhận.',
+  completedSaleDate: 'Ngày bán thực tế (Việt Nam)',
+  completedSaleReference: 'Hợp đồng/tham chiếu',
+  completedSaleReferenceHint: 'Từ 1 đến 200 ký tự.',
+  completedSaleReferenceRequired:
+    'Vui lòng chọn nhân viên và nhập ngày, tham chiếu hợp lệ.',
+  completedSaleClosesReservations:
+    'Xác nhận sẽ đóng mọi yêu cầu đặt chỗ đang mở và giữ nguyên người đặt chỗ cùng lịch sử.',
+  completedSaleSubmit: 'Xác nhận đã bán',
+  completedSaleRecorded:
+    'Đã ghi nhận bán thành công; bất động sản chuyển sang Đã bán.',
+  completedSaleFailed: 'Chưa ghi được xác nhận bán. Vui lòng thử lại.',
+  completedSaleSelfCredit: 'Bạn không thể tự ghi nhận thương vụ của mình.',
+  completedSaleFutureDate: 'Ngày bán không được ở tương lai.',
+  completedSaleConflict:
+    'Ghi nhận bán đã thay đổi. Trạng thái mới nhất đang được hiển thị.',
+  completedSaleReservationConflict:
+    'Bất động sản đang có đặt chỗ hiệu lực của nhân viên khác. Hãy giải phóng đặt chỗ đó trước.',
+  completedSaleRentalActive:
+    'Bất động sản đang có hợp đồng thuê hiệu lực; hãy kết thúc hợp đồng thuê trước.',
+  completedSaleUnavailable:
+    'Bất động sản đang ở trạng thái {status}, không thể xác nhận bán.',
+  completedSaleArchived: 'Hồ sơ lưu trữ không thể xác nhận bán.',
+  completedSaleNoCloser:
+    'Không có nhân viên nào khác để ghi nhận thương vụ này.',
+  completedSaleLoadFailed: 'Không tải được trạng thái xác nhận bán.',
+  completedSaleRecordedBy: 'Người xác nhận',
+  completedSaleRecordedAt: 'Thời điểm ghi nhận',
+  completedSalePreviousStatus: 'Trạng thái trước khi bán',
+  navCompletedSales: 'Bán thành công',
+  completedSalesRanking: 'Xếp hạng bán thành công',
+  completedSalesNote:
+    'Chỉ các thương vụ bán đã được xác nhận độc lập mới được tính; đặt chỗ, trạng thái Đã bán thô và hồ sơ cũ chưa có người ghi nhận không tạo thành tích.',
+  completedSales: 'Thương vụ bán đã xác nhận',
+  completedSalesCount: 'Số thương vụ',
+  completedSalesEmpty:
+    'Không có thương vụ bán nào được xác nhận trong khoảng thời gian này.',
+  completedSalesTotal: 'Tổng cộng: {n}',
+  completedSalesUnknown:
+    'Bất động sản đã bán chưa có người được ghi nhận (tính đến {date}): {n} — hiển thị riêng, không gán cho nhân viên nào.',
+  completedSalesFailed: 'Không tải được xếp hạng bán thành công.',
+  rank: 'Hạng',
 };
 export type MessageKey = keyof typeof vi;
 
@@ -354,6 +569,19 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     searchHint:
       'Enter a contiguous address fragment; accents are optional. % and _ are literal characters, not wildcards.',
     queryTooLong: 'Search addresses must be at most 120 characters.',
+    sortLabel: 'Original entry date order',
+    sortDefault: 'Default',
+    sortOldest: 'Oldest first',
+    sortNewest: 'Newest first',
+    ageHint:
+      'Available and negotiating unarchived inventory only. Order uses the original inventory entry date and does not change on update, price edit or relisting. Records with an unknown entry date are listed last, never hidden.',
+    entryDate: 'Original inventory entry date',
+    entryDateUnknown: 'Unknown',
+    entryDateLegacy: 'From the legacy record',
+    entrySourceRecorded: 'Recorded when the record was created',
+    entryAge: 'days in inventory',
+    entryAgeOne: 'day in inventory',
+    entryAgeUnknown: 'Inventory age unknown',
     propertyCode: 'Property code',
     details: 'Property details',
     back: 'Back to results',
@@ -430,12 +658,19 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
       'That date range is not valid. The start date must not be after the end date, and the range may cover at most 366 days.',
     rangeTooLarge:
       "The range {from} – {to} exceeds the report's 1,000-row limit (the limit is active employees × days). Narrow the date range.",
+    rankingTooLarge:
+      "The range {from} – {to} exceeds the ranking's 1,000-row limit (the number of employees in scope). Narrow the date range.",
     todaySummary: "Today's summary",
     companyHistory: 'History by day',
     companyEmployee: 'Employee',
     companyActivityNote:
       'Owner-contact access is the number of properties whose owner contact each employee opened that Vietnam day: not attendance, work hours, connected calls or physical visits.',
     noEmployees: 'No active employees.',
+    rankingTitle: 'Owner-contact activity ranking',
+    rankingRank: 'Rank',
+    rankingInactive: 'No longer active',
+    rankingNote:
+      'The rank uses the number of properties whose owner contact each employee opened in the selected range, summed per Vietnam day: one property counts once per employee per day, and equal totals share a rank. Page views and distinct properties viewed never enter the rank and stay in the history-by-day table below. A contributor who is no longer active keeps the activity recorded in this range.',
     myActivity: 'My activity',
     myActivityLink: 'My activity',
     myActivityNote:
@@ -457,6 +692,19 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
       'This submission key already recorded different text. Refresh to see the recorded comment.',
     commentPostRemoved:
       'That comment was already removed. Your text is kept; posting again creates a new comment.',
+    editComment: 'Edit comment',
+    commentCurrent: 'Current saved comment',
+    editHint: 'Edit the shared comment text. Up to 2,000 characters.',
+    saveComment: 'Save changes',
+    savingComment: 'Saving…',
+    commentEdited: 'Comment updated.',
+    commentEditedMarker: 'edited',
+    commentUnchanged: 'No changes to save.',
+    editStale:
+      'This comment changed or was removed. Your unsent edit is kept; refresh to reconcile.',
+    editFailed: 'Changes not saved. Your unsent edit is kept.',
+    editDenied:
+      'Changes not saved. Access or the Property archived state changed; refresh to see the current state.',
     noComments: 'No comments yet.',
     moreComments: 'More comments',
     removeComment: 'Remove',
@@ -520,6 +768,128 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     employeeAccessActive: 'Active',
     employeeAccessInactive: 'Access disabled',
     employeeAccessUnlinked: 'Not linked to sign-in',
+    employeeAccessAccountDeleted: 'Sign-in account deleted',
+    // Employee deactivation (issue #66).
+    employeeActions: 'Actions',
+    employeeDeactivate: 'Deactivate access',
+    employeeDeactivateTarget: 'Employee',
+    employeeDeactivateNote:
+      'This disables internal membership first, then confirms the sign-in block for the exact account. Record, history and work stay attributed to the person.',
+    employeeDeactivateConfirm: 'Confirm deactivation',
+    employeeDeactivateReconcile: 'Reconcile sign-in block',
+    employeeDeactivateState: 'Action state',
+    employeeDeactivateOutstanding: 'Outstanding reservations',
+    employeeDeactivateNoOutstanding: 'No open requests or reservations.',
+    employeeDeactivateReservationEffective: 'Approved reservation',
+    employeeDeactivateReservationPending: 'Pending request',
+    employeeDeactivateReservationExpires: 'Expires',
+    employeeDeactivateReservationNote:
+      'Release or expiry stays with the existing claimant, reviewer and expiry rules; the system never transfers or rewrites the recorded claimant.',
+    employeeDeactivatePendingLabel: 'Sign-in block confirmation pending',
+    employeeDeactivateReconciliationLabel:
+      'Sign-in block reconciliation required',
+    employeeDeactivateConfirmedLabel: 'Sign-in block confirmed',
+    employeeDeactivateBanNote:
+      'The provider confirms a finite sign-in ban (about 100 years); it is renewed only by an explicit reconciliation and is not an infinite state.',
+    employeeDeactivateSuccess:
+      'Access disabled and the sign-in block was confirmed.',
+    employeeDeactivatePending:
+      'Access is disabled; the sign-in block is not confirmed yet.',
+    employeeDeactivateFailed:
+      'The action did not complete. Access stays disabled and the recorded state is unchanged.',
+    employeeDeactivateLastAdmin: 'The last active admin cannot be deactivated.',
+    employeeDeactivateNotDeactivable:
+      'This employee can no longer be deactivated (no linked sign-in or already inactive).',
+    employeeDeactivateConflict:
+      'This action key was already used for a different action. Reopen this entry.',
+    employeeDeactivateStale:
+      'The action state changed. Reload before retrying.',
+    employeeDeactivateProviderUnavailable:
+      'The server has no sign-in confirmation configuration. Access is disabled; retry after configuration is restored.',
+    employeeDeactivateLoadFailed: 'Deactivation state did not load.',
+    // Permanent sign-in account deletion (issue #67).
+    employeeDelete: 'Delete sign-in account',
+    employeeDeleteReconcile: 'Reconcile account deletion',
+    employeeDeleteTarget: 'Retained employee',
+    employeeDeleteNote:
+      'Permanently removes this exact employee’s sign-in account. The employee record, name, identifier and all recorded work are retained.',
+    employeeDeleteConfirmLabel: 'Type the email to confirm',
+    employeeDeleteConfirmHint:
+      'Type exactly “{email}” to enable the permanent delete button.',
+    employeeDeleteConfirmRequired: 'Type this employee’s email.',
+    employeeDeleteConfirmMismatch:
+      'The typed email does not match this employee.',
+    employeeDeleteConfirm: 'Permanently delete the sign-in account',
+    employeeDeleteState: 'Action state',
+    employeeDeleteStorageNote:
+      'Uploaded files are technically owned by the sign-in account. The system preflights them and only reassigns ownership to an active admin; file content, file id, path and uploader attribution are unchanged.',
+    employeeDeleteStorageEvidence:
+      'Files owned: {owned} · ownership reassigned: {reassigned}',
+    employeeDeletePendingLabel: 'Account deletion confirmation pending',
+    employeeDeleteReconciliationLabel:
+      'Account deletion reconciliation required',
+    employeeDeleteStorageBlockedLabel:
+      'Not deleted: files are still owned by the account',
+    employeeDeleteConfirmedLabel: 'Sign-in account deletion confirmed',
+    employeeDeleteSuccess:
+      'The sign-in account was confirmed absent. The employee record and their work are retained.',
+    employeeDeletePending:
+      'Access is disabled; the sign-in account is not deleted yet.',
+    employeeDeleteFailed:
+      'The action did not complete. Access stays disabled and the employee record and work are intact; retry.',
+    employeeDeleteStorageBlocked:
+      'Deletion could not confirm: the account still owns files and ownership was not safely reassigned. No file was deleted.',
+    employeeDeleteLastAdmin:
+      'The last active admin’s sign-in account cannot be deleted.',
+    employeeDeleteNotDeletable:
+      'This employee’s sign-in account can no longer be deleted (no linked sign-in or already deleted).',
+    employeeDeleteLifecycleConflict:
+      'Another lifecycle action is open for this employee. Finish or reconcile it first.',
+    employeeDeleteKeyConflict:
+      'This action key was already used for a different action. Reopen this entry.',
+    employeeDeleteStale: 'The action state changed. Reload before retrying.',
+    employeeDeleteProviderUnavailable:
+      'The server has no account-deletion configuration. Access is disabled; retry after configuration is restored.',
+    employeeDeleteLoadFailed: 'Deletion state did not load.',
+    // People → Vendors (#73): the company directory and its one bounded create.
+    vendorsLink: 'Vendors',
+    vendorDirectory: 'Vendor directory',
+    vendorDirectoryNote:
+      'Recorded companies, distinct from owners, brokers and employees. Every active employee can read the directory; staff, managers and admins record vendors.',
+    vendorDirectoryEmpty: 'No vendors are recorded.',
+    vendorDirectoryEmptyQuery: 'No vendors match this search.',
+    vendorDirectoryFailed: 'The vendor directory could not be loaded.',
+    vendorPageInfo: 'This page: {n} vendors',
+    vendorSearch: 'Search vendors',
+    vendorSearchHint:
+      'Enter a contiguous name fragment; accents are optional and % and _ are ordinary characters. At most 120 characters.',
+    vendorCreate: 'Record a vendor',
+    vendorCreateNote:
+      'One company with one contact block, separate from owners, brokers and employees.',
+    vendorCompanyName: 'Company name',
+    vendorCompanyNameHint: 'The company name as recorded, 1 to 200 characters.',
+    vendorContactName: 'Contact name',
+    vendorPhones: 'Phone numbers',
+    vendorPhonesHint:
+      'One number per line, up to five. Numbers are preserved as typed.',
+    vendorSourceAddress: 'Address / source text',
+    vendorOptionalHint:
+      'A blank field is unknown, not an empty value. Nothing is filled in automatically.',
+    vendorCreateSubmit: 'Record vendor',
+    vendorCreateInvalid: 'Check the company name, phone numbers and email.',
+    vendorCreateConflict:
+      'This submission key was already used for different vendor details. Your draft is kept; submitting again records a new vendor.',
+    vendorCreateFailed:
+      'The vendor was not recorded. Retry keeps your draft; a duplicate submission does not create another company.',
+    vendorMaintainerOnly:
+      'You can read this directory. Only staff, managers and admins may record vendors.',
+    vendorDetailTitle: 'Vendor details',
+    vendorDetailFailed: 'Vendor details could not be loaded.',
+    vendorNotFound: 'The vendor was not found or you cannot read it.',
+    vendorBackToDirectory: 'Back to the vendor directory',
+    vendorRecordedAt: 'Recorded',
+    saving: 'Saving…',
+    notes: 'Notes',
     signInHelp:
       'Access is limited to invited staff whose account has been activated.',
     north: 'North',
@@ -612,6 +982,65 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     reservationLoadFailed: 'Reservation state did not load.',
     reservationNote:
       'Only an approved, unexpired reservation holds the property.',
+    reservationRelease: 'Release reservation',
+    reservationReleaseReason: 'Release reason',
+    reservationReleaseReasonHint: 'Between 10 and 2,000 characters.',
+    reservationReleaseReasonRequired:
+      'Enter a reason between 10 and 2,000 characters.',
+    reservationReleaseSubmit: 'Release',
+    reservationReleased:
+      'Reservation released; the claimant and recorded events are retained.',
+    reservationReleaseFailed: 'The reservation was not released. Try again.',
+    reservationReleaseClosed:
+      'This reservation can no longer be released. The latest state is shown.',
+    reservationReleaseNote:
+      'Release never erases the claimant, reason or recorded events.',
+    completedSaleTitle: 'Confirm completed sale',
+    completedSaleNote:
+      'Only a manager or admin other than the credited employee can confirm. A property has at most one effective completed sale.',
+    completedSaleCreditedCloser: 'Credited closer',
+    completedSaleSelectCloser: 'Select an employee',
+    completedSaleSuggestedCloser:
+      'Effective reservation claimant: {name} — you must select a closer explicitly.',
+    completedSaleDate: 'Actual completion date (Vietnam)',
+    completedSaleReference: 'Contract/reference',
+    completedSaleReferenceHint: 'Between 1 and 200 characters.',
+    completedSaleReferenceRequired:
+      'Select an employee and enter a valid date and reference.',
+    completedSaleClosesReservations:
+      'Confirming closes every open reservation and retains its claimant and events.',
+    completedSaleSubmit: 'Confirm completed sale',
+    completedSaleRecorded:
+      'Completed sale recorded; the property is marked sold.',
+    completedSaleFailed: 'The completion was not recorded. Try again.',
+    completedSaleSelfCredit: 'You cannot credit your own sale.',
+    completedSaleFutureDate: 'The completion date cannot be in the future.',
+    completedSaleConflict:
+      'The completion state changed. The latest state is shown.',
+    completedSaleReservationConflict:
+      'Another employee holds an effective reservation. Release it first.',
+    completedSaleRentalActive:
+      'An active rental commitment blocks this sale; close the rental first.',
+    completedSaleUnavailable:
+      'The property is {status}; a completion can only be recorded from available or negotiating.',
+    completedSaleArchived: 'An archived record cannot be completed.',
+    completedSaleNoCloser: 'No other employee is available to credit.',
+    completedSaleLoadFailed: 'The completion state did not load.',
+    completedSaleRecordedBy: 'Confirmed by',
+    completedSaleRecordedAt: 'Recorded at',
+    completedSalePreviousStatus: 'Pre-sale status',
+    navCompletedSales: 'Completed sales',
+    completedSalesRanking: 'Completed sales ranking',
+    completedSalesNote:
+      'Only independently confirmed completions count; reservations, raw sold statuses and unrecorded legacy sales earn no credit.',
+    completedSales: 'Confirmed completed sales',
+    completedSalesCount: 'Completed sales',
+    completedSalesEmpty: 'No completed sale was confirmed in this period.',
+    completedSalesTotal: 'Total: {n}',
+    completedSalesUnknown:
+      'Sold properties with no recorded closer (as of {date}): {n} — shown separately, never assigned to an employee.',
+    completedSalesFailed: 'The completed-sales ranking did not load.',
+    rank: 'Rank',
   },
 };
 export function label(

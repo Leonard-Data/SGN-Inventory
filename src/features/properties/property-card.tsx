@@ -3,6 +3,7 @@ import { label } from '@/i18n/messages';
 import type { PropertySummary } from './types';
 import { CoverImage } from '@/features/property-files/cover-image';
 import { Plate } from './plate';
+import { formatInteger, vietnamDate } from './format';
 
 /* Tone helper: maps an inventory status to a badge tone. */
 function statusTone(status: string): string {
@@ -23,12 +24,17 @@ export function PropertyCard({
   locale,
   resultLocation,
   onDenied,
+  showEntry = false,
 }: {
   record: PropertySummary;
   locale: Locale;
   resultLocation: string;
   onDenied: (status: number) => void;
+  showEntry?: boolean;
 }) {
+  // The chronological views carry the recorded original entry date and the database's Vietnam
+  // age. A property the database reports with no date is an explicit unknown, not a missing row.
+  const entryDate = record.entryOn ? vietnamDate(record.entryOn) : null;
   return (
     <article className="property-card" key={record.id}>
       {record.coverFileId ? (
@@ -77,6 +83,33 @@ export function PropertyCard({
               : label(locale, null)}
           </a>
         </h2>
+        {showEntry ? (
+          <p className="card-entry">
+            {label(locale, 'entryDate')}:{' '}
+            {entryDate ? (
+              <>
+                <time dateTime={record.entryOn ?? undefined}>{entryDate}</time>
+                {record.entrySource === 'legacy'
+                  ? ` (${label(locale, 'entryDateLegacy')})`
+                  : ''}
+                {typeof record.ageDays === 'number'
+                  ? ` · ${formatInteger(record.ageDays, locale)} ${label(
+                      locale,
+                      record.ageDays === 1 ? 'entryAgeOne' : 'entryAge',
+                    )}`
+                  : ''}
+              </>
+            ) : (
+              <>
+                <span className="badge" data-tone="muted">
+                  {label(locale, 'entryDateUnknown')}
+                </span>
+                {' · '}
+                {label(locale, 'entryAgeUnknown')}
+              </>
+            )}
+          </p>
+        ) : null}
         <div className="card-foot">
           <span className="badge" data-tone={statusTone(record.status)}>
             {label(locale, record.status)}

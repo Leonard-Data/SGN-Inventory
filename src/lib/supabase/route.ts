@@ -171,14 +171,7 @@ export async function objectBody(
     throw new ApiError(400, 'invalid-input');
   return body as Record<string, unknown>;
 }
-export function uuid(value: unknown): value is string {
-  return (
-    typeof value === 'string' &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-      value,
-    )
-  );
-}
+export { isUuid as uuid } from './query';
 export function credentials(body: Record<string, unknown>): {
   email: string;
   password: string;

@@ -51,12 +51,34 @@ export type Database = {
         Update: never;
         Relationships: [];
       };
+      property_comment_edits: {
+        Row: {
+          author_id: string;
+          author_name: string;
+          body: string;
+          comment_id: string;
+          edited_actor_name: string;
+          edited_at: string;
+          edited_by: string;
+          edit_key: string;
+          id: string;
+          previous_body: string;
+          previous_revision: string;
+          property_id: string;
+          revision: string;
+          version: number;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
       property_comments: {
         Row: {
           author_id: string;
           author_name: string;
           body: string | null;
           created_at: string;
+          edited_at: string | null;
           id: string;
           idempotency_key: string;
           property_id: string;
@@ -336,6 +358,32 @@ export type Database = {
         };
         Relationships: [];
       };
+      vendors: {
+        Row: {
+          contact_name: string | null;
+          created_at: string;
+          created_by: string;
+          display_name: string;
+          email: string | null;
+          id: string;
+          notes: string | null;
+          phones: string[] | null;
+          search_text: string;
+          source_address: string | null;
+          submission_key: string;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [
+          {
+            foreignKeyName: 'vendors_created_by_fkey';
+            columns: ['created_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       document_categories: {
         Row: {
           builtin: string | null;
@@ -377,6 +425,7 @@ export type Database = {
       };
       employees: {
         Row: {
+          account_deleted_at: string | null;
           auth_user_id: string | null;
           created_at: string;
           display_name: string;
@@ -388,6 +437,7 @@ export type Database = {
           role: string;
         };
         Insert: {
+          account_deleted_at?: string | null;
           auth_user_id?: string | null;
           created_at?: string;
           display_name: string;
@@ -399,6 +449,7 @@ export type Database = {
           role?: string;
         };
         Update: {
+          account_deleted_at?: string | null;
           auth_user_id?: string | null;
           created_at?: string;
           display_name?: string;
@@ -410,6 +461,85 @@ export type Database = {
           role?: string;
         };
         Relationships: [];
+      };
+      employee_admin_operations: {
+        Row: {
+          actor_id: string;
+          completed_at: string | null;
+          created_at: string;
+          employee_id: string;
+          id: string;
+          idempotency_key: string;
+          kind: string;
+          membership_disabled_at: string;
+          provider_attempted_at: string | null;
+          provider_ban_until: string | null;
+          provider_detail: string | null;
+          provider_outcome: string | null;
+          provider_reference: string | null;
+          provider_user_id: string | null;
+          revision: number;
+          state: string;
+          storage_owned_count: number | null;
+          storage_reassigned_count: number | null;
+          target_auth_user_id: string | null;
+          updated_at: string;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [
+          {
+            foreignKeyName: 'employee_admin_operations_actor_id_fkey';
+            columns: ['actor_id'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'employee_admin_operations_employee_id_fkey';
+            columns: ['employee_id'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      employee_admin_events: {
+        Row: {
+          action: string;
+          actor_id: string;
+          created_at: string;
+          detail: string | null;
+          employee_id: string;
+          id: string;
+          idempotency_key: string | null;
+          operation_id: string;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [
+          {
+            foreignKeyName: 'employee_admin_events_actor_id_fkey';
+            columns: ['actor_id'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'employee_admin_events_employee_id_fkey';
+            columns: ['employee_id'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'employee_admin_events_operation_id_fkey';
+            columns: ['operation_id'];
+            isOneToOne: false;
+            referencedRelation: 'employee_admin_operations';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       lock_events: {
         Row: {
@@ -480,6 +610,8 @@ export type Database = {
           created_by: string | null;
           depth_m: number | null;
           direction: string | null;
+          entry_on: string | null;
+          entry_source: string;
           floor_area_m2: number | null;
           floors: number | null;
           frontage_m: number | null;
@@ -515,6 +647,8 @@ export type Database = {
           created_by?: string | null;
           depth_m?: number | null;
           direction?: string | null;
+          entry_on?: string | null;
+          entry_source?: string;
           floor_area_m2?: number | null;
           floors?: number | null;
           frontage_m?: number | null;
@@ -550,6 +684,8 @@ export type Database = {
           created_by?: string | null;
           depth_m?: number | null;
           direction?: string | null;
+          entry_on?: string | null;
+          entry_source?: string;
           floor_area_m2?: number | null;
           floors?: number | null;
           frontage_m?: number | null;
@@ -1246,8 +1382,120 @@ export type Database = {
           },
         ];
       };
+      sale_completions: {
+        Row: {
+          completed_on: string;
+          confirmed_at: string;
+          confirmed_by: string;
+          credited_employee_id: string;
+          id: string;
+          idempotency_key: string;
+          previous_status: string;
+          property_id: string;
+          reference: string;
+          reversal_reason: string | null;
+          reversed_at: string | null;
+          reversed_by: string | null;
+          version: number;
+        };
+        Insert: {
+          completed_on: string;
+          confirmed_at?: string;
+          confirmed_by: string;
+          credited_employee_id: string;
+          id?: string;
+          idempotency_key: string;
+          previous_status: string;
+          property_id: string;
+          reference: string;
+          reversal_reason?: string | null;
+          reversed_at?: string | null;
+          reversed_by?: string | null;
+          version?: number;
+        };
+        Update: {
+          completed_on?: string;
+          confirmed_at?: string;
+          confirmed_by?: string;
+          credited_employee_id?: string;
+          id?: string;
+          idempotency_key?: string;
+          previous_status?: string;
+          property_id?: string;
+          reference?: string;
+          reversal_reason?: string | null;
+          reversed_at?: string | null;
+          reversed_by?: string | null;
+          version?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'sale_completions_confirmed_by_fkey';
+            columns: ['confirmed_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'sale_completions_confirmed_by_fkey';
+            columns: ['confirmed_by'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+          {
+            foreignKeyName: 'sale_completions_credited_employee_id_fkey';
+            columns: ['credited_employee_id'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'sale_completions_credited_employee_id_fkey';
+            columns: ['credited_employee_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+          {
+            foreignKeyName: 'sale_completions_property_id_fkey';
+            columns: ['property_id'];
+            isOneToOne: false;
+            referencedRelation: 'properties';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'sale_completions_reversed_by_fkey';
+            columns: ['reversed_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'sale_completions_reversed_by_fkey';
+            columns: ['reversed_by'];
+            isOneToOne: false;
+            referencedRelation: 'v_admin_locks_by_employee';
+            referencedColumns: ['employee_id'];
+          },
+        ];
+      };
     };
     Views: {
+      property_price_history: {
+        Row: {
+          actor_id: string | null;
+          actor_name: string | null;
+          after_value: string | null;
+          before_value: string | null;
+          explanation: string | null;
+          id: string | null;
+          occurred_at: string | null;
+          property_id: string | null;
+          series: string | null;
+        };
+        Relationships: [];
+      };
       v_admin_inventory_by_area: {
         Row: {
           available_count: number | null;
@@ -1538,6 +1786,49 @@ export type Database = {
       };
     };
     Functions: {
+      begin_employee_account_deletion: {
+        Args: { p_employee_id: string; p_key: string };
+        Returns: Json;
+      };
+      begin_employee_deactivation: {
+        Args: { p_employee_id: string; p_key: string };
+        Returns: Json;
+      };
+      employee_storage_preflight: {
+        Args: { p_auth_user_id: string };
+        Returns: Json;
+      };
+      reassign_employee_storage_ownership: {
+        Args: { p_from_auth_user_id: string; p_to_auth_user_id: string };
+        Returns: Json;
+      };
+      record_employee_account_deletion_result: {
+        Args: {
+          p_operation_id: string;
+          p_revision: number;
+          p_actor_id: string;
+          p_auth_user_id: string;
+          p_outcome: string;
+          p_provider_reference?: string | null;
+          p_storage_owned?: number | null;
+          p_storage_reassigned?: number | null;
+          p_detail?: string | null;
+        };
+        Returns: Json;
+      };
+      record_employee_deactivation_result: {
+        Args: {
+          p_operation_id: string;
+          p_revision: number;
+          p_actor_id: string;
+          p_auth_user_id: string;
+          p_outcome: string;
+          p_provider_reference?: string | null;
+          p_detail?: string | null;
+          p_ban_until?: string | null;
+        };
+        Returns: Json;
+      };
       create_property: {
         Args: { p_mode: string; p_facts: Json; p_address: Json };
         Returns: string;
@@ -1550,6 +1841,7 @@ export type Database = {
           p_expected_revision: string;
           p_changes: Json;
           p_property_revision: string;
+          p_explanation?: string | null;
         };
         Returns: string;
       };
@@ -1628,6 +1920,18 @@ export type Database = {
         };
         Returns: string;
       };
+      create_vendor: {
+        Args: {
+          p_contact_name?: string | null;
+          p_display_name: string;
+          p_email?: string | null;
+          p_key: string;
+          p_notes?: string | null;
+          p_phones?: string[] | null;
+          p_source_address?: string | null;
+        };
+        Returns: Json;
+      };
       decide_property_lock: {
         Args: {
           p_approve: boolean;
@@ -1640,6 +1944,16 @@ export type Database = {
       decide_rental_payment: {
         Args: { p_action: string; p_payment_id: string; p_reason: string };
         Returns: undefined;
+      };
+      employee_owner_contact_ranking: {
+        Args: { p_from: string; p_to: string };
+        Returns: {
+          employee_active: boolean;
+          employee_id: string;
+          employee_name: string;
+          owner_contact_properties: number;
+          rank_position: number;
+        }[];
       };
       list_document_categories: {
         Args: never;
@@ -1663,10 +1977,30 @@ export type Database = {
           author_name: string;
           body: string | null;
           created_at: string;
+          edited_at: string | null;
           id: string;
           property_id: string;
           removed_at: string | null;
           revision: string;
+        }[];
+      };
+      list_vendors: {
+        Args: {
+          p_before_created_at?: string;
+          p_before_id?: string;
+          p_limit?: number;
+          p_query?: string;
+        };
+        Returns: {
+          contact_name: string | null;
+          created_at: string;
+          created_by: string;
+          display_name: string;
+          email: string | null;
+          id: string;
+          notes: string | null;
+          phones: string[] | null;
+          source_address: string | null;
         }[];
       };
       company_employee_daily_activity: {
@@ -1697,6 +2031,16 @@ export type Database = {
           owner_contact_properties: number;
           page_view_events: number;
         }[];
+      };
+      edit_property_comment: {
+        Args: {
+          p_body: string;
+          p_comment_id: string;
+          p_key: string;
+          p_property_id: string;
+          p_revision: string;
+        };
+        Returns: Json;
       };
       post_property_comment: {
         Args: { p_body: string; p_key: string; p_property_id: string };
@@ -1764,6 +2108,33 @@ export type Database = {
         Args: { p_key: string; p_property_id: string };
         Returns: Json;
       };
+      list_inventory_by_age: {
+        Args: {
+          p_after_id?: string;
+          p_after_on?: string;
+          p_after_unknown?: boolean;
+          p_direction: string;
+          p_limit?: number;
+          p_query?: string;
+        };
+        Returns: {
+          access_type: string | null;
+          age_days: number | null;
+          cover_file_id: string | null;
+          depth_m: string | null;
+          direction: string | null;
+          entry_on: string | null;
+          entry_source: string;
+          floor_area_m2: string | null;
+          floors: number | null;
+          frontage_m: string | null;
+          id: string;
+          land_area_m2: string | null;
+          listing_mode: string;
+          property_code: string;
+          status: string;
+        }[];
+      };
       search_properties: {
         Args: {
           p_after?: string;
@@ -1786,6 +2157,8 @@ export type Database = {
           created_by: string | null;
           depth_m: number | null;
           direction: string | null;
+          entry_on: string | null;
+          entry_source: string;
           floor_area_m2: number | null;
           floors: number | null;
           frontage_m: number | null;
@@ -1827,6 +2200,20 @@ export type Database = {
       set_property_cover: {
         Args: { p_file_id?: string; p_property_id: string };
         Returns: undefined;
+      };
+      complete_property_sale: {
+        Args: {
+          p_completed_on: string;
+          p_credited_employee_id: string;
+          p_key: string;
+          p_property_id: string;
+          p_reference: string;
+        };
+        Returns: string;
+      };
+      completed_sale_ranking: {
+        Args: { p_from: string; p_to: string };
+        Returns: Json;
       };
     };
     Enums: {

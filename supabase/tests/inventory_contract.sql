@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
-select plan(19);
+select plan(27);
 select ok(not has_table_privilege('anon','public.properties','SELECT'),'anonymous inventory select revoked');
 select ok(not has_table_privilege('authenticated','public.property_locks','UPDATE'),'direct lock mutation revoked');
 select ok(not has_table_privilege('authenticated','public.activity_events','INSERT'),'direct activity insertion revoked');
@@ -22,5 +22,13 @@ select ok(not has_table_privilege('anon','public.property_comments','SELECT'),'a
 select ok(not has_table_privilege('authenticated','public.property_comments','INSERT'),'direct comment insertion revoked');
 select ok(not has_table_privilege('authenticated','public.property_comments','UPDATE') and not has_table_privilege('authenticated','public.property_comments','DELETE'),'direct comment mutation revoked');
 select ok(exists(select 1 from pg_indexes where schemaname='public' and indexname='property_comments_author_id_idempotency_key_key'),'one comment identity per employee submission key exists');
+select ok((select reloptions=array['security_invoker=true'] from pg_class where relname='property_price_history'),'asking-price history view is security invoker');
+select ok(has_table_privilege('authenticated','public.property_price_history','SELECT'),'asking-price history select granted to authenticated');
+select ok(not has_table_privilege('anon','public.property_price_history','SELECT'),'anonymous asking-price history select revoked');
+select ok(not has_table_privilege('authenticated','public.property_history','UPDATE'),'direct business-history mutation revoked');
+select ok(not has_table_privilege('anon','public.property_comment_edits','SELECT'),'anonymous prior-version select revoked');
+select ok(not has_table_privilege('authenticated','public.property_comment_edits','INSERT') and not has_table_privilege('authenticated','public.property_comment_edits','UPDATE') and not has_table_privilege('authenticated','public.property_comment_edits','DELETE'),'direct retained-edit mutation revoked');
+select ok(exists(select 1 from pg_indexes where schemaname='public' and indexname='property_comment_edits_comment_id_version_key'),'one retained row per comment edit version exists');
+select ok(exists(select 1 from information_schema.columns where table_schema='public' and table_name='property_comments' and column_name='edited_at'),'comment edited marker column exists');
 select * from finish();
 rollback;

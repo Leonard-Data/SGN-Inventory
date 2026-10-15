@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type ReactNode,
 } from 'react';
 import { label, messages, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
@@ -21,7 +22,9 @@ import {
 import type { PropertyDetail } from './detail-data';
 import type { OwnerContactDisclosure } from './types';
 import { Maintenance } from '@/features/property-maintenance/workspace';
+import { maintenanceText } from '@/features/property-maintenance/messages';
 import { History } from '@/features/property-maintenance/history';
+import { PriceHistory } from '@/features/property-maintenance/price-history';
 import {
   CorrectionQueue,
   CorrectionReport,
@@ -34,11 +37,66 @@ import {
 } from './format';
 import { Discussion } from '@/features/property-comments/discussion';
 import { Reservation } from './reservation';
+import { SaleCompletion } from '@/features/sales/completion';
 import { detailMessages } from './messages';
+import { contactRows } from './contact-rows';
 // The record screen groups its content the way the design package does: the record's own
 // facts, its documents and its discussion.
 const RECORD_TABS = ['overview', 'docs', 'comments'] as const;
 type RecordTab = (typeof RECORD_TABS)[number];
+function DetailActionDialog({
+  title,
+  headTitle = false,
+  closeLabel,
+  children,
+  open,
+  onClose,
+  size = 'wide',
+}: {
+  title: string;
+  headTitle?: boolean;
+  closeLabel: string;
+  children: ReactNode;
+  open: boolean;
+  onClose: () => void;
+  size?: 'default' | 'wide';
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (open && !dialog.open) dialog.showModal();
+    if (!open && dialog.open) dialog.close();
+  }, [open]);
+
+  return (
+    <dialog
+      ref={dialogRef}
+      className="sgn-dialog"
+      data-size={size}
+      onClose={onClose}
+      onCancel={onClose}
+      aria-label={title}
+    >
+      <div className="sgn-dialog-panel">
+        <div className="sgn-dialog-head">
+          {headTitle ? <h2>{title}</h2> : null}
+          <button
+            className="sgn-dialog-close"
+            type="button"
+            onClick={onClose}
+            aria-label={closeLabel}
+          >
+            ×
+          </button>
+        </div>
+        <div className="sgn-dialog-body">{open ? children : null}</div>
+      </div>
+    </dialog>
+  );
+}
+
 const directionKeys: Record<string, string> = {
   N: 'north',
   NE: 'northeast',
@@ -104,6 +162,9 @@ export function Detail({
   const locale = initialLocale;
   const text = messages[locale];
   const [tab, setTab] = useState<RecordTab>('overview');
+  const [actionDialog, setActionDialog] = useState<
+    'sale' | 'reservation' | 'edit' | 'correction' | 'requests' | null
+  >(null);
   // Roving tabindex: the arrow keys move both focus and selection across the three tabs.
   function onTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
     const index = RECORD_TABS.indexOf(tab);
@@ -261,7 +322,14 @@ export function Detail({
       : (typeof value === 'string'
           ? formatDecimal(value, locale)
           : numberFormat.format(value)) + unit;
+  // One projection for every contact surface: the recorded owner phone is withheld until the
+  // deliberate Show owner contact disclosure, on the overview panel and the sticky card alike.
+  const contacts = useMemo(
+    () => contactRows(data?.contacts ?? []),
+    [data?.contacts],
+  );
   const dt = detailMessages[locale];
+  const mt = maintenanceText(locale);
   return (
     <div lang={locale}>
       <p>
@@ -285,6 +353,51 @@ export function Detail({
             </div>
           ) : null}
         </div>
+        {property && employee ? (
+          <div
+            className="detail-actions"
+            role="group"
+            aria-label={dt.recordActions}
+          >
+            {employee.role === 'manager' || employee.role === 'admin' ? (
+              <button
+                className="btn btn-primary"
+                type="button"
+                onClick={() => setActionDialog('sale')}
+              >
+                {text.completedSaleTitle}
+              </button>
+            ) : null}
+            <button
+              className="btn btn-sm btn-ghost"
+              type="button"
+              onClick={() => setActionDialog('reservation')}
+            >
+              {text.reservations}
+            </button>
+            <button
+              className="btn btn-sm btn-ghost"
+              type="button"
+              onClick={() => setActionDialog('edit')}
+            >
+              {mt.editFacts}
+            </button>
+            <button
+              className="btn btn-sm btn-ghost"
+              type="button"
+              onClick={() => setActionDialog('correction')}
+            >
+              {text.navCorrections}
+            </button>
+            <button
+              className="btn btn-sm btn-ghost"
+              type="button"
+              onClick={() => setActionDialog('requests')}
+            >
+              {dt.myRequests}
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {busy && !property ? (
@@ -606,6 +719,15 @@ export function Detail({
                     </div>
                   </div>
 
+                  {/* recorded asking-price series */}
+                  <PriceHistory
+                    key={
+                      'prices' + property.id + property.revision + refreshTick
+                    }
+                    propertyId={property.id}
+                    locale={locale}
+                  />
+
                   {/* addresses */}
                   <div className="panel" data-od-id="panel-addresses">
                     <div className="panel-head">
@@ -654,34 +776,31 @@ export function Detail({
                       <h2>{dt.contacts}</h2>
                     </div>
                     <div className="panel-body">
-                      {data.contacts.length ? (
-                        data.contacts.map((link) => (
-                          <div
-                            className="record"
-                            key={link.contacts?.id ?? link.contact_id}
-                          >
+                      {contacts.length ? (
+                        contacts.map((row) => (
+                          <div className="record" key={row.id}>
                             <div className="record-head">
                               <span className="record-title" translate="no">
-                                {link.contacts?.display_name ?? text.unknown}
+                                {row.name ?? text.unknown}
                               </span>
                               <span
                                 className="badge"
                                 data-tone={
-                                  link.relation === 'owner'
+                                  row.relation === 'owner'
                                     ? 'accent'
                                     : 'neutral'
                                 }
                               >
-                                {link.relation === 'owner'
+                                {row.relation === 'owner'
                                   ? dt.owner
-                                  : link.relation === 'broker' ||
-                                      link.relation === 'agent'
+                                  : row.relation === 'broker' ||
+                                      row.relation === 'agent'
                                     ? dt.agent
-                                    : link.relation === 'representative'
+                                    : row.relation === 'representative'
                                       ? dt.representative
-                                      : label(locale, link.relation)}
+                                      : label(locale, row.relation)}
                               </span>
-                              {link.is_primary ? (
+                              {row.isPrimary ? (
                                 <span
                                   className="badge badge-plain"
                                   data-tone="neutral"
@@ -690,11 +809,13 @@ export function Detail({
                                 </span>
                               ) : null}
                             </div>
-                            <p className="record-body num">
-                              {link.contacts?.raw_phone_text ?? text.unknown}
-                            </p>
+                            {row.phone.show ? (
+                              <p className="record-body num" translate="no">
+                                {row.phone.text ?? text.unknown}
+                              </p>
+                            ) : null}
                             <p className="record-meta">
-                              {link.is_primary
+                              {row.isPrimary
                                 ? dt.contactConsent
                                 : dt.contactSource}
                             </p>
@@ -783,43 +904,6 @@ export function Detail({
                       </div>
                     </div>
                   </div>
-
-                  {employee ? (
-                    <>
-                      <Reservation
-                        key={property.id}
-                        propertyId={property.id}
-                        locale={locale}
-                        status={property.status}
-                        archived={!!property.archived_at}
-                        employeeId={employee.id}
-                        onDenied={denyFiles}
-                      />
-                      <Maintenance
-                        key={'maintenance' + property.id}
-                        detail={data}
-                        employee={employee}
-                        locale={locale}
-                        onSaved={changed}
-                        onDenied={denyFiles}
-                      />
-                      <CorrectionReport
-                        key={'correction' + property.id}
-                        detail={data}
-                        locale={locale}
-                        role={employee.role}
-                        onDenied={denyFiles}
-                        onSaved={changed}
-                      />
-                      <CorrectionQueue
-                        key={'requests' + property.id + refreshTick}
-                        propertyId={property.id}
-                        locale={locale}
-                        onDenied={denyFiles}
-                        onChanged={() => void changed()}
-                      />
-                    </>
-                  ) : null}
                 </section>
 
                 <section
@@ -872,39 +956,38 @@ export function Detail({
                     <h2 id="detail-contacts">{dt.contacts}</h2>
                   </div>
                   <div className="panel-body">
-                    {data.contacts.length ? (
+                    {contacts.length ? (
                       <div className="contact-card-list">
-                        {data.contacts.map((link) => (
-                          <article
-                            className="contact-card-item"
-                            key={link.contact_id}
-                          >
+                        {contacts.map((row) => (
+                          <article className="contact-card-item" key={row.id}>
                             <div className="record-head">
                               <strong className="record-title" translate="no">
-                                {link.contacts?.display_name ?? text.unknown}
+                                {row.name ?? text.unknown}
                               </strong>
                               <span
                                 className="badge badge-plain"
                                 data-tone={
-                                  link.relation === 'owner'
+                                  row.relation === 'owner'
                                     ? 'accent'
                                     : 'neutral'
                                 }
                               >
-                                {link.relation === 'owner'
+                                {row.relation === 'owner'
                                   ? dt.owner
-                                  : link.relation === 'broker' ||
-                                      link.relation === 'agent'
+                                  : row.relation === 'broker' ||
+                                      row.relation === 'agent'
                                     ? dt.agent
-                                    : link.relation === 'representative'
+                                    : row.relation === 'representative'
                                       ? dt.representative
-                                      : label(locale, link.relation)}
+                                      : label(locale, row.relation)}
                               </span>
                             </div>
-                            <p className="record-body num" translate="no">
-                              {link.contacts?.raw_phone_text ?? text.unknown}
-                            </p>
-                            {link.is_primary ? (
+                            {row.phone.show ? (
+                              <p className="record-body num" translate="no">
+                                {row.phone.text ?? text.unknown}
+                              </p>
+                            ) : null}
+                            {row.isPrimary ? (
                               <p className="record-meta">{dt.primary}</p>
                             ) : null}
                           </article>
@@ -1021,6 +1104,90 @@ export function Detail({
                 </section>
               </aside>
             </div>
+
+            {employee ? (
+              <>
+                {employee.role === 'manager' || employee.role === 'admin' ? (
+                  <DetailActionDialog
+                    open={actionDialog === 'sale'}
+                    onClose={() => setActionDialog(null)}
+                    title={text.completedSaleTitle}
+                    closeLabel={text.close}
+                  >
+                    <SaleCompletion
+                      key={'sale' + property.id}
+                      propertyId={property.id}
+                      locale={locale}
+                      employeeId={employee.id}
+                      onDenied={denyFiles}
+                      onSaved={changed}
+                    />
+                  </DetailActionDialog>
+                ) : null}
+                <DetailActionDialog
+                  open={actionDialog === 'reservation'}
+                  onClose={() => setActionDialog(null)}
+                  title={text.reservations}
+                  size="default"
+                  closeLabel={text.close}
+                >
+                  <Reservation
+                    key={'reservation' + property.id + refreshTick}
+                    propertyId={property.id}
+                    locale={locale}
+                    status={property.status}
+                    archived={!!property.archived_at}
+                    employeeId={employee.id}
+                    onDenied={denyFiles}
+                  />
+                </DetailActionDialog>
+                <DetailActionDialog
+                  open={actionDialog === 'edit'}
+                  onClose={() => setActionDialog(null)}
+                  title={mt.editFacts}
+                  closeLabel={text.close}
+                >
+                  <Maintenance
+                    key={'maintenance' + property.id}
+                    detail={data}
+                    employee={employee}
+                    locale={locale}
+                    onSaved={changed}
+                    onDenied={denyFiles}
+                  />
+                </DetailActionDialog>
+                <DetailActionDialog
+                  open={actionDialog === 'correction'}
+                  onClose={() => setActionDialog(null)}
+                  title={text.navCorrections}
+                  headTitle
+                  closeLabel={text.close}
+                >
+                  <CorrectionReport
+                    key={'correction' + property.id}
+                    detail={data}
+                    locale={locale}
+                    role={employee.role}
+                    onDenied={denyFiles}
+                    onSaved={changed}
+                  />
+                </DetailActionDialog>
+                <DetailActionDialog
+                  open={actionDialog === 'requests'}
+                  onClose={() => setActionDialog(null)}
+                  title={mt.queue}
+                  closeLabel={text.close}
+                >
+                  <CorrectionQueue
+                    key={'requests' + property.id + refreshTick}
+                    propertyId={property.id}
+                    locale={locale}
+                    onDenied={denyFiles}
+                    onChanged={() => void changed()}
+                  />
+                </DetailActionDialog>
+              </>
+            ) : null}
           </>
         ) : null}
       </div>

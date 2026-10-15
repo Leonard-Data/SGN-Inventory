@@ -19,7 +19,7 @@ Two visual vocabularies existed before this work:
 
 Both define `--muted` and `--danger` with different values. The newer, deliberate baseline is the auth system (tokens, fonts, a visual-compare harness); the inventory sheet predates it and has no radii/spacing tokens.
 
-**Decision (shipped):** the *Saigon New House* design package is the visual baseline and is ported verbatim: `src/app/app.css` is its token layer (declared at `:root`, so every surface including `.sgn-auth` inherits one palette, one type ramp, one radius set, one spacing scale) and `src/app/sgn-app.css` is its app layer, which owns the shared class vocabulary. The package's `assets/sgn-app.css` is byte-identical to the port except for the one documented adaptation — its runtime Google Fonts request is replaced by the `next/font` variables this application already self-hosts. Inventory, detail, maintenance and files no longer carry their own values: the legacy blocks the package also defines were deleted from `globals.css`. Control vocabulary is single: the auth screens were renamed from their `sgn-`-prefixed mirror onto the reference names (`.btn*`, `.field`, `.input`, `.lang-switch`, `.logo-tile`, `.auth-panel`) with `scripts/auth-visual-compare.mjs` as the check.
+**Decision (shipped):** the *Saigon New House* design package is the visual baseline and is ported verbatim: `src/app/app.css` is its token layer (declared at `:root`, so every surface including `.sgn-auth` inherits one palette, one type ramp, one radius set, one spacing scale) and `src/app/sgn-app.css` is its app layer, which owns the shared class vocabulary. The package's `assets/sgn-app.css` is byte-identical to the port except for the documented adaptations — its runtime Google Fonts request is replaced by the `next/font` variables this application already self-hosts, and the chronological inventory work (#37) adds the repo-only `.card-entry` line and extends `.seg-btn` with the `[aria-current="true"]` selected state (§5.1). Inventory, detail, maintenance and files no longer carry their own values: the legacy blocks the package also defines were deleted from `globals.css`. Control vocabulary is single: the auth screens were renamed from their `sgn-`-prefixed mirror onto the reference names (`.btn*`, `.field`, `.input`, `.lang-switch`, `.logo-tile`, `.auth-panel`) with `scripts/auth-visual-compare.mjs` as the check.
 
 **Rejected:** leaving `globals.css` in place with a third token set for the shell — two greens, two body fonts and two badge colours in one product, and a guaranteed later migration.
 
@@ -61,7 +61,7 @@ The shell replaces the per-page `SessionHeader`. Locale switch and sign-out move
 | Inventory | Search (`/properties`); New property (`/properties/new`, shipped) | all |
 | Reservations & Reviews | My requests (`/requests`); Reviews hub (`/reviews/…`, corrections shipped) | all; queues per role |
 | Rentals | Agreements (`/rentals`) | staff, manager, admin |
-| People | Employees (`/people/employees`); Contacts (`/people/contacts`) | admin; staff/manager/admin |
+| People | Employees (`/people/employees`, shipped: list only, admin); Vendors (`/people/vendors`, shipped, all roles); Contacts (`/people/contacts`) | admin; all; staff/manager/admin |
 | Reports | My activity (`/activity/me`, shipped); Company (`/activity/company`, shipped) | all; manager/admin |
 | Admin | Categories (`/admin/categories`); Units (`/admin/units`) | admin |
 
@@ -75,21 +75,21 @@ The contract is `src/app/sgn-app.css` — the ported design package. Compose the
 | --- | --- | --- |
 | Content region | `.sgn-content` (the shell's `<main id="main-content">`) | `--content-max` 1280px, `--gutter-x` padding; the page renders inside it and owns no `<main>` |
 | Page head | `.page-head` > `.page-intro` (`.example` eyebrow, `h1`, `.intro-copy`) + `.page-actions` | one accent action per viewport |
-| Toolbar / search | `.toolbar`, `.search` > `.input` + `.search-btn`, `.search-hint`, `.chips` > `.chip` | filters as chips; the package's `.seg` view switch is unused (the app renders cards only) |
+| Toolbar / search | `.toolbar`, `.search` > `.input` + `.search-btn`, `.search-hint`, `.chips` > `.chip`, `.seg` > `.seg-btn[aria-current="true"]` | filters as chips; the package's `.seg` Cards/List/Table view switch is unused (the app renders cards only); `.seg` renders the chronological order control (Default / Oldest first / Newest first) |
 | Card / section | `.panel` > `.panel-head` (`.panel-title`, `.panel-note`) / `.panel-body` / `.panel-foot` | white, `--radius-lg`, hairline border |
-| Property card | `.property-card` inside `.property-list[data-view="cards"]` > `.cover` + `.card-body`/`.card-meta`/`.card-address`/`.card-foot`/`.card-actions` | the cover holds the plate, or a stored photograph |
+| Property card | `.property-card` inside `.property-list[data-view="cards"]` > `.cover` + `.card-body`/`.card-meta`/`.card-address`/`.card-entry`/`.card-foot`/`.card-actions` | the cover holds the plate, or a stored photograph; `.card-entry` (repo-only, added in `sgn-app.css`) shows the original entry date, legacy marker and Vietnam age in the chronological views, or the explicit unknown date and unknown age |
 | Site plate | `.cover > svg.plate.plate-card`/`.plate-bare`/`.plate-hero`, `.plate-*` internals | one scale per record; repo-only placeholder text comes from the component |
 | Status pill | `.badge` + `data-tone="neutral\|muted\|success\|warn\|danger\|accent"` | the localized label carries the meaning; the tone dot never replaces it |
 | Buttons | `.btn`, `.btn-primary`, `.btn-secondary`, `.btn-ghost`, `.btn-danger`, `.btn-sm`, `.btn-block`, `.is-loading` | the auth screens use the same classes |
 | Fields | `.field` > `.field-label-row` (`.field-req`), `.input`/`.select`/`.textarea`, `.field-unit`, `.check`, `.field-hint`, `.field-error` | one control set for every form |
 | Rows / detail | `.detail-head`, `.detail-sub`, `.detail-body`, `.detail-rail`, `.chips.head-chips`, `.facts` > `.fact` (`dt`/`dd`, `.is-unknown`), `.record` > `.record-head`/`.record-title`/`.record-body`/`.record-meta` | facts print `Chưa rõ` for unknown values, never a dash |
 | Files | `.doc-row`, `.doc-icon`, `.doc-name`, `.doc-meta`, `.doc-actions`, `.dropzone` | replaces the legacy file list |
-| History / price | `.timeline` > `.tl-item` (`.tl-time`, `.tl-title`, `.tl-body`, `.tl-actor`), `.hist-row` (`.hist-when`, `.hist-change`, `.hist-field`), `.price-row` | the app has no asking-price history endpoint; `property_history` events render through the history rows |
+| History / price | `.timeline` > `.tl-item` (`.tl-time`, `.tl-title`, `.tl-body`, `.tl-actor`), `.hist-row` (`.hist-when`, `.hist-change`, `.hist-field`), `.price-series` (`.price-series-title`) > `.price-row` (`.price-when`, `.price-change`, `.price-note`, `.price-who`) | `property_history` events render through the history rows; the record's recorded sale/rent series (#36) renders through the price rows |
 | Comments | `.comment` (`.sgn-avatar` cell + body) > `.comment-author`, `.comment-meta`, `.comment-body`, `.comment-actions`, `.composer` > `.composer-foot` | 500-character contract unchanged |
 | States | `.state-panel` (+ `data-tone="danger"`, `.state-mark`, `.state-title`), `.busy-bar`, `.busy-line` + `.spinner`, `.skeleton`/`.sk-card`, `.alert` (+ `data-tone`), `.toast` | loading, empty, error and denial stay distinct; empty ≠ zero ≠ denied |
 | Lists / tables | `.data-table.stackable` (`[data-num]`, `data-label`), `.pagination` > `.page-info` + `.page-buttons` > `.pager-btn` | tables stack to label/value cards under 640px |
 | Dialogs | `.sgn-dialog` > `.sgn-dialog-panel`/`.sgn-dialog-head`/`.sgn-dialog-body`/`.sgn-dialog-foot` | native `<dialog>`: focus trap and Escape come from the platform |
-| Repo-only surfaces | `.maintenance*` (disclosures, inline editors), `.history-event`, `.history-comparison`, `.history-field`, `.owner-disclosure`, `.owner-phone`, `.reservation*` (`.reservation-effective`, `.reservation-pending`, `.reservation-request`), `.proposal-choices`, `.contact-choices`, `.eyebrow` (auth), `.comment-removed` and `.comment-moderation` (extensions to the comment row) | `globals.css` + `sgn-surfaces.css`; package tokens only |
+| Repo-only surfaces | `.maintenance*` (disclosures, inline editors), `.history-event`, `.history-comparison`, `.history-field`, `.owner-disclosure`, `.owner-phone`, `.reservation*` (`.reservation-effective`, `.reservation-pending`, `.reservation-request`), `.proposal-choices`, `.contact-choices`, `.eyebrow` (auth), `.comment-removed`, `.comment-edited`, `.comment-edit` and `.comment-moderation` (extensions to the comment row), `.vendor-note` and `.data-table .is-unknown` (vendor record), and `.card-entry` (the chronological card line) | `globals.css` + `sgn-surfaces.css`, except `.card-entry` in `sgn-app.css`; package tokens only |
 
 ## 5. Page layouts
 
@@ -100,22 +100,23 @@ All page bodies render inside the shell `main` region; `SessionHeader` is gone f
 ```
 .sgn-content
   .page-head:  .page-intro (.example · h1 · .intro-copy)   |  .page-actions [ Company activity ] (manager/admin)
-  .toolbar > .search > .input + .search-btn, .search-hint
+  .toolbar (form) > .search > .input + .search-btn · .seg > .seg-btn[aria-current] (Default · Oldest first · Newest first)
+  .search-hint rows (search rules; the chronological scope and unknown-date placement when an order is active)
   .chips > .chip (applied conditions) · .result-line in .row-between
   .property-list[data-view="cards"] > .property-card × N
       .cover > Plate(card)  |  stored cover photograph
-      .card-body: .card-meta (code · mode) · .card-address > a · .card-foot > .badge[data-tone]
+      .card-body: .card-meta (code · mode) · .card-address > a · .card-entry (original entry date · legacy marker · Vietnam age, or unknown date · unknown age) · .card-foot > .badge[data-tone]
   .pagination > .page-info + .page-buttons > .pager-btn
   states: .busy-line (loading) · .state-panel (empty) · .state-panel[data-tone="danger"] (error)
 ```
-Shipped: the card cover is the site plate drawn from the record's own fields; a stored cover photograph wins; a record with no areas keeps the plate's muted placeholder. The package's `.seg` Cards/List/Table switch is **not** implemented (the app renders cards only) and the ordering control is not implemented — both are open items, not silent omissions. The two panels that used to sit under the results — the create-property form and the correction queue — moved to their own destinations (`/properties/new`, `/reviews/corrections`); `/properties` keeps search, results and pagination.
+Shipped: the card cover is the site plate drawn from the record's own fields; a stored cover photograph wins; a record with no areas keeps the plate's muted placeholder. The package's `.seg` Cards/List/Table switch is **not** implemented (the app renders cards only); `.seg` instead renders the chronological Default/Oldest first/Newest first control, which starts a new page-one journey without rewriting the search, and the active order adds the `.card-entry` line to each card. The Cards/List/Table switch remains an open item, not a silent omission. The two panels that used to sit under the results — the create-property form and the correction queue — moved to their own destinations (`/properties/new`, `/reviews/corrections`); `/properties` keeps search, results and pagination.
 
 ### 5.2 `/properties/[id]` — Detail *(shipped, minus the items noted)*
 
 ```
 .sgn-content
   quiet back link (.link-quiet) → returnTo (keeps the filtered result position)
-  detail-head: .example eyebrow · h1 (record code) · .chips.head-chips (status + review status badges)
+  detail-head: .example eyebrow · h1 (record code) · .chips.head-chips (status + review status badges) · .detail-actions (record action bar: completed-sale confirmation for manager/admin, Reservation, Edit facts, Correction requests, My requests)
   archived notice: .alert[data-tone="neutral"] with the archive mark
   detail-body (two-column grid, single column under 1180px): main column + aside.detail-rail
     main column:
@@ -123,23 +124,28 @@ Shipped: the card cover is the site plate drawn from the record's own fields; a 
       .tabpanel "Tổng quan":
         panel .plate-hero (top of the grid)  → Plate(hero) | stored cover photograph
         panel Facts      → dl.facts with .fact rows; unknown values print Chưa rõ
+        panel Price history → two .price-series groups (sale asking price / monthly asking rent) of .price-row (.price-when, .price-change, .price-note, .price-who), newest-first with per-series paging
         panel Addresses  → .record rows + mapping .badge, .addrNote policy line
         panel Contacts   → .record rows + owner-contact disclosure (.owner-disclosure/.owner-phone)
-        panel Reservation→ effective/pending states (.reservation-effective/.reservation-pending) + request and decision forms
-        panel Maintenance→ in-page maintenance workspace (revision-checked)
-        panel Corrections→ report + role-scoped queue
       .tabpanel "Tài liệu": panel Files → property-files Workspace (.doc-row vocabulary, cover, dropzone)
-      .tabpanel "Thảo luận": Discussion → 30-item list newest-first, .composer, author withdrawal and reasoned manager/admin removal (.comment-actions, .comment-removed marker, .comment-moderation); editing is not shipped
+      .tabpanel "Thảo luận": Discussion → 30-item list newest-first, .composer, author edit and withdrawal with reasoned manager/admin removal (.comment-actions, .comment-edited marker, .comment-edit editor, .comment-removed marker, .comment-moderation)
     aside.detail-rail (sticky):
       panel History    → maintenance history rows (.hist-row)
       page-view note, then panel Activity → today's own counts
+  record action dialogs (siblings of .detail-body, content mounted only while open), opened from the action bar:
+    dialog "Completed sale" → reviewer-only confirmation form (credited closer, actual Vietnam date, contract reference) or the recorded completion (.sale-completion/.sale-completion-recorded), manager/admin only
+    dialog "Reservation" → effective/pending states (.reservation-effective/.reservation-pending) + request and decision forms; a manager/admin also gets the reasoned release control on an effective reservation
+    dialog "Edit facts" → maintenance workspace (revision-checked)
+    dialog "Correction requests" → correction report (the .maintenance disclosure)
+    dialog "My requests" → role-scoped correction queue
 ```
 Shipped as above. The three groups and the main/rail split follow the package's own record screen
 (`ui_kits/app/components/App.jsx`: `overview | docs | comments` inside a `<div>`, beside `<aside class="detail-rail">`).
 Before this the panels were direct children of `.detail-body`, so the two-column grid placed them in alternating
 columns and the facts panel rendered inside the 344 px rail. Inactive tabpanels stay mounted but `hidden`, so a
-tab switch neither refetches nor loses an in-flight upload. **Not implemented:** the record's Edit action —
-there is no `/properties/[id]/edit` route, so editing stays the in-page maintenance disclosure. No new route was added.
+tab switch neither refetches nor loses an in-flight upload. **Not implemented:** a dedicated record-edit route —
+there is no `/properties/[id]/edit`; the record's *Edit facts* action opens the maintenance workspace in a dialog instead.
+No new route was added.
 
 ### 5.3 `/requests` — my requests (new)
 
@@ -162,7 +168,7 @@ queue rows: .history-event — subject link · claimant/actor · dates · eviden
   expanding row reveals decision form: [reason textarea] [Approve] [Reject]
 pagination
 ```
-Routes: `/reviews/corrections` (shipped as **Correction requests**: page-intro plus the correction queue, guarded by its own protected read — every active employee reads their own requests, and staff/manager/admin decide them), `/reviews/reservations`, `/reviews/visits`, `/reviews/rental-activation`, `/reviews/sale-completions`, `/reviews/closure-corrections`. Same layout shell; each queue is its own route and guard. `/reviews` redirects to the first permitted queue.
+Routes: `/reviews/corrections` (shipped as **Correction requests**: page-intro plus the correction queue, guarded by its own protected read — every active employee reads their own requests, and staff/manager/admin decide them), `/reviews/reservations`, `/reviews/rental-activation`, `/reviews/sale-completions`, `/reviews/closure-corrections`. Same layout shell; each queue is its own route and guard. `/reviews` redirects to the first permitted queue. Issue #38 ships the sale confirmation interaction on the property detail instead of the planned `/reviews/sale-completions` queue; that queue remains unbuilt. No physical-visit queue is planned at any point: visit submission and independent visit confirmation were retired in favour of the automatically recorded owner-contact access measure, retained `site_visit` rows are history only, and independent reservation approval is unaffected.
 
 ### 5.5 `/rentals` + `/rentals/[id]` (new)
 
@@ -182,17 +188,42 @@ Routes: `/reviews/corrections` (shipped as **Correction requests**: page-intro p
 ```
 Master (agreement) + detail (months/payments), reusing `.details` grid.
 
-### 5.6 `/people/employees` (shipped: list only, admin)
+### 5.6 `/people/employees` (shipped: list, guarded deactivation and permanent account deletion, admin)
 
 ```
 page-intro (.example · h1 · .intro-copy)
-panel Employees → .data-table.stackable: name · email · role · access state
+panel Employees → .data-table.stackable: name · email · role · access state · actions
+  access badge + recorded deactivation badge + recorded deletion badge
+  [Deactivate access]/[Reconcile sign-in block] → .deactivation-panel
+    target identity · recorded action state · outstanding reservations (effective/pending + expiry)
+    release-or-expiry note · finite provider-ban note · [Confirm deactivation]/[Retry] · [Close]
+  [Delete sign-in account]/[Reconcile account deletion] → .deactivation-panel
+    retained-employee identity · retention note · recorded state incl. blocked Storage ownership
+    owned/reassigned file counts · outstanding reservations · typed-email confirmation field
+    [Permanently delete the sign-in account]/[Retry] · [Close]
   .panel-foot → .pagination (.page-info + .page-buttons > .pager-btn)
   states: .panel-note[role=status] (loading) · .state-panel (empty) · .alert[data-tone=danger] (error)
 ```
-Shipped: the list reads existing employee identities from `GET /api/employees` and shows the recorded display name, email, role and access state (`Đang hoạt động` / `Đã tắt truy cập` / `Chưa liên kết đăng nhập`), at most 30 rows per page with a keyset cursor. An unlinked imported person is labelled not linked, never invited: the schema records no invitation. The rail renders the destination for admin only and the proxy refuses a direct visit by another role.
+Shipped: the list reads existing employee identities from `GET /api/employees` and shows the recorded display name, email, role and access state (`Đang hoạt động` / `Đã tắt truy cập` / `Chưa liên kết đăng nhập` / `Đã xóa tài khoản đăng nhập`), at most 30 rows per page with a keyset cursor. An unlinked imported person is labelled not linked, never invited, and is never presented as a deleted person: the schema records no invitation, and account deletion is a separate recorded state. The rail renders the destination for admin only and the proxy refuses a direct visit by another role. A live admin confirms deactivation from the row: membership is disabled first, the exact Auth sign-in block is confirmed through the server-only adapter, and the recorded `provider_pending` / `provider_failed` / `completed` state is shown next to the access badge so a disabled membership is never presented as a completed deactivation. The panel lists the departing employee's outstanding reservations with their expiries and states that release or expiry stays with the existing claimant, reviewer and expiry rules; no reservation is transferred or rewritten, and the finite provider ban is described with its renewal rule rather than as infinite. While the provider step is pending or failed, an admin can reopen the row and retry the same action.
 
-Still planned, not shipped: the `[Invite employee]` disclosure, the last-activity column, the `[Activate|Deactivate]` and `[Change role]` row actions, last-admin protection and the "review approved locks before deactivation" warnings. No per-employee route.
+Permanent account deletion is a second, separately recorded control on the same row, offered only for an employee whose sign-in account is still linked. Its confirmation names the exact retained employee and states that the sign-in account is permanently removed while the business record remains, describes the Storage ownership preflight and reassignment without promising to delete a file, lists the same outstanding reservations, and keeps its destructive control disabled until the employee's own email is typed — the target-specific confirmation vocabulary, reusing the existing field, hint, badge and panel classes rather than a remote dialog. The recorded state distinguishes `provider_pending`, `provider_failed`, `storage_blocked` and `completed`, so a blocked Storage ownership step is never shown as a generic failure or as a deletion. Deletion, inactive access and an unlinked imported person are three different badges, and a completed deletion row offers no lifecycle action at all.
+
+Still planned, not shipped: the `[Invite employee]` disclosure, the last-activity column, the `[Activate]` and `[Change role]` row actions and any per-employee route.
+
+### 5.6b `/people/vendors` + `/people/vendors/[id]` (shipped, issue #73)
+
+```
+page-intro (.example · h1 · .intro-copy)
+panel search: .toolbar > .search > .input + .search-btn, .search-hint
+panel [Record a vendor] (staff/manager/admin only): .field × 6 → company name (required),
+  contact name, phone lines, email, address/source text, notes; .form-foot submit
+panel Vendor directory → .data-table.stackable: company (row link) · contact · phones · email
+  .panel-foot → .pagination (.page-info + .page-buttons > .pager-btn)
+  states: .panel-note[role=status] (loading) · .state-panel (empty / no match) · .alert[data-tone=danger] (error)
+detail: quiet back link · .detail-head · panel .facts (recorded contact block; unknown details
+  read as unknown, never a dash)
+```
+Shipped: `GET /api/vendors` serves the newest-first bounded directory through `list_vendors` (at most 30 rows, keyset cursor pair); `POST /api/vendors` creates one company through the guarded `create_vendor` operation for a live staff/manager/admin, keeping the draft and the submission key on failure; `GET /api/vendors/[id]` reads one recorded identity. Every active role sees the People → Vendors destination; only maintainers see the create panel, and the route and database refuse the mutation independently. Detail has no edit control in this slice.
 
 ### 5.7 `/people/contacts` (new, staff/manager/admin)
 
@@ -229,6 +260,8 @@ footnote: historical rankings can change after cancellation/correction
 ```
 Three separate rankings, no composite score; no geographic map (per the confirmed analytics plan).
 
+Shipped for issue #38: the completed-sales ranking alone is delivered at `/reports/completed-sales` — a manager/admin rail entry with the validated Vietnam range filter, tied ranks, an explicit total and the separate unknown-attribution note; the reviewer-only confirmation form lives on the property detail in a dialog opened from the record action bar rather than as a `/reviews/sale-completions` queue, and the province and completed-rental panels above remain planned, while the owner-contact activity ranking ships on the delivered company-activity report at `/activity/company` (see the shipped-route note below, #34).
+
 ### 5.10 `/admin/categories` · `/admin/units` (new, admin)
 
 ```
@@ -238,7 +271,7 @@ page-intro · [New category] / [New unit]
 
 ## 6. Cross-cutting states
 
-- **Denied / inactive:** the shell is never rendered. `/access-denied` stays in the `(auth)` group and is shown shell-free; API responses return `403` and a localized access-denied message, never an empty inventory.
+- **Denied / inactive:** the shell is never rendered. `/access-denied` stays in the `(auth)` group and is shown shell-free; a membership or identity denial returns `403` with a localized access-denied message, never an empty inventory. An object-level refusal (`contact-refusal`) keeps the current page and its state with a localized inline message instead ([maintenance contract](maintenance-contract.md#shared-identities-and-local-links)).
 - **Loading / empty / error:** the package's own states — `.busy-line` (+ `.spinner`) and `.busy-bar` for progress, `.skeleton`/`.sk-card` where the final geometry is known, `.state-panel` (with `.state-mark`, `.state-title`, optional `data-tone="danger"`) for empty and error, `.alert` for inline feedback and `.toast` for transient confirmation — each with localized text. Empty ≠ denied and empty ≠ zero: an event-free day is an explicit `0`, not a blank.
 - **Failed saves:** keep the draft, show a localized error, never a false success.
 - **Sign-out / denial after load:** clear displayed inventory, contact and discussion data; Back/refresh must not reveal it.
@@ -259,11 +292,11 @@ page-intro · [New category] / [New unit]
 
 ### Shipped-state gaps (deliberate, not silent)
 
-- Navigation renders four groups: Inventory (`/properties` and `/properties/new`, every role), Reservations & Reviews (`/reviews/corrections`, every role — the queue reads the caller's own requests while only staff/manager/admin decide), People (`/people/employees`, admin) and Reports (`/activity/me`, every role; `/activity/company`, manager/admin). The ADR's other two groups (Rentals, Admin) ship with their routes.
-- The inventory results have **cards only**: the package's Cards/List/Table `.seg` switch and the ordering control are not implemented, and `.cell-plate` table thumbnails therefore have no consumer yet.
-- The card shows the record's existing fact set (code, mode, address, status). The prototype's card also prints area and price lines; adding them would be new data display beyond this restyle, so they were left out.
-- The record page has no Edit action (no edit route exists; editing stays the in-page maintenance disclosure).
-- The asking-price timeline (`.price-row`), the change timeline (`.timeline`/`.tl-item`) and the **Nhân sự & liên hệ** screen (employee accounts + contact book, `.directory-tabs`, `.cell-person`, `.sgn-avatar-sm`) are rendered in the design review route `/design/app-preview` from fictional fixtures: the app has no price-history feed and no contact-book endpoint, and the review route is where unused package vocabulary is inspectable. The employee list itself now ships separately (§5.6). Their remaining product routes (`/people/contacts`) and data contracts are separate, unauthorized work.
-- The personal activity report (#30) shipped at **`/activity/me`** rather than this document's planned `/reports/activity`, with its own acceptance evidence and API path (`/api/activity/me`), and the company employee-by-day report (#57) shipped at **`/activity/company`** rather than the planned `/reports/company` with API path (`/api/activity/company`); both routes were left where the features shipped and the rail's Reports group points at them. `/requests`, the rest of `/reviews/*`, `/rentals*`, `/people/contacts`, `/admin/*` remain unbuilt and are only described above.
+- Navigation renders four groups: Inventory (`/properties` and `/properties/new`, every role), Reservations & Reviews (`/reviews/corrections`, every role — the queue reads the caller's own requests while only staff/manager/admin decide), People (`/people/employees`, admin) and Reports (`/activity/me`, every role; `/activity/company` and `/reports/completed-sales`, manager/admin). The ADR's other two groups (Rentals, Admin) ship with their routes.
+- The inventory results have **cards only**: the package's Cards/List/Table `.seg` switch is not implemented, so `.cell-plate` table thumbnails have no consumer yet; `.seg` renders the chronological oldest/newest ordering control (#37) instead.
+- The card shows the record's existing fact set (code, mode, address, status), plus the original inventory entry date, legacy marker and Vietnam age in the chronological views (#37), or the explicit unknown date and unknown age. The prototype's card also prints area and price lines; adding them would be new data display beyond this restyle, so they were left out.
+- The record page's *Edit facts* action opens the maintenance workspace in a dialog; no dedicated edit route exists.
+- The change timeline (`.timeline`/`.tl-item`) and the **Nhân sự & liên hệ** screen (employee accounts + contact book, `.directory-tabs`, `.cell-person`, `.sgn-avatar-sm`) are rendered in the design review route `/design/app-preview` from fictional fixtures: the app has no contact-book endpoint, and the review route is where that unused vocabulary is inspectable. The asking-price timeline (`.price-row`) now ships on the record from the recorded sale/rent series (#36); the employee list ships separately (§5.6). The remaining product route (`/people/contacts`) and its data contract are separate, unauthorized work.
+- The personal activity report (#30) shipped at **`/activity/me`** rather than this document's planned `/reports/activity`, with its own acceptance evidence and API path (`/api/activity/me`), and the company employee-by-day report (#57) shipped at **`/activity/company`** rather than the planned `/reports/company` with API path (`/api/activity/company`); both routes were left where the features shipped and the rail's Reports group points at them. Issue #34 added the owner-contact activity ranking to that shipped report as the `# · employee · owner-contact properties` table above the daily history, read through `employee_owner_contact_ranking` behind the same endpoint, range filter and denial states; the planned Province activity and completed-rental rankings remain unbuilt. `/requests`, the rest of `/reviews/*`, `/rentals*`, `/people/contacts`, `/admin/*` remain unbuilt and are only described above.
 - The auth surfaces keep their own layout sheet (`.sgn-auth` + `sgn-auth.css`); they share the token layer and the control vocabulary but they are shell-free by design (ADR 0001).
 - **Not in scope:** no geographic map, no physical-visit UI, no threads/reactions/mentions, no dashboards beyond §5.9, and no archived-property exception beyond the existing reviewer read boundary and the reasoned manager/admin discussion removal in §5.2.
