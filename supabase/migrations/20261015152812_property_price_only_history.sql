@@ -44,7 +44,7 @@ revoke all on function private.record_business_change() from public,anon,authent
 -- application records, and a price application that records nothing is still refused.
 create or replace function private.decide_correction(p_request_id uuid,p_request_revision uuid,p_action text,p_reason text,p_changes jsonb) returns void
 language plpgsql security definer set search_path='' as $$
-declare req public.correction_requests; amendment public.correction_amendments; prop uuid; changes jsonb; rev uuid; parent_rev uuid; started timestamptz; observed jsonb; me uuid:=private.employee_id();
+declare req public.correction_requests; amendment public.correction_amendments; prop uuid; changes jsonb; rev uuid; parent_rev uuid; started timestamptz; observed jsonb; price_changed boolean; me uuid:=private.employee_id();
 begin
   if me is null then raise exception 'active employee required' using errcode='42501'; end if;
   if p_action is null or p_action not in ('apply','reject','withdraw') then raise exception 'invalid outcome' using errcode='23514'; end if;
@@ -71,6 +71,7 @@ begin
     if changes='{}'::jsonb then raise exception 'actual correction required' using errcode='23514'; end if;
     -- Revalidate the original/amended target association and both observed revisions.
     observed:=private.correction_observation(prop,req.target,req.target_id,rev,parent_rev);
+    price_changed:=exists(select 1 from jsonb_each(changes) c where c.key=any(array['sale_price_vnd','monthly_rent_vnd']) and observed->c.key is distinct from c.value);
     -- The applied proposal must differ from the live observed value, whether or not the
     -- change is one the history records.
     if not exists(select 1 from jsonb_each(changes) c where observed->c.key is distinct from c.value) then
@@ -78,7 +79,7 @@ begin
     started:=clock_timestamp();
     perform private.maintain_property(prop,req.target,req.target_id,rev,changes,parent_rev);
     -- Only this operation's inserted events, and only for a recorded price change.
-    if changes ?| array['sale_price_vnd','monthly_rent_vnd'] then
+    if price_changed then
       update public.property_history set explanation=p_reason where actor_id=me and occurred_at>=started and xmin=pg_current_xact_id()::xid;
       if not found then raise exception 'actual business change required' using errcode='23514'; end if;
     end if;

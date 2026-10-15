@@ -317,6 +317,66 @@ export async function correctionContract({
     },
   );
   await asUser(1);
+  await check(
+    'an unchanged price alongside a real non-price correction applies without history',
+    async () => {
+      const observed = await row();
+      const price = (
+        await db.query(
+          'select sale_price_vnd::text as price from public.properties where id=$1',
+          [property],
+        )
+      ).rows[0].price;
+      const beforeHistory = (
+        await db.query(
+          'select id,explanation from public.property_history where property_id=$1 order by id',
+          [property],
+        )
+      ).rows;
+      const mixed = (
+        await db.query(submit, [
+          property,
+          'property',
+          property,
+          'incorrect',
+          'Price is unchanged but the note needs correction',
+          { sale_price_vnd: price, notes: 'Mixed correction note' },
+          observed.revision,
+          observed.revision,
+        ])
+      ).rows[0].id;
+      await asUser(5);
+      const pending = await request(mixed);
+      await db.query(decide, [
+        mixed,
+        pending.revision,
+        'apply',
+        'Applied the mixed correction without a price change',
+        null,
+      ]);
+      assert.equal((await request(mixed)).status, 'applied');
+      assert.equal((await row()).notes, 'Mixed correction note');
+      assert.deepEqual(
+        (
+          await db.query(
+            'select id,explanation from public.property_history where property_id=$1 order by id',
+            [property],
+          )
+        ).rows,
+        beforeHistory,
+      );
+      assert.deepEqual(
+        (
+          await db.query(
+            'select explanation from public.property_price_history where property_id=$1 and explanation=$2',
+            [property, 'Applied the mixed correction without a price change'],
+          )
+        ).rows,
+        [],
+      );
+    },
+  );
+  await asUser(1);
   let stale;
   await check(
     'stale proposal application fails while original evidence remains available for reconciliation',
