@@ -2,7 +2,6 @@
 import {
   useCallback,
   useEffect,
-  useId,
   useMemo,
   useRef,
   useState,
@@ -23,6 +22,7 @@ import {
 import type { PropertyDetail } from './detail-data';
 import type { OwnerContactDisclosure } from './types';
 import { Maintenance } from '@/features/property-maintenance/workspace';
+import { maintenanceText } from '@/features/property-maintenance/messages';
 import { History } from '@/features/property-maintenance/history';
 import { PriceHistory } from '@/features/property-maintenance/price-history';
 import {
@@ -47,6 +47,7 @@ type RecordTab = (typeof RECORD_TABS)[number];
 function DetailActionDialog({
   title,
   description,
+  closeLabel,
   children,
   open,
   onClose,
@@ -54,13 +55,13 @@ function DetailActionDialog({
 }: {
   title: string;
   description?: string;
+  closeLabel: string;
   children: ReactNode;
   open: boolean;
   onClose: () => void;
   size?: 'default' | 'wide';
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const titleId = useId();
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -76,19 +77,16 @@ function DetailActionDialog({
       data-size={size}
       onClose={onClose}
       onCancel={onClose}
-      aria-labelledby={titleId}
+      aria-label={title}
     >
       <div className="sgn-dialog-panel">
         <div className="sgn-dialog-head">
-          <div>
-            <h2 id={titleId}>{title}</h2>
-            {description ? <p>{description}</p> : null}
-          </div>
+          {description ? <p>{description}</p> : null}
           <button
             className="sgn-dialog-close"
             type="button"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={closeLabel}
           >
             ×
           </button>
@@ -331,6 +329,7 @@ export function Detail({
     [data?.contacts],
   );
   const dt = detailMessages[locale];
+  const mt = maintenanceText(locale);
   return (
     <div lang={locale}>
       <p>
@@ -355,10 +354,7 @@ export function Detail({
           ) : null}
         </div>
         {property && employee ? (
-          <div
-            className="detail-actions"
-            aria-label={locale === 'vi' ? 'Thao tác hồ sơ' : 'Record actions'}
-          >
+          <div className="detail-actions" aria-label={dt.recordActions}>
             {employee.role === 'manager' || employee.role === 'admin' ? (
               <button
                 className="btn btn-primary"
@@ -380,7 +376,7 @@ export function Detail({
               type="button"
               onClick={() => setActionDialog('edit')}
             >
-              {locale === 'vi' ? 'Chỉnh sửa thông tin' : 'Edit facts'}
+              {mt.editFacts}
             </button>
             <button
               className="btn btn-sm btn-ghost"
@@ -394,7 +390,7 @@ export function Detail({
               type="button"
               onClick={() => setActionDialog('requests')}
             >
-              {locale === 'vi' ? 'Yêu cầu của tôi' : 'My requests'}
+              {dt.myRequests}
             </button>
           </div>
         ) : null}
@@ -904,90 +900,6 @@ export function Detail({
                       </div>
                     </div>
                   </div>
-
-                  {employee ? (
-                    <>
-                      {employee.role === 'manager' ||
-                      employee.role === 'admin' ? (
-                        <DetailActionDialog
-                          open={actionDialog === 'sale'}
-                          onClose={() => setActionDialog(null)}
-                          title={text.completedSaleTitle}
-                          description={text.completedSaleNote}
-                        >
-                          <SaleCompletion
-                            key={'sale' + property.id}
-                            propertyId={property.id}
-                            locale={locale}
-                            employeeId={employee.id}
-                            onDenied={denyFiles}
-                            onSaved={changed}
-                          />
-                        </DetailActionDialog>
-                      ) : null}
-                      <DetailActionDialog
-                        open={actionDialog === 'reservation'}
-                        onClose={() => setActionDialog(null)}
-                        title={text.reservations}
-                        size="default"
-                      >
-                        <Reservation
-                          key={'reservation' + property.id + refreshTick}
-                          propertyId={property.id}
-                          locale={locale}
-                          status={property.status}
-                          archived={!!property.archived_at}
-                          employeeId={employee.id}
-                          onDenied={denyFiles}
-                        />
-                      </DetailActionDialog>
-                      <DetailActionDialog
-                        open={actionDialog === 'edit'}
-                        onClose={() => setActionDialog(null)}
-                        title={
-                          locale === 'vi' ? 'Chỉnh sửa thông tin' : 'Edit facts'
-                        }
-                      >
-                        <Maintenance
-                          key={'maintenance' + property.id}
-                          detail={data}
-                          employee={employee}
-                          locale={locale}
-                          onSaved={changed}
-                          onDenied={denyFiles}
-                        />
-                      </DetailActionDialog>
-                      <DetailActionDialog
-                        open={actionDialog === 'correction'}
-                        onClose={() => setActionDialog(null)}
-                        title={text.navCorrections}
-                      >
-                        <CorrectionReport
-                          key={'correction' + property.id}
-                          detail={data}
-                          locale={locale}
-                          role={employee.role}
-                          onDenied={denyFiles}
-                          onSaved={changed}
-                        />
-                      </DetailActionDialog>
-                      <DetailActionDialog
-                        open={actionDialog === 'requests'}
-                        onClose={() => setActionDialog(null)}
-                        title={
-                          locale === 'vi' ? 'Yêu cầu của tôi' : 'My requests'
-                        }
-                      >
-                        <CorrectionQueue
-                          key={'requests' + property.id + refreshTick}
-                          propertyId={property.id}
-                          locale={locale}
-                          onDenied={denyFiles}
-                          onChanged={() => void changed()}
-                        />
-                      </DetailActionDialog>
-                    </>
-                  ) : null}
                 </section>
 
                 <section
@@ -1188,6 +1100,90 @@ export function Detail({
                 </section>
               </aside>
             </div>
+
+            {employee ? (
+              <>
+                {employee.role === 'manager' || employee.role === 'admin' ? (
+                  <DetailActionDialog
+                    open={actionDialog === 'sale'}
+                    onClose={() => setActionDialog(null)}
+                    title={text.completedSaleTitle}
+                    description={text.completedSaleNote}
+                    closeLabel={text.close}
+                  >
+                    <SaleCompletion
+                      key={'sale' + property.id}
+                      propertyId={property.id}
+                      locale={locale}
+                      employeeId={employee.id}
+                      onDenied={denyFiles}
+                      onSaved={changed}
+                    />
+                  </DetailActionDialog>
+                ) : null}
+                <DetailActionDialog
+                  open={actionDialog === 'reservation'}
+                  onClose={() => setActionDialog(null)}
+                  title={text.reservations}
+                  size="default"
+                  closeLabel={text.close}
+                >
+                  <Reservation
+                    key={'reservation' + property.id + refreshTick}
+                    propertyId={property.id}
+                    locale={locale}
+                    status={property.status}
+                    archived={!!property.archived_at}
+                    employeeId={employee.id}
+                    onDenied={denyFiles}
+                  />
+                </DetailActionDialog>
+                <DetailActionDialog
+                  open={actionDialog === 'edit'}
+                  onClose={() => setActionDialog(null)}
+                  title={mt.editFacts}
+                  closeLabel={text.close}
+                >
+                  <Maintenance
+                    key={'maintenance' + property.id}
+                    detail={data}
+                    employee={employee}
+                    locale={locale}
+                    onSaved={changed}
+                    onDenied={denyFiles}
+                  />
+                </DetailActionDialog>
+                <DetailActionDialog
+                  open={actionDialog === 'correction'}
+                  onClose={() => setActionDialog(null)}
+                  title={text.navCorrections}
+                  closeLabel={text.close}
+                >
+                  <CorrectionReport
+                    key={'correction' + property.id}
+                    detail={data}
+                    locale={locale}
+                    role={employee.role}
+                    onDenied={denyFiles}
+                    onSaved={changed}
+                  />
+                </DetailActionDialog>
+                <DetailActionDialog
+                  open={actionDialog === 'requests'}
+                  onClose={() => setActionDialog(null)}
+                  title={mt.queue}
+                  closeLabel={text.close}
+                >
+                  <CorrectionQueue
+                    key={'requests' + property.id + refreshTick}
+                    propertyId={property.id}
+                    locale={locale}
+                    onDenied={denyFiles}
+                    onChanged={() => void changed()}
+                  />
+                </DetailActionDialog>
+              </>
+            ) : null}
           </>
         ) : null}
       </div>
