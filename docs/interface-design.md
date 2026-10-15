@@ -165,7 +165,7 @@ queue rows: .history-event — subject link · claimant/actor · dates · eviden
   expanding row reveals decision form: [reason textarea] [Approve] [Reject]
 pagination
 ```
-Routes: `/reviews/corrections` (shipped as **Correction requests**: page-intro plus the correction queue, guarded by its own protected read — every active employee reads their own requests, and staff/manager/admin decide them), `/reviews/reservations`, `/reviews/visits`, `/reviews/rental-activation`, `/reviews/sale-completions`, `/reviews/closure-corrections`. Same layout shell; each queue is its own route and guard. `/reviews` redirects to the first permitted queue. Issue #38 ships the sale confirmation interaction on the property detail instead of the planned `/reviews/sale-completions` queue; that queue remains unbuilt.
+Routes: `/reviews/corrections` (shipped as **Correction requests**: page-intro plus the correction queue, guarded by its own protected read — every active employee reads their own requests, and staff/manager/admin decide them), `/reviews/reservations`, `/reviews/rental-activation`, `/reviews/sale-completions`, `/reviews/closure-corrections`. Same layout shell; each queue is its own route and guard. `/reviews` redirects to the first permitted queue. Issue #38 ships the sale confirmation interaction on the property detail instead of the planned `/reviews/sale-completions` queue; that queue remains unbuilt. No physical-visit queue is planned at any point: visit submission and independent visit confirmation were retired in favour of the automatically recorded owner-contact access measure, retained `site_visit` rows are history only, and independent reservation approval is unaffected.
 
 ### 5.5 `/rentals` + `/rentals/[id]` (new)
 
