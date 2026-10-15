@@ -374,6 +374,12 @@ async function cleanup() {
     if (removed?.error && !/not found/i.test(removed.error.message))
       throw new Error(`remove fixture auth user: ${removed.error.message}`);
   }
+  // The synthetic employee rows are removed too, but only the ones no retained operation
+  // references: the account-deleted target and any employee the ledger carries stay by design.
+  if (removable.length)
+    ownerSql(
+      `delete from public.employees where id in (${removable.map(sqlText).join(',')})`,
+    );
   await persistManifest();
 }
 
