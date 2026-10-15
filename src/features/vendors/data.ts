@@ -189,7 +189,8 @@ export async function unlinkPropertyVendor(
 function linkError(error: { code?: string } | null) {
   if (!error) return;
   if (error.code === '42501') throw new ApiError(403, 'access-denied');
-  if (error.code === '40001') throw new ApiError(409, 'stale-edit');
+  // PT409 is the repo's stale-context code: 40001 would be retried by PostgREST and time out.
+  if (error.code === 'PT409') throw new ApiError(409, 'stale-edit');
   if (error.code === '23505') throw new ApiError(409, 'conflict');
   if (error.code === '23503' || error.code === 'P0002')
     throw new ApiError(404, 'not-found');

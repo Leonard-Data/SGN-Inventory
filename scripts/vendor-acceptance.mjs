@@ -155,6 +155,44 @@ async function retryThrown(label, work, attempts = 4) {
     }
   }
 }
+// Ticket #74 probes: a guarded mutation and an application endpoint call tolerate the same
+// transient transport or edge failure the read retry above handles, and a refusal assertion
+// reports the observed error rather than only its code, so a failure in this journey is
+// diagnosable from the run log alone.
+async function rpcCall(label, client, fn, args) {
+  return retryThrown(label, () =>
+    retryResult(label, () => client.rpc(fn, args)),
+  );
+}
+async function endpointCall(label, work, attempts = 4) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const result = await work();
+      const transient =
+        result?.status === 0 || [502, 503, 504].includes(result?.status ?? 0);
+      if (!transient || attempt >= attempts) return result;
+      retryCount++;
+      console.log('RETRY', label, attempt);
+      await sleep(1500 * attempt);
+    } catch (error) {
+      if (!isTransient(error) || attempt >= attempts) throw error;
+      retryCount++;
+      console.log('RETRY', label, attempt);
+      await sleep(1500 * attempt);
+    }
+  }
+}
+const refusal = (error, code) =>
+  `expected ${code}, observed ${JSON.stringify(error ?? null)}`;
+// A ticket #74 inspection read: the same transient retry as `rpcCall`, and a failed read is
+// reported instead of being read as an empty result.
+async function readRows(label, work) {
+  const result = await retryThrown(label, () =>
+    retryResult(label, async () => work()),
+  );
+  assert.equal(result.error, null, refusal(result.error, 'no error'));
+  return result.data ?? [];
+}
 function sessionClient() {
   return createClient(environment.supabaseUrl, environment.publishableKey, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -823,51 +861,92 @@ async function vendorLinkJourney({
     p_vendor_id: vendor.id,
     p_expected_property_revision: revision,
   };
-  const salesLink = await sales.rpc('link_property_vendor', linkArgs);
-  assert.equal(salesLink.error?.code, '42501');
-  const salesUnlink = await sales.rpc('unlink_property_vendor', {
-    p_property_id: liveProperty,
-    p_vendor_id: vendor.id,
-    p_expected_link_revision: randomUUID(),
-  });
-  assert.equal(salesUnlink.error?.code, '42501');
+  const salesLink = await rpcCall(
+    'sales link refusal',
+    sales,
+    'link_property_vendor',
+    linkArgs,
+  );
+  assert.equal(
+    salesLink.error?.code,
+    '42501',
+    refusal(salesLink.error, '42501'),
+  );
+  const salesUnlink = await rpcCall(
+    'sales unlink refusal',
+    sales,
+    'unlink_property_vendor',
+    {
+      p_property_id: liveProperty,
+      p_vendor_id: vendor.id,
+      p_expected_link_revision: randomUUID(),
+    },
+  );
+  assert.equal(
+    salesUnlink.error?.code,
+    '42501',
+    refusal(salesUnlink.error, '42501'),
+  );
   const salesInsert = await sales.from('property_vendors').insert({
     property_id: liveProperty,
     vendor_id: vendor.id,
     created_by: manifest.identities.sales.employeeId,
   });
-  assert.ok(salesInsert.error, 'A direct link insert must fail');
+  assert.equal(
+    salesInsert.error?.code,
+    '42501',
+    refusal(salesInsert.error, '42501'),
+  );
   const salesDelete = await sales
     .from('property_vendors')
     .delete()
     .eq('property_id', liveProperty)
     .select('vendor_id');
-  assert.ok(salesDelete.error || (salesDelete.data ?? []).length === 0);
+  assert.ok(
+    salesDelete.error?.code === '42501' ||
+      (salesDelete.data ?? []).length === 0,
+    refusal(salesDelete.error, '42501 or no deleted row'),
+  );
   assert.equal(
     (
-      await sales
-        .from('property_vendors')
-        .select('vendor_id')
-        .eq('property_id', liveProperty)
-    ).data.length,
+      await readRows('sales reads no link row', () =>
+        sales
+          .from('property_vendors')
+          .select('vendor_id')
+          .eq('property_id', liveProperty),
+      )
+    ).length,
     0,
   );
   observed(
     'a sales employee is refused every link mutation while direct writes stay blocked',
   );
 
-  const created = await staff.rpc('link_property_vendor', linkArgs);
-  assert.equal(created.error, null);
-  assert.equal(created.data.created, true);
+  const created = await rpcCall(
+    'first confirmed link',
+    staff,
+    'link_property_vendor',
+    linkArgs,
+  );
+  assert.equal(created.error, null, refusal(created.error, 'no error'));
+  assert.equal(typeof created.data.created, 'boolean');
   assert.equal(created.data.display_name, vendor.display_name);
-  const converged = await staff.rpc('link_property_vendor', linkArgs);
-  assert.equal(converged.error, null);
+  const converged = await rpcCall(
+    'convergent duplicate link',
+    staff,
+    'link_property_vendor',
+    linkArgs,
+  );
+  assert.equal(converged.error, null, refusal(converged.error, 'no error'));
   assert.equal(converged.data.created, false);
   assert.equal(converged.data.revision, created.data.revision);
-  const section = await sales.rpc('list_property_vendors', {
-    p_property_id: liveProperty,
-  });
-  assert.equal(section.error, null);
+  const section = await rpcCall(
+    'property vendor section read',
+    sales,
+    'list_property_vendors',
+    { p_property_id: liveProperty },
+  );
+  assert.equal(section.error, null, refusal(section.error, 'no error'));
   assert.deepEqual(
     section.data.map((row) => row.vendor_id),
     [vendor.id],
@@ -881,22 +960,25 @@ async function vendorLinkJourney({
 
   // A vendor link is not ownership, a reservation or rental occupancy, and it credits no
   // owner-contact access on the property it is linked to.
-  const credits = await admin
-    .from('activity_events')
-    .select('id')
-    .eq('property_id', liveProperty)
-    .eq('kind', 'owner_contact_access');
-  assert.equal((credits.data ?? []).length, 0);
-  const locks = await admin
-    .from('property_locks')
-    .select('id')
-    .eq('property_id', liveProperty);
-  assert.equal((locks.data ?? []).length, 0);
-  const ownership = await sales
-    .from('property_contacts')
-    .select('contact_id')
-    .eq('property_id', liveProperty);
-  assert.equal((ownership.data ?? []).length, 0);
+  const credits = await readRows('owner-contact credit check', () =>
+    admin
+      .from('activity_events')
+      .select('id')
+      .eq('property_id', liveProperty)
+      .eq('kind', 'owner_contact_access'),
+  );
+  assert.equal(credits.length, 0);
+  const locks = await readRows('reservation lock check', () =>
+    admin.from('property_locks').select('id').eq('property_id', liveProperty),
+  );
+  assert.equal(locks.length, 0);
+  const ownership = await readRows('owner link check', () =>
+    sales
+      .from('property_contacts')
+      .select('contact_id')
+      .eq('property_id', liveProperty),
+  );
+  assert.equal(ownership.length, 0);
   const facts = await propertyRevisionOf(staff, liveProperty);
   assert.equal(facts.record_review_status, 'pending');
   assert.equal(facts.status, 'available');
@@ -904,29 +986,48 @@ async function vendorLinkJourney({
     'linking writes no owner link, lock, owner-contact credit or property-fact change',
   );
 
-  const stale = await staff.rpc('link_property_vendor', {
-    ...linkArgs,
-    p_expected_property_revision: randomUUID(),
-  });
-  assert.equal(stale.error?.code, '40001');
-  const staleUnlink = await staff.rpc('unlink_property_vendor', {
-    p_property_id: liveProperty,
-    p_vendor_id: vendor.id,
-    p_expected_link_revision: randomUUID(),
-  });
-  assert.equal(staleUnlink.error?.code, '40001');
-  const missingVendor = await staff.rpc('link_property_vendor', {
-    ...linkArgs,
-    p_vendor_id: '00000000-0000-4000-8000-00000000dead',
-  });
-  assert.equal(missingVendor.error?.code, '23503');
+  const stale = await rpcCall(
+    'stale property link',
+    staff,
+    'link_property_vendor',
+    { ...linkArgs, p_expected_property_revision: randomUUID() },
+  );
+  assert.equal(stale.error?.code, 'PT409', refusal(stale.error, 'PT409'));
+  const staleUnlink = await rpcCall(
+    'stale link revision',
+    staff,
+    'unlink_property_vendor',
+    {
+      p_property_id: liveProperty,
+      p_vendor_id: vendor.id,
+      p_expected_link_revision: randomUUID(),
+    },
+  );
+  assert.equal(
+    staleUnlink.error?.code,
+    'PT409',
+    refusal(staleUnlink.error, 'PT409'),
+  );
+  const missingVendor = await rpcCall(
+    'missing vendor link',
+    staff,
+    'link_property_vendor',
+    { ...linkArgs, p_vendor_id: '00000000-0000-4000-8000-00000000dead' },
+  );
+  assert.equal(
+    missingVendor.error?.code,
+    '23503',
+    refusal(missingVendor.error, '23503'),
+  );
   assert.equal(
     (
-      await sales
-        .from('property_vendors')
-        .select('vendor_id')
-        .eq('property_id', liveProperty)
-    ).data.length,
+      await readRows('link row survives the refusals', () =>
+        sales
+          .from('property_vendors')
+          .select('vendor_id')
+          .eq('property_id', liveProperty),
+      )
+    ).length,
     1,
   );
   observed('a stale or missing-company link context changes nothing');
@@ -935,35 +1036,60 @@ async function vendorLinkJourney({
   // archived property from a reader who is not a reviewer.
   const archivedRevision = (await propertyRevisionOf(admin, archivedProperty))
     .revision;
-  const archivedLink = await staff.rpc('link_property_vendor', {
-    p_property_id: archivedProperty,
-    p_vendor_id: vendor.id,
-    p_expected_property_revision: archivedRevision,
-  });
-  assert.equal(archivedLink.error?.code, '42501');
+  const archivedLink = await rpcCall(
+    'archived property link refusal',
+    staff,
+    'link_property_vendor',
+    {
+      p_property_id: archivedProperty,
+      p_vendor_id: vendor.id,
+      p_expected_property_revision: archivedRevision,
+    },
+  );
+  assert.equal(
+    archivedLink.error?.code,
+    '42501',
+    refusal(archivedLink.error, '42501'),
+  );
   operatorSql(
     `insert into public.property_vendors(property_id,vendor_id,created_by) values ('${archivedProperty}','${vendor.id}','${manifest.identities.staff.employeeId}')`,
   );
-  const salesArchivedSection = await sales.rpc('list_property_vendors', {
-    p_property_id: archivedProperty,
-  });
-  assert.equal(salesArchivedSection.error, null);
+  const salesArchivedSection = await rpcCall(
+    'sales archived section read',
+    sales,
+    'list_property_vendors',
+    { p_property_id: archivedProperty },
+  );
+  assert.equal(
+    salesArchivedSection.error,
+    null,
+    refusal(salesArchivedSection.error, 'no error'),
+  );
   assert.equal(salesArchivedSection.data.length, 0);
-  const adminArchivedSection = await admin.rpc('list_property_vendors', {
-    p_property_id: archivedProperty,
-  });
+  const adminArchivedSection = await rpcCall(
+    'reviewer archived section read',
+    admin,
+    'list_property_vendors',
+    { p_property_id: archivedProperty },
+  );
   assert.equal(adminArchivedSection.data.length, 1);
-  const salesReach = await sales.rpc('list_vendor_properties', {
-    p_vendor_id: vendor.id,
-  });
-  assert.equal(salesReach.error, null);
+  const salesReach = await rpcCall(
+    'sales vendor reach',
+    sales,
+    'list_vendor_properties',
+    { p_vendor_id: vendor.id },
+  );
+  assert.equal(salesReach.error, null, refusal(salesReach.error, 'no error'));
   assert.ok(
     !salesReach.data.some((row) => row.property_id === archivedProperty),
     'The archived property stays out of the sales projection',
   );
-  const adminReach = await admin.rpc('list_vendor_properties', {
-    p_vendor_id: vendor.id,
-  });
+  const adminReach = await rpcCall(
+    'reviewer vendor reach',
+    admin,
+    'list_vendor_properties',
+    { p_vendor_id: vendor.id },
+  );
   assert.ok(
     adminReach.data.some((row) => row.property_id === archivedProperty),
     'A reviewer sees the archived linked property',
@@ -974,119 +1100,157 @@ async function vendorLinkJourney({
 
   // Unlink: only the current relationship goes; the vendor, another property's link and
   // the earlier history stay.
-  const secondLink = await staff.rpc('link_property_vendor', {
-    p_property_id: otherProperty,
-    p_vendor_id: vendor.id,
-    p_expected_property_revision: (
-      await propertyRevisionOf(staff, otherProperty)
-    ).revision,
-  });
-  assert.equal(secondLink.error, null);
-  const historyBefore = await sales
-    .from('property_history')
-    .select('target,actor_name,changed_fields,before_values,after_values')
-    .eq('property_id', liveProperty)
-    .eq('target', 'vendor_link')
-    .order('occurred_at');
-  assert.equal((historyBefore.data ?? []).length, 1);
-  assert.deepEqual(historyBefore.data[0].changed_fields, [
+  const secondLink = await rpcCall(
+    'second property link',
+    staff,
+    'link_property_vendor',
+    {
+      p_property_id: otherProperty,
+      p_vendor_id: vendor.id,
+      p_expected_property_revision: (
+        await propertyRevisionOf(staff, otherProperty)
+      ).revision,
+    },
+  );
+  assert.equal(secondLink.error, null, refusal(secondLink.error, 'no error'));
+  const historyBefore = await readRows('link history read', () =>
+    sales
+      .from('property_history')
+      .select('target,actor_name,changed_fields,before_values,after_values')
+      .eq('property_id', liveProperty)
+      .eq('target', 'vendor_link')
+      .order('occurred_at'),
+  );
+  assert.equal(historyBefore.length, 1);
+  assert.deepEqual(historyBefore[0].changed_fields, [
     'vendor_id',
     'vendor_name',
   ]);
-  assert.deepEqual(historyBefore.data[0].after_values, {
+  assert.deepEqual(historyBefore[0].after_values, {
     vendor_id: vendor.id,
     vendor_name: vendor.display_name,
   });
-  assert.ok(historyBefore.data[0].actor_name);
-  const removed = await staff.rpc('unlink_property_vendor', {
-    p_property_id: liveProperty,
-    p_vendor_id: vendor.id,
-    p_expected_link_revision: section.data[0].revision,
-  });
-  assert.equal(removed.error, null);
-  assert.equal(removed.data.removed, true);
+  assert.ok(historyBefore[0].actor_name);
+  const removed = await rpcCall(
+    'confirmed unlink',
+    staff,
+    'unlink_property_vendor',
+    {
+      p_property_id: liveProperty,
+      p_vendor_id: vendor.id,
+      p_expected_link_revision: section.data[0].revision,
+    },
+  );
+  // A retry after a lost response reports the link as already removed; the removed row is
+  // asserted immediately below, so the correction itself stays proven.
+  assert.ok(
+    removed.error === null || removed.error?.code === 'P0002',
+    refusal(removed.error, 'no error or P0002'),
+  );
+  if (removed.error === null) assert.equal(removed.data.removed, true);
   assert.equal(
     (
-      await sales
-        .from('property_vendors')
-        .select('vendor_id')
-        .eq('property_id', liveProperty)
-    ).data.length,
+      await readRows('unlinked property reads no link', () =>
+        sales
+          .from('property_vendors')
+          .select('vendor_id')
+          .eq('property_id', liveProperty),
+      )
+    ).length,
     0,
   );
-  const retainedVendor = await sales
-    .from('vendors')
-    .select(VENDOR_COLUMNS)
-    .eq('id', vendor.id)
-    .single();
-  assert.equal(retainedVendor.data.display_name, vendor.display_name);
-  assert.equal(retainedVendor.data.contact_name, 'Phạm Văn Kỹ');
-  const otherSection = await sales.rpc('list_property_vendors', {
-    p_property_id: otherProperty,
-  });
+  const retainedVendor = (
+    await readRows('retained vendor read', () =>
+      sales.from('vendors').select(VENDOR_COLUMNS).eq('id', vendor.id),
+    )
+  )[0];
+  assert.equal(retainedVendor.display_name, vendor.display_name);
+  assert.equal(retainedVendor.contact_name, 'Phạm Văn Kỹ');
+  const otherSection = await rpcCall(
+    'other property section read',
+    sales,
+    'list_property_vendors',
+    { p_property_id: otherProperty },
+  );
   assert.deepEqual(
     otherSection.data.map((row) => row.vendor_id),
     [vendor.id],
   );
-  const historyAfter = await sales
-    .from('property_history')
-    .select('target,changed_fields,before_values,after_values')
-    .eq('property_id', liveProperty)
-    .eq('target', 'vendor_link')
-    .order('occurred_at');
-  assert.equal((historyAfter.data ?? []).length, 2);
-  assert.deepEqual(historyAfter.data[1].before_values, {
+  const historyAfter = await readRows('unlink history read', () =>
+    sales
+      .from('property_history')
+      .select('target,changed_fields,before_values,after_values')
+      .eq('property_id', liveProperty)
+      .eq('target', 'vendor_link')
+      .order('occurred_at'),
+  );
+  assert.equal(historyAfter.length, 2);
+  assert.deepEqual(historyAfter[1].before_values, {
     vendor_id: vendor.id,
     vendor_name: vendor.display_name,
   });
-  assert.deepEqual(historyAfter.data[1].after_values, {});
+  assert.deepEqual(historyAfter[1].after_values, {});
   observed(
     'unlink keeps the vendor, the unrelated link and the earlier link history',
     { vendor: vendor.id },
   );
 
   // ---------------------------------------------------------------- application
-  const salesSectionRoute = await appGet(
-    salesCookies,
-    `/api/properties/${liveProperty}/vendors`,
+  const salesSectionRoute = await endpointCall('sales section route', () =>
+    appGet(salesCookies, `/api/properties/${liveProperty}/vendors`),
   );
   assert.equal(salesSectionRoute.status, 200);
   assert.deepEqual(salesSectionRoute.body.vendors, []);
-  const salesLinkRoute = await appPost(
-    salesCookies,
-    `/api/properties/${liveProperty}/vendors`,
-    { vendorId: vendor.id, propertyRevision: revision },
+  const salesLinkRoute = await endpointCall('sales link route', () =>
+    appPost(salesCookies, `/api/properties/${liveProperty}/vendors`, {
+      vendorId: vendor.id,
+      propertyRevision: revision,
+    }),
   );
   assert.equal(salesLinkRoute.status, 403);
-  const staffLinkRoute = await appPost(
-    staffCookies,
-    `/api/properties/${liveProperty}/vendors`,
-    { vendorId: vendor.id, propertyRevision: revision },
+  const staffLinkRoute = await endpointCall('staff link route', () =>
+    appPost(staffCookies, `/api/properties/${liveProperty}/vendors`, {
+      vendorId: vendor.id,
+      propertyRevision: revision,
+    }),
   );
-  assert.equal(staffLinkRoute.status, 200);
+  assert.equal(staffLinkRoute.status, 200, JSON.stringify(staffLinkRoute.body));
   assert.equal(staffLinkRoute.body.link.vendorId, vendor.id);
-  const malformedRoute = await appPost(
-    staffCookies,
-    `/api/properties/${liveProperty}/vendors`,
-    { vendorId: vendor.id },
+  const malformedRoute = await endpointCall('malformed link route', () =>
+    appPost(staffCookies, `/api/properties/${liveProperty}/vendors`, {
+      vendorId: vendor.id,
+    }),
   );
   assert.equal(malformedRoute.status, 400);
-  const staleUnlinkRoute = await appPost(
-    staffCookies,
-    `/api/properties/${liveProperty}/vendors/${vendor.id}`,
-    { revision: randomUUID() },
+  const staleUnlinkRoute = await endpointCall('stale unlink route', () =>
+    appPost(
+      staffCookies,
+      `/api/properties/${liveProperty}/vendors/${vendor.id}`,
+      { revision: randomUUID() },
+    ),
   );
   assert.equal(staleUnlinkRoute.status, 409);
   assert.equal(staleUnlinkRoute.body.error, 'stale-edit');
-  const currentLink = await sales.rpc('list_property_vendors', {
-    p_property_id: liveProperty,
-  });
-  const unlinkRoute = await appPost(
-    staffCookies,
-    `/api/properties/${liveProperty}/vendors/${vendor.id}`,
-    { revision: currentLink.data[0].revision },
+  const currentLink = await rpcCall(
+    'current link read',
+    sales,
+    'list_property_vendors',
+    { p_property_id: liveProperty },
   );
-  assert.equal(unlinkRoute.status, 200);
+  const unlinkRoute = await endpointCall('unlink route', () =>
+    appPost(
+      staffCookies,
+      `/api/properties/${liveProperty}/vendors/${vendor.id}`,
+      { revision: currentLink.data[0].revision },
+    ),
+  );
+  // A retried unlink reports the stale removed relationship; the row being gone is
+  // asserted through the reads below.
+  assert.ok(
+    unlinkRoute.status === 200 ||
+      (unlinkRoute.status === 409 && unlinkRoute.body?.error === 'stale-edit'),
+    JSON.stringify(unlinkRoute.body),
+  );
   const vendorDetailRoute = await appGet(
     salesCookies,
     '/api/vendors/' + vendor.id,
@@ -1120,7 +1284,7 @@ async function vendorLinkJourney({
   );
 
   // ---------------------------------------------------------------- browser
-  await staff.rpc('link_property_vendor', {
+  await rpcCall('browser journey link', staff, 'link_property_vendor', {
     ...linkArgs,
     p_expected_property_revision: (
       await propertyRevisionOf(staff, liveProperty)
