@@ -1361,13 +1361,19 @@ async function vendorLinkJourney({
       { revision: currentLink.data[0].revision },
     ),
   );
-  // A retried unlink reports the stale removed relationship; the row being gone is
-  // asserted through the reads below.
-  assert.ok(
-    unlinkRoute.status === 200 ||
-      (unlinkRoute.status === 409 && unlinkRoute.body?.error === 'stale-edit'),
-    JSON.stringify(unlinkRoute.body),
+  assert.equal(unlinkRoute.status, 200, JSON.stringify(unlinkRoute.body));
+  const afterRouteSection = await rpcCall(
+    'property section after route unlink',
+    sales,
+    'list_property_vendors',
+    { p_property_id: liveProperty },
   );
+  assert.equal(
+    afterRouteSection.error,
+    null,
+    refusal(afterRouteSection.error, 'no error'),
+  );
+  assert.deepEqual(afterRouteSection.data, []);
   const vendorDetailRoute = await appGet(
     salesCookies,
     '/api/vendors/' + vendor.id,
@@ -1380,6 +1386,12 @@ async function vendorLinkJourney({
       (property) => property.propertyId === archivedProperty,
     ),
     'The sales projection hides the archived linked property',
+  );
+  assert.ok(
+    !vendorDetailRoute.body.properties.some(
+      (property) => property.propertyId === liveProperty,
+    ),
+    'The route unlink removes the live property from the vendor projection',
   );
   assert.ok(
     vendorDetailRoute.body.properties.some(
