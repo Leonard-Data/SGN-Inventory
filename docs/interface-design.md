@@ -129,7 +129,7 @@ Shipped: the card cover is the site plate drawn from the record's own fields; a 
         panel Price history → two .price-series groups (sale asking price / monthly asking rent) of .price-row (.price-when, .price-change, .price-note, .price-who), newest-first with per-series paging
         panel Addresses  → .record rows + mapping .badge, .addrNote policy line
         panel Contacts   → .record rows + owner-contact disclosure (.owner-disclosure/.owner-phone)
-        panel Vendors    → .record rows of linked supplier companies, separate from owners and brokers; a maintainer-only .maintenance disclosure searches the directory, links one company and confirms removing a mistaken link (issue #74)
+        panel Vendors    → .record rows of linked supplier companies, separate from owners and brokers; an active-employee .maintenance disclosure on an unarchived property searches the directory, links one company and confirms removing a mistaken link (issue #74)
       .tabpanel "Tài liệu": panel Files → property-files Workspace (.doc-row vocabulary with labelled icon row actions, five-row .pager, cover with an add-cover icon action, dropzone)
       .tabpanel "Thảo luận": Discussion → 30-item list newest-first, .composer, author edit and withdrawal with reasoned manager/admin removal (.comment-actions labelled icon buttons, .comment-edited marker, .comment-edit editor, .comment-removed marker, .comment-moderation)
     aside.detail-rail (sticky):
@@ -227,7 +227,7 @@ detail: quiet back link · .detail-head · panel .facts (recorded contact block;
   read as unknown, never a dash) · panel linked properties (.record rows: property code →
   property record, state badge, link time; bounded to 50 with an explicit cut note)
 ```
-Shipped: `GET /api/vendors` serves the newest-first bounded directory through `list_vendors` (at most 30 rows, keyset cursor pair); `POST /api/vendors` creates one company through the guarded `create_vendor` operation for a live staff/manager/admin, keeping the draft and the submission key on failure; `GET /api/vendors/[id]` reads one recorded identity and its authorized linked-property projection (ticket #74), which hides an archived property outside the reader's role. Every active role sees the People → Vendors destination; only maintainers see the create panel, and the route and database refuse the mutation independently. Detail has no edit control in this slice; a property's own Vendor section is the only link/unlink surface.
+Shipped: `GET /api/vendors` serves the newest-first bounded directory through `list_vendors` (at most 30 rows, keyset cursor pair); `POST /api/vendors` creates one company through the guarded `create_vendor` operation for a live staff/manager/admin, keeping the draft and the submission key on failure; `GET /api/vendors/[id]` reads one recorded identity and its authorized linked-property projection (ticket #74), which hides an archived property outside the reader's role. Every active role sees the People → Vendors destination; only maintainers see the create panel, and the route and database refuse the mutation independently. Detail has no edit control in this slice; a property's own Vendor section is the only link/unlink surface, and every active employee sees those controls on a maintainable unarchived property. Contact creation and contact-link maintenance remain staff/manager/admin-only.
 
 ### 5.7 `/people/contacts` (new, staff/manager/admin)
 

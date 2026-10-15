@@ -25,6 +25,7 @@ import { employeeDeactivationContract } from './employee-deactivation-contract.m
 import { employeeAccountDeletionContract } from './employee-account-deletion-contract.mjs';
 import { auditRetentionContract } from './audit-retention-contract.mjs';
 import { employeeDeactivationConcurrency } from './employee-deactivation-concurrency.mjs';
+import { propertyVendorLinkConcurrency } from './property-vendor-links-concurrency.mjs';
 import { applyEmbeddedSchema } from './embedded-schema.mjs';
 const root = process.env.SGN_PROJECT_ROOT || process.cwd();
 const db = new PGlite({extensions:{unaccent,pg_trgm,pgcrypto}});
@@ -603,6 +604,7 @@ await employeeDeactivationContract({db,asUser,check,fails,employees});
 // reference and the historical Auth attribution preserved.
 await employeeAccountDeletionContract({db,asUser,check,fails});
 await employeeDeactivationConcurrency({root,check});
+await propertyVendorLinkConcurrency({root,check});
 // Ticket #73: the vendor directory authority, validation, retry and paging rules.
 await vendorContract({db,asUser,check,fails,employees});
 // Ticket #74: property-to-vendor links, their correction and the history they project.
@@ -610,7 +612,7 @@ await propertyVendorLinkContract({db,asUser,check,fails,employees,property,other
 // Audit-trail retention: the window boundary, repeat safety, own-table binding and the
 // application/API denial around the administrative trim.
 await auditRetentionContract({db,asUser,check,fails,employees});
-const report={checked_at:new Date().toISOString(),engine:'PGlite embedded PostgreSQL plus an embedded real PostgreSQL engine for the two-connection last-admin race; mocked auth/storage schemas',passed,
- limitations:['Not a live Supabase integration test','HTTP Auth, signed URLs, Vercel and browser flows not exercised','Sustained multi-session contention at production load remains a staging acceptance gate']};
+const report={checked_at:new Date().toISOString(),engine:'PGlite embedded PostgreSQL plus an embedded real PostgreSQL engine for the two-connection last-admin and property-vendor-link races; mocked auth/storage schemas',passed,
+ limitations:['Not a live Supabase integration test','HTTP Auth, signed URLs, Vercel and browser flows not exercised','Hosted/staging independent-session contention at production load remains an acceptance gate']};
 await fs.writeFile(path.join(root,'docs/validation-results.json'),JSON.stringify(report,null,2)+'\n');
 console.log(`${passed} assertions passed`);await db.close();

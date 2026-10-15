@@ -133,8 +133,8 @@ export async function propertyVendors(
   }
 }
 
-// A link is a vendor-maintenance write (C5) on a property the caller may maintain; the
-// database re-reads the live role, the maintenance gate and the parent property revision
+// A link is a vendor relationship write (C5) on a readable unarchived property; the
+// database re-reads live membership, the maintenance gate and the parent property revision
 // independently, and a duplicate submission converges on the recorded relationship.
 export async function linkPropertyVendor(
   context: RouteContext,

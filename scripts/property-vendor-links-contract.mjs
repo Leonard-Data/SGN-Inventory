@@ -118,17 +118,47 @@ export async function propertyVendorLinkContract({
       );
       const key = (
         await db.query(
-          "select pg_get_constraintdef(oid) as def from pg_constraint where conrelid='public.property_vendors'::regclass and contype='p'",
+          `select array_agg(att.attname order by key.ord) as columns
+           from pg_constraint con
+           join pg_index idx on idx.indexrelid = con.conindid
+           cross join lateral unnest(idx.indkey) with ordinality as key(attnum, ord)
+           join pg_attribute att on att.attrelid = idx.indrelid and att.attnum = key.attnum
+           where con.conrelid = 'public.property_vendors'::regclass and con.contype = 'p'
+           group by con.oid`,
         )
-      ).rows[0].def;
-      assert.ok(/property_id, vendor_id/.test(key), key);
+      ).rows[0]?.columns;
+      assert.deepEqual(key, ['property_id', 'vendor_id']);
       const vendorIndex = (
         await db.query(
-          "select indexdef from pg_indexes where schemaname='public' and tablename='property_vendors' and indexname='property_vendors_vendor_idx'",
+          `select array_agg(att.attname order by key.ord) as columns
+           from pg_class index_rel
+           join pg_namespace index_ns on index_ns.oid = index_rel.relnamespace
+           join pg_index idx on idx.indexrelid = index_rel.oid
+           cross join lateral unnest(idx.indkey) with ordinality as key(attnum, ord)
+           join pg_attribute att on att.attrelid = idx.indrelid and att.attnum = key.attnum
+           where index_ns.nspname = 'public'
+             and index_rel.relname = 'property_vendors_vendor_idx'
+             and idx.indisvalid
+           group by index_rel.oid`,
         )
       ).rows[0];
       assert.ok(vendorIndex, 'the vendor -> property lookup index is missing');
-      assert.ok(/\(vendor_id, property_id\)/.test(vendorIndex.indexdef));
+      assert.deepEqual(vendorIndex.columns, ['vendor_id', 'property_id']);
+    },
+  );
+
+  await check(
+    'the primary key refuses a direct duplicate property/vendor pair',
+    async () => {
+      const insert =
+        'insert into public.property_vendors(property_id,vendor_id,created_by) values($1,$2,$3)';
+      await asAdmin();
+      await db.query(insert, [other, related, employees[5]]);
+      await fails(insert, [other, related, employees[5]], '23505');
+      await db.query(
+        'delete from public.property_vendors where property_id=$1 and vendor_id=$2',
+        [other, related],
+      );
     },
   );
 
@@ -158,7 +188,7 @@ export async function propertyVendorLinkContract({
   );
 
   await check(
-    'linking needs a live staff, manager or admin identity on a property it may maintain',
+    'linking needs a live active employee on an unarchived property',
     async () => {
       await asUser(null);
       await fails(link, [property, vendor], '42501');
@@ -166,9 +196,13 @@ export async function propertyVendorLinkContract({
       await fails(link, [property, vendor], '42501');
       await asIdentity('00000000-0000-4000-8000-00000000dead');
       await fails(link, [property, vendor], '42501');
-      // Sales read a property but a vendor link is not a property-fact edit for them.
       await asUser(0);
-      await fails(link, [property, vendor], '42501');
+      const salesLink = (await db.query(link, [other, related])).rows[0].link;
+      assert.equal(salesLink.created, true);
+      const salesUnlink = (
+        await db.query(unlink, [other, related, salesLink.revision])
+      ).rows[0].link;
+      assert.equal(salesUnlink.removed, true);
       await asUser(2);
       assert.equal(
         (await db.query(link, [property, vendor])).rows[0].link.created,
@@ -252,7 +286,7 @@ export async function propertyVendorLinkContract({
   await check(
     'an archived property refuses a new link and hides its links outside reviewer authority',
     async () => {
-      await asUser(5);
+      await asUser(0);
       await fails(link, [archivedProperty, vendor], '42501');
       await asAdmin();
       await db.query(
