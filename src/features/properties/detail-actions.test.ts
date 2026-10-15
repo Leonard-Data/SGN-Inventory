@@ -43,23 +43,20 @@ test('an employee with shared-contact authority can open Edit', () => {
   );
 });
 
-test(
-  'shared-contact Edit stays closed for a non-reviewer on an archived property',
-  () => {
-    const colleague = employee('colleague', 'sales');
-    const archived = { ...property, archived_at: '2026-01-01T00:00:00Z' };
+test('shared-contact Edit stays closed for a non-reviewer on an archived property', () => {
+  const colleague = employee('colleague', 'sales');
+  const archived = { ...property, archived_at: '2026-01-01T00:00:00Z' };
 
-    assert.equal(canOpenEditDetail(colleague, archived), false);
-    assert.equal(
-      activeDetailAction(
-        { tool: 'edit', forEmployee: colleague, propertyId: archived.id },
-        colleague,
-        archived,
-      ),
-      null,
-    );
-  },
-);
+  assert.equal(canOpenEditDetail(colleague, archived), false);
+  assert.equal(
+    activeDetailAction(
+      { tool: 'edit', forEmployee: colleague, propertyId: archived.id },
+      colleague,
+      archived,
+    ),
+    null,
+  );
+});
 
 test('owner disclosure cannot be reused by another employee session', () => {
   const disclosure = {

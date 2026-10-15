@@ -76,10 +76,7 @@ export function activeDetailAction(
     action.propertyId !== property.id
   )
     return null;
-  if (
-    action.tool === 'edit' &&
-    !canOpenEditDetail(employee, property)
-  )
+  if (action.tool === 'edit' && !canOpenEditDetail(employee, property))
     return null;
   if (action.tool === 'sale' && !['manager', 'admin'].includes(employee.role))
     return null;
