@@ -18,6 +18,7 @@ import { priceHistoryContract } from './price-history-contract.mjs';
 import { inventoryAgeContract } from './inventory-age-contract.mjs';
 import { inventoryFilterContract } from './inventory-filter-contract.mjs';
 import { vendorContract } from './vendor-contract.mjs';
+import { propertyVendorLinkContract } from './property-vendor-links-contract.mjs';
 import { referenceCatalogContract } from './reference-catalog-contract.mjs';
 import { saleCompletionContract } from './sale-completion-contract.mjs';
 import { employeeDeactivationContract } from './employee-deactivation-contract.mjs';
@@ -612,6 +613,8 @@ await employeeAccountDeletionContract({db,asUser,check,fails});
 await employeeDeactivationConcurrency({root,check});
 // Ticket #73: the vendor directory authority, validation, retry and paging rules.
 await vendorContract({db,asUser,check,fails,employees});
+// Ticket #74: property-to-vendor links, their correction and the history they project.
+await propertyVendorLinkContract({db,asUser,check,fails,employees,property,other});
 // Audit-trail retention: the window boundary, repeat safety, own-table binding and the
 // application/API denial around the administrative trim.
 await auditRetentionContract({db,asUser,check,fails,employees});

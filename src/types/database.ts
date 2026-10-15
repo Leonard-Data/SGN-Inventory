@@ -910,6 +910,40 @@ export type Database = {
           },
         ];
       };
+      property_vendors: {
+        Row: {
+          created_at: string;
+          created_by: string;
+          property_id: string;
+          revision: string;
+          vendor_id: string;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [
+          {
+            foreignKeyName: 'property_vendors_created_by_fkey';
+            columns: ['created_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'property_vendors_property_id_fkey';
+            columns: ['property_id'];
+            isOneToOne: false;
+            referencedRelation: 'properties';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'property_vendors_vendor_id_fkey';
+            columns: ['vendor_id'];
+            isOneToOne: false;
+            referencedRelation: 'vendors';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       property_files: {
         Row: {
           bucket_id: string;
@@ -2016,6 +2050,45 @@ export type Database = {
           phones: string[] | null;
           source_address: string | null;
         }[];
+      };
+      list_property_vendors: {
+        Args: { p_property_id: string };
+        Returns: {
+          contact_name: string | null;
+          created_at: string;
+          display_name: string;
+          email: string | null;
+          phones: string[] | null;
+          revision: string;
+          vendor_id: string;
+        }[];
+      };
+      list_vendor_properties: {
+        Args: { p_vendor_id: string; p_limit?: number };
+        Returns: {
+          archived_at: string | null;
+          linked_at: string;
+          listing_mode: string;
+          property_code: string;
+          property_id: string;
+          status: string;
+        }[];
+      };
+      link_property_vendor: {
+        Args: {
+          p_expected_property_revision: string;
+          p_property_id: string;
+          p_vendor_id: string;
+        };
+        Returns: Json;
+      };
+      unlink_property_vendor: {
+        Args: {
+          p_expected_link_revision: string;
+          p_property_id: string;
+          p_vendor_id: string;
+        };
+        Returns: Json;
       };
       company_employee_daily_activity: {
         Args: { p_from: string; p_to: string };
