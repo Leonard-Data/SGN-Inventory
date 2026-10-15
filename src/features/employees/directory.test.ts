@@ -4,6 +4,7 @@ import {
   DIRECTORY_PAGE_SIZE,
   DirectoryError,
   accessState,
+  directoryInvitations,
   directoryOperations,
   directoryPage,
   directoryQuery,
@@ -28,8 +29,8 @@ function row(index: number, patch: Partial<DirectoryRow> = {}): DirectoryRow {
 test('recorded link and activation decide the access state', () => {
   assert.equal(accessState(row(1)), 'active');
   assert.equal(accessState(row(2, { is_active: false })), 'inactive');
-  // An imported person with no linked sign-in identity is unlinked: the schema records no
-  // invitation, so nothing here may present them as invited.
+  // An imported person with no linked sign-in identity is unlinked: a recorded invitation is
+  // separate evidence, so nothing here may present them as invited from the null link alone.
   assert.equal(accessState(row(3, { auth_user_id: null })), 'unlinked');
   assert.equal(
     accessState(row(4, { auth_user_id: null, is_active: false })),
@@ -84,6 +85,7 @@ test('a page is bounded and keeps the database ordering', () => {
     access: 'active',
     deactivation: null,
     deletion: null,
+    invitation: null,
   });
 });
 
@@ -228,5 +230,58 @@ test('the recorded deletion states are distinct in both languages', () => {
       messages[locale].employeeAccessAccountDeleted,
     ];
     assert.equal(new Set(labels).size, 6, `${locale} labels must differ`);
+  }
+});
+
+test('the recorded invitation state is attached to its employee', () => {
+  const rows = [row(1), row(2)];
+  const invitations = directoryInvitations([
+    {
+      employee_id: rows[0]!.id,
+      state: 'provider_failed',
+      revision: 2,
+      updated_at: '2026-10-15T10:00:00Z',
+    },
+    {
+      employee_id: rows[0]!.id,
+      state: 'provider_pending',
+      revision: 1,
+      updated_at: '2026-10-15T09:00:00Z',
+    },
+    {
+      employee_id: rows[1]!.id,
+      state: 'completed',
+      revision: 1,
+      updated_at: '2026-10-15T09:00:00Z',
+    },
+  ]);
+  const page = directoryPage(rows, {}, invitations);
+  assert.deepEqual(page.employees[0]!.invitation, {
+    state: 'provider_failed',
+    revision: 2,
+    updatedAt: '2026-10-15T10:00:00Z',
+  });
+  // A deactivation state is not an invitation state, and an employee without a recorded
+  // invitation carries no marker at all.
+  assert.equal(page.employees[1]!.invitation, null);
+});
+
+test('an employee with no recorded invitation is never presented as invited', () => {
+  const page = directoryPage([
+    row(1, { auth_user_id: null, is_active: false }),
+  ]);
+  assert.equal(page.employees[0]!.access, 'unlinked');
+  assert.equal(page.employees[0]!.invitation, null);
+  for (const locale of ['vi', 'en'] as const) {
+    const labels = [
+      messages[locale].employeeInvitePendingLabel,
+      messages[locale].employeeInviteReconciliationLabel,
+      messages[locale].employeeInviteRecordedLabel,
+    ];
+    assert.equal(new Set(labels).size, 3, `${locale} labels must differ`);
+    assert.ok(
+      !/đã gửi|delivered|mailbox received/i.test(labels.join(' ')),
+      `${locale} must not claim the mailbox received the invitation`,
+    );
   }
 });

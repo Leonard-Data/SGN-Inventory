@@ -23,7 +23,7 @@ An employee whose company inventory access is disabled, regardless of whether th
 _Avoid_: Signed-out employee
 
 **Unlinked employee**:
-An employee record with no confirmed sign-in identity that has never had one confirmed and recorded as deleted. It is a distinct access state, not a pending invitation and not a disabled account; the schema records no invitation.
+An employee record with no confirmed sign-in identity that has never had one confirmed and recorded as deleted. It is a distinct access state, not a disabled account. A recorded invitation is separate lifecycle evidence: it does not make the employee linked, and an unlinked person with no recorded invitation is not invited.
 _Avoid_: Invited employee
 
 **Account-deleted employee**:

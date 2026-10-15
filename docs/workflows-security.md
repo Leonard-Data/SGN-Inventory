@@ -22,6 +22,7 @@
 | Read the completed-sale ranking | No | No | Yes | Yes |
 | Manage employee activation/roles and catalogs | No | No | No | Yes |
 | Deactivate a linked employee (guarded; provider block confirmed) | No | No | No | Yes |
+| Invite an employee by email and role (guarded; provider request recorded) | No | No | No | Yes |
 | Open the admin employee list (`/people/employees`) | No | No | No | Yes |
 | Read area/employee analytics | No | No | Yes | Yes |
 | Read staging/audit directly through API | No | No | No | No |
@@ -81,4 +82,4 @@ The required languages are VI/EN, with Vietnamese regional conventions in either
 
 Validate every form and server input. Require POST/Server Action mutations with origin/CSRF protections appropriate to the route. Limit high-volume search/event submissions in application middleware or an equivalent rate limiter. Prevent shared caching of signed-in data. Keep logs limited to request IDs, error classes and safe identifiers. Alert on repeated reservation conflicts or failed file completions without logging deal/contact content.
 
-Admin user invitations must link the correct Auth account to an employee email and confirm the requested role. The last active admin is protected by a database trigger that refuses a deactivation, demotion, unlink or removal that would leave the company without an active admin, serialized with an advisory lock so concurrent removals cannot both pass; deactivation runs through the guarded `begin_employee_deactivation` RPC and a direct lifecycle, link or role write cannot bypass the guard. Activation, invitation and role-change forms remain unshipped. Bootstrap the first admin through a controlled administrative database action after creating the Auth account.
+Admin user invitations must link the correct Auth account to an employee email and confirm the requested role. The last active admin is protected by a database trigger that refuses a deactivation, demotion, unlink or removal that would leave the company without an active admin, serialized with an advisory lock so concurrent removals cannot both pass; deactivation runs through the guarded `begin_employee_deactivation` RPC and a direct lifecycle, link or role write cannot bypass the guard. An invitation runs through the guarded `begin_employee_invitation` RPC: it records one normalized address and one existing company role under the live admin, creates the invited employee unlinked and inactive, and records the provider request state without activating or linking anyone; the requested role is never written into editable Auth metadata. The activation, account-deletion and role-change forms remain unshipped. Bootstrap the first admin through a controlled administrative database action after creating the Auth account.

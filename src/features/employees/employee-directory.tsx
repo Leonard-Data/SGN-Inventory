@@ -4,6 +4,8 @@ import { messages, label, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { EmployeeDeactivationPanel } from './employee-deactivation';
 import { EmployeeAccountDeletionPanel } from './employee-account-deletion';
+import { EmployeeInvitationForm } from './employee-invitation';
+import { mayAdministerEmployees } from './deactivation';
 import {
   deletionResumable,
   deletionStatus,
@@ -11,6 +13,7 @@ import {
 } from './deletion';
 import type {
   DirectoryDeactivation,
+  DirectoryInvitation,
   DirectoryPage,
   EmployeeAccess,
 } from './directory';
@@ -89,6 +92,16 @@ export function EmployeeDirectory({
     provider_failed: 'danger',
     completed: 'success',
   };
+  const invitationLabel: Record<DirectoryInvitation['state'], string> = {
+    provider_pending: text.employeeInvitePendingLabel,
+    provider_failed: text.employeeInviteReconciliationLabel,
+    recorded: text.employeeInviteRecordedLabel,
+  };
+  const invitationTone: Record<DirectoryInvitation['state'], string> = {
+    provider_pending: 'muted',
+    provider_failed: 'danger',
+    recorded: 'success',
+  };
   return (
     <>
       <div className="page-head">
@@ -142,6 +155,17 @@ export function EmployeeDirectory({
               <h2 id="employees">{text.employeesLink}</h2>
             </div>
             <div className="panel-body">
+              {mayAdministerEmployees(actor?.role ?? '') ? (
+                <details className="maintenance">
+                  <summary>{text.employeeInviteOpen}</summary>
+                  <EmployeeInvitationForm
+                    actorRole={actor?.role ?? ''}
+                    locale={locale}
+                    onChanged={reload}
+                    onDenied={redirectDenied}
+                  />
+                </details>
+              ) : null}
               {data.employees.length === 0 ? (
                 <div className="state-panel">
                   <h3>{text.employeeDirectoryEmpty}</h3>
@@ -213,6 +237,16 @@ export function EmployeeDirectory({
                                     data-tone={deletionTone[deletion.state]}
                                   >
                                     {deletionLabel[deletionState]}
+                                  </span>
+                                ) : null}
+                                {employee.invitation ? (
+                                  <span
+                                    className="badge"
+                                    data-tone={
+                                      invitationTone[employee.invitation.state]
+                                    }
+                                  >
+                                    {invitationLabel[employee.invitation.state]}
                                   </span>
                                 ) : null}
                               </td>
