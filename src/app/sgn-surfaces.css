@@ -44,29 +44,11 @@ body:has(dialog.sgn-dialog[open]) {
   overflow: hidden;
 }
 
-/* The record toolbar's overflow menu reuses the package popover. It hangs under the
-   toolbar's right edge rather than under the control itself: under 640px the package
-   stretches the buttons and this control wraps to a new line at the left, where a
-   control-anchored 232px menu ran off the screen. */
-.detail-actions {
-  position: relative;
-}
-.detail-more {
-  display: inline-flex;
-}
-.detail-more .sgn-popover {
-  right: 0;
-  left: auto;
-  min-width: min(232px, calc(100vw - var(--space-8)));
-  max-width: calc(100vw - var(--space-8));
-}
-
 /* Rows are lists for their semantics, not for numbering; the list itself carries no marker
    or inset. Left on the browser default, the marker inset pushed content 40px past the
    panel body's own inset — past the composer in the discussion, and past the row icons in
    a file or asking-price list. */
 .discussion ol,
-.price-list,
 .file-list {
   list-style: none;
   padding: 0;
