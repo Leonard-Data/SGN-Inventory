@@ -1,6 +1,7 @@
 import 'server-only';
 import { ApiError, uuid, type RouteContext } from '@/lib/supabase/route';
 import type { Employee } from '@/features/employees/types';
+import { requireReadableProperty } from './property-access';
 import { decisionDays, reservationReason } from './reservation-rules';
 import type {
   EffectiveReservation,
@@ -69,6 +70,7 @@ export async function reservationState(
   id: string,
 ): Promise<ReservationState> {
   if (!uuid(id)) throw new ApiError(400, 'invalid-input');
+  await requireReadableProperty(context, id);
   const canDecide = employee.role === 'manager' || employee.role === 'admin';
   const pendingQuery = context.client
     .from('property_locks')
@@ -135,6 +137,7 @@ export async function requestReservation(
   const reason = reservationReason(body.reason);
   if (!uuid(id) || !reason || Object.keys(body).some((key) => key !== 'reason'))
     throw new ApiError(400, 'invalid-input');
+  await requireReadableProperty(context, id);
   const { error } = await context.client.rpc('request_property_lock', {
     p_property_id: id,
     p_reason: reason,
@@ -157,6 +160,7 @@ export async function releaseReservation(
     Object.keys(body).some((key) => !['lockId', 'reason'].includes(key))
   )
     throw new ApiError(400, 'invalid-input');
+  await requireReadableProperty(context, id);
   const { data: lock, error: lockError } = await context.client
     .from('property_locks')
     .select('id,property_id,status')
@@ -200,6 +204,7 @@ export async function decideReservation(
     throw new ApiError(400, 'invalid-input');
   if (employee.role !== 'manager' && employee.role !== 'admin')
     throw new ApiError(403, 'access-denied');
+  await requireReadableProperty(context, id);
   // The database refuses self approval unconditionally. Reading the claimant first keeps that
   // denial an actionable message instead of the session-level 403 reserved for role failures.
   const { data: lock, error: lockError } = await context.client

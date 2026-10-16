@@ -8,6 +8,7 @@ import {
   revisions,
   target,
 } from '@/features/property-maintenance/data';
+import { requireReadableProperty } from '@/features/properties/property-access';
 function explanation(value: unknown) {
   if (
     typeof value !== 'string' ||
@@ -29,6 +30,7 @@ export async function correctionPage(
     (after && !uuid(after))
   )
     throw new ApiError(400, 'invalid-input');
+  if (property) await requireReadableProperty(context, property);
   let request = context.client
     .from('correction_requests')
     .select('*,correction_amendments(*)')
@@ -78,12 +80,24 @@ export async function correctionPage(
     nextCursor: (data?.length ?? 0) > 30 ? requests.at(-1)!.id : null,
   };
 }
-export async function correctionDetail(context: RouteContext, id: string) {
-  if (!uuid(id)) throw new ApiError(400, 'invalid-input');
+export async function correctionDetail(
+  context: RouteContext,
+  id: string,
+  params: URLSearchParams,
+) {
+  const propertyId = params.get('propertyId');
+  if (
+    !uuid(id) ||
+    !uuid(propertyId) ||
+    [...params.keys()].some((key) => key !== 'propertyId')
+  )
+    throw new ApiError(400, 'invalid-input');
+  await requireReadableProperty(context, propertyId);
   const { data, error } = await context.client
     .from('correction_requests')
     .select('*')
     .eq('id', id)
+    .eq('property_id', propertyId)
     .maybeSingle();
   databaseError(error);
   if (!data) throw new ApiError(404, 'not-found');
@@ -193,21 +207,25 @@ export async function amendmentPage(
   id: string,
   params: URLSearchParams,
 ) {
-  const after = params.get('after'),
+  const propertyId = params.get('propertyId'),
+    after = params.get('after'),
     ordinal = after === null ? 0 : Number(after);
   if (
     !uuid(id) ||
-    [...params.keys()].some((k) => k !== 'after') ||
+    !uuid(propertyId) ||
+    [...params.keys()].some((k) => !['propertyId', 'after'].includes(k)) ||
     (after !== null && !/^(0|[1-9][0-9]*)$/.test(after)) ||
     !Number.isInteger(ordinal) ||
     ordinal < 0 ||
     ordinal > 2147483647
   )
     throw new ApiError(400, 'invalid-input');
+  await requireReadableProperty(context, propertyId);
   const parent = await context.client
     .from('correction_requests')
     .select('id')
     .eq('id', id)
+    .eq('property_id', propertyId)
     .maybeSingle();
   databaseError(parent.error);
   if (!parent.data) throw new ApiError(404, 'not-found');

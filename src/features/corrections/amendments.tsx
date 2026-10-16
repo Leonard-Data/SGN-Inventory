@@ -8,10 +8,12 @@ import { vietnamTimestamp } from '@/features/properties/format';
 import type { AmendmentPage } from './data';
 function AmendmentList({
   requestId,
+  propertyId,
   locale,
   onInvalidate,
 }: {
   requestId: string;
+  propertyId: string;
   locale: Locale;
   onInvalidate?: () => void;
 }) {
@@ -20,8 +22,11 @@ function AmendmentList({
     { data, error, busy, surface, reload } = useProtectedData<AmendmentPage>(
       '/api/corrections/' +
         requestId +
-        '/amendments' +
-        (after ? '?after=' + after : ''),
+        '/amendments?' +
+        new URLSearchParams({
+          propertyId,
+          ...(after === null ? {} : { after: String(after) }),
+        }),
       undefined,
       onInvalidate,
     );
@@ -85,10 +90,12 @@ function AmendmentList({
 }
 export function Amendments({
   requestId,
+  propertyId,
   locale,
   onInvalidate,
 }: {
   requestId: string;
+  propertyId: string;
   locale: Locale;
   onInvalidate?: () => void;
 }) {
@@ -103,6 +110,7 @@ export function Amendments({
       {open ? (
         <AmendmentList
           requestId={requestId}
+          propertyId={propertyId}
           locale={locale}
           onInvalidate={onInvalidate}
         />

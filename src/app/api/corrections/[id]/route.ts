@@ -12,7 +12,11 @@ export function GET(
   return runRoute(request, async (context) => {
     await activeEmployee(context);
     return NextResponse.json(
-      await correctionDetail(context, (await route.params).id),
+      await correctionDetail(
+        context,
+        (await route.params).id,
+        request.nextUrl.searchParams,
+      ),
     );
   });
 }

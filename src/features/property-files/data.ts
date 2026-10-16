@@ -1,5 +1,6 @@
 import 'server-only';
 import { ApiError, uuid, type RouteContext } from '@/lib/supabase/route';
+import { requireReadableProperty } from '@/features/properties/property-access';
 import type { PropertyFileList, SignedFileResponse } from './types';
 
 export async function propertyFiles(
@@ -7,6 +8,7 @@ export async function propertyFiles(
   propertyId: string,
 ): Promise<PropertyFileList> {
   if (!uuid(propertyId)) throw new ApiError(400, 'invalid-input');
+  await requireReadableProperty(context, propertyId);
   const { data: files, error } = await context.client
     .from('property_files')
     .select(
@@ -32,17 +34,7 @@ export async function authorizeAndSignFile(
     throw new ApiError(400, 'invalid-input');
   if (typeof download !== 'boolean') throw new ApiError(400, 'invalid-input');
 
-  // Verify property exists and caller has access (RLS on properties table)
-  const { data: property, error: propError } = await context.client
-    .from('properties')
-    .select('id')
-    .eq('id', propertyId)
-    .maybeSingle();
-  if (propError) {
-    if (propError.code === '42501') throw new ApiError(403, 'access-denied');
-    throw new ApiError(503, 'unavailable');
-  }
-  if (!property) throw new ApiError(404, 'property-not-found');
+  await requireReadableProperty(context, propertyId);
 
   // Verify file exists, belongs to property, is ready — RLS ensures caller has access
   const { data: file, error: fileError } = await context.client
