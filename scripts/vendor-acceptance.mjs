@@ -128,7 +128,7 @@ function observed(name, details = {}) {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let retryCount = 0;
 function isTransient(error) {
-  const text = `${error?.message ?? ''} ${error?.details ?? ''}`;
+  const text = `${error?.message ?? ''} ${error?.details ?? ''} ${error?.code ?? ''} ${error?.status ?? ''}`;
   return /fetch failed|ConnectTimeout|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket hang up|Connection terminated|upstream connect error|502|503|504/i.test(
     text,
   );
@@ -192,6 +192,120 @@ async function readRows(label, work) {
   );
   assert.equal(result.error, null, refusal(result.error, 'no error'));
   return result.data ?? [];
+}
+function failureDetails(error, response) {
+  return {
+    message: error?.message ?? error?.details ?? null,
+    code: error?.code ?? null,
+    status: response?.status ?? error?.status ?? null,
+    body: response?.body ?? null,
+  };
+}
+function rpcFailure(result) {
+  return result?.error ?? result?.observedError ?? null;
+}
+function endpointFailure(result) {
+  return JSON.stringify({
+    body: result?.body ?? null,
+    observedError: result?.observedError ?? null,
+  });
+}
+async function recordedLink(client, propertyId, vendorId, label) {
+  return (
+    await readRows(label, () =>
+      client
+        .from('property_vendors')
+        .select('vendor_id,revision')
+        .eq('property_id', propertyId)
+        .eq('vendor_id', vendorId),
+    )
+  )[0] ?? null;
+}
+async function unlinkRpcCall(label, client, args, attempts = 4) {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    let result;
+    let thrown;
+    try {
+      result = await client.rpc('unlink_property_vendor', args);
+    } catch (error) {
+      thrown = error;
+    }
+    const error = thrown ?? result?.error;
+    if (!error) return result;
+    if (!isTransient(error))
+      return {
+        data: result?.data ?? null,
+        error,
+        observedError: failureDetails(error),
+      };
+    const current = await recordedLink(
+      client,
+      args.p_property_id,
+      args.p_vendor_id,
+      `${label} current link read`,
+    );
+    if (!current)
+      return {
+        data: { removed: true },
+        error: null,
+        observedError: failureDetails(error),
+      };
+    if (attempt === attempts)
+      return {
+        data: result?.data ?? null,
+        error,
+        observedError: failureDetails(error),
+      };
+    retryCount++;
+    console.log('RETRY', label, attempt);
+    await sleep(1500 * attempt);
+  }
+}
+async function unlinkEndpointCall(
+  label,
+  client,
+  propertyId,
+  vendorId,
+  work,
+  attempts = 4,
+) {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    let response;
+    let thrown;
+    try {
+      response = await work();
+    } catch (error) {
+      thrown = error;
+    }
+    const transient = thrown
+      ? isTransient(thrown)
+      : response?.status === 0 || [502, 503, 504].includes(response?.status ?? 0);
+    if (!transient) {
+      if (thrown)
+        return { status: 0, body: null, observedError: failureDetails(thrown) };
+      return response;
+    }
+    const current = await recordedLink(
+      client,
+      propertyId,
+      vendorId,
+      `${label} current link read`,
+    );
+    if (!current)
+      return {
+        status: 200,
+        body: null,
+        observedError: failureDetails(thrown ?? response?.body, response),
+      };
+    if (attempt === attempts)
+      return {
+        ...(response ?? { status: 0, body: null }),
+        observedError: failureDetails(thrown ?? response?.body, response),
+      };
+    retryCount++;
+    console.log('RETRY', label, attempt);
+    await sleep(1500 * attempt);
+  }
 }
 function sessionClient() {
   return createClient(environment.supabaseUrl, environment.publishableKey, {
@@ -878,19 +992,28 @@ async function vendorLinkJourney({
   inactiveCookies,
   unlinkedCookies,
 }) {
+  const recordProperty = async (id) => {
+    manifest.propertyIds.push(id);
+    report.retained_properties = [...manifest.propertyIds];
+    await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', {
+      mode: 0o600,
+    });
+  };
   const liveProperty = await createLinkProperty(
     staff,
     fixtureName('liên kết A'),
   );
+  await recordProperty(liveProperty);
   const otherProperty = await createLinkProperty(
     staff,
     fixtureName('liên kết B'),
   );
+  await recordProperty(otherProperty);
   const archivedProperty = await createLinkProperty(
     staff,
     fixtureName('liên kết C'),
   );
-  manifest.propertyIds.push(liveProperty, otherProperty, archivedProperty);
+  await recordProperty(archivedProperty);
   operatorSql(
     `update public.properties set archived_at = now() where id = '${archivedProperty}'`,
   );
@@ -919,18 +1042,21 @@ async function vendorLinkJourney({
   );
   assert.equal(salesLink.error, null, refusal(salesLink.error, 'no error'));
   assert.equal(salesLink.data.created, true);
-  const salesUnlink = await rpcCall(
-    'sales unlink',
-    sales,
-    'unlink_property_vendor',
-    {
-      p_property_id: liveProperty,
-      p_vendor_id: vendor.id,
-      p_expected_link_revision: salesLink.data.revision,
-    },
+  const salesUnlink = await unlinkRpcCall('sales unlink', sales, {
+    p_property_id: liveProperty,
+    p_vendor_id: vendor.id,
+    p_expected_link_revision: salesLink.data.revision,
+  });
+  assert.equal(
+    salesUnlink.error,
+    null,
+    refusal(rpcFailure(salesUnlink), 'no error'),
   );
-  assert.equal(salesUnlink.error, null, refusal(salesUnlink.error, 'no error'));
-  assert.equal(salesUnlink.data.removed, true);
+  assert.equal(
+    salesUnlink.data.removed,
+    true,
+    refusal(rpcFailure(salesUnlink), 'removed link'),
+  );
   const salesInsert = await sales.from('property_vendors').insert({
     property_id: liveProperty,
     vendor_id: vendor.id,
@@ -1022,16 +1148,11 @@ async function vendorLinkJourney({
       '42501',
       refusal(deniedLink.error, '42501'),
     );
-    const deniedUnlink = await rpcCall(
-      `${caller.name} unlink refusal`,
-      caller.client,
-      'unlink_property_vendor',
-      {
-        p_property_id: liveProperty,
-        p_vendor_id: vendor.id,
-        p_expected_link_revision: section.data[0].revision,
-      },
-    );
+    const deniedUnlink = await caller.client.rpc('unlink_property_vendor', {
+      p_property_id: liveProperty,
+      p_vendor_id: vendor.id,
+      p_expected_link_revision: section.data[0].revision,
+    });
     assert.equal(
       deniedUnlink.error?.code,
       '42501',
@@ -1049,18 +1170,14 @@ async function vendorLinkJourney({
       [401, 403].includes(deniedLinkRoute.status),
       JSON.stringify(deniedLinkRoute.body),
     );
-    const deniedUnlinkRoute = await endpointCall(
-      `${caller.name} unlink endpoint refusal`,
-      () =>
-        appPost(
-          caller.cookies,
-          `/api/properties/${liveProperty}/vendors/${vendor.id}`,
-          { revision: section.data[0].revision },
-        ),
+    const deniedUnlinkRoute = await appPost(
+      caller.cookies,
+      `/api/properties/${liveProperty}/vendors/${vendor.id}`,
+      { revision: section.data[0].revision },
     );
     assert.ok(
       [401, 403].includes(deniedUnlinkRoute.status),
-      JSON.stringify(deniedUnlinkRoute.body),
+      endpointFailure(deniedUnlinkRoute),
     );
   }
   const unchanged = await readRows(
@@ -1117,16 +1234,11 @@ async function vendorLinkJourney({
     { ...linkArgs, p_expected_property_revision: randomUUID() },
   );
   assert.equal(stale.error?.code, 'PT409', refusal(stale.error, 'PT409'));
-  const staleUnlink = await rpcCall(
-    'stale link revision',
-    staff,
-    'unlink_property_vendor',
-    {
-      p_property_id: liveProperty,
-      p_vendor_id: vendor.id,
-      p_expected_link_revision: randomUUID(),
-    },
-  );
+  const staleUnlink = await staff.rpc('unlink_property_vendor', {
+    p_property_id: liveProperty,
+    p_vendor_id: vendor.id,
+    p_expected_link_revision: randomUUID(),
+  });
   assert.equal(
     staleUnlink.error?.code,
     'PT409',
@@ -1237,32 +1349,37 @@ async function vendorLinkJourney({
     },
   );
   assert.equal(secondLink.error, null, refusal(secondLink.error, 'no error'));
+  const otherHistory = await readRows('other property link history read', () =>
+    sales
+      .from('property_history')
+      .select('target,actor_name,changed_fields,before_values,after_values')
+      .eq('property_id', otherProperty)
+      .order('occurred_at'),
+  );
+  assert.equal(otherHistory.length, 0);
   const historyBefore = await readRows('link history read', () =>
     sales
       .from('property_history')
       .select('target,actor_name,changed_fields,before_values,after_values')
       .eq('property_id', liveProperty)
-      .eq('target', 'vendor_link')
       .order('occurred_at'),
   );
   assert.equal(historyBefore.length, 0);
-  const removed = await rpcCall(
-    'confirmed unlink',
-    staff,
-    'unlink_property_vendor',
-    {
-      p_property_id: liveProperty,
-      p_vendor_id: vendor.id,
-      p_expected_link_revision: section.data[0].revision,
-    },
+  const removed = await unlinkRpcCall('confirmed unlink', staff, {
+    p_property_id: liveProperty,
+    p_vendor_id: vendor.id,
+    p_expected_link_revision: section.data[0].revision,
+  });
+  assert.equal(
+    removed.error,
+    null,
+    refusal(rpcFailure(removed), 'no error'),
   );
-  // A retry after a lost response reports the link as already removed; the removed row is
-  // asserted immediately below, so the correction itself stays proven.
-  assert.ok(
-    removed.error === null || removed.error?.code === 'P0002',
-    refusal(removed.error, 'no error or P0002'),
+  assert.equal(
+    removed.data.removed,
+    true,
+    refusal(rpcFailure(removed), 'removed link'),
   );
-  if (removed.error === null) assert.equal(removed.data.removed, true);
   assert.equal(
     (
       await readRows('unlinked property reads no link', () =>
@@ -1296,7 +1413,6 @@ async function vendorLinkJourney({
       .from('property_history')
       .select('target,changed_fields,before_values,after_values')
       .eq('property_id', liveProperty)
-      .eq('target', 'vendor_link')
       .order('occurred_at'),
   );
   assert.equal(historyAfter.length, 0);
@@ -1325,18 +1441,19 @@ async function vendorLinkJourney({
     'list_property_vendors',
     { p_property_id: liveProperty },
   );
-  const salesUnlinkRoute = await endpointCall('sales unlink route', () =>
-    appPost(
-      salesCookies,
-      `/api/properties/${liveProperty}/vendors/${vendor.id}`,
-      { revision: salesRouteSection.data[0].revision },
-    ),
+  const salesUnlinkRoute = await unlinkEndpointCall(
+    'sales unlink route',
+    sales,
+    liveProperty,
+    vendor.id,
+    () =>
+      appPost(
+        salesCookies,
+        `/api/properties/${liveProperty}/vendors/${vendor.id}`,
+        { revision: salesRouteSection.data[0].revision },
+      ),
   );
-  assert.equal(
-    salesUnlinkRoute.status,
-    200,
-    JSON.stringify(salesUnlinkRoute.body),
-  );
+  assert.equal(salesUnlinkRoute.status, 200, endpointFailure(salesUnlinkRoute));
   const staffLinkRoute = await endpointCall('staff link route', () =>
     appPost(staffCookies, `/api/properties/${liveProperty}/vendors`, {
       vendorId: vendor.id,
@@ -1351,29 +1468,36 @@ async function vendorLinkJourney({
     }),
   );
   assert.equal(malformedRoute.status, 400);
-  const staleUnlinkRoute = await endpointCall('stale unlink route', () =>
-    appPost(
-      staffCookies,
-      `/api/properties/${liveProperty}/vendors/${vendor.id}`,
-      { revision: randomUUID() },
-    ),
+  const staleUnlinkRoute = await appPost(
+    staffCookies,
+    `/api/properties/${liveProperty}/vendors/${vendor.id}`,
+    { revision: randomUUID() },
   );
-  assert.equal(staleUnlinkRoute.status, 409);
-  assert.equal(staleUnlinkRoute.body.error, 'stale-edit');
+  assert.equal(staleUnlinkRoute.status, 409, endpointFailure(staleUnlinkRoute));
+  assert.equal(
+    staleUnlinkRoute.body.error,
+    'stale-edit',
+    endpointFailure(staleUnlinkRoute),
+  );
   const currentLink = await rpcCall(
     'current link read',
     sales,
     'list_property_vendors',
     { p_property_id: liveProperty },
   );
-  const unlinkRoute = await endpointCall('unlink route', () =>
-    appPost(
-      staffCookies,
-      `/api/properties/${liveProperty}/vendors/${vendor.id}`,
-      { revision: currentLink.data[0].revision },
-    ),
+  const unlinkRoute = await unlinkEndpointCall(
+    'unlink route',
+    staff,
+    liveProperty,
+    vendor.id,
+    () =>
+      appPost(
+        staffCookies,
+        `/api/properties/${liveProperty}/vendors/${vendor.id}`,
+        { revision: currentLink.data[0].revision },
+      ),
   );
-  assert.equal(unlinkRoute.status, 200, JSON.stringify(unlinkRoute.body));
+  assert.equal(unlinkRoute.status, 200, endpointFailure(unlinkRoute));
   const afterRouteSection = await rpcCall(
     'property section after route unlink',
     sales,
@@ -1415,10 +1539,7 @@ async function vendorLinkJourney({
     `/api/properties/${liveProperty}/history`,
   );
   assert.equal(historyRoute.status, 200);
-  const linkEvents = historyRoute.body.events.filter(
-    (event) => event.target === 'vendor_link',
-  );
-  assert.equal(linkEvents.length, 0);
+  assert.equal(historyRoute.body.events.length, 0);
   observed(
     'the endpoints bind the link bodies without writing property history',
   );
@@ -1522,8 +1643,8 @@ async function vendorLinkJourney({
   const afterUnlink = vendorSection('sgn73-staff', 9336);
   assert.equal(afterUnlink.rows.length, 0);
   assert.equal(
-    afterUnlink.history.some((row) => row.target === 'Liên kết nhà cung cấp'),
-    false,
+    afterUnlink.history.length,
+    0,
     'The unlink stays out of property history',
   );
   observed(
