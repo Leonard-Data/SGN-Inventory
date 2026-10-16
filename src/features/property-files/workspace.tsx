@@ -223,6 +223,7 @@ export function Workspace({
     setPurpose('photo');
     fileInput.current?.focus();
     fileInput.current?.scrollIntoView({ block: 'center' });
+    fileInput.current?.click();
   }
 
   function categoryName(id: string): string {
