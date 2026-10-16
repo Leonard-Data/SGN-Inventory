@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Employee, EmployeeSession } from './types';
 import { api, RequestError } from './api';
 import {
+  isProtectedInvalidation,
   loadProtected,
   refocusAction,
   renderedSession,
@@ -12,6 +13,7 @@ import {
 export function useProtectedData<T>(
   source: string | ((signal: AbortSignal) => Promise<T>),
   onClear?: () => void,
+  onInvalidate?: () => void,
 ) {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [data, setData] = useState<T | null>(null);
@@ -19,6 +21,7 @@ export function useProtectedData<T>(
   const [busy, setBusy] = useState(true);
   const generation = useRef(0);
   const controller = useRef<AbortController | null>(null);
+  const loadRef = useRef<(() => Promise<void>) | null>(null);
   const surfaceElement = useRef<HTMLDivElement | null>(null);
   const renderedFor = useRef<string | null>(null);
   const renderedAccessRevision = useRef<number | null>(null);
@@ -66,7 +69,8 @@ export function useProtectedData<T>(
         onIdentityChange: () => {
           if (renderedFor.current === null) return;
           clear();
-          void load();
+          onInvalidate?.();
+          void loadRef.current?.();
         },
       });
       if (version !== generation.current) return;
@@ -83,6 +87,7 @@ export function useProtectedData<T>(
       setData(null);
       setEmployee(null);
       onClear?.();
+      if (isProtectedInvalidation(failure)) onInvalidate?.();
       if (
         failure instanceof RequestError &&
         (failure.status === 401 || failure.status === 403)
@@ -99,7 +104,10 @@ export function useProtectedData<T>(
         setBusy(false);
       }
     }
-  }, [source, invalidate, onClear, clear]);
+  }, [source, invalidate, onClear, onInvalidate, clear]);
+  useEffect(() => {
+    loadRef.current = load;
+  }, [load]);
   const reload = useCallback(() => {
     setBusy(true);
     setError(null);

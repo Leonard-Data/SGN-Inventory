@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   loadProtected,
+  isProtectedInvalidation,
   refocusAction,
   renderedSession,
   sessionDiffers,
@@ -32,6 +33,13 @@ const archived = { property: { id: 'archived-1' } };
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 const sessionResponse = (employee: Employee, accessRevision = 0) =>
   Response.json({ employee, accessRevision });
+
+test('protected authorization failures invalidate their parent surface', () => {
+  assert.equal(isProtectedInvalidation(new RequestError(401, 'unauthenticated')), true);
+  assert.equal(isProtectedInvalidation(new RequestError(403, 'access-denied')), true);
+  assert.equal(isProtectedInvalidation(new RequestError(404, 'not-found')), true);
+  assert.equal(isProtectedInvalidation(new RequestError(500, 'unavailable')), false);
+});
 
 test('rendered session comparison includes the access revision', () => {
   const current = { employee: manager, accessRevision: 2 };

@@ -12,10 +12,12 @@ function Series({
   propertyId,
   series,
   locale,
+  onInvalidate,
 }: {
   propertyId: string;
   series: PriceSeries;
   locale: Locale;
+  onInvalidate?: () => void;
 }) {
   const [cursor, setCursor] = useState<{
     before: string;
@@ -27,7 +29,7 @@ function Series({
     '/price-history?' +
     new URLSearchParams({ series, ...cursor });
   const { data, error, busy, surface, reload } =
-      useProtectedData<PriceHistoryPage>(endpoint),
+      useProtectedData<PriceHistoryPage>(endpoint, undefined, onInvalidate),
     text = maintenanceText(locale),
     heading = series === 'sale' ? text.salePriceSeries : text.rentPriceSeries,
     empty = series === 'sale' ? text.emptySalePrices : text.emptyRentPrices,
@@ -111,9 +113,11 @@ function Series({
 export function PriceHistory({
   propertyId,
   locale,
+  onInvalidate,
 }: {
   propertyId: string;
   locale: Locale;
+  onInvalidate?: () => void;
 }) {
   const text = maintenanceText(locale);
   return (
@@ -122,8 +126,18 @@ export function PriceHistory({
         <h2>{text.priceHistory}</h2>
       </div>
       <div className="panel-body">
-        <Series propertyId={propertyId} series="sale" locale={locale} />
-        <Series propertyId={propertyId} series="rent" locale={locale} />
+        <Series
+          propertyId={propertyId}
+          series="sale"
+          locale={locale}
+          onInvalidate={onInvalidate}
+        />
+        <Series
+          propertyId={propertyId}
+          series="rent"
+          locale={locale}
+          onInvalidate={onInvalidate}
+        />
         <p className="field-hint">{text.priceHistoryNote}</p>
       </div>
     </section>

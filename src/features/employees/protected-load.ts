@@ -1,4 +1,4 @@
-import { api } from './api.ts';
+import { api, RequestError } from './api.ts';
 import type { Employee, EmployeeSession } from './types';
 
 // The session values a protected read authorizes on: the same employee with a
@@ -15,6 +15,13 @@ export function sessionDiffers(
   return (
     renderedFor !== renderedSession(session.employee) ||
     renderedAccessRevision !== session.accessRevision
+  );
+}
+
+export function isProtectedInvalidation(failure: unknown) {
+  return (
+    failure instanceof RequestError &&
+    [401, 403, 404].includes(failure.status)
   );
 }
 
