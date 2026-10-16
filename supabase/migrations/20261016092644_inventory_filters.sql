@@ -1,4 +1,4 @@
--- Ticket #47: advanced inventory filters on the existing inventory read paths.
+-- Advance Filter and Search Island: the inventory filters on the existing inventory read paths.
 -- Status, listing mode, property type, an asking-price range and an area range compose with the
 -- existing free-text query, ordering and cursor paging. Every bound is optional and validated
 -- here as well as in the route, so an unknown enum or an out-of-range bound is refused (22023)

@@ -589,7 +589,7 @@ await myActivityContract({db,asUser,check,fails,employees});
 await rankingContract({db,asUser,check,fails,employees});
 // Issue #37: explicit original inventory entry dates and eligible chronological ordering.
 await inventoryAgeContract({db,asUser,check,fails,employees});
-// Ticket #47: the advanced status/mode/type/price/area inventory filters.
+// Advance Filter and Search Island: the advanced status/mode/type/price/area inventory filters.
 await inventoryFilterContract({db,asUser,check,fails,employees});
 // Seeded Vietnamese province/city and ward/commune reference catalogue.
 await referenceCatalogContract({db,asUser,check,fails,employees,root});

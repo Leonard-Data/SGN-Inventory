@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 
-// Ticket #47 embedded regressions for the advanced inventory filters. It proves the mode-aware
+// Advance Filter and Search Island embedded regressions for the advanced inventory filters. It proves the mode-aware
 // asking-price range, the land-or-floor area range, composition with the free-text query, the
 // chronological cursor walk over a filtered eligible set, the retained archived exclusion, the
 // database refusal of unknown and out-of-range bounds, the invoker/stable shape of both
@@ -19,7 +19,7 @@ export async function inventoryFilterContract({
   };
   const id = (suffix) => `47000000-0000-4000-8000-0000000000${suffix}`;
   const sales = employees[0];
-  const marker = 'FILTERFIX 47 Kiem Thu';
+  const marker = 'FILTERFIX Kiem Thu';
   // Fixture-bound prices and areas are deliberately unlike any other contract's data, so a
   // bounded window matches this contract's rows and nothing else in the shared embedded schema.
   const saleHouse = id('01'); // sale 4,700,000,001 · land 4701 · floor 4751
