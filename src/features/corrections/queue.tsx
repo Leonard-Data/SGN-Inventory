@@ -322,8 +322,11 @@ export function CorrectionQueue({
                   const amendments = data.amendments.filter(
                     (a) => a.request_id === request.id,
                   );
+                  const latestAmendment = amendments[0];
+                  const latestObserved =
+                    latestAmendment?.observed_values ?? request.observed_values;
                   const latestProposal =
-                    amendments[0]?.proposed_values ?? request.proposed_values;
+                    latestAmendment?.proposed_values ?? request.proposed_values;
                   return (
                     <article className="history-event" key={request.id}>
                       <h3>
@@ -376,10 +379,8 @@ export function CorrectionQueue({
                           <h4>{text.before}</h4>
                           <BusinessValues
                             values={
-                              changedValues(
-                                request.observed_values,
-                                latestProposal,
-                              ).observed
+                              changedValues(latestObserved, latestProposal)
+                                .observed
                             }
                             locale={locale}
                           />

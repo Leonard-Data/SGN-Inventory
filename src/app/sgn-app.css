@@ -711,8 +711,6 @@ dialog.sgn-dialog::backdrop { background: color-mix(in oklab, var(--fg) 46%, tra
 }
 .icon-btn:hover { background: var(--surface-warm); color: var(--fg); border-color: var(--border); }
 .icon-btn svg { width: 20px; height: 20px; }
-.icon-btn.is-danger { color: var(--danger); }
-.icon-btn.is-danger:hover { background: var(--danger-soft); border-color: var(--danger); }
 .icon-btn[disabled] { cursor: default; opacity: .62; }
 .icon-btn[data-busy="yes"] svg { visibility: hidden; }
 .icon-btn[data-busy="yes"]::after {

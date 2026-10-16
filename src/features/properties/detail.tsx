@@ -116,6 +116,7 @@ function RecordActionsMenu({
   onPick: (id: RecordAction['id']) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -140,20 +141,25 @@ function RecordActionsMenu({
   }, [open]);
   function onMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
     const buttons = [...(menu.current?.querySelectorAll('button') ?? [])];
-    const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
-    const next =
+    if (!buttons.length) return;
+    const focusedIndex = buttons.indexOf(
+      document.activeElement as HTMLButtonElement,
+    );
+    const index = focusedIndex >= 0 ? focusedIndex : activeIndex;
+    const nextIndex =
       event.key === 'ArrowDown'
-        ? buttons[(index + 1) % buttons.length]
+        ? (index + 1) % buttons.length
         : event.key === 'ArrowUp'
-          ? buttons[(index - 1 + buttons.length) % buttons.length]
+          ? (index - 1 + buttons.length) % buttons.length
           : event.key === 'Home'
-            ? buttons[0]
+            ? 0
             : event.key === 'End'
-              ? buttons[buttons.length - 1]
+              ? buttons.length - 1
               : null;
-    if (!next) return;
+    if (nextIndex === null) return;
     event.preventDefault();
-    next.focus();
+    setActiveIndex(nextIndex);
+    buttons[nextIndex]?.focus();
   }
   return (
     <div className="detail-actions" ref={root}>
@@ -163,7 +169,10 @@ function RecordActionsMenu({
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          setActiveIndex(0);
+          setOpen((value) => !value);
+        }}
       >
         {label}
         <svg
@@ -185,13 +194,21 @@ function RecordActionsMenu({
           aria-label={label}
           ref={menu}
           onKeyDown={onMenuKeyDown}
+          onBlur={(event) => {
+            if (
+              !event.currentTarget.contains(event.relatedTarget as Node | null)
+            )
+              setOpen(false);
+          }}
         >
-          {items.map((item) => (
+          {items.map((item, index) => (
             <button
               key={item.id}
               type="button"
               role="menuitem"
+              tabIndex={index === activeIndex ? 0 : -1}
               className="actions-menu-item"
+              onFocus={() => setActiveIndex(index)}
               onClick={() => {
                 setOpen(false);
                 onPick(item.id);

@@ -45,7 +45,6 @@ const paths: Record<string, ReactNode> = {
       <path d="M12 9v4M12 16h.01" />
     </>
   ),
-  check: <path d="m5 13 5 5L20 7" />,
   imagePlus: (
     <>
       <path d="M4 5h16v14H4z" />
@@ -81,7 +80,6 @@ export function IconAction({
   onClick,
   disabled = false,
   busy = false,
-  danger = false,
   expanded,
   controls,
 }: {
@@ -90,14 +88,13 @@ export function IconAction({
   onClick: () => void;
   disabled?: boolean;
   busy?: boolean;
-  danger?: boolean;
   expanded?: boolean;
   controls?: string;
 }) {
   return (
     <button
       type="button"
-      className={'icon-btn' + (danger ? ' is-danger' : '')}
+      className="icon-btn"
       data-busy={busy ? 'yes' : undefined}
       title={label}
       aria-label={label}

@@ -246,7 +246,7 @@ function saleScreen(session) {
         path: location.pathname,
         locale: document.documentElement.lang,
         status: document.querySelector('.head-chips .badge')?.textContent?.trim() ?? null,
-        heading: panel?.querySelector('h2')?.textContent ?? null,
+        heading: document.querySelector('dialog.sgn-dialog[open] .sgn-dialog-head h2')?.textContent ?? null,
         text: panel?.innerText ?? null,
         recorded: Boolean(panel?.querySelector('.sale-completion-recorded')),
         form: form

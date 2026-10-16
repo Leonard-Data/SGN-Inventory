@@ -263,7 +263,7 @@ function screen(session) {
         status:
           document.querySelector('.head-chips .badge')?.textContent?.trim() ??
           null,
-        heading: panel?.querySelector('h2')?.textContent ?? null,
+        heading: document.querySelector('dialog.sgn-dialog[open] .sgn-dialog-head h2')?.textContent ?? null,
         effective: effective ? (effective.innerText ?? null) : null,
         pending: pending ? (pending.innerText ?? null) : null,
         requests: requests.map((node) => ({
