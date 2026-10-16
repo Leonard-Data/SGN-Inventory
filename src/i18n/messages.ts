@@ -61,7 +61,7 @@ const vi = {
   filtersAny: 'Tất cả',
   filtersInvalid: 'Bộ lọc chưa hợp lệ. Kiểm tra lại giá và diện tích đã nhập.',
   priceFilterHint:
-    'Chưa chọn loại giao dịch: hồ sơ cho thuê dùng giá thuê tháng (VND/tháng), còn hồ sơ bán hoặc bán và cho thuê dùng giá bán nguyên VND. Chọn Bán để chỉ so sánh giá bán hoặc Cho thuê để chỉ so sánh giá thuê tháng.',
+    'Không chọn loại giao dịch: mỗi hồ sơ dùng giá chào riêng — hồ sơ cho thuê dùng giá thuê tháng (VND/tháng), còn hồ sơ bán và bán và cho thuê dùng giá bán (nguyên VND). Chọn Bán hoặc Bán và cho thuê để chỉ so sánh giá bán; chọn Cho thuê để chỉ so sánh giá thuê tháng.',
   areaFilterHint:
     'Diện tích khớp khi diện tích đất hoặc diện tích sàn nằm trong khoảng.',
   priceUnitVnd: 'VND',
@@ -604,7 +604,7 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     filtersInvalid:
       'The filter set is not valid. Check the entered price and area bounds.',
     priceFilterHint:
-      'With no listing mode selected, rental records use monthly asking rent (VND/month); sale and sale-and-rent records use the asking sale price in whole VND. Select Sale to compare sale prices only or Rent to compare monthly asking rents only.',
+      'With no listing mode selected, each record uses its own asking price: rental records use monthly asking rent (VND/month), while sale and sale-and-rent records use asking sale price in whole VND. Select Sale or Sale and rent to compare asking sale prices only; select Rent to compare monthly asking rents only.',
     areaFilterHint:
       'Area matches when the land area or the floor area is inside the range.',
     priceUnitVnd: 'VND',

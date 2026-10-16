@@ -3,9 +3,10 @@
 -- existing free-text query, ordering and cursor paging. Every bound is optional and validated
 -- here as well as in the route, so an unknown enum or an out-of-range bound is refused (22023)
 -- instead of silently returning a different inventory.
--- Price basis: the asking price of the listing under the selected mode — the monthly asking rent
--- for a rent search, otherwise the asking sale price, which is also what a 'both' listing is
--- filtered by. Area matches when the land area or the floor area is inside the range.
+-- Price basis: with no listing mode selected, each listing uses its own asking price — monthly
+-- asking rent for rental listings, and whole-VND asking sale price for sale and 'both' listings.
+-- Selecting 'sale' or 'both' compares asking sale price; selecting 'rent' compares monthly rent.
+-- Area matches when the land area or the floor area is inside the range.
 begin;
 
 -- Range filters read a bounded window per column, so each directly compared column gets the

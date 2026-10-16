@@ -197,6 +197,7 @@ export function SearchIsland({
           autoComplete="off"
           defaultValue={filters[name] ?? ''}
           aria-invalid={invalid}
+          aria-label={`${heading}, ${units.join(', ')}`}
         />
         <span className="field-unit-label" aria-hidden="true">
           {units.map((unit) => (
