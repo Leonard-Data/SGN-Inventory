@@ -33,18 +33,33 @@ export async function loadProtected<T>(options: {
   renderedFor: string | null;
   onIdentityChange: () => void;
 }) {
-  const session = await api<{ employee: Employee }>(
+  let session = await api<{ employee: Employee }>(
     '/api/session',
     undefined,
     options.signal,
   );
-  options.signal.throwIfAborted();
-  if (renderedSession(session.employee) !== options.renderedFor)
-    options.onIdentityChange();
-  options.signal.throwIfAborted();
-  const data = await (typeof options.source === 'string'
-    ? api<T>(options.source, undefined, options.signal)
-    : options.source(options.signal));
-  options.signal.throwIfAborted();
-  return { employee: session.employee, data };
+  for (;;) {
+    options.signal.throwIfAborted();
+    if (
+      options.renderedFor !== null &&
+      renderedSession(session.employee) !== options.renderedFor
+    )
+      options.onIdentityChange();
+    options.signal.throwIfAborted();
+    const data = await (typeof options.source === 'string'
+      ? api<T>(options.source, undefined, options.signal)
+      : options.source(options.signal));
+    options.signal.throwIfAborted();
+    const current = await api<{ employee: Employee }>(
+      '/api/session',
+      undefined,
+      options.signal,
+    );
+    options.signal.throwIfAborted();
+    if (renderedSession(current.employee) === renderedSession(session.employee))
+      return { employee: current.employee, data };
+    if (options.renderedFor !== null) options.onIdentityChange();
+    options.signal.throwIfAborted();
+    session = current;
+  }
 }

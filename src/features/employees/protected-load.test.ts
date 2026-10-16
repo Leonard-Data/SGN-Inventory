@@ -54,7 +54,10 @@ test('an ordinary employee replacing a reviewer conceals the archived snapshot b
   const source = Promise.withResolvers<typeof archived>();
   const events: string[] = [];
   let settled = false;
-  t.mock.method(globalThis, 'fetch', async () => session.promise);
+  let sessionReads = 0;
+  t.mock.method(globalThis, 'fetch', async () =>
+    sessionReads++ === 0 ? session.promise : Response.json({ employee: sales }),
+  );
   const pending = loadProtected({
     source: () => {
       events.push('source-requested');
@@ -83,7 +86,12 @@ test('the same employee with a different role conceals the manager snapshot befo
   const session = Promise.withResolvers<Response>();
   const source = Promise.withResolvers<typeof archived>();
   const events: string[] = [];
-  t.mock.method(globalThis, 'fetch', async () => session.promise);
+  let sessionReads = 0;
+  t.mock.method(globalThis, 'fetch', async () =>
+    sessionReads++ === 0
+      ? session.promise
+      : Response.json({ employee: { ...manager, role: 'sales' } }),
+  );
   const pending = loadProtected({
     source: () => {
       events.push('source-requested');
@@ -107,7 +115,7 @@ test('the same employee with a different role conceals the manager snapshot befo
   });
 });
 
-test('no rendered identity yet still conceals before publishing', async (t) => {
+test('a first load does not report an identity change before publishing', async (t) => {
   t.mock.method(globalThis, 'fetch', async () =>
     Response.json({ employee: sales }),
   );
@@ -120,8 +128,50 @@ test('no rendered identity yet still conceals before publishing', async (t) => {
       events.push('conceal');
     },
   });
-  assert.deepEqual(events, ['conceal']);
+  assert.deepEqual(events, []);
   assert.deepEqual(result, { employee: sales, data: archived });
+});
+
+test('a first read discards data when identity changes during the source read', async (t) => {
+  const firstSession = Promise.withResolvers<Response>();
+  const secondSession = Promise.withResolvers<Response>();
+  const firstSource = Promise.withResolvers<typeof archived>();
+  const secondSource = Promise.withResolvers<typeof archived>();
+  let sessionReads = 0;
+  let sourceReads = 0;
+  t.mock.method(globalThis, 'fetch', async (path: string) => {
+    assert.equal(path, '/api/session');
+    const read = sessionReads++;
+    return read === 0
+      ? firstSession.promise
+      : read === 1
+        ? secondSession.promise
+        : Response.json({ employee: sales });
+  });
+  const pending = loadProtected({
+    source: () => {
+      sourceReads++;
+      return (sourceReads === 1 ? firstSource : secondSource).promise;
+    },
+    signal: new AbortController().signal,
+    renderedFor: null,
+    onIdentityChange: () => {
+      assert.fail('first loads do not conceal an empty surface');
+    },
+  });
+  await flush();
+  firstSession.resolve(Response.json({ employee: manager }));
+  await flush();
+  assert.equal(sourceReads, 1);
+  firstSource.resolve(archived);
+  await flush();
+  assert.equal(sessionReads, 2);
+  secondSession.resolve(Response.json({ employee: sales }));
+  await flush();
+  assert.equal(sourceReads, 2);
+  const fresh = { property: { id: 'fresh-1' } };
+  secondSource.resolve(fresh);
+  assert.deepEqual(await pending, { employee: sales, data: fresh });
 });
 
 test('a denied session rejects without publishing or concealing', async (t) => {
