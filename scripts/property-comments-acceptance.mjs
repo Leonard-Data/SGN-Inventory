@@ -142,7 +142,7 @@ function operatorSql(statement) {
 // Polling must not block the event loop: a synchronous probe delays the very request it is
 // meant to observe.
 function operatorSqlAsync(statement) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const child = spawn('npx', [
       'supabase',
       'db',
@@ -154,12 +154,24 @@ function operatorSqlAsync(statement) {
       statement,
     ]);
     let output = '';
+    let errorOutput = '';
     child.stdout.on('data', (chunk) => (output += chunk));
-    child.on('exit', () => {
+    child.stderr.on('data', (chunk) => (errorOutput += chunk));
+    child.on('error', reject);
+    child.on('exit', (status, signal) => {
+      if (status !== 0) {
+        reject(
+          new Error(
+            'Operator SQL failed: ' +
+              (errorOutput || output || `signal ${signal}`).slice(-800),
+          ),
+        );
+        return;
+      }
       try {
         resolve(JSON.parse(output).rows ?? []);
-      } catch {
-        resolve([]);
+      } catch (error) {
+        reject(new Error('Operator SQL returned invalid JSON', { cause: error }));
       }
     });
   });
@@ -551,40 +563,44 @@ function setReviewerRole(role) {
 }
 // Any failure must still return the declared fixture identities to their original state.
 async function cleanupHistoryRows() {
-  if (!historyCleanupCommentIds.size) return;
-  const ids = [...historyCleanupCommentIds]
-    .map((id) => `'${id}'`)
-    .join(',');
-  await operatorSqlAsync(
-    `do $$
-     begin
-       execute 'alter table public.property_comment_removals disable trigger comment_removal_guard';
-       execute 'alter table public.property_comment_edits disable trigger comment_edit_guard';
-       execute 'alter table public.property_comments disable trigger comment_original';
+  try {
+    if (!historyCleanupCommentIds.size) return;
+    const ids = [...historyCleanupCommentIds]
+      .map((id) => `'${id}'`)
+      .join(',');
+    await operatorSqlAsync(
+      `do $$
        begin
-         delete from public.property_comment_removals where comment_id in (${ids});
-         delete from public.property_comment_edits where comment_id in (${ids});
-         delete from public.property_comments where id in (${ids});
-         execute 'alter table public.property_comment_removals enable trigger comment_removal_guard';
-         execute 'alter table public.property_comment_edits enable trigger comment_edit_guard';
-         execute 'alter table public.property_comments enable trigger comment_original';
-       exception when others then
-         execute 'alter table public.property_comment_removals enable trigger comment_removal_guard';
-         execute 'alter table public.property_comment_edits enable trigger comment_edit_guard';
-         execute 'alter table public.property_comments enable trigger comment_original';
-         raise;
-       end;
-     end $$;`,
-  );
-  const rows = await operatorSqlAsync(
-    `select
-       (select count(*)::int from public.property_comment_removals where comment_id in (${ids})) as removals,
-       (select count(*)::int from public.property_comment_edits where comment_id in (${ids})) as edits,
-       (select count(*)::int from public.property_comments where id in (${ids})) as comments`,
-  );
-  assert.equal(Number(rows[0]?.removals ?? 0), 0, 'History removal fixtures are cleaned');
-  assert.equal(Number(rows[0]?.edits ?? 0), 0, 'History edit fixtures are cleaned');
-  assert.equal(Number(rows[0]?.comments ?? 0), 0, 'History comment fixtures are cleaned');
+         execute 'alter table public.property_comment_removals disable trigger comment_removal_guard';
+         execute 'alter table public.property_comment_edits disable trigger comment_edit_guard';
+         execute 'alter table public.property_comments disable trigger comment_original';
+         begin
+           delete from public.property_comment_removals where comment_id in (${ids});
+           delete from public.property_comment_edits where comment_id in (${ids});
+           delete from public.property_comments where id in (${ids});
+           execute 'alter table public.property_comment_removals enable trigger comment_removal_guard';
+           execute 'alter table public.property_comment_edits enable trigger comment_edit_guard';
+           execute 'alter table public.property_comments enable trigger comment_original';
+         exception when others then
+           execute 'alter table public.property_comment_removals enable trigger comment_removal_guard';
+           execute 'alter table public.property_comment_edits enable trigger comment_edit_guard';
+           execute 'alter table public.property_comments enable trigger comment_original';
+           raise;
+         end;
+       end $$;`,
+    );
+    const rows = await operatorSqlAsync(
+      `select
+         (select count(*)::int from public.property_comment_removals where comment_id in (${ids})) as removals,
+         (select count(*)::int from public.property_comment_edits where comment_id in (${ids})) as edits,
+         (select count(*)::int from public.property_comments where id in (${ids})) as comments`,
+    );
+    assert.equal(Number(rows[0]?.removals ?? 0), 0, 'History removal fixtures are cleaned');
+    assert.equal(Number(rows[0]?.edits ?? 0), 0, 'History edit fixtures are cleaned');
+    assert.equal(Number(rows[0]?.comments ?? 0), 0, 'History comment fixtures are cleaned');
+  } finally {
+    await resetRaceProperty(race.id);
+  }
 }
 async function restoreAndExit(error) {
   try {
@@ -2940,6 +2956,14 @@ for (let version = 1; version <= 3; version++) {
   browserHistoryRevision = edited.data.revision;
   browserHistoryBodies.push(body);
 }
+const scopedHistoryOriginal = 'Lịch sử phạm vi nguyên bản';
+const scopedHistoryPosted = await reviewer.rpc('post_property_comment', {
+  p_property_id: second.id,
+  p_body: scopedHistoryOriginal,
+  p_key: randomUUID(),
+});
+assert.equal(scopedHistoryPosted.error, null, 'Scoped history fixture posts');
+historyCleanupCommentIds.add(scopedHistoryPosted.data.id);
 const browserHistoryExpected = await reviewer.rpc('list_property_comment_history', {
   p_property_id: second.id,
   p_comment_id: browserHistoryPosted.data.id,
@@ -3226,6 +3250,79 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
     browserHistoryBodies,
     'The original and every saved edit remain in chronological order',
   );
+  openHistory(scopedHistoryPosted.data.id, secondary);
+  await waitUntil(
+    `() => document.querySelectorAll('.comment-history').length === 2`,
+    secondary,
+  );
+  const beforeScopedMutation = evaluate(
+    `() => {
+      const historyFor = (id) => document.querySelector('[data-comment-id="${id}"] .comment-history');
+      return {
+        scopedEvents: historyFor('${scopedHistoryPosted.data.id}')?.querySelectorAll('li').length ?? 0,
+        browserEvents: historyFor('${browserHistoryPosted.data.id}')?.querySelectorAll('li').length ?? 0,
+      };
+    }`,
+    secondary,
+  );
+  assert.equal(beforeScopedMutation.scopedEvents, 1, 'Scoped mutation starts with one history event');
+  assert.equal(
+    beforeScopedMutation.browserEvents,
+    browserHistoryExpected.data.length,
+    'Unrelated history is loaded before the scoped mutation',
+  );
+  const editOpened = evaluate(
+    `() => {
+      const target = document.querySelector('[data-comment-id="${scopedHistoryPosted.data.id}"]');
+      const button = [...(target?.querySelectorAll('.comment-actions button') ?? [])]
+        .find((node) => node.textContent.trim() === 'Chỉnh sửa bình luận');
+      if (!button) return false;
+      button.click();
+      return true;
+    }`,
+    secondary,
+  );
+  assert.equal(editOpened, true, 'Reviewer-authored scoped comment can be edited');
+  await waitUntil(
+    `() => Boolean(document.querySelector('[data-comment-id="${scopedHistoryPosted.data.id}"] .comment-edit textarea'))`,
+    secondary,
+  );
+  const scopedHistoryEditedBody = 'Lịch sử phạm vi đã sửa';
+  fill('Chỉnh sửa bình luận', scopedHistoryEditedBody, secondary);
+  click('Lưu bình luận', secondary);
+  await waitUntil(
+    `() => {
+      const scoped = document.querySelector('[data-comment-id="${scopedHistoryPosted.data.id}"]');
+      const unrelated = document.querySelector('[data-comment-id="${browserHistoryPosted.data.id}"]');
+      return scoped?.querySelector('.comment-body')?.textContent === '${scopedHistoryEditedBody}' &&
+        !scoped?.querySelector('.comment-history') &&
+        Boolean(unrelated?.querySelector('.comment-history'));
+    }`,
+    secondary,
+  );
+  const afterScopedMutation = evaluate(
+    `() => ({
+      scopedHistoryVisible: Boolean(document.querySelector('[data-comment-id="${scopedHistoryPosted.data.id}"] .comment-history')),
+      browserHistoryVisible: Boolean(document.querySelector('[data-comment-id="${browserHistoryPosted.data.id}"] .comment-history')),
+    })`,
+    secondary,
+  );
+  assert.equal(afterScopedMutation.scopedHistoryVisible, false, 'Changed comment history is invalidated');
+  assert.equal(afterScopedMutation.browserHistoryVisible, true, 'Unrelated comment history remains visible');
+  openHistory(scopedHistoryPosted.data.id, secondary);
+  await waitUntil(
+    `() => document.querySelector('[data-comment-id="${scopedHistoryPosted.data.id}"] .comment-history')?.querySelectorAll('li').length === 2`,
+    secondary,
+  );
+  const refreshedScopedHistory = evaluate(
+    `() => [...document.querySelectorAll('[data-comment-id="${scopedHistoryPosted.data.id}"] .comment-history-body')].map((node) => node.textContent)`,
+    secondary,
+  );
+  assert.deepEqual(
+    refreshedScopedHistory,
+    [scopedHistoryOriginal, scopedHistoryEditedBody],
+    'Reopening the changed comment shows its refreshed history',
+  );
   click('Làm mới', secondary);
   await waitUntil(
     `() => !document.querySelector('.comment-history')`,
@@ -3506,11 +3603,13 @@ function archive(client, propertyId, revision) {
   });
 }
 async function attempt(propertyId, key, body) {
-  return alpha.rpc('post_property_comment', {
+  const result = await alpha.rpc('post_property_comment', {
     p_property_id: propertyId,
     p_body: body,
     p_key: key,
   });
+  if (!result.error && result.data?.id) historyCleanupCommentIds.add(result.data.id);
+  return result;
 }
 async function markerCount(markerKey) {
   const rows = await operatorSqlAsync(

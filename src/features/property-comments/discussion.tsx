@@ -89,25 +89,50 @@ export function Discussion({
   const [editNotice, setEditNotice] = useState<string | null>(null);
   const inFlight = useRef<AbortController | null>(null);
   const generation = useRef(0);
-  const historyGeneration = useRef(0);
   const historyRequestTokens = useRef<Record<string, number>>({});
   const historyAbortControllers = useRef<Record<string, AbortController>>({});
   const nextHistoryRequestToken = useRef(0);
   const mounted = useRef(true);
-  const abortHistory = useCallback(() => {
-    historyGeneration.current++;
+  const abortHistory = useCallback((commentId?: string) => {
+    if (commentId !== undefined) {
+      historyAbortControllers.current[commentId]?.abort();
+      delete historyAbortControllers.current[commentId];
+      delete historyRequestTokens.current[commentId];
+      return;
+    }
     Object.values(historyAbortControllers.current).forEach((controller) =>
       controller.abort(),
     );
     historyRequestTokens.current = {};
     historyAbortControllers.current = {};
   }, []);
-  const invalidateHistory = useCallback(() => {
-    abortHistory();
-    setHistory({});
-    setHistoryBusy({});
-    setHistoryError({});
-  }, [abortHistory]);
+  const invalidateHistory = useCallback(
+    (commentId?: string) => {
+      abortHistory(commentId);
+      if (commentId === undefined) {
+        setHistory({});
+        setHistoryBusy({});
+        setHistoryError({});
+        return;
+      }
+      setHistory((value) => {
+        const next = { ...value };
+        delete next[commentId];
+        return next;
+      });
+      setHistoryBusy((value) => {
+        const next = { ...value };
+        delete next[commentId];
+        return next;
+      });
+      setHistoryError((value) => {
+        const next = { ...value };
+        delete next[commentId];
+        return next;
+      });
+    },
+    [abortHistory],
+  );
   const editTarget = useRef<string | null>(null);
   // The open editor's identity; a save response only closes the editor it was sent from.
   const editSession = useRef<EditSession | null>(null);
@@ -306,7 +331,7 @@ export function Discussion({
       return;
     }
     // Committed state is authoritative: only now is the draft spent and its key retired.
-    invalidateHistory();
+    invalidateHistory(created.id);
     submissionKey.current = '';
     setDraft('');
     setNotice(text.commentPosted);
@@ -420,7 +445,7 @@ export function Discussion({
     setComments((rows) =>
       rows.map((entry) => (entry.id === updated.id ? updated : entry)),
     );
-    invalidateHistory();
+    invalidateHistory(updated.id);
     // A replayed key can converge on an already-withdrawn comment, so the response is not a save.
     if (updated.removedAt !== null) {
       setBusy(true);
@@ -474,7 +499,7 @@ export function Discussion({
     setComments((rows) =>
       rows.map((entry) => (entry.id === removed.id ? removed : entry)),
     );
-    invalidateHistory();
+    invalidateHistory(removed.id);
     setReason('');
     setReasonFor(null);
     setRemoveNotice(text.commentRemoved);
@@ -512,7 +537,6 @@ export function Discussion({
       });
       return;
     }
-    const requestGeneration = historyGeneration.current;
     const requestToken = ++nextHistoryRequestToken.current;
     const abort = new AbortController();
     historyRequestTokens.current[commentId] = requestToken;
@@ -532,12 +556,15 @@ export function Discussion({
       if (
         !mounted.current ||
         !reviewer ||
-        requestGeneration !== historyGeneration.current
+        historyRequestTokens.current[commentId] !== requestToken
       )
         return;
       setHistory((value) => ({ ...value, [commentId]: result }));
     } catch (error) {
-      if (!mounted.current || requestGeneration !== historyGeneration.current)
+      if (
+        !mounted.current ||
+        historyRequestTokens.current[commentId] !== requestToken
+      )
         return;
       if (
         error instanceof RequestError &&
@@ -551,7 +578,6 @@ export function Discussion({
       if (historyRequestTokens.current[commentId] !== requestToken) return;
       delete historyRequestTokens.current[commentId];
       delete historyAbortControllers.current[commentId];
-      if (requestGeneration !== historyGeneration.current) return;
       setHistoryBusy((value) => {
         const next = { ...value };
         delete next[commentId];
