@@ -327,15 +327,26 @@ async function settle(session = primary) {
 // record: it is closed through its own control before the header is used again.
 const saleAction = '^(Xác nhận bán thành công|Confirm completed sale)$';
 const reservationAction = '^(Đặt chỗ|Reservations)$';
-const headerActionReady = (pattern) =>
-  `() => [...document.querySelectorAll('.detail-actions button')].some((button) => new RegExp(${JSON.stringify(pattern)}).test(button.textContent.trim()))`;
+// The record action bar is one menu, so the journey opens the menu and then its item. A
+// dialog blocks the rest of the record and is closed through its own control before the
+// header is used again.
+const openRecordActions = `(() => {
+  const trigger = document.querySelector('.detail-actions button[aria-haspopup="menu"]');
+  if (!trigger) return false;
+  if (trigger.getAttribute('aria-expanded') !== 'true') trigger.click();
+  return true;
+})()`;
+const menuItemReady = (pattern) =>
+  `() => [...document.querySelectorAll('.actions-menu-item')].some((item) => new RegExp(${JSON.stringify(pattern)}).test(item.textContent.trim()))`;
+const headerActionReady = `() => Boolean(document.querySelector('.detail-actions button[aria-haspopup="menu"]'))`;
+async function openRecordAction(pattern, session, what) {
+  await waitUntil(headerActionReady, session);
+  act(openRecordActions, session, 'open the record actions menu');
+  await waitUntil(menuItemReady(pattern), session);
+  act(clickMatching(pattern, '.actions-menu-item'), session, what);
+}
 async function openSalePanel(session = primary) {
-  await waitUntil(headerActionReady(saleAction), session);
-  act(
-    clickMatching(saleAction, '.detail-actions button'),
-    session,
-    'open the confirmation panel',
-  );
+  await openRecordAction(saleAction, session, 'open the confirmation panel');
   await settle(session);
 }
 async function openSaleDetail(property, session = primary) {
@@ -343,9 +354,8 @@ async function openSaleDetail(property, session = primary) {
   await openSalePanel(session);
 }
 async function openReservationPanel(session = primary) {
-  await waitUntil(headerActionReady(reservationAction), session);
-  act(
-    clickMatching(reservationAction, '.detail-actions button'),
+  await openRecordAction(
+    reservationAction,
     session,
     'open the reservation panel',
   );
