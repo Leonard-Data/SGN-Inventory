@@ -33,11 +33,6 @@ export async function loadProtected<T>(options: {
   renderedFor: string | null;
   onIdentityChange: () => void;
 }) {
-  const sourcePromise =
-    typeof options.source === 'string'
-      ? api<T>(options.source, undefined, options.signal)
-      : options.source(options.signal);
-  void sourcePromise.catch(() => {});
   const session = await api<{ employee: Employee }>(
     '/api/session',
     undefined,
@@ -46,7 +41,10 @@ export async function loadProtected<T>(options: {
   options.signal.throwIfAborted();
   if (renderedSession(session.employee) !== options.renderedFor)
     options.onIdentityChange();
-  const data = await sourcePromise;
+  options.signal.throwIfAborted();
+  const data = await (typeof options.source === 'string'
+    ? api<T>(options.source, undefined, options.signal)
+    : options.source(options.signal));
   options.signal.throwIfAborted();
   return { employee: session.employee, data };
 }

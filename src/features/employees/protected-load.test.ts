@@ -70,9 +70,10 @@ test('an ordinary employee replacing a reviewer conceals the archived snapshot b
     settled = true;
   });
   await flush();
+  assert.deepEqual(events, []);
   session.resolve(Response.json({ employee: sales }));
   await flush();
-  assert.deepEqual(events, ['source-requested', 'conceal']);
+  assert.deepEqual(events, ['conceal', 'source-requested']);
   assert.equal(settled, false);
   source.resolve(archived);
   assert.deepEqual(await pending, { employee: sales, data: archived });
@@ -95,9 +96,10 @@ test('the same employee with a different role conceals the manager snapshot befo
     },
   });
   await flush();
+  assert.deepEqual(events, []);
   session.resolve(Response.json({ employee: { ...manager, role: 'sales' } }));
   await flush();
-  assert.deepEqual(events, ['source-requested', 'conceal']);
+  assert.deepEqual(events, ['conceal', 'source-requested']);
   source.resolve(archived);
   assert.deepEqual(await pending, {
     employee: { ...manager, role: 'sales' },
