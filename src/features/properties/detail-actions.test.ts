@@ -86,6 +86,18 @@ test('owner disclosure cannot be reused by another employee session', () => {
   );
 });
 
+test('a same-identity detail reload keeps an open tool active', () => {
+  const opener = employee('editor', 'staff');
+  const refreshed = { ...opener };
+  const action: DetailAction = {
+    tool: 'edit',
+    forEmployee: opener,
+    propertyId: property.id,
+  };
+
+  assert.equal(activeDetailAction(action, refreshed, property), 'edit');
+});
+
 test('a tool opened by an earlier employee session stays closed after revalidation', () => {
   const opener = employee('editor', 'staff');
   const current = employee('editor', 'sales');

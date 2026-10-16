@@ -53,8 +53,9 @@ export function useProtectedData<T>(
           signal: abort.signal,
           renderedFor: renderedFor.current,
           onIdentityChange: () => {
-            if (renderedFor.current) clear();
-            setBusy(false);
+            if (renderedFor.current === null) return;
+            clear();
+            void load();
           },
         });
       if (version !== generation.current) return;

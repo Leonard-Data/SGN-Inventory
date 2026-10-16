@@ -72,7 +72,8 @@ export function activeDetailAction(
     !action ||
     !employee ||
     !property ||
-    action.forEmployee !== employee ||
+    action.forEmployee.id !== employee.id ||
+    action.forEmployee.role !== employee.role ||
     action.propertyId !== property.id
   )
     return null;

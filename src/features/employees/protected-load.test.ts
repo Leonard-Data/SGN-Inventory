@@ -29,11 +29,13 @@ const manager: Employee = {
 const archived = { property: { id: 'archived-1' } };
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
+const sessionResponse = (employee: Employee, accessRevision = 0) =>
+  Response.json({ employee, accessRevision });
 
 test('same-identity reload keeps the rendered snapshot without concealing', async (t) => {
   t.mock.method(globalThis, 'fetch', async (path: string) => {
     assert.equal(path, '/api/session');
-    return Response.json({ employee: reviewer });
+    return sessionResponse(reviewer);
   });
   const events: string[] = [];
   const result = await loadProtected({
@@ -55,7 +57,7 @@ test('an ordinary employee replacing a reviewer conceals the archived snapshot b
   let settled = false;
   let sessionReads = 0;
   t.mock.method(globalThis, 'fetch', async () =>
-    sessionReads++ === 0 ? session.promise : Response.json({ employee: sales }),
+    sessionReads++ === 0 ? session.promise : sessionResponse(sales),
   );
   const pending = loadProtected({
     source: () => {
@@ -73,7 +75,7 @@ test('an ordinary employee replacing a reviewer conceals the archived snapshot b
   });
   await flush();
   assert.deepEqual(events, []);
-  session.resolve(Response.json({ employee: sales }));
+  session.resolve(sessionResponse(sales));
   await flush();
   assert.deepEqual(events, ['conceal', 'source-requested']);
   assert.equal(settled, false);
@@ -89,7 +91,7 @@ test('the same employee with a different role conceals the manager snapshot befo
   t.mock.method(globalThis, 'fetch', async () =>
     sessionReads++ === 0
       ? session.promise
-      : Response.json({ employee: { ...manager, role: 'sales' } }),
+      : sessionResponse({ ...manager, role: 'sales' }),
   );
   const pending = loadProtected({
     source: () => {
@@ -104,7 +106,7 @@ test('the same employee with a different role conceals the manager snapshot befo
   });
   await flush();
   assert.deepEqual(events, []);
-  session.resolve(Response.json({ employee: { ...manager, role: 'sales' } }));
+  session.resolve(sessionResponse({ ...manager, role: 'sales' }));
   await flush();
   assert.deepEqual(events, ['conceal', 'source-requested']);
   source.resolve(archived);
@@ -115,9 +117,7 @@ test('the same employee with a different role conceals the manager snapshot befo
 });
 
 test('a first load does not report an identity change before publishing', async (t) => {
-  t.mock.method(globalThis, 'fetch', async () =>
-    Response.json({ employee: sales }),
-  );
+  t.mock.method(globalThis, 'fetch', async () => sessionResponse(sales));
   const events: string[] = [];
   const result = await loadProtected({
     source: async () => archived,
@@ -129,6 +129,38 @@ test('a first load does not report an identity change before publishing', async 
   });
   assert.deepEqual(events, []);
   assert.deepEqual(result, { employee: sales, data: archived });
+});
+
+test('a source result is discarded when access changes away and back during the read', async (t) => {
+  const firstSource = Promise.withResolvers<typeof archived>();
+  const secondSource = Promise.withResolvers<typeof archived>();
+  let sessionReads = 0;
+  let sourceReads = 0;
+  t.mock.method(globalThis, 'fetch', async (path: string) => {
+    assert.equal(path, '/api/session');
+    sessionReads++;
+    return sessionResponse(sales, sessionReads === 1 ? 1 : 3);
+  });
+  const pending = loadProtected({
+    source: () => {
+      sourceReads++;
+      return (sourceReads === 1 ? firstSource : secondSource).promise;
+    },
+    signal: new AbortController().signal,
+    renderedFor: null,
+    onIdentityChange: () => {
+      assert.fail('first loads do not conceal an empty surface');
+    },
+  });
+  await flush();
+  assert.equal(sourceReads, 1);
+  firstSource.resolve(archived);
+  await flush();
+  assert.equal(sessionReads, 2);
+  assert.equal(sourceReads, 2);
+  const fresh = { property: { id: 'fresh-aba' } };
+  secondSource.resolve(fresh);
+  assert.deepEqual(await pending, { employee: sales, data: fresh });
 });
 
 test('a first read discards data when identity changes during the source read', async (t) => {
@@ -145,7 +177,7 @@ test('a first read discards data when identity changes during the source read', 
       ? firstSession.promise
       : read === 1
         ? secondSession.promise
-        : Response.json({ employee: sales });
+        : sessionResponse(sales, 2);
   });
   const pending = loadProtected({
     source: () => {
@@ -159,13 +191,13 @@ test('a first read discards data when identity changes during the source read', 
     },
   });
   await flush();
-  firstSession.resolve(Response.json({ employee: manager }));
+  firstSession.resolve(sessionResponse(manager, 1));
   await flush();
   assert.equal(sourceReads, 1);
   firstSource.resolve(archived);
   await flush();
   assert.equal(sessionReads, 2);
-  secondSession.resolve(Response.json({ employee: sales }));
+  secondSession.resolve(sessionResponse(sales, 2));
   await flush();
   assert.equal(sourceReads, 2);
   const fresh = { property: { id: 'fresh-1' } };

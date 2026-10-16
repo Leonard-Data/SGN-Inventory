@@ -5,3 +5,8 @@ export type Employee = {
   role: 'sales' | 'staff' | 'manager' | 'admin';
   locale: Locale;
 };
+
+export type EmployeeSession = {
+  employee: Employee;
+  accessRevision: number;
+};

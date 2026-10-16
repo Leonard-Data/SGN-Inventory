@@ -1,5 +1,5 @@
 import { api } from './api.ts';
-import type { Employee } from './types';
+import type { Employee, EmployeeSession } from './types';
 
 // The session values a protected read authorizes on: the same employee with a
 // different role is a different session and loses what those reads allowed.
@@ -25,7 +25,7 @@ export async function loadProtected<T>(options: {
   renderedFor: string | null;
   onIdentityChange: () => void;
 }) {
-  let session = await api<{ employee: Employee }>(
+  let session = await api<EmployeeSession>(
     '/api/session',
     undefined,
     options.signal,
@@ -42,13 +42,16 @@ export async function loadProtected<T>(options: {
       ? api<T>(options.source, undefined, options.signal)
       : options.source(options.signal));
     options.signal.throwIfAborted();
-    const current = await api<{ employee: Employee }>(
+    const current = await api<EmployeeSession>(
       '/api/session',
       undefined,
       options.signal,
     );
     options.signal.throwIfAborted();
-    if (renderedSession(current.employee) === renderedSession(session.employee))
+    if (
+      current.accessRevision === session.accessRevision &&
+      renderedSession(current.employee) === renderedSession(session.employee)
+    )
       return { employee: current.employee, data };
     if (options.renderedFor !== null) options.onIdentityChange();
     options.signal.throwIfAborted();
