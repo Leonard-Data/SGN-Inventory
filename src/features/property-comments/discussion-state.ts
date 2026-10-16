@@ -32,6 +32,33 @@ export function mergePage(current: Comment[], page: Comment[]): Comment[] {
   });
 }
 
+export function changedCommentIds(
+  current: Comment[],
+  page: Comment[],
+): string[] {
+  const existing = new Map(current.map((row) => [row.id, row]));
+  return mergePage(current, page)
+    .filter((row) => {
+      const previous = existing.get(row.id);
+      return previous !== undefined && !sameComment(previous, row);
+    })
+    .map((row) => row.id);
+}
+
+function sameComment(left: Comment, right: Comment): boolean {
+  return (
+    left.id === right.id &&
+    left.propertyId === right.propertyId &&
+    left.authorId === right.authorId &&
+    left.authorName === right.authorName &&
+    left.body === right.body &&
+    left.createdAt === right.createdAt &&
+    left.revision === right.revision &&
+    left.removedAt === right.removedAt &&
+    left.editedAt === right.editedAt
+  );
+}
+
 function timestampKey(value: string): string {
   const match =
     /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,6}))?(?:Z|\+00:00)$/.exec(

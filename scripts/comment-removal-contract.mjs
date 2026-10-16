@@ -709,6 +709,17 @@ export async function commentRemovalContract({
       await db.query('update public.employees set is_active=true where id=$1', [
         employees[2],
       ]);
+      await asUser('unlinked');
+      assert.deepEqual(
+        (await db.query('select * from public.property_comment_removals')).rows,
+        [],
+      );
+      await fails(
+        remove,
+        [first, colleagueComment, revision, 'moderation', 'Lý do'],
+        '42501',
+      );
+      await asAdmin();
       await db.query(
         "update public.employees set display_name='Tên đã đổi' where id=$1",
         [employees[1]],

@@ -60,14 +60,6 @@ export async function commentEditContract({
     await db.exec('reset role');
     await db.query("select set_config('request.jwt.claim.sub','',false)");
   };
-  const asUnlinked = async () => {
-    await db.exec('reset role');
-    await db.query(
-      "select set_config('request.jwt.claim.sub',$1,false)",
-      ['99999999-9999-4999-8999-999999999999'],
-    );
-    await db.exec('set role authenticated');
-  };
   const iso = (value) => (value == null ? null : new Date(value).toISOString());
   const trim = (value) => value.trim();
 
@@ -849,6 +841,18 @@ export async function commentEditContract({
       await fails('select * from public.property_comment_edits', [], '42501');
     },
   );
+  await asUser('unlinked');
+  await check(
+    'an authenticated unlinked identity cannot edit or read prior versions',
+    async () => {
+      await fails(
+        edit,
+        [live, ownComment, '24000000-0000-0000-0000-0000000000ff', 'Unlinked'],
+        '42501',
+      );
+      await fails('select * from public.property_comment_edits', [], '42501');
+    },
+  );
   await asUser(4);
   await check(
     'an inactive identity reaches neither edits nor evidence',
@@ -876,7 +880,7 @@ export async function commentEditContract({
         await asUser(actor);
         await fails(history, [live, replayComment], '42501');
       }
-      await asUnlinked();
+      await asUser('unlinked');
       assert.deepEqual(
         (await db.query('select * from public.property_comment_edits')).rows,
         [],

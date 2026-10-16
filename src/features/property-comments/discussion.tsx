@@ -13,6 +13,7 @@ import { vietnamTimestamp } from '@/features/properties/format';
 import { COMMENT_MAX_LENGTH, COMMENT_REASON_MAX_LENGTH } from './types';
 import { IconAction } from '@/features/icon-action';
 import {
+  changedCommentIds,
   mergePage,
   mergeStaleEditState,
   retainEditTarget,
@@ -340,6 +341,9 @@ export function Discussion({
     try {
       const page = await fetchPage(null);
       if (version !== generation.current) return;
+      for (const commentId of changedCommentIds(comments, page.comments)) {
+        if (commentId !== created.id) invalidateHistory(commentId);
+      }
       const merged = withPost(created, page.comments, !!page.nextCursor);
       setComments((rows) =>
         retainEditTarget(

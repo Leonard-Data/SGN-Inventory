@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  changedCommentIds,
   mergePage,
   mergeStaleEditState,
   retainEditTarget,
@@ -222,6 +223,23 @@ test('editor refresh keeps loaded older-page rows without an exact result', () =
     newest,
     older,
   ]);
+});
+
+test('post reconciliation identifies only changed existing rows', () => {
+  const unchanged = comment('unchanged', 'Unchanged', '2026-10-13T09:00:00.000Z');
+  const edited = comment('edited', 'Before', '2026-10-12T09:00:00.000Z');
+  const refreshed = {
+    ...edited,
+    body: 'After',
+    editedAt: '2026-10-13T10:00:00.000Z',
+    revision: 'edited-revision-2',
+  };
+  const newComment = comment('new', 'New', '2026-10-13T11:00:00.000Z');
+
+  assert.deepEqual(
+    changedCommentIds([unchanged, edited], [unchanged, refreshed, newComment]),
+    ['edited'],
+  );
 });
 
 test('ordinary page refresh still follows the refreshed page contents', () => {
