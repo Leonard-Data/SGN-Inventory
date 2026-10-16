@@ -60,10 +60,18 @@ const vi = {
   filtersRemove: 'Bỏ điều kiện lọc',
   filtersAny: 'Tất cả',
   filtersInvalid: 'Bộ lọc chưa hợp lệ. Kiểm tra lại giá và diện tích đã nhập.',
-  filtersHint:
-    'Giá lọc theo giá chào của loại giao dịch đã chọn: giá thuê tháng khi chọn cho thuê, còn lại là giá bán. Diện tích khớp khi diện tích đất hoặc diện tích sàn nằm trong khoảng.',
+  priceFilterHint:
+    'Chưa chọn loại giao dịch: hồ sơ cho thuê dùng giá thuê tháng (VND/tháng), còn hồ sơ bán hoặc bán và cho thuê dùng giá bán nguyên VND. Chọn Bán để chỉ so sánh giá bán hoặc Cho thuê để chỉ so sánh giá thuê tháng.',
+  areaFilterHint:
+    'Diện tích khớp khi diện tích đất hoặc diện tích sàn nằm trong khoảng.',
+  priceUnitVnd: 'VND',
+  priceUnitMonthly: 'VND/tháng',
   priceRangeFrom: 'Giá từ',
   priceRangeTo: 'Giá đến',
+  salePriceFrom: 'Giá bán từ',
+  salePriceTo: 'Giá bán đến',
+  rentPriceFrom: 'Giá thuê tháng từ',
+  rentPriceTo: 'Giá thuê tháng đến',
   areaRangeFrom: 'Diện tích từ',
   areaRangeTo: 'Diện tích đến',
   emptyFiltered: 'Không có bất động sản khớp bộ lọc.',
@@ -595,10 +603,18 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     filtersAny: 'Any',
     filtersInvalid:
       'The filter set is not valid. Check the entered price and area bounds.',
-    filtersHint:
-      'Price filters the asking price of the selected listing mode — the monthly asking rent for a rent search, otherwise the asking sale price. Area matches when the land area or the floor area is inside the range.',
+    priceFilterHint:
+      'With no listing mode selected, rental records use monthly asking rent (VND/month); sale and sale-and-rent records use the asking sale price in whole VND. Select Sale to compare sale prices only or Rent to compare monthly asking rents only.',
+    areaFilterHint:
+      'Area matches when the land area or the floor area is inside the range.',
+    priceUnitVnd: 'VND',
+    priceUnitMonthly: 'VND/month',
     priceRangeFrom: 'Price from',
     priceRangeTo: 'Price to',
+    salePriceFrom: 'Sale price from',
+    salePriceTo: 'Sale price to',
+    rentPriceFrom: 'Monthly rent from',
+    rentPriceTo: 'Monthly rent to',
     areaRangeFrom: 'Area from',
     areaRangeTo: 'Area to',
     emptyFiltered: 'No property matches these filters.',

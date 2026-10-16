@@ -37,6 +37,7 @@ export function SearchIsland({
   const text = messages[locale];
   const [open, setOpen] = useState(false);
   const [invalid, setInvalid] = useState(false);
+  const [mode, setMode] = useState(filters.mode ?? '');
   const dialogRef = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -48,6 +49,9 @@ export function SearchIsland({
     }
     if (!open && dialog.open) dialog.close();
   }, [open]);
+  useEffect(() => {
+    setMode(filters.mode ?? '');
+  }, [filters.mode]);
   const count = activeFilterCount(filters);
   // Applying starts a new page-one journey with the stated filters, so a paging cursor from the
   // previous filter set can never be replayed against this one.
@@ -76,6 +80,19 @@ export function SearchIsland({
     wholeVnd(value) ? formatVnd(value, locale) : value;
   const m2 = (value: string) =>
     squareMetres(value) ? `${formatDecimal(value, locale)} m²` : value;
+  const priceLabel = (selectedMode: string | null, range: 'from' | 'to') => {
+    if (selectedMode === 'rent')
+      return range === 'from' ? text.rentPriceFrom : text.rentPriceTo;
+    if (selectedMode)
+      return range === 'from' ? text.salePriceFrom : text.salePriceTo;
+    return range === 'from' ? text.priceRangeFrom : text.priceRangeTo;
+  };
+  const priceUnits = (selectedMode: string | null) =>
+    selectedMode === 'rent'
+      ? [text.priceUnitMonthly]
+      : selectedMode
+        ? [text.priceUnitVnd]
+        : [text.priceUnitVnd, text.priceUnitMonthly];
   // The current filter set stays visible as removable chips, and each chip removes exactly its
   // own condition, so the address is still the only place a filter lives.
   const applied: { key: InventoryFilterKey; label: string }[] = [];
@@ -97,12 +114,12 @@ export function SearchIsland({
   if (filters.priceMin)
     applied.push({
       key: 'priceMin',
-      label: `${text.priceRangeFrom}: ${vnd(filters.priceMin)}`,
+      label: `${priceLabel(filters.mode, 'from')}: ${vnd(filters.priceMin)}`,
     });
   if (filters.priceMax)
     applied.push({
       key: 'priceMax',
-      label: `${text.priceRangeTo}: ${vnd(filters.priceMax)}`,
+      label: `${priceLabel(filters.mode, 'to')}: ${vnd(filters.priceMax)}`,
     });
   if (filters.areaMin)
     applied.push({
@@ -131,33 +148,40 @@ export function SearchIsland({
     heading: string,
     options: readonly string[],
     first = false,
-  ) => (
-    <div className="field" key={`${name}=${filters[name] ?? ''}`}>
-      <label className="field-label" htmlFor={'filter-' + name}>
-        {heading}
-      </label>
-      <select
-        id={'filter-' + name}
-        className="select"
-        name={name}
-        defaultValue={filters[name] ?? ''}
-        data-filter-first={first ? '' : undefined}
-      >
-        <option value="">{text.filtersAny}</option>
-        {options.map((value) => (
-          <option key={value} value={value}>
-            {label(locale, value)}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
+  ) => {
+    const isMode = name === 'mode';
+    return (
+      <div className="field" key={`${name}=${filters[name] ?? ''}`}>
+        <label className="field-label" htmlFor={'filter-' + name}>
+          {heading}
+        </label>
+        <select
+          id={'filter-' + name}
+          className="select"
+          name={name}
+          value={isMode ? mode : undefined}
+          defaultValue={isMode ? undefined : filters[name] ?? ''}
+          onChange={
+            isMode ? (event) => setMode(event.currentTarget.value) : undefined
+          }
+          data-filter-first={first ? '' : undefined}
+        >
+          <option value="">{text.filtersAny}</option>
+          {options.map((value) => (
+            <option key={value} value={value}>
+              {label(locale, value)}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
+  };
   // A field is keyed by its applied value so a soft navigation that changes the address
   // rebuilds the control with the filter set the address now states.
   const bound = (
     name: keyof InventoryFilters,
     heading: string,
-    unit: string,
+    units: readonly string[],
   ) => (
     <div className="field" key={`${name}=${filters[name] ?? ''}`}>
       <label className="field-label" htmlFor={'filter-' + name}>
@@ -174,7 +198,11 @@ export function SearchIsland({
           defaultValue={filters[name] ?? ''}
           aria-invalid={invalid}
         />
-        <span aria-hidden="true">{unit}</span>
+        <span className="field-unit-label" aria-hidden="true">
+          {units.map((unit) => (
+            <span key={unit}>{unit}</span>
+          ))}
+        </span>
       </span>
     </div>
   );
@@ -267,13 +295,20 @@ export function SearchIsland({
               </div>
             </div>
             <div className="form-section">
-              <div className="form-grid">
-                {bound('priceMin', text.priceRangeFrom, 'VND')}
-                {bound('priceMax', text.priceRangeTo, 'VND')}
-                {bound('areaMin', text.areaRangeFrom, 'm²')}
-                {bound('areaMax', text.areaRangeTo, 'm²')}
+              <div className="filter-range">
+                <div className="form-grid">
+                  {bound('priceMin', priceLabel(mode, 'from'), priceUnits(mode))}
+                  {bound('priceMax', priceLabel(mode, 'to'), priceUnits(mode))}
+                </div>
+                <p className="field-hint">{text.priceFilterHint}</p>
               </div>
-              <p className="field-hint">{text.filtersHint}</p>
+              <div className="filter-range">
+                <div className="form-grid">
+                  {bound('areaMin', text.areaRangeFrom, ['m²'])}
+                  {bound('areaMax', text.areaRangeTo, ['m²'])}
+                </div>
+                <p className="field-hint">{text.areaFilterHint}</p>
+              </div>
             </div>
             {invalid ? (
               <p className="field-error" role="alert">
