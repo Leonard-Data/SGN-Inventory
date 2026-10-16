@@ -34,16 +34,16 @@ begin
   if p_type is not null and p_type not in ('house','land','apartment','villa','serviced_apartment','unclassified') then
     raise exception 'invalid inventory property type' using errcode='22023';
   end if;
-  if p_price_min is not null and (p_price_min < 0 or p_price_min <> trunc(p_price_min)) then
+  if p_price_min is not null and (p_price_min < 0 or p_price_min > 999999999999999999 or p_price_min <> trunc(p_price_min)) then
     raise exception 'invalid inventory price bound' using errcode='22023';
   end if;
-  if p_price_max is not null and (p_price_max < 0 or p_price_max <> trunc(p_price_max)) then
+  if p_price_max is not null and (p_price_max < 0 or p_price_max > 999999999999999999 or p_price_max <> trunc(p_price_max)) then
     raise exception 'invalid inventory price bound' using errcode='22023';
   end if;
-  if p_area_min is not null and (p_area_min <= 0 or p_area_min <> round(p_area_min,2)) then
+  if p_area_min is not null and (p_area_min <= 0 or p_area_min > 9999999999.99 or p_area_min <> round(p_area_min,2)) then
     raise exception 'invalid inventory area bound' using errcode='22023';
   end if;
-  if p_area_max is not null and (p_area_max <= 0 or p_area_max <> round(p_area_max,2)) then
+  if p_area_max is not null and (p_area_max <= 0 or p_area_max > 9999999999.99 or p_area_max <> round(p_area_max,2)) then
     raise exception 'invalid inventory area bound' using errcode='22023';
   end if;
   if p_price_min is not null and p_price_max is not null and p_price_min > p_price_max then
@@ -115,16 +115,16 @@ begin
   if p_type is not null and p_type not in ('house','land','apartment','villa','serviced_apartment','unclassified') then
     raise exception 'invalid inventory property type' using errcode='22023';
   end if;
-  if p_price_min is not null and (p_price_min < 0 or p_price_min <> trunc(p_price_min)) then
+  if p_price_min is not null and (p_price_min < 0 or p_price_min > 999999999999999999 or p_price_min <> trunc(p_price_min)) then
     raise exception 'invalid inventory price bound' using errcode='22023';
   end if;
-  if p_price_max is not null and (p_price_max < 0 or p_price_max <> trunc(p_price_max)) then
+  if p_price_max is not null and (p_price_max < 0 or p_price_max > 999999999999999999 or p_price_max <> trunc(p_price_max)) then
     raise exception 'invalid inventory price bound' using errcode='22023';
   end if;
-  if p_area_min is not null and (p_area_min <= 0 or p_area_min <> round(p_area_min,2)) then
+  if p_area_min is not null and (p_area_min <= 0 or p_area_min > 9999999999.99 or p_area_min <> round(p_area_min,2)) then
     raise exception 'invalid inventory area bound' using errcode='22023';
   end if;
-  if p_area_max is not null and (p_area_max <= 0 or p_area_max <> round(p_area_max,2)) then
+  if p_area_max is not null and (p_area_max <= 0 or p_area_max > 9999999999.99 or p_area_max <> round(p_area_max,2)) then
     raise exception 'invalid inventory area bound' using errcode='22023';
   end if;
   if p_price_min is not null and p_price_max is not null and p_price_min > p_price_max then

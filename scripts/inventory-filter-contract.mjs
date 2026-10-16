@@ -283,8 +283,10 @@ export async function inventoryFilterContract({
         { type: 'shophouse' },
         { priceMin: -1 },
         { priceMax: 1.5 },
+        { priceMin: '1000000000000000000' },
         { areaMin: 0 },
         { areaMax: 12.345 },
+        { areaMin: '10000000000' },
         { priceMin: 9000000000, priceMax: 8000000000 },
         { areaMin: 100.5, areaMax: 100.4 },
       ];
