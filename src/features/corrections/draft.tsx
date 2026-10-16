@@ -20,6 +20,7 @@ import {
   maintenanceText,
   optionLabel,
 } from '@/features/property-maintenance/messages';
+import { missingUnitReplacement } from '@/features/property-maintenance/units';
 import type { Correction } from './data';
 export function observation(
   detail: PropertyDetail,
@@ -128,6 +129,10 @@ export function CorrectionDraft({
     setBusy(true);
     setError(null);
     try {
+      if (missingUnitReplacement(replacementNames, (name) => form.get(name))) {
+        setError('invalid-input');
+        return;
+      }
       const changes = formChanges(target, form, observed.values);
       if (request)
         await api('/api/corrections/' + request.id, {
