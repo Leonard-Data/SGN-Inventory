@@ -2,12 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Employee } from './types';
 import { api, RequestError } from './api';
-import {
-  loadProtected,
-  recoverAfterIdentityChange,
-  refocusAction,
-  renderedSession,
-} from './protected-load';
+import { loadProtected, refocusAction, renderedSession } from './protected-load';
 
 export function useProtectedData<T>(
   source: string | ((signal: AbortSignal) => Promise<T>),
@@ -104,7 +99,8 @@ export function useProtectedData<T>(
     try {
       const session = await api<{ employee: Employee }>('/api/session');
       if (renderedSession(session.employee) !== renderedFor.current) {
-        recoverAfterIdentityChange(clear, reload);
+        clear();
+        void reload();
       }
     } catch (failure) {
       if (

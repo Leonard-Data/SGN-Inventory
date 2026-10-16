@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   activeDetailAction,
   activeDetailDisclosure,
+  canEditContactDetail,
   canEditDetail,
   canOpenEditDetail,
   type DetailAction,
@@ -47,6 +48,7 @@ test('shared-contact Edit stays closed for a non-reviewer on an archived propert
   const colleague = employee('colleague', 'sales');
   const archived = { ...property, archived_at: '2026-01-01T00:00:00Z' };
 
+  assert.equal(canEditContactDetail(colleague, archived), false);
   assert.equal(canOpenEditDetail(colleague, archived), false);
   assert.equal(
     activeDetailAction(
@@ -56,6 +58,15 @@ test('shared-contact Edit stays closed for a non-reviewer on an archived propert
     ),
     null,
   );
+});
+
+test('shared-contact Edit remains available to reviewers on an archived property', () => {
+  const reviewer = employee('reviewer', 'manager');
+  const archived = { ...property, archived_at: '2026-01-01T00:00:00Z' };
+
+  assert.equal(canEditDetail(reviewer, archived), false);
+  assert.equal(canEditContactDetail(reviewer, archived), true);
+  assert.equal(canOpenEditDetail(reviewer, archived), true);
 });
 
 test('owner disclosure cannot be reused by another employee session', () => {
