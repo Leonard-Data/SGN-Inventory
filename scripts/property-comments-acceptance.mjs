@@ -3,7 +3,7 @@
 //
 // Real development Supabase Auth/Data API/RLS plus the local real Next.js application and
 // real Chrome sessions. Mock, shim and readiness-page results are not acceptance. Mutates
-// only the declared SGN-TEST-44/45/46 synthetic namespace and restores the declared fixture
+// only the declared SGN-TEST-44/45/46/47 synthetic namespace and restores the declared fixture
 // activation on every exit path.
 //
 // Usage:
@@ -69,6 +69,7 @@ assert.match(
   'Only a declared synthetic namespace is allowed',
 );
 const historyFixture = fixtures.namespace === 'SGN-TEST-47';
+const historyCleanupCommentIds = new Set();
 for (const name of ['alpha', 'beta', 'reviewer', 'inactive']) {
   assert.equal(
     typeof fixtures.identities[name]?.employeeId,
@@ -549,12 +550,49 @@ function setReviewerRole(role) {
   );
 }
 // Any failure must still return the declared fixture identities to their original state.
-function restoreAndExit(error) {
+async function cleanupHistoryRows() {
+  if (!historyCleanupCommentIds.size) return;
+  const ids = [...historyCleanupCommentIds]
+    .map((id) => `'${id}'`)
+    .join(',');
+  await operatorSqlAsync(
+    `do $$
+     begin
+       execute 'alter table public.property_comment_removals disable trigger comment_removal_guard';
+       execute 'alter table public.property_comment_edits disable trigger comment_edit_guard';
+       execute 'alter table public.property_comments disable trigger comment_original';
+       begin
+         delete from public.property_comment_removals where comment_id in (${ids});
+         delete from public.property_comment_edits where comment_id in (${ids});
+         delete from public.property_comments where id in (${ids});
+         execute 'alter table public.property_comment_removals enable trigger comment_removal_guard';
+         execute 'alter table public.property_comment_edits enable trigger comment_edit_guard';
+         execute 'alter table public.property_comments enable trigger comment_original';
+       exception when others then
+         execute 'alter table public.property_comment_removals enable trigger comment_removal_guard';
+         execute 'alter table public.property_comment_edits enable trigger comment_edit_guard';
+         execute 'alter table public.property_comments enable trigger comment_original';
+         raise;
+       end;
+     end $$;`,
+  );
+  const rows = await operatorSqlAsync(
+    `select
+       (select count(*)::int from public.property_comment_removals where comment_id in (${ids})) as removals,
+       (select count(*)::int from public.property_comment_edits where comment_id in (${ids})) as edits,
+       (select count(*)::int from public.property_comments where id in (${ids})) as comments`,
+  );
+  assert.equal(Number(rows[0]?.removals ?? 0), 0, 'History removal fixtures are cleaned');
+  assert.equal(Number(rows[0]?.edits ?? 0), 0, 'History edit fixtures are cleaned');
+  assert.equal(Number(rows[0]?.comments ?? 0), 0, 'History comment fixtures are cleaned');
+}
+async function restoreAndExit(error) {
   try {
+    await cleanupHistoryRows();
     setBetaActive(true);
     setReviewerRole(reviewerRole);
   } catch {
-    console.error('FIXTURE RESTORE FAILED: reactivate ' + betaEmployee);
+    console.error('FIXTURE RESTORE FAILED: history rows or roles');
   }
   console.error(error);
   process.exit(1);
@@ -2887,6 +2925,7 @@ const browserHistoryPosted = await alpha.rpc('post_property_comment', {
   p_key: randomUUID(),
 });
 assert.equal(browserHistoryPosted.error, null, 'Browser history fixture posts');
+historyCleanupCommentIds.add(browserHistoryPosted.data.id);
 let browserHistoryRevision = browserHistoryPosted.data.revision;
 for (let version = 1; version <= 3; version++) {
   const body = `Lịch sử trình duyệt phiên ${version}`;
@@ -2918,6 +2957,7 @@ const boundedHistoryPosted = await alpha.rpc('post_property_comment', {
   p_key: randomUUID(),
 });
 assert.equal(boundedHistoryPosted.error, null, 'Bounded history fixture posts');
+historyCleanupCommentIds.add(boundedHistoryPosted.data.id);
 let boundedHistoryRevision = boundedHistoryPosted.data.revision;
 for (let version = 1; version <= 64; version++) {
   const edited = await alpha.rpc('edit_property_comment', {
@@ -2943,6 +2983,7 @@ const archivedInactiveHistoryBody = 'Lịch sử của tác giả đã ngừng h
 await operatorSqlAsync(
   `insert into public.property_comments(id,property_id,author_id,author_name,body,revision,idempotency_key) values('${archivedInactiveHistoryId}','${archived.id}','${inactiveEmployee}','${names.inactive.replace(/'/g, "''")}','${archivedInactiveHistoryBody}','${randomUUID()}','${randomUUID()}')`,
 );
+historyCleanupCommentIds.add(archivedInactiveHistoryId);
 const archivedInactiveHistoryExpected = await reviewer.rpc(
   'list_property_comment_history',
   { p_property_id: archived.id, p_comment_id: archivedInactiveHistoryId },
@@ -3157,6 +3198,8 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
     `() => document.querySelector('section.discussion h2')?.textContent === 'Thảo luận bất động sản'`,
     secondary,
   );
+  await settle(secondary);
+  browser(['open', detail(second)], secondary);
   await settle(secondary);
   openHistory(browserHistoryPosted.data.id, secondary);
   await waitUntil(
@@ -3920,6 +3963,8 @@ if (historyFixture) {
   });
 }
 
+await cleanupHistoryRows();
+
 const report = {
   checkedAt: new Date().toISOString(),
   environment:
@@ -3929,7 +3974,7 @@ const report = {
   namespace: fixtures.namespace,
   observations,
   limits: [
-    `Fixture-only writes: the ${fixtures.namespace} namespace is created and removed by this task.`,
+    `Ticket-47 history rows created by this journey are removed; the surrounding ${fixtures.namespace} fixture namespace remains owned by its fixture setup and teardown.`,
     'The held-lock race uses the operator connection to hold the parent property row; it does not replace a staging gate for production contention.',
   ],
 };

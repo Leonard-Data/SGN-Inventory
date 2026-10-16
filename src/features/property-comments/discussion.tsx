@@ -91,10 +91,15 @@ export function Discussion({
   const generation = useRef(0);
   const historyGeneration = useRef(0);
   const historyRequestTokens = useRef<Record<string, number>>({});
+  const historyAbortControllers = useRef<Record<string, AbortController>>({});
   const nextHistoryRequestToken = useRef(0);
   const invalidateHistory = useCallback(() => {
     historyGeneration.current++;
+    Object.values(historyAbortControllers.current).forEach((controller) =>
+      controller.abort(),
+    );
     historyRequestTokens.current = {};
+    historyAbortControllers.current = {};
     setHistory({});
     setHistoryBusy({});
     setHistoryError({});
@@ -498,7 +503,9 @@ export function Discussion({
     }
     const requestGeneration = historyGeneration.current;
     const requestToken = ++nextHistoryRequestToken.current;
+    const abort = new AbortController();
     historyRequestTokens.current[commentId] = requestToken;
+    historyAbortControllers.current[commentId] = abort;
     setHistoryBusy((value) => ({ ...value, [commentId]: true }));
     setHistoryError((value) => {
       const next = { ...value };
@@ -508,6 +515,8 @@ export function Discussion({
     try {
       const result = await api<CommentHistoryPage>(
         `/api/properties/${propertyId}/comments/${commentId}/history`,
+        undefined,
+        abort.signal,
       );
       if (!reviewer || requestGeneration !== historyGeneration.current) return;
       setHistory((value) => ({ ...value, [commentId]: result }));
@@ -524,6 +533,7 @@ export function Discussion({
     } finally {
       if (historyRequestTokens.current[commentId] !== requestToken) return;
       delete historyRequestTokens.current[commentId];
+      delete historyAbortControllers.current[commentId];
       if (requestGeneration !== historyGeneration.current) return;
       setHistoryBusy((value) => {
         const next = { ...value };
