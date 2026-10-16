@@ -6,6 +6,14 @@ export class RequestError extends Error {
     super(code);
   }
 }
+
+export function isPropertyAccessFailure(failure: unknown) {
+  return (
+    failure instanceof RequestError &&
+    failure.status === 404 &&
+    failure.code === 'property-not-found'
+  );
+}
 // Responses come from the application's typed JSON API; never expose raw remote diagnostics.
 export async function api<T>(
   path: string,

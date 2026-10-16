@@ -5,7 +5,7 @@ import type { OwnerContactDisclosure } from './types';
 const errorMap: Record<string, [number, string]> = {
   '42501': [403, 'access-denied'],
   P0001: [400, 'invalid-input'],
-  P0002: [404, 'not-found'],
+  P0002: [404, 'property-not-found'],
   P0003: [409, 'owner-contact-missing'],
   P0004: [409, 'owner-phone-missing'],
   P0005: [409, 'disclosure-key-conflict'],

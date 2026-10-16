@@ -7,7 +7,7 @@ import {
   renderedSession,
   sessionDiffers,
 } from './protected-load.ts';
-import { RequestError } from './api.ts';
+import { isPropertyAccessFailure, RequestError } from './api.ts';
 import type { Employee } from './types.ts';
 
 const reviewer: Employee = {
@@ -34,10 +34,16 @@ const flush = () => new Promise((resolve) => setImmediate(resolve));
 const sessionResponse = (employee: Employee, accessRevision = 0) =>
   Response.json({ employee, accessRevision });
 
-test('protected authorization failures invalidate their parent surface', () => {
+test('property access misses invalidate while child misses stay local', () => {
+  const propertyMiss = new RequestError(404, 'property-not-found');
+  const childMiss = new RequestError(404, 'not-found');
+
+  assert.equal(isPropertyAccessFailure(propertyMiss), true);
+  assert.equal(isPropertyAccessFailure(childMiss), false);
   assert.equal(isProtectedInvalidation(new RequestError(401, 'unauthenticated')), true);
   assert.equal(isProtectedInvalidation(new RequestError(403, 'access-denied')), true);
-  assert.equal(isProtectedInvalidation(new RequestError(404, 'not-found')), true);
+  assert.equal(isProtectedInvalidation(propertyMiss), true);
+  assert.equal(isProtectedInvalidation(childMiss), false);
   assert.equal(isProtectedInvalidation(new RequestError(500, 'unavailable')), false);
 });
 

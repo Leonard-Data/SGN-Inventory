@@ -4,7 +4,11 @@ import type { Locale } from '@/i18n/messages';
 import type { Json } from '@/types/database';
 import type { Employee } from '@/features/employees/types';
 import { ContactPicker } from '@/features/property-maintenance/contact-picker';
-import { api, RequestError } from '@/features/employees/api';
+import {
+  api,
+  isPropertyAccessFailure,
+  RequestError,
+} from '@/features/employees/api';
 import type { PropertyDetail } from '@/features/properties/detail-data';
 import {
   AddressFields,
@@ -159,7 +163,7 @@ export function CorrectionDraft({
       setSuccess(true);
       await onSaved();
     } catch (failure) {
-      if (failure instanceof RequestError && failure.status === 404) {
+      if (isPropertyAccessFailure(failure)) {
         onInvalidate?.();
         return;
       }

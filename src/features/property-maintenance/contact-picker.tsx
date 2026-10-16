@@ -1,6 +1,10 @@
 'use client';
 import { useId, useRef, useState, useEffect, type FormEvent } from 'react';
-import { api, RequestError } from '@/features/employees/api';
+import {
+  api,
+  isPropertyAccessFailure,
+  RequestError,
+} from '@/features/employees/api';
 import type { Locale } from '@/i18n/messages';
 import { maintenanceText, optionLabel } from './messages';
 type Page = {
@@ -50,8 +54,7 @@ export function ContactPicker({
       if (!abort.signal.aborted) setPage(result);
     } catch (failure) {
       if (abort.signal.aborted) return;
-      if (failure instanceof RequestError && failure.status === 404)
-        onInvalidate?.();
+      if (isPropertyAccessFailure(failure)) onInvalidate?.();
       else if (
         failure instanceof RequestError &&
         (failure.status === 401 || failure.status === 403)

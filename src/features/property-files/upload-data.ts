@@ -118,6 +118,14 @@ export async function validateAndCompleteFile(
   const key = process.env.SGN_FILE_VALIDATION_KEY;
   if (!key || !/^[a-f0-9]{64}$/.test(key))
     throw new ApiError(503, 'unavailable');
+  const { data: property, error: propertyError } = await context.client
+    .from('properties')
+    .select('id,archived_at,created_by')
+    .eq('id', propertyId)
+    .maybeSingle();
+  if (propertyError) databaseFailure(propertyError);
+  if (!property) throw new ApiError(404, 'property-not-found');
+  if (property.archived_at) throw new ApiError(403, 'access-denied');
   const { data: file, error } = await context.client
     .from('property_files')
     .select(
@@ -128,14 +136,6 @@ export async function validateAndCompleteFile(
     .maybeSingle();
   if (error) databaseFailure(error);
   if (!file) throw new ApiError(404, 'not-found');
-  const { data: property, error: propertyError } = await context.client
-    .from('properties')
-    .select('id,archived_at,created_by')
-    .eq('id', propertyId)
-    .maybeSingle();
-  if (propertyError) databaseFailure(propertyError);
-  if (!property || property.archived_at)
-    throw new ApiError(403, 'access-denied');
   const readyPhotoEditor =
     file.upload_status === 'ready' &&
     file.purpose === 'photo' &&

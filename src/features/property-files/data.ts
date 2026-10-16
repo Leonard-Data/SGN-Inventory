@@ -42,7 +42,7 @@ export async function authorizeAndSignFile(
     if (propError.code === '42501') throw new ApiError(403, 'access-denied');
     throw new ApiError(503, 'unavailable');
   }
-  if (!property) throw new ApiError(404, 'not-found');
+  if (!property) throw new ApiError(404, 'property-not-found');
 
   // Verify file exists, belongs to property, is ready — RLS ensures caller has access
   const { data: file, error: fileError } = await context.client

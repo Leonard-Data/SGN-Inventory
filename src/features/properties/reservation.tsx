@@ -8,7 +8,11 @@ import {
   type FormEvent,
 } from 'react';
 import { messages, type Locale } from '@/i18n/messages';
-import { api, RequestError } from '@/features/employees/api';
+import {
+  api,
+  isPropertyAccessFailure,
+  RequestError,
+} from '@/features/employees/api';
 import {
   RESERVATION_DAYS_DEFAULT,
   RESERVATION_DAYS_MAX,
@@ -214,7 +218,7 @@ export function Reservation({
   }, []);
   const failure = useCallback(
     (problem: unknown, set: (code: string) => void) => {
-      if (problem instanceof RequestError && problem.status === 404) {
+      if (isPropertyAccessFailure(problem)) {
         onInvalidate?.();
         return;
       }
@@ -280,7 +284,7 @@ export function Reservation({
         onDenied(problem.status);
         return;
       }
-      if (problem instanceof RequestError && problem.status === 404) {
+      if (isPropertyAccessFailure(problem)) {
         onInvalidate?.();
         return;
       }
@@ -327,7 +331,7 @@ export function Reservation({
         onDenied(problem.status);
         return;
       }
-      if (problem instanceof RequestError && problem.status === 404) {
+      if (isPropertyAccessFailure(problem)) {
         onInvalidate?.();
         return;
       }
@@ -381,7 +385,7 @@ export function Reservation({
         onDenied(problem.status);
         return;
       }
-      if (problem instanceof RequestError && problem.status === 404) {
+      if (isPropertyAccessFailure(problem)) {
         onInvalidate?.();
         return;
       }

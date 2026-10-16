@@ -2,7 +2,11 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { messages as globalMessages, type Locale } from '@/i18n/messages';
 import { fileMessages } from './messages';
-import { api, RequestError } from '@/features/employees/api';
+import {
+  api,
+  isPropertyAccessFailure,
+  RequestError,
+} from '@/features/employees/api';
 import { CoverImage } from './cover-image';
 import type {
   PropertyFileList,
@@ -27,7 +31,7 @@ function handleProtectedFailure(
   onDenied: (status: number) => void,
   onInvalidate?: () => void,
 ) {
-  if (failure instanceof RequestError && failure.status === 404) {
+  if (isPropertyAccessFailure(failure)) {
     onInvalidate?.();
     return true;
   }
@@ -361,7 +365,8 @@ export function Workspace({
         if (
           signal?.aborted ||
           (failure instanceof RequestError &&
-            [401, 403, 404].includes(failure.status))
+            ([401, 403].includes(failure.status) ||
+              isPropertyAccessFailure(failure)))
         )
           throw failure;
         // Completion may have committed before its response was lost.
@@ -671,6 +676,7 @@ export function Workspace({
             fileId={coverFileId}
             locale={locale}
             onDenied={onDenied}
+            onInvalidate={onInvalidate}
           />
           {canEdit && !archived && coverFileId ? (
             <button

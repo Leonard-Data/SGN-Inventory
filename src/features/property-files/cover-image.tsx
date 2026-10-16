@@ -2,7 +2,11 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Locale } from '@/i18n/messages';
 import { messages } from '@/i18n/messages';
-import { api, RequestError } from '@/features/employees/api';
+import {
+  api,
+  isPropertyAccessFailure,
+  RequestError,
+} from '@/features/employees/api';
 import { fileMessages } from './messages';
 import type { SignedFileResponse } from './types';
 
@@ -11,11 +15,13 @@ export function CoverImage({
   fileId,
   locale,
   onDenied,
+  onInvalidate,
 }: {
   propertyId: string;
   fileId: string | null;
   locale: Locale;
   onDenied: (status: number) => void;
+  onInvalidate?: () => void;
 }) {
   const key = propertyId + '/' + fileId;
   const [resource, setResource] = useState<{
@@ -47,6 +53,10 @@ export function CoverImage({
             timer = window.setTimeout(() => onDenied(failure.status), 0);
             return;
           }
+          if (isPropertyAccessFailure(failure)) {
+            onInvalidate?.();
+            return;
+          }
           if (failure.status === 404) {
             setResource({ key, error: 'missing' });
             return;
@@ -58,7 +68,7 @@ export function CoverImage({
       abort.abort();
       clearTimeout(timer);
     };
-  }, [propertyId, fileId, key, revision, onDenied]);
+  }, [propertyId, fileId, key, revision, onDenied, onInvalidate]);
   const current = resource?.key === key ? resource : null;
   return (
     <div

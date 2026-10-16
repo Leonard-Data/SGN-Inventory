@@ -15,7 +15,7 @@ export async function propertyDetail(context: RouteContext, id: string) {
       error.code === '42501' ? 403 : 503,
       error.code === '42501' ? 'access-denied' : 'unavailable',
     );
-  if (!property) throw new ApiError(404, 'not-found');
+  if (!property) throw new ApiError(404, 'property-not-found');
   const [addressResult, contactResult] = await Promise.all([
     context.client
       .from('property_addresses')

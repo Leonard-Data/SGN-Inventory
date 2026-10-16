@@ -1,4 +1,4 @@
-import { api, RequestError } from './api.ts';
+import { api, isPropertyAccessFailure, RequestError } from './api.ts';
 import type { Employee, EmployeeSession } from './types';
 
 // The session values a protected read authorizes on: the same employee with a
@@ -21,7 +21,7 @@ export function sessionDiffers(
 export function isProtectedInvalidation(failure: unknown) {
   return (
     failure instanceof RequestError &&
-    [401, 403, 404].includes(failure.status)
+    ([401, 403].includes(failure.status) || isPropertyAccessFailure(failure))
   );
 }
 

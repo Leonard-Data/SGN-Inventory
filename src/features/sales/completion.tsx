@@ -8,7 +8,11 @@ import {
   type FormEvent,
 } from 'react';
 import { label, messages, type Locale } from '@/i18n/messages';
-import { api, RequestError } from '@/features/employees/api';
+import {
+  api,
+  isPropertyAccessFailure,
+  RequestError,
+} from '@/features/employees/api';
 import { vietnamDate, vietnamTimestamp } from '@/features/properties/format';
 import { SALE_REFERENCE_MAX } from './rules';
 import type { SaleCompletionState } from './types';
@@ -61,7 +65,7 @@ export function SaleCompletion({
   const dateTouched = useRef(false);
   const failure = useCallback(
     (problem: unknown, set: (code: string) => void) => {
-      if (problem instanceof RequestError && problem.status === 404) {
+      if (isPropertyAccessFailure(problem)) {
         onInvalidate?.();
         return;
       }
@@ -133,7 +137,7 @@ export function SaleCompletion({
         onDenied(problem.status);
         return;
       }
-      if (problem instanceof RequestError && problem.status === 404) {
+      if (isPropertyAccessFailure(problem)) {
         onInvalidate?.();
         return;
       }

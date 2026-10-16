@@ -2,7 +2,11 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { Locale } from '@/i18n/messages';
 import type { Employee } from '@/features/employees/types';
-import { api, RequestError } from '@/features/employees/api';
+import {
+  api,
+  isPropertyAccessFailure,
+  RequestError,
+} from '@/features/employees/api';
 import type { PropertyDetail } from '@/features/properties/detail-data';
 import type { ContactDetail } from './data';
 import { MutationForm, RecordFields, AddressFields } from './forms';
@@ -123,7 +127,7 @@ export function Maintenance({
         });
     } catch (failure) {
       if (abort.signal.aborted) return;
-      if (failure instanceof RequestError && failure.status === 404) {
+      if (isPropertyAccessFailure(failure)) {
         onInvalidate?.();
         return;
       }

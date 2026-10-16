@@ -100,7 +100,7 @@ export async function saleCompletionState(
         claimResult.error!,
     );
   const property = propertyResult.data;
-  if (!property) throw new ApiError(404, 'not-found');
+  if (!property) throw new ApiError(404, 'property-not-found');
   const names = new Map(
     (employeesResult.data ?? []).map((row) => [row.id, row.display_name]),
   );
