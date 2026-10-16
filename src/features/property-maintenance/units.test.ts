@@ -4,6 +4,7 @@ import {
   missingUnitReplacement,
   unitCatalogUnavailable,
   unitOptionLabels,
+  unitSelectionUnavailable,
 } from './units.ts';
 
 test('an official unit option shows the name alone', () => {
@@ -41,6 +42,16 @@ test('an unavailable catalog preserves the stored selection path', () => {
     unitCatalogUnavailable('commune', 'province-id', false, false),
     false,
   );
+});
+
+test('a stored unit stays preserved when a loaded catalog has no matching option', () => {
+  assert.equal(unitSelectionUnavailable('stored-id', [], false), true);
+  assert.equal(
+    unitSelectionUnavailable('stored-id', [{ id: 'other-id' }], false),
+    true,
+  );
+  assert.equal(unitSelectionUnavailable('', [], false), false);
+  assert.equal(unitSelectionUnavailable('stored-id', [], true), true);
 });
 
 test('a selected unit replacement requires an available value', () => {

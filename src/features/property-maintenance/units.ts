@@ -14,6 +14,15 @@ export function unitCatalogUnavailable(
 ) {
   return loading || failed || (level === 'commune' && !parent);
 }
+export function unitSelectionUnavailable(
+  value: string,
+  units: readonly { id: string }[],
+  catalogUnavailable: boolean,
+) {
+  return (
+    catalogUnavailable || (!!value && !units.some((unit) => unit.id === value))
+  );
+}
 export function missingUnitReplacement(
   names: readonly string[],
   valueFor: (name: string) => unknown,
