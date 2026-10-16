@@ -360,15 +360,15 @@ export async function saleCompletionContract({
         ).rows[0].status,
         'sold',
       );
-      // A status change is no longer recorded in the property history.
       assert.equal(
         (
           await db.query(
-            "select count(*)::int as n from public.property_history where property_id=$1 and changed_fields @> '{status}'",
+            'select count(*)::int as n from public.property_history where property_id=$1',
             [sameClaimProperty],
           )
         ).rows[0].n,
         0,
+        'A sale status change records no property-history row',
       );
     },
   );
@@ -418,7 +418,7 @@ export async function saleCompletionContract({
       assert.equal(
         (
           await db.query(
-            "select count(*)::int as n from public.property_history where property_id=$1 and changed_fields @> '{status}'",
+            'select count(*)::int as n from public.property_history where property_id=$1',
             [sameClaimProperty],
           )
         ).rows[0].n,
