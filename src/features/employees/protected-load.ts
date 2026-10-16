@@ -7,6 +7,17 @@ export function renderedSession(employee: Employee) {
   return `${employee.id}:${employee.role}`;
 }
 
+export function sessionDiffers(
+  renderedFor: string | null,
+  renderedAccessRevision: number | null,
+  session: EmployeeSession,
+) {
+  return (
+    renderedFor !== renderedSession(session.employee) ||
+    renderedAccessRevision !== session.accessRevision
+  );
+}
+
 // What a window refocus does with a protected surface. A read already in flight
 // decides what the surface shows; a displayed snapshot is only rechecked against
 // live membership; a surface with nothing displayed reads again before showing
@@ -23,6 +34,7 @@ export async function loadProtected<T>(options: {
   source: string | ((signal: AbortSignal) => Promise<T>);
   signal: AbortSignal;
   renderedFor: string | null;
+  renderedAccessRevision: number | null;
   onIdentityChange: () => void;
 }) {
   let session = await api<EmployeeSession>(
@@ -34,7 +46,11 @@ export async function loadProtected<T>(options: {
     options.signal.throwIfAborted();
     if (
       options.renderedFor !== null &&
-      renderedSession(session.employee) !== options.renderedFor
+      sessionDiffers(
+        options.renderedFor,
+        options.renderedAccessRevision,
+        session,
+      )
     )
       options.onIdentityChange();
     options.signal.throwIfAborted();
@@ -49,10 +65,17 @@ export async function loadProtected<T>(options: {
     );
     options.signal.throwIfAborted();
     if (
-      current.accessRevision === session.accessRevision &&
-      renderedSession(current.employee) === renderedSession(session.employee)
+      !sessionDiffers(
+        renderedSession(session.employee),
+        session.accessRevision,
+        current,
+      )
     )
-      return { employee: current.employee, data };
+      return {
+        employee: current.employee,
+        data,
+        accessRevision: current.accessRevision,
+      };
     if (options.renderedFor !== null) options.onIdentityChange();
     options.signal.throwIfAborted();
     session = current;

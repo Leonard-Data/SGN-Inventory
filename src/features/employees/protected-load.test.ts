@@ -4,6 +4,7 @@ import {
   loadProtected,
   refocusAction,
   renderedSession,
+  sessionDiffers,
 } from './protected-load.ts';
 import { RequestError } from './api.ts';
 import type { Employee } from './types.ts';
@@ -32,6 +33,19 @@ const flush = () => new Promise((resolve) => setImmediate(resolve));
 const sessionResponse = (employee: Employee, accessRevision = 0) =>
   Response.json({ employee, accessRevision });
 
+test('rendered session comparison includes the access revision', () => {
+  const current = { employee: manager, accessRevision: 2 };
+
+  assert.equal(
+    sessionDiffers(renderedSession(manager), 1, current),
+    true,
+  );
+  assert.equal(
+    sessionDiffers(renderedSession(manager), 2, current),
+    false,
+  );
+});
+
 test('same-identity reload keeps the rendered snapshot without concealing', async (t) => {
   t.mock.method(globalThis, 'fetch', async (path: string) => {
     assert.equal(path, '/api/session');
@@ -42,12 +56,17 @@ test('same-identity reload keeps the rendered snapshot without concealing', asyn
     source: async () => archived,
     signal: new AbortController().signal,
     renderedFor: renderedSession(reviewer),
+    renderedAccessRevision: 0,
     onIdentityChange: () => {
       events.push('conceal');
     },
   });
   assert.deepEqual(events, []);
-  assert.deepEqual(result, { employee: reviewer, data: archived });
+  assert.deepEqual(result, {
+    employee: reviewer,
+    data: archived,
+    accessRevision: 0,
+  });
 });
 
 test('an ordinary employee replacing a reviewer conceals the archived snapshot before its data is published', async (t) => {
@@ -66,6 +85,7 @@ test('an ordinary employee replacing a reviewer conceals the archived snapshot b
     },
     signal: new AbortController().signal,
     renderedFor: renderedSession(reviewer),
+    renderedAccessRevision: 0,
     onIdentityChange: () => {
       events.push('conceal');
       assert.equal(settled, false);
@@ -80,7 +100,11 @@ test('an ordinary employee replacing a reviewer conceals the archived snapshot b
   assert.deepEqual(events, ['conceal', 'source-requested']);
   assert.equal(settled, false);
   source.resolve(archived);
-  assert.deepEqual(await pending, { employee: sales, data: archived });
+  assert.deepEqual(await pending, {
+    employee: sales,
+    data: archived,
+    accessRevision: 0,
+  });
 });
 
 test('the same employee with a different role conceals the manager snapshot before its data is published', async (t) => {
@@ -100,6 +124,7 @@ test('the same employee with a different role conceals the manager snapshot befo
     },
     signal: new AbortController().signal,
     renderedFor: renderedSession(manager),
+    renderedAccessRevision: 0,
     onIdentityChange: () => {
       events.push('conceal');
     },
@@ -113,6 +138,7 @@ test('the same employee with a different role conceals the manager snapshot befo
   assert.deepEqual(await pending, {
     employee: { ...manager, role: 'sales' },
     data: archived,
+    accessRevision: 0,
   });
 });
 
@@ -123,12 +149,17 @@ test('a first load does not report an identity change before publishing', async 
     source: async () => archived,
     signal: new AbortController().signal,
     renderedFor: null,
+    renderedAccessRevision: null,
     onIdentityChange: () => {
       events.push('conceal');
     },
   });
   assert.deepEqual(events, []);
-  assert.deepEqual(result, { employee: sales, data: archived });
+  assert.deepEqual(result, {
+    employee: sales,
+    data: archived,
+    accessRevision: 0,
+  });
 });
 
 test('a source result is discarded when access changes away and back during the read', async (t) => {
@@ -148,6 +179,7 @@ test('a source result is discarded when access changes away and back during the 
     },
     signal: new AbortController().signal,
     renderedFor: null,
+    renderedAccessRevision: null,
     onIdentityChange: () => {
       assert.fail('first loads do not conceal an empty surface');
     },
@@ -160,7 +192,11 @@ test('a source result is discarded when access changes away and back during the 
   assert.equal(sourceReads, 2);
   const fresh = { property: { id: 'fresh-aba' } };
   secondSource.resolve(fresh);
-  assert.deepEqual(await pending, { employee: sales, data: fresh });
+  assert.deepEqual(await pending, {
+    employee: sales,
+    data: fresh,
+    accessRevision: 3,
+  });
 });
 
 test('a first read discards data when identity changes during the source read', async (t) => {
@@ -186,6 +222,7 @@ test('a first read discards data when identity changes during the source read', 
     },
     signal: new AbortController().signal,
     renderedFor: null,
+    renderedAccessRevision: null,
     onIdentityChange: () => {
       assert.fail('first loads do not conceal an empty surface');
     },
@@ -202,7 +239,11 @@ test('a first read discards data when identity changes during the source read', 
   assert.equal(sourceReads, 2);
   const fresh = { property: { id: 'fresh-1' } };
   secondSource.resolve(fresh);
-  assert.deepEqual(await pending, { employee: sales, data: fresh });
+  assert.deepEqual(await pending, {
+    employee: sales,
+    data: fresh,
+    accessRevision: 2,
+  });
 });
 
 test('a denied session rejects without publishing or concealing', async (t) => {
@@ -215,6 +256,7 @@ test('a denied session rejects without publishing or concealing', async (t) => {
       source: async () => archived,
       signal: new AbortController().signal,
       renderedFor: renderedSession(reviewer),
+      renderedAccessRevision: 0,
       onIdentityChange: () => {
         concealed += 1;
       },
