@@ -9,9 +9,11 @@ import type { AmendmentPage } from './data';
 function AmendmentList({
   requestId,
   locale,
+  onInvalidate,
 }: {
   requestId: string;
   locale: Locale;
+  onInvalidate?: () => void;
 }) {
   const [after, setAfter] = useState<number | null>(null),
     text = maintenanceText(locale),
@@ -20,6 +22,8 @@ function AmendmentList({
         requestId +
         '/amendments' +
         (after ? '?after=' + after : ''),
+      undefined,
+      onInvalidate,
     );
   return (
     <div>
@@ -82,9 +86,11 @@ function AmendmentList({
 export function Amendments({
   requestId,
   locale,
+  onInvalidate,
 }: {
   requestId: string;
   locale: Locale;
+  onInvalidate?: () => void;
 }) {
   const [open, setOpen] = useState(false),
     text = maintenanceText(locale);
@@ -94,7 +100,13 @@ export function Amendments({
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
       <summary>{text.amendments}</summary>
-      {open ? <AmendmentList requestId={requestId} locale={locale} /> : null}
+      {open ? (
+        <AmendmentList
+          requestId={requestId}
+          locale={locale}
+          onInvalidate={onInvalidate}
+        />
+      ) : null}
     </details>
   );
 }
