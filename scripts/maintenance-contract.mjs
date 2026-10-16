@@ -41,7 +41,6 @@ export async function maintenanceContract({
         ).rows[0].address_text,
         'Nhà nguồn 50%_ Lý Thường Kiệt',
       );
-      // An address-only creation carries no asking-price change, so it records no history.
       assert.deepEqual(
         (
           await db.query(
@@ -370,7 +369,6 @@ export async function maintenanceContract({
         preview.revision,
         { raw_phone_text: '0900 mới %_', phones: ['0900999999'] },
       ]);
-      // The shared person row carries the correction; no property records contact history.
       assert.equal(
         (
           await db.query(
@@ -636,7 +634,6 @@ export async function maintenanceContract({
           raw_phone_text: '0900 %_ mới',
         },
       );
-      // A contact correction is no longer recorded in any property's history.
       assert.equal(
         (
           await db.query(
@@ -1346,7 +1343,6 @@ export async function maintenanceContract({
         ).rows[0],
         { address_text: 'Địa chỉ khác chưa phân loại', is_primary: false },
       );
-      // An address correction is no longer recorded in the property history.
       assert.equal(
         (
           await db.query(

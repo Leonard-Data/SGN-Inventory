@@ -1207,6 +1207,7 @@ export function Detail({
                     open={activeActionDialog === 'sale'}
                     onClose={() => setActionDialog(null)}
                     title={text.completedSaleTitle}
+                    headTitle
                     closeLabel={text.close}
                   >
                     <SaleCompletion
@@ -1224,6 +1225,7 @@ export function Detail({
                   open={activeActionDialog === 'reservation'}
                   onClose={() => setActionDialog(null)}
                   title={text.reservations}
+                  headTitle
                   size="default"
                   closeLabel={text.close}
                 >
@@ -1242,6 +1244,7 @@ export function Detail({
                   open={activeActionDialog === 'edit'}
                   onClose={() => setActionDialog(null)}
                   title={mt.editFacts}
+                  headTitle
                   closeLabel={text.close}
                 >
                   <Maintenance
@@ -1272,6 +1275,7 @@ export function Detail({
                   open={activeActionDialog === 'requests'}
                   onClose={() => setActionDialog(null)}
                   title={mt.queue}
+                  headTitle
                   closeLabel={text.close}
                 >
                   <CorrectionQueue

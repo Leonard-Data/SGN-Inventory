@@ -5,8 +5,8 @@
 // acceptance. Existing inventory is used read-only: the declared properties are unarchived
 // available/negotiating records that carry no completion and no reservation row, except the
 // declared rental-committed property, which must already carry an active rental agreement.
-// The harness removes exactly the completion, reservation, event, history and activity rows
-// it creates, by exact ID, restores the declared property statuses and the fixture
+// The harness removes exactly the completion, reservation, event and activity rows it
+// creates, by exact ID, restores the declared property statuses and the fixture
 // identities it deactivates, and re-reads the row identities it recorded before the journey.
 //
 // Usage:
@@ -947,15 +947,15 @@ const manager = await userClient('manager');
   assert.equal(row.previous_status, declaredProperties.main.status);
   assert.equal(row.reversed_at, null);
   assert.equal(row.version, 1);
-  // A status change is no longer recorded in the property history.
+  const historyCount = Number(
+    operatorSql(
+      `select count(*)::int as n from public.property_history where property_id = '${main.id}'`,
+    )[0].n,
+  );
   assert.equal(
-    Number(
-      operatorSql(
-        `select count(*)::int as n from public.property_history where property_id = '${main.id}'`,
-      )[0].n,
-    ),
+    historyCount,
     Number(mainHistoryBefore),
-    'The sale recorded no new property history',
+    'The sale records no property-history row',
   );
   observed('a manager confirms a past-dated sale through the rendered form', {
     form,

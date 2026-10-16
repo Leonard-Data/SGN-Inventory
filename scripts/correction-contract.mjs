@@ -11,7 +11,7 @@ export async function correctionContract({
   const row = async () =>
     (
       await db.query(
-        'select revision,notes from public.properties where id=$1',
+        'select revision,notes,sale_price_vnd from public.properties where id=$1',
         [property],
       )
     ).rows[0];
@@ -157,7 +157,6 @@ export async function correctionContract({
       assert.equal(after.status, 'applied');
       assert.equal(after.outcome_actor_id, employees[5]);
       assert.equal((await row()).notes, 'Đã chỉnh đúng nguồn');
-      // A non-price correction changes the record but is no longer recorded anywhere.
       assert.deepEqual(
         (
           await db.query(
@@ -507,7 +506,7 @@ export async function correctionContract({
           property,
           'incorrect',
           'Synthetic correction rollback fixture',
-          { sale_price_vnd: '888000' },
+          { sale_price_vnd: '1230000000' },
           current.revision,
           current.revision,
         ])
