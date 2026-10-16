@@ -77,6 +77,7 @@ export function Workspace({
 
   const text = globalMessages[locale];
   const fileText = fileMessages[locale];
+  const fileInputDisabled = uploading || creatingCategory || busy;
 
   useEffect(() => {
     const version = ++generation.current;
@@ -518,7 +519,7 @@ export function Workspace({
         {!archived && employeeId ? (
           <fieldset
             className="dropzone"
-            disabled={uploading || creatingCategory || busy}
+            disabled={fileInputDisabled}
           >
             <legend className="sr">{fileText.purpose}</legend>
             <label className="check">
@@ -681,6 +682,7 @@ export function Workspace({
               <IconAction
                 name="imagePlus"
                 label={fileText.addCover}
+                disabled={fileInputDisabled}
                 onClick={addCoverImage}
               />
               <p className="field-hint">{fileText.addCoverHint}</p>
