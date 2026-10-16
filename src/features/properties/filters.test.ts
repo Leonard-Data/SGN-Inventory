@@ -61,10 +61,10 @@ test('unknown status, mode or type values are refused', () => {
     assert.equal(parse(values).ok, false, JSON.stringify(values));
 });
 
-test('a price bound is whole VND within the exactly representable range', () => {
-  for (const value of ['0', '123456789012345'])
+test('a price bound is whole VND across the database range', () => {
+  for (const value of ['0', '123456789012345', '999999999999999999'])
     assert.equal(parse({ priceMin: value }).ok, true, value);
-  for (const value of ['1.5', '-1', '1e9', '5 000', '1234567890123456', ''])
+  for (const value of ['1.5', '-1', '1e9', '5 000', '1000000000000000000', ''])
     assert.equal(
       parse({ priceMin: value }).ok,
       value === '',
@@ -135,9 +135,20 @@ test('only set filters become link and RPC parameters', () => {
     }),
     {
       p_status: 'available',
-      p_price_min: 1000,
-      p_price_max: 2000,
+      p_price_min: '1000',
+      p_price_max: '2000',
       p_area_min: 45.5,
+    },
+  );
+  assert.deepEqual(
+    filterRpcArgs({
+      ...noInventoryFilters,
+      priceMin: '100000000000000000',
+      priceMax: '999999999999999999',
+    }),
+    {
+      p_price_min: '100000000000000000',
+      p_price_max: '999999999999999999',
     },
   );
 });

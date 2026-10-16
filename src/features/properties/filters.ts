@@ -41,11 +41,7 @@ export const noInventoryFilters: InventoryFilters = {
   areaMax: null,
 };
 
-// An asking price is whole VND; a bound of at most 15 digits stays exactly representable as the
-// JSON number the RPC call sends, so a larger one is refused rather than rounded. Area bounds
-// follow the stored numeric(12,2) square metres. Both predicates are exported so the applied
-// filter summary formats only a bound it knows is well formed.
-const WHOLE_VND = /^\d{1,15}$/;
+const WHOLE_VND = /^\d{1,18}$/;
 const AREA_M2 = /^\d{1,10}(?:\.\d{1,2})?$/;
 
 export function wholeVnd(value: string): boolean {
@@ -126,8 +122,8 @@ export type InventoryFilterArgs = {
   p_status?: string;
   p_mode?: string;
   p_type?: string;
-  p_price_min?: number;
-  p_price_max?: number;
+  p_price_min?: string;
+  p_price_max?: string;
   p_area_min?: number;
   p_area_max?: number;
 };
@@ -139,8 +135,8 @@ export function filterRpcArgs(filters: InventoryFilters): InventoryFilterArgs {
   if (filters.status) args.p_status = filters.status;
   if (filters.mode) args.p_mode = filters.mode;
   if (filters.type) args.p_type = filters.type;
-  if (filters.priceMin) args.p_price_min = Number(filters.priceMin);
-  if (filters.priceMax) args.p_price_max = Number(filters.priceMax);
+  if (filters.priceMin) args.p_price_min = filters.priceMin;
+  if (filters.priceMax) args.p_price_max = filters.priceMax;
   if (filters.areaMin) args.p_area_min = Number(filters.areaMin);
   if (filters.areaMax) args.p_area_max = Number(filters.areaMax);
   return args;

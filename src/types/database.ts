@@ -2118,8 +2118,8 @@ export type Database = {
           p_direction: string;
           p_limit?: number;
           p_mode?: string;
-          p_price_max?: number;
-          p_price_min?: number;
+          p_price_max?: string;
+          p_price_min?: string;
           p_query?: string;
           p_status?: string;
           p_type?: string;
@@ -2150,8 +2150,8 @@ export type Database = {
           p_area_min?: number;
           p_limit?: number;
           p_mode?: string;
-          p_price_max?: number;
-          p_price_min?: number;
+          p_price_max?: string;
+          p_price_min?: string;
           p_query?: string;
           p_status?: string;
           p_type?: string;
