@@ -35,10 +35,21 @@ export function SearchIsland({
 }) {
   const router = useRouter();
   const text = messages[locale];
+  const appliedMode = filters.mode ?? '';
+  const appliedStateKey = JSON.stringify([
+    query,
+    sort,
+    ...INVENTORY_FILTER_KEYS.map((key) => filters[key]),
+  ]);
   const [open, setOpen] = useState(false);
   const [invalid, setInvalid] = useState(false);
-  const [mode, setMode] = useState(filters.mode ?? '');
+  const [mode, setMode] = useState(appliedMode);
   const dialogRef = useRef<HTMLDialogElement>(null);
+  function dismiss() {
+    setOpen(false);
+    setInvalid(false);
+    setMode(appliedMode);
+  }
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
@@ -50,8 +61,9 @@ export function SearchIsland({
     if (!open && dialog.open) dialog.close();
   }, [open]);
   useEffect(() => {
-    setMode(filters.mode ?? '');
-  }, [filters.mode]);
+    setMode(appliedMode);
+    setInvalid(false);
+  }, [appliedMode, appliedStateKey]);
   const count = activeFilterCount(filters);
   // Applying starts a new page-one journey with the stated filters, so a paging cursor from the
   // previous filter set can never be replayed against this one.
@@ -65,8 +77,7 @@ export function SearchIsland({
       setInvalid(true);
       return;
     }
-    setInvalid(false);
-    setOpen(false);
+    dismiss();
     router.push(
       '/properties?' +
         new URLSearchParams({
@@ -267,10 +278,11 @@ export function SearchIsland({
         ref={dialogRef}
         className="sgn-dialog"
         aria-labelledby="inventory-filters-title"
-        onClose={() => setOpen(false)}
-        onCancel={() => setOpen(false)}
+        onClose={dismiss}
+        onCancel={dismiss}
       >
         <form
+          key={`${open}:${appliedStateKey}`}
           className="sgn-dialog-panel"
           method="get"
           action="/properties"
@@ -281,7 +293,7 @@ export function SearchIsland({
             <button
               className="sgn-dialog-close"
               type="button"
-              onClick={() => setOpen(false)}
+              onClick={dismiss}
               aria-label={text.close}
             >
               ×
@@ -325,7 +337,7 @@ export function SearchIsland({
             <Link
               className="btn btn-ghost btn-sm"
               href={clearHref}
-              onClick={() => setOpen(false)}
+              onClick={dismiss}
             >
               {text.filtersClear}
             </Link>
