@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { unitOptionLabels } from './units.ts';
+import { unitCatalogUnavailable, unitOptionLabels } from './units.ts';
 
 test('an official unit option shows the name alone', () => {
   assert.deepEqual(
@@ -17,6 +17,25 @@ test('an official unit option shows the name alone', () => {
       },
     ]),
     ['Tỉnh Đồng Nai', 'Thành phố Đồng Nai'],
+  );
+});
+
+test('an unavailable catalog preserves the stored selection path', () => {
+  assert.equal(
+    unitCatalogUnavailable('province', undefined, true, false),
+    true,
+  );
+  assert.equal(
+    unitCatalogUnavailable('commune', 'province-id', false, true),
+    true,
+  );
+  assert.equal(
+    unitCatalogUnavailable('commune', undefined, false, false),
+    true,
+  );
+  assert.equal(
+    unitCatalogUnavailable('commune', 'province-id', false, false),
+    false,
   );
 });
 

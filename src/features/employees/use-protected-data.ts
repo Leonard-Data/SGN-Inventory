@@ -58,7 +58,7 @@ export function useProtectedData<T>(
           signal: abort.signal,
           renderedFor: renderedFor.current,
           onIdentityChange: () => {
-            clear();
+            if (renderedFor.current) clear();
             setBusy(false);
           },
         });

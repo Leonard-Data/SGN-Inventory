@@ -5,6 +5,15 @@ export type UnitOption = {
   valid_from: string;
   valid_to: string | null;
 };
+export type UnitLevel = 'province' | 'commune';
+export function unitCatalogUnavailable(
+  level: UnitLevel,
+  parent: string | undefined,
+  loading: boolean,
+  failed: boolean,
+) {
+  return loading || failed || (level === 'commune' && !parent);
+}
 export function unitOptionLabels(units: readonly UnitOption[]): string[] {
   const seen = new Map<string, number>();
   for (const unit of units)
