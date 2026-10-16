@@ -2,6 +2,7 @@
   "status": "not-executed",
   "scope": "ticket #47 reviewer-only Property comment history",
   "environment": "authorized development Supabase and local real Next.js application",
+  "applicationHead": null,
   "namespace": null,
   "migration": "20261016110000_property_comment_history_window.sql",
   "historyWindow": 64,

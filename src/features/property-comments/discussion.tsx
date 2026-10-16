@@ -555,7 +555,7 @@ export function Discussion({
             const canEdit = canWithdraw && !removed;
             return (
               <li key={row.id}>
-                <article className="comment">
+                <article className="comment" data-comment-id={row.id}>
                   <span className="sgn-avatar" aria-hidden="true">
                     {initials}
                   </span>
@@ -698,7 +698,11 @@ export function Discussion({
                             aria-label={text.commentHistory}
                           >
                             {history[row.id]!.events.map((event, index) => (
-                              <li key={`${event.kind}-${event.version ?? index}`}>
+                              <li
+                                key={`${event.kind}-${event.version ?? index}`}
+                                data-history-kind={event.kind}
+                                data-history-version={event.version ?? ''}
+                              >
                                 <p>
                                   <strong>
                                     {event.kind === 'posting'
@@ -709,16 +713,18 @@ export function Discussion({
                                           ? text.commentAuthorWithdrawal
                                           : text.commentModeratedRemoval}
                                   </strong>{' '}
-                                  — <span translate="no">{event.body}</span>
+                                  — <span className="comment-history-body" translate="no">{event.body}</span>
                                 </p>
                                 <p className="comment-meta" translate="no">
-                                  {event.actorName} ·{' '}
-                                  {vietnamTimestamp(event.occurredAt, locale)} (
-                                  {text.vietnamTime})
+                                  <span className="comment-history-actor">{event.actorName}</span> ·{' '}
+                                  <time className="comment-history-time" dateTime={event.occurredAt}>
+                                    {vietnamTimestamp(event.occurredAt, locale)}
+                                  </time>{' '}
+                                  ({text.vietnamTime})
                                 </p>
                                 {event.removalKind === 'moderation' &&
                                 event.reason ? (
-                                  <p className="field-hint">
+                                  <p className="field-hint comment-history-reason">
                                     {text.removalReason}:{' '}
                                     <span translate="no">{event.reason}</span>
                                   </p>
@@ -730,12 +736,14 @@ export function Discussion({
                           <p className="field-hint">{text.commentHistoryEmpty}</p>
                         )}
                         {history[row.id]!.hasMore ? (
-                          <p className="field-hint">{text.commentHistoryMore}</p>
+                          <p className="field-hint comment-history-more">
+                            {text.commentHistoryMore}
+                          </p>
                         ) : null}
                       </>
                     ) : null}
                     {reviewer && historyError === row.id ? (
-                      <p role="alert" className="field-error">
+                      <p role="alert" className="field-error comment-history-error">
                         {text.commentHistoryFailed}{' '}
                         <button
                           type="button"

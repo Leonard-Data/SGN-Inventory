@@ -896,6 +896,7 @@ export async function commentEditContract({
   await check(
     'history SQL bounds an over-window comment and reports retained events beyond it',
     async () => {
+      await asUser(1);
       const bounded = (
         await db.query(post, [
           live,
@@ -904,7 +905,6 @@ export async function commentEditContract({
         ])
       ).rows[0].created;
       let revision = bounded.revision;
-      await asUser(1);
       for (let version = 1; version <= 64; version++) {
         const key =
           '24000000-0000-4000-8000-' + version.toString(16).padStart(12, '0');
