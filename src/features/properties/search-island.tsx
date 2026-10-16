@@ -8,6 +8,7 @@ import { formatDecimal, formatVnd } from './format';
 import {
   activeFilterCount,
   filterParams,
+  INVENTORY_FILTER_KEYS,
   INVENTORY_LISTING_MODES,
   INVENTORY_PROPERTY_TYPES,
   INVENTORY_STATUSES,
