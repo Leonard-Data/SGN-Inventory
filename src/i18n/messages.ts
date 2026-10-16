@@ -422,7 +422,7 @@ const vi = {
     'Chưa xác nhận được kết quả. Đọc lại thông tin hiện tại trước khi thử lại; không tự gửi lại.',
   vendorUnlink: 'Gỡ liên kết',
   vendorUnlinkConfirm:
-    'Gỡ liên kết này? Chỉ mối liên hệ hiện tại bị gỡ; nhà cung cấp, các liên kết khác và lịch sử trước đó vẫn được giữ.',
+    'Gỡ liên kết này? Chỉ mối liên hệ hiện tại bị gỡ; nhà cung cấp và các liên kết khác vẫn được giữ.',
   vendorUnlinkYes: 'Xác nhận gỡ liên kết',
   vendorUnlinked: 'Đã gỡ liên kết. Nhà cung cấp vẫn được giữ.',
   vendorLinkedProperties: 'Bất động sản đã liên kết',
@@ -983,7 +983,7 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
       'The outcome could not be confirmed. Read the current information before retrying; do not automatically resubmit.',
     vendorUnlink: 'Unlink',
     vendorUnlinkConfirm:
-      'Unlink this relationship? Only the current link is removed; the vendor, its other links and earlier history remain.',
+      'Unlink this relationship? Only the current link is removed; the vendor and its other links remain.',
     vendorUnlinkYes: 'Confirm unlink',
     vendorUnlinked: 'The link was removed. The vendor remains.',
     vendorLinkedProperties: 'Linked properties',

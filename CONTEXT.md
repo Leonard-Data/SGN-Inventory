@@ -159,7 +159,7 @@ A company the inventory works with, recorded as its own directory identity and d
 _Avoid_: Supplier contact, owner type, broker record
 
 **Vendor link**:
-An explicit recorded relationship between one property and one recorded vendor. It is not an owner link, a reservation or rental occupancy: it carries no owner-primary marker, no occupancy state and no owner-contact access credit, and a property has at most one link per vendor. Removing a mistaken link keeps the vendor, its other links and the earlier property history.
+An explicit recorded relationship between one property and one recorded vendor. It is not an owner link, a reservation or rental occupancy: it carries no owner-primary marker, no occupancy state and no owner-contact access credit, and a property has at most one link per vendor. The current link row carries its creator and link time; removing a mistaken link keeps the vendor and its other links and does not write Property change history.
 _Avoid_: Owner relationship, lock, tenant record
 
 **Vendor contact block**:
