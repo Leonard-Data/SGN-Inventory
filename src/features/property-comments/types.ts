@@ -2,6 +2,16 @@ export const COMMENT_PAGE_SIZE = 30;
 export const COMMENT_MAX_LENGTH = 2000;
 export const COMMENT_REASON_MAX_LENGTH = 2000;
 export type CommentRemovalKind = 'author' | 'moderation';
+
+export type CommentHistoryEvent = {
+  kind: 'posting' | 'edit' | 'removal';
+  version: number | null;
+  body: string;
+  actorId: string;
+  actorName: string;
+  occurredAt: string;
+  reason: string | null;
+};
 export interface Comment {
   id: string;
   propertyId: string;

@@ -8,6 +8,7 @@ import {
   type Comment,
   type CommentPage,
   type CommentRemovalKind,
+  type CommentHistoryEvent,
 } from './types';
 
 function databaseError(error: { code?: string }) {
@@ -52,6 +53,46 @@ function comment(row: unknown): Comment {
     removedAt,
     editedAt,
   };
+}
+
+export async function commentHistory(
+  context: RouteContext,
+  id: string,
+  commentId: string,
+): Promise<CommentHistoryEvent[]> {
+  if (!uuid(id) || !uuid(commentId)) throw new ApiError(400, 'invalid-input');
+  const { data, error } = await context.client.rpc(
+    'list_property_comment_history',
+    {
+      p_property_id: id,
+      p_comment_id: commentId,
+    },
+  );
+  if (error) databaseError(error);
+  if (!Array.isArray(data) || data.length > 64)
+    throw new ApiError(503, 'unavailable');
+  return data.map((row) => {
+    const value = row as Record<string, unknown>;
+    if (
+      !['posting', 'edit', 'removal'].includes(String(value.event_kind)) ||
+      (value.version !== null && !Number.isInteger(value.version)) ||
+      typeof value.body !== 'string' ||
+      !uuid(value.actor_id) ||
+      typeof value.actor_name !== 'string' ||
+      typeof value.occurred_at !== 'string' ||
+      (value.reason !== null && typeof value.reason !== 'string')
+    )
+      throw new ApiError(503, 'unavailable');
+    return {
+      kind: value.event_kind as CommentHistoryEvent['kind'],
+      version: value.version as number | null,
+      body: value.body,
+      actorId: value.actor_id,
+      actorName: value.actor_name,
+      occurredAt: value.occurred_at,
+      reason: value.reason as string | null,
+    };
+  });
 }
 
 export async function commentPage(

@@ -177,6 +177,9 @@ const vi = {
   myActivityEmpty:
     'Không có hoạt động nào được ghi nhận trong khoảng đã chọn. Mỗi ngày vẫn hiển thị với giá trị 0.',
   discussion: 'Thảo luận bất động sản',
+  commentHistory: 'Lịch sử bình luận',
+  viewHistory: 'Xem lịch sử',
+  hideHistory: 'Ẩn lịch sử',
   addComment: 'Bình luận',
   commentHint: 'Viết bình luận chung cho bất động sản này. Tối đa 2.000 ký tự.',
   postComment: 'Gửi bình luận',
@@ -721,6 +724,9 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     myActivityEmpty:
       'No activity was recorded in the selected period. Every day still appears with zero values.',
     discussion: 'Property discussion',
+    commentHistory: 'Comment history',
+    viewHistory: 'View history',
+    hideHistory: 'Hide history',
     addComment: 'Comment',
     commentHint:
       'Write a shared comment about this property. Up to 2,000 characters.',

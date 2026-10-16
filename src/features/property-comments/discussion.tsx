@@ -23,6 +23,7 @@ import type {
   CommentCursor,
   CommentPage,
   CommentRemovalKind,
+  CommentHistoryEvent,
 } from './types';
 
 type EditSession = {
@@ -55,6 +56,10 @@ export function Discussion({
     reasonId = useId(),
     reasonHintId = useId();
   const [comments, setComments] = useState<Comment[]>([]);
+  const [history, setHistory] = useState<Record<string, CommentHistoryEvent[]>>(
+    {},
+  );
+  const [historyBusy, setHistoryBusy] = useState<string | null>(null);
   const [next, setNext] = useState<CommentCursor | null>(null);
   const [busy, setBusy] = useState(true);
   const [more, setMore] = useState(false);
@@ -458,6 +463,31 @@ export function Discussion({
     return text.editFailed;
   };
   const loadingMore = busy || more;
+  const loadHistory = async (commentId: string) => {
+    if (history[commentId]) {
+      setHistory((value) => {
+        const next = { ...value };
+        delete next[commentId];
+        return next;
+      });
+      return;
+    }
+    setHistoryBusy(commentId);
+    try {
+      const result = await api<{ events: CommentHistoryEvent[] }>(
+        `/api/properties/${propertyId}/comments/${commentId}/history`,
+      );
+      setHistory((value) => ({ ...value, [commentId]: result.events }));
+    } catch (error) {
+      onDenied(
+        error instanceof RequestError && error.code === 'access-denied'
+          ? 403
+          : 503,
+      );
+    } finally {
+      setHistoryBusy(null);
+    }
+  };
   return (
     <section className="panel discussion" aria-labelledby={headingId}>
       <div className="panel-head">
@@ -626,6 +656,54 @@ export function Discussion({
                         {row.body}
                       </p>
                     )}
+                    {reviewer ? (
+                      <div className="comment-actions">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          onClick={() => void loadHistory(row.id)}
+                          disabled={historyBusy === row.id}
+                        >
+                          {history[row.id]
+                            ? text.hideHistory
+                            : historyBusy === row.id
+                              ? text.loading
+                              : text.viewHistory}
+                        </button>
+                      </div>
+                    ) : null}
+                    {history[row.id]?.length ? (
+                      <ol
+                        className="comment-history"
+                        aria-label={text.commentHistory}
+                      >
+                        {history[row.id]!.map((event, index) => (
+                          <li key={`${event.kind}-${event.version ?? index}`}>
+                            <p>
+                              <strong>
+                                {event.kind === 'posting'
+                                  ? text.commentPosted
+                                  : event.kind === 'edit'
+                                    ? text.commentEditedMarker
+                                    : text.commentRemoved}
+                              </strong>{' '}
+                              — <span translate="no">{event.body}</span>
+                            </p>
+                            <p className="comment-meta" translate="no">
+                              {event.actorName} ·{' '}
+                              {vietnamTimestamp(event.occurredAt, locale)} (
+                              {text.vietnamTime})
+                            </p>
+                            {event.reason ? (
+                              <p className="field-hint">
+                                {text.removalReason}:{' '}
+                                <span translate="no">{event.reason}</span>
+                              </p>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ol>
+                    ) : null}
                     {!removed && !editingHere && (canWithdraw || reviewer) ? (
                       <div className="comment-actions">
                         {canEdit ? (

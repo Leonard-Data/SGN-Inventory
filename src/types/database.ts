@@ -1984,6 +1984,18 @@ export type Database = {
           revision: string;
         }[];
       };
+      list_property_comment_history: {
+        Args: { p_comment_id: string; p_property_id: string };
+        Returns: {
+          actor_id: string;
+          actor_name: string;
+          body: string;
+          event_kind: string;
+          occurred_at: string;
+          reason: string | null;
+          version: number | null;
+        }[];
+      };
       list_vendors: {
         Args: {
           p_before_created_at?: string;
