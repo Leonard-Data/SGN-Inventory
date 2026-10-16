@@ -160,7 +160,7 @@ export function SearchIsland({
           className="select"
           name={name}
           value={isMode ? mode : undefined}
-          defaultValue={isMode ? undefined : filters[name] ?? ''}
+          defaultValue={isMode ? undefined : (filters[name] ?? '')}
           onChange={
             isMode ? (event) => setMode(event.currentTarget.value) : undefined
           }
@@ -297,7 +297,11 @@ export function SearchIsland({
             <div className="form-section">
               <div className="filter-range">
                 <div className="form-grid">
-                  {bound('priceMin', priceLabel(mode, 'from'), priceUnits(mode))}
+                  {bound(
+                    'priceMin',
+                    priceLabel(mode, 'from'),
+                    priceUnits(mode),
+                  )}
                   {bound('priceMax', priceLabel(mode, 'to'), priceUnits(mode))}
                 </div>
                 <p className="field-hint">{text.priceFilterHint}</p>
