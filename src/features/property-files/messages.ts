@@ -50,6 +50,9 @@ const vi = {
   availabilityNote:
     'Tập tin đã kiểm tra kỹ thuật được chia sẻ nội bộ mà không cần duyệt tài liệu. Đây không phải xác minh tính xác thực, quyền sở hữu pháp lý hay quét mã độc.',
   cover: 'Ảnh bìa',
+  addCover: 'Thêm ảnh bìa',
+  addCoverHint:
+    'Chọn ảnh bất động sản để tải lên; sau khi kiểm tra kỹ thuật, ảnh đó có thể được chọn làm ảnh bìa và hiển thị trên thẻ bất động sản.',
   setCover: 'Chọn làm ảnh bìa',
   replaceCover: 'Thay ảnh bìa',
   clearCover: 'Bỏ chọn ảnh bìa',
@@ -64,6 +67,9 @@ const vi = {
   cancel: 'Hủy',
   changeCategory: 'Đổi danh mục',
   savingCategory: 'Đang lưu…',
+  previousPage: 'Trang trước',
+  nextPage: 'Trang sau',
+  pagerStatus: 'Trang {page}/{pages}',
 };
 
 const en: Record<keyof typeof vi, string> = {
@@ -114,6 +120,9 @@ const en: Record<keyof typeof vi, string> = {
   availabilityNote:
     'Technically validated files are shared privately without document approval. This is not authenticity or legal ownership verification, or malware scanning.',
   cover: 'Cover photo',
+  addCover: 'Add cover photo',
+  addCoverHint:
+    'Choose a Property photo to upload; once technically validated it can be set as the cover and shown on the inventory card.',
   setCover: 'Set as cover',
   replaceCover: 'Replace cover',
   clearCover: 'Clear cover',
@@ -129,6 +138,9 @@ const en: Record<keyof typeof vi, string> = {
   cancel: 'Cancel',
   changeCategory: 'Change category',
   savingCategory: 'Saving…',
+  previousPage: 'Previous page',
+  nextPage: 'Next page',
+  pagerStatus: 'Page {page} of {pages}',
 };
 
 const errorsVi: Record<string, string> = {

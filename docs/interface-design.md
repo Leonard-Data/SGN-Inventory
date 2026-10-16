@@ -80,15 +80,16 @@ The contract is `src/app/sgn-app.css` — the ported design package. Compose the
 | Property card | `.property-card` inside `.property-list[data-view="cards"]` > `.cover` + `.card-body`/`.card-meta`/`.card-address`/`.card-entry`/`.card-foot`/`.card-actions` | the cover holds the plate, or a stored photograph; `.card-entry` (repo-only, added in `sgn-app.css`) shows the original entry date, legacy marker and Vietnam age in the chronological views, or the explicit unknown date and unknown age |
 | Site plate | `.cover > svg.plate.plate-card`/`.plate-bare`/`.plate-hero`, `.plate-*` internals | one scale per record; repo-only placeholder text comes from the component |
 | Status pill | `.badge` + `data-tone="neutral\|muted\|success\|warn\|danger\|accent"` | the localized label carries the meaning; the tone dot never replaces it |
-| Buttons | `.btn`, `.btn-primary`, `.btn-secondary`, `.btn-ghost`, `.btn-danger`, `.btn-sm`, `.btn-block`, `.is-loading` | the auth screens use the same classes |
+| Buttons | `.btn`, `.btn-primary`, `.btn-secondary`, `.btn-ghost`, `.btn-danger`, `.btn-sm`, `.btn-block`, `.is-loading`, `.icon-btn` (`.is-danger`, `data-busy`) | the auth screens use the same classes; `.icon-btn` is the icon-only control whose localized label is both the accessible name and the native tooltip |
+| Actions menu | `.actions-menu` > `.actions-menu-item` (`role="menu"`/`role="menuitem"`) | the record action bar's single trigger: arrow keys rove, Escape closes and returns focus to the trigger, an outside press closes |
 | Fields | `.field` > `.field-label-row` (`.field-req`), `.input`/`.select`/`.textarea`, `.field-unit`, `.check`, `.field-hint`, `.field-error` | one control set for every form |
 | Rows / detail | `.detail-head`, `.detail-sub`, `.detail-body`, `.detail-rail`, `.chips.head-chips`, `.facts` > `.fact` (`dt`/`dd`, `.is-unknown`), `.record` > `.record-head`/`.record-title`/`.record-body`/`.record-meta` | facts print `Chưa rõ` for unknown values, never a dash |
-| Files | `.doc-row`, `.doc-icon`, `.doc-name`, `.doc-meta`, `.doc-actions`, `.dropzone` | replaces the legacy file list |
+| Files | `.doc-row`, `.doc-icon`, `.doc-name`, `.doc-meta`, `.doc-actions`, `.dropzone`, `.cover-slot`, `.pager` > `.pager-status` | replaces the legacy file list; the row actions are `.icon-btn` controls, the list is bounded to five rows a page and the empty cover slot is an add-cover action |
 | History / price | `.timeline` > `.tl-item` (`.tl-time`, `.tl-title`, `.tl-body`, `.tl-actor`), `.hist-row` (`.hist-when`, `.hist-change`, `.hist-field`), `.price-series` (`.price-series-title`) > `.price-row` (`.price-when`, `.price-change`, `.price-note`, `.price-who`) | `property_history` events render through the history rows, each recorded value on one clipped line (`.history-comparison dd`) with the full text kept in the DOM and on its `title`; the record's recorded sale/rent series (#36) renders through the price rows |
-| Comments | `.comment` (`.sgn-avatar` cell + body) > `.comment-author`, `.comment-meta`, `.comment-body`, `.comment-actions`, `.composer` > `.composer-foot` | 500-character contract unchanged |
+| Comments | `.comment` (`.sgn-avatar` cell + body) > `.comment-author`, `.comment-meta`, `.comment-body`, `.comment-actions` (`.icon-btn`), `.composer` > `.composer-foot` | 500-character contract unchanged; the panel body supplies the card inset the row itself does not draw |
 | States | `.state-panel` (+ `data-tone="danger"`, `.state-mark`, `.state-title`), `.busy-bar`, `.busy-line` + `.spinner`, `.skeleton`/`.sk-card`, `.alert` (+ `data-tone`), `.toast` | loading, empty, error and denial stay distinct; empty ≠ zero ≠ denied |
 | Lists / tables | `.data-table.stackable` (`[data-num]`, `data-label`), `.pagination` > `.page-info` + `.page-buttons` > `.pager-btn` | tables stack to label/value cards under 640px |
-| Dialogs | `.sgn-dialog` > `.sgn-dialog-panel`/`.sgn-dialog-head`/`.sgn-dialog-body`/`.sgn-dialog-foot` | native `<dialog>`: focus trap and Escape come from the platform |
+| Dialogs | `.sgn-dialog` > `.sgn-dialog-panel`/`.sgn-dialog-head`/`.sgn-dialog-body`/`.sgn-dialog-foot` | native `<dialog>`: focus trap and Escape come from the platform. The dialog head always renders the title; a `.panel` mounted directly in `.sgn-dialog-body` gives up its own frame, heading and inset, so the surface has one title in the header and one border |
 | Repo-only surfaces | `.maintenance*` (disclosures, inline editors), `.history-event`, `.history-comparison`, `.history-field`, `.owner-disclosure`, `.owner-phone`, `.reservation*` (`.reservation-effective`, `.reservation-pending`, `.reservation-request`), `.proposal-choices`, `.contact-choices`, `.eyebrow` (auth), `.comment-removed`, `.comment-edited`, `.comment-edit` and `.comment-moderation` (extensions to the comment row), `.vendor-note` and `.data-table .is-unknown` (vendor record), and `.card-entry` (the chronological card line) | `globals.css` + `sgn-surfaces.css`, except `.card-entry` in `sgn-app.css`; package tokens only |
 
 ## 5. Page layouts
@@ -117,7 +118,7 @@ Shipped: the card cover is the site plate drawn from the record's own fields; a 
 ```
 .sgn-content
   quiet back link (.link-quiet) → returnTo (keeps the filtered result position)
-  detail-head: .example eyebrow · h1 (record code) · .chips.head-chips (status + review status badges) · .detail-actions (record action bar: completed-sale confirmation for manager/admin, Reservation, Edit facts, Correction requests, My requests)
+  detail-head: .example eyebrow · h1 (record code) · .chips.head-chips (status + review status badges) · .detail-actions (one "Record actions" menu trigger: completed-sale confirmation for manager/admin, Reservation, Edit facts, Correction requests, My requests)
   archived notice: .alert[data-tone="neutral"] with the archive mark
   detail-body (two-column grid, single column under 1180px): main column + aside.detail-rail
     main column:
@@ -128,17 +129,17 @@ Shipped: the card cover is the site plate drawn from the record's own fields; a 
         panel Price history → two .price-series groups (sale asking price / monthly asking rent) of .price-row (.price-when, .price-change, .price-note, .price-who), newest-first with per-series paging
         panel Addresses  → .record rows + mapping .badge, .addrNote policy line
         panel Contacts   → .record rows + owner-contact disclosure (.owner-disclosure/.owner-phone)
-      .tabpanel "Tài liệu": panel Files → property-files Workspace (.doc-row vocabulary, cover, dropzone)
-      .tabpanel "Thảo luận": Discussion → 30-item list newest-first, .composer, author edit and withdrawal with reasoned manager/admin removal (.comment-actions, .comment-edited marker, .comment-edit editor, .comment-removed marker, .comment-moderation)
+      .tabpanel "Tài liệu": panel Files → property-files Workspace (.doc-row vocabulary with labelled icon row actions, five-row .pager, cover with an add-cover icon action, dropzone)
+      .tabpanel "Thảo luận": Discussion → 30-item list newest-first, .composer, author edit and withdrawal with reasoned manager/admin removal (.comment-actions labelled icon buttons, .comment-edited marker, .comment-edit editor, .comment-removed marker, .comment-moderation)
     aside.detail-rail (sticky):
       panel History    → maintenance history rows (.hist-row) whose before/after halves and label/value pairs stack in the rail (.detail-rail .history-comparison), one clipped line per recorded value
       page-view note, then panel Activity → today's own counts
-  record action dialogs (siblings of .detail-body, content mounted only while open), opened from the action bar:
+  record action dialogs (siblings of .detail-body, content mounted only while open), opened from the actions menu. Every dialog renders one title in its header; a section mounted inside it drops its own panel frame, heading and inset:
     dialog "Completed sale" → reviewer-only confirmation form (credited closer, actual Vietnam date, contract reference) or the recorded completion (.sale-completion/.sale-completion-recorded), manager/admin only
     dialog "Reservation" → effective/pending states (.reservation-effective/.reservation-pending) + request and decision forms; a manager/admin also gets the reasoned release control on an effective reservation
-    dialog "Edit facts" → maintenance workspace (revision-checked) in three tabs (roving tabindex, arrow/Home/End): *Property facts*, the default opening tab, then *Address corrections* and *Contact corrections*. Address rows and their correction controls live only in the address section, so the page's own address panel is not repeated here.
+    dialog "Edit facts" → maintenance workspace (revision-checked) in three sections: *Property facts*, the default opening section, then *Address corrections* and *Contact corrections*. The tab strip switches to a labelled dropdown at 720px, so only one of the two shapes is ever rendered. Address rows and their correction controls live only in the address section, so the page's own address panel is not repeated here.
     dialog "Correction requests" → correction report (the .maintenance disclosure)
-    dialog "My requests" → role-scoped correction queue
+    dialog "My requests" → role-scoped correction queue; each request shows the fields the proposal names, as before/after pairs, with the retained amendments in a disclosure
 ```
 Shipped as above. The three groups and the main/rail split follow the package's own record screen
 (`ui_kits/app/components/App.jsx`: `overview | docs | comments` inside a `<div>`, beside `<aside class="detail-rail">`).
@@ -281,7 +282,7 @@ page-intro · [New category] / [New unit]
 
 - **i18n:** VI default + EN for every label, badge, control, empty/loading/error state and format. Shell/nav/global strings in `src/i18n/messages.ts`; page areas get feature-local files (e.g. `src/features/reviews/messages.ts`). Never translate source records; Vietnamese addresses, phone strings, VND and m² stay verbatim. Dates `dd/MM/yyyy`, times in `Asia/Ho_Chi_Minh`.
 - **Accessibility:** skip link; visible focus (`:focus-visible`); every input has a label; interactive hit areas ≥44px; status conveyed by text, not colour alone; `<details>` disclosure is keyboard-operable; drawer has a focus trap; tables use `<th scope>`.
-- **Responsive breakpoints (shipped):** 1039/1040px (rail → drawer; `--logo-size`, `--topbar-h` step down; `.detail-head`/`.detail-body` collapse), 720px (the language switch switches to its short form), 640px (content padding, `.property-list` to one column, `.facts`/`.price-row`/`.doc-row` stack, `.data-table` to stacked cards, dialogs widen to the viewport), 480px (history comparison stacks to one column, and its values stay one clipped line each at every width, so no history row overflows the page). Print hides the rail, topbar, scrim and toasts.
+- **Responsive breakpoints (shipped):** 1039/1040px (rail → drawer; `--logo-size`, `--topbar-h` step down; `.detail-head`/`.detail-body` collapse), 720px (the language switch switches to its short form; the Edit-facts section chooser switches from the tab strip to its dropdown), 640px (content padding, `.property-list` to one column, `.facts`/`.price-row`/`.doc-row` stack, `.data-table` to stacked cards, dialogs widen to the viewport), 480px (history comparison stacks to one column, and its values stay one clipped line each at every width, so no history row overflows the page). Print hides the rail, topbar, scrim and toasts.
 
 ## 8. Open decisions and flags
 

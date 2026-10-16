@@ -660,11 +660,11 @@ dialog.sgn-dialog::backdrop { background: color-mix(in oklab, var(--fg) 46%, tra
   overflow: hidden; background: var(--surface); border-radius: var(--radius-lg);
 }
 .sgn-dialog[data-size="wide"] .sgn-dialog-panel { width: min(1040px, calc(100vw - 32px)); }
-.sgn-dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); padding: var(--space-6); border-bottom: 1px solid var(--border-soft); }
+.sgn-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-5) var(--space-6); border-bottom: 1px solid var(--border-soft); }
 .sgn-dialog-head h2 { font-family: var(--font-body); font-size: var(--text-lg); font-weight: 600; line-height: 1.3; }
 .sgn-dialog-close { width: var(--btn-h-sm); height: var(--btn-h-sm); display: grid; place-items: center; flex: 0 0 auto; margin-left: auto; background: transparent; border: 1px solid transparent; border-radius: var(--radius-md); color: var(--muted); }
 .sgn-dialog-close:hover { background: var(--surface-warm); color: var(--fg); border-color: var(--border); }
-.sgn-dialog-body { flex: 1; overflow-y: auto; padding: var(--space-6); }
+.sgn-dialog-body { flex: 1; overflow-y: auto; padding: var(--space-5) var(--space-6) var(--space-6); }
 .sgn-dialog-foot { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); padding: var(--space-5) var(--space-6); border-top: 1px solid var(--border-soft); background: var(--surface); }
 .sgn-dialog-foot .foot-lead { margin-right: auto; font-size: var(--text-xs); color: var(--muted); }
 /* Search-island adaptation: the filter panel is a form whose Clear/Apply pair wraps
@@ -685,7 +685,47 @@ dialog.sgn-dialog::backdrop { background: color-mix(in oklab, var(--fg) 46%, tra
 .detail-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-6); align-items: start; }
 .detail-head h1 { margin-top: var(--space-3); font-size: clamp(26px, 2.4vw, 34px); }
 .detail-sub { margin-top: var(--space-3); display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
-.detail-actions { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.detail-actions { position: relative; display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.detail-actions .btn svg { width: 16px; height: 16px; }
+.actions-menu {
+  position: absolute; right: 0; top: calc(100% + var(--space-2)); z-index: 30;
+  min-width: 240px; display: flex; flex-direction: column; gap: 2px; padding: var(--space-2);
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-raise);
+}
+.actions-menu-item {
+  display: block; width: 100%; padding: var(--space-3) var(--space-4); text-align: left;
+  font-size: var(--text-sm); color: var(--fg-2); background: transparent; border: 0;
+  border-radius: var(--radius-sm); white-space: nowrap;
+  transition: background var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard);
+}
+.actions-menu-item:hover, .actions-menu-item:focus-visible { background: var(--surface-warm); color: var(--fg); }
+
+/* Icon-only control: the accessible name and the native tooltip are the same localized
+   label, so a row of these stays readable without a text button per action. */
+.icon-btn {
+  position: relative; width: var(--btn-h-sm); height: var(--btn-h-sm); display: grid;
+  place-items: center; flex: 0 0 auto; background: transparent; border: 1px solid transparent;
+  border-radius: var(--radius-md); color: var(--fg-2);
+  transition: background var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard);
+}
+.icon-btn:hover { background: var(--surface-warm); color: var(--fg); border-color: var(--border); }
+.icon-btn svg { width: 20px; height: 20px; }
+.icon-btn.is-danger { color: var(--danger); }
+.icon-btn.is-danger:hover { background: var(--danger-soft); border-color: var(--danger); }
+.icon-btn[disabled] { cursor: default; opacity: .62; }
+.icon-btn[data-busy="yes"] svg { visibility: hidden; }
+.icon-btn[data-busy="yes"]::after {
+  content: ''; position: absolute; width: 17px; height: 17px;
+  border: 2px solid color-mix(in oklab, var(--fg) 24%, transparent); border-top-color: var(--fg);
+  border-radius: 50%; animation: sgn-spin .7s linear infinite;
+}
+
+.pager { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); padding-top: var(--space-4); border-top: 1px solid var(--border-soft); }
+.pager-status { margin-right: auto; font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+
+.cover-slot { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-4) var(--space-5); border: 1px dashed var(--field-border); border-radius: var(--radius-md); background: var(--surface-warm); }
+.cover-slot .field-hint { margin-top: 0; }
 .detail-body { display: grid; grid-template-columns: minmax(0, 1fr) 344px; gap: var(--space-6); align-items: start; margin-top: var(--space-6); }
   .detail-rail { position: sticky; top: calc(var(--topbar-h) + var(--space-5)); display: flex; flex-direction: column; gap: var(--space-5); }
   .contact-card .panel-body { padding-block: var(--space-4); }
@@ -746,7 +786,7 @@ dialog.sgn-dialog::backdrop { background: color-mix(in oklab, var(--fg) 46%, tra
 .comment-author { font-size: var(--text-sm); font-weight: 600; color: var(--fg); }
 .comment-meta { margin-top: 2px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .comment-body { margin-top: var(--space-3); font-size: var(--text-sm); line-height: 1.6; color: var(--fg-2); }
-.comment-actions { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-2); }
+.comment-actions { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-2); }
 .composer { display: flex; flex-direction: column; gap: var(--space-3); padding-bottom: var(--space-5); border-bottom: 1px solid var(--border-soft); }
 .composer-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
 

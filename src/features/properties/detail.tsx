@@ -5,7 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
-  type KeyboardEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from 'react';
 import { label, messages, type Locale } from '@/i18n/messages';
@@ -44,9 +44,11 @@ import { contactRows } from './contact-rows';
 // facts, its documents and its discussion.
 const RECORD_TABS = ['overview', 'docs', 'comments'] as const;
 type RecordTab = (typeof RECORD_TABS)[number];
+// The dialog owns the only heading and the only border on the surface: the embedded
+// section is flattened by `.sgn-dialog-body > .panel` in sgn-app.css, so every action
+// dialog opens with one visible title in the right place instead of an empty band.
 function DetailActionDialog({
   title,
-  headTitle = false,
   closeLabel,
   children,
   open,
@@ -54,7 +56,6 @@ function DetailActionDialog({
   size = 'wide',
 }: {
   title: string;
-  headTitle?: boolean;
   closeLabel: string;
   children: ReactNode;
   open: boolean;
@@ -81,7 +82,7 @@ function DetailActionDialog({
     >
       <div className="sgn-dialog-panel">
         <div className="sgn-dialog-head">
-          {headTitle ? <h2>{title}</h2> : null}
+          <h2>{title}</h2>
           <button
             className="sgn-dialog-close"
             type="button"
@@ -94,6 +95,114 @@ function DetailActionDialog({
         <div className="sgn-dialog-body">{open ? children : null}</div>
       </div>
     </dialog>
+  );
+}
+
+type RecordAction = {
+  id: 'sale' | 'reservation' | 'edit' | 'correction' | 'requests';
+  label: string;
+};
+
+// The record toolbar is one menu, not a row of buttons. The trigger keeps
+// aria-haspopup/aria-expanded, the items are a roving menu, Escape closes and returns
+// focus to the trigger, and an outside pointer press closes without stealing focus.
+function RecordActionsMenu({
+  label,
+  items,
+  onPick,
+}: {
+  label: string;
+  items: RecordAction[];
+  onPick: (id: RecordAction['id']) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const first = menu.current?.querySelector<HTMLButtonElement>('button');
+    first?.focus();
+    function onPointerDown(event: PointerEvent) {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return;
+      setOpen(false);
+      trigger.current?.focus();
+    }
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+  function onMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const buttons = [...(menu.current?.querySelectorAll('button') ?? [])];
+    const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    const next =
+      event.key === 'ArrowDown'
+        ? buttons[(index + 1) % buttons.length]
+        : event.key === 'ArrowUp'
+          ? buttons[(index - 1 + buttons.length) % buttons.length]
+          : event.key === 'Home'
+            ? buttons[0]
+            : event.key === 'End'
+              ? buttons[buttons.length - 1]
+              : null;
+    if (!next) return;
+    event.preventDefault();
+    next.focus();
+  }
+  return (
+    <div className="detail-actions" ref={root}>
+      <button
+        ref={trigger}
+        className="btn btn-sm btn-secondary"
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        {label}
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </button>
+      {open ? (
+        <div
+          className="actions-menu"
+          role="menu"
+          aria-label={label}
+          ref={menu}
+          onKeyDown={onMenuKeyDown}
+        >
+          {items.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              role="menuitem"
+              className="actions-menu-item"
+              onClick={() => {
+                setOpen(false);
+                onPick(item.id);
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -166,7 +275,7 @@ export function Detail({
     'sale' | 'reservation' | 'edit' | 'correction' | 'requests' | null
   >(null);
   // Roving tabindex: the arrow keys move both focus and selection across the three tabs.
-  function onTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+  function onTabKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>) {
     const index = RECORD_TABS.indexOf(tab);
     const next =
       event.key === 'ArrowRight'
@@ -354,49 +463,24 @@ export function Detail({
           ) : null}
         </div>
         {property && employee ? (
-          <div
-            className="detail-actions"
-            role="group"
-            aria-label={dt.recordActions}
-          >
-            {employee.role === 'manager' || employee.role === 'admin' ? (
-              <button
-                className="btn btn-primary"
-                type="button"
-                onClick={() => setActionDialog('sale')}
-              >
-                {text.completedSaleTitle}
-              </button>
-            ) : null}
-            <button
-              className="btn btn-sm btn-ghost"
-              type="button"
-              onClick={() => setActionDialog('reservation')}
-            >
-              {text.reservations}
-            </button>
-            <button
-              className="btn btn-sm btn-ghost"
-              type="button"
-              onClick={() => setActionDialog('edit')}
-            >
-              {mt.editFacts}
-            </button>
-            <button
-              className="btn btn-sm btn-ghost"
-              type="button"
-              onClick={() => setActionDialog('correction')}
-            >
-              {text.navCorrections}
-            </button>
-            <button
-              className="btn btn-sm btn-ghost"
-              type="button"
-              onClick={() => setActionDialog('requests')}
-            >
-              {dt.myRequests}
-            </button>
-          </div>
+          <RecordActionsMenu
+            label={dt.recordActions}
+            onPick={setActionDialog}
+            items={[
+              ...(employee.role === 'manager' || employee.role === 'admin'
+                ? [
+                    {
+                      id: 'sale' as const,
+                      label: text.completedSaleTitle,
+                    },
+                  ]
+                : []),
+              { id: 'reservation' as const, label: text.reservations },
+              { id: 'edit' as const, label: mt.editFacts },
+              { id: 'correction' as const, label: text.navCorrections },
+              { id: 'requests' as const, label: dt.myRequests },
+            ]}
+          />
         ) : null}
       </div>
 
@@ -948,58 +1032,6 @@ export function Detail({
               </div>
 
               <aside className="detail-rail">
-                <section
-                  className="panel contact-card"
-                  aria-labelledby="detail-contacts"
-                >
-                  <div className="panel-head">
-                    <h2 id="detail-contacts">{dt.contacts}</h2>
-                  </div>
-                  <div className="panel-body">
-                    {contacts.length ? (
-                      <div className="contact-card-list">
-                        {contacts.map((row) => (
-                          <article className="contact-card-item" key={row.id}>
-                            <div className="record-head">
-                              <strong className="record-title" translate="no">
-                                {row.name ?? text.unknown}
-                              </strong>
-                              <span
-                                className="badge badge-plain"
-                                data-tone={
-                                  row.relation === 'owner'
-                                    ? 'accent'
-                                    : 'neutral'
-                                }
-                              >
-                                {row.relation === 'owner'
-                                  ? dt.owner
-                                  : row.relation === 'broker' ||
-                                      row.relation === 'agent'
-                                    ? dt.agent
-                                    : row.relation === 'representative'
-                                      ? dt.representative
-                                      : label(locale, row.relation)}
-                              </span>
-                            </div>
-                            {row.phone.show ? (
-                              <p className="record-body num" translate="no">
-                                {row.phone.text ?? text.unknown}
-                              </p>
-                            ) : null}
-                            {row.isPrimary ? (
-                              <p className="record-meta">{dt.primary}</p>
-                            ) : null}
-                          </article>
-                        ))}
-                      </div>
-                    ) : (
-                      <p>{dt.noContacts}</p>
-                    )}
-                    <p className="field-hint">{text.ownerContactNote}</p>
-                  </div>
-                </section>
-
                 {employee ? (
                   <>
                     <History
@@ -1160,7 +1192,6 @@ export function Detail({
                   open={actionDialog === 'correction'}
                   onClose={() => setActionDialog(null)}
                   title={text.navCorrections}
-                  headTitle
                   closeLabel={text.close}
                 >
                   <CorrectionReport

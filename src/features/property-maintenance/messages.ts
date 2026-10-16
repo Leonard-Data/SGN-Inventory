@@ -160,6 +160,8 @@ const copy = {
     'Replacement field (optional)',
   ],
   latestProposal: ['Đề xuất hiện tại', 'Current proposal'],
+  needsUpdate: ['Trường cần đính chính', 'Fields to update'],
+  section: ['Phần thông tin', 'Information section'],
   original: ['Đề xuất gốc', 'Original submission'],
   amendments: ['Các bổ sung được giữ lại', 'Retained amendments'],
   observed: ['Thông tin đã quan sát', 'Observed information'],

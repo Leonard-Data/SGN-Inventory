@@ -185,7 +185,6 @@ export function Reservation({
   onDenied: (status: number) => void;
 }) {
   const text = messages[locale],
-    headingId = useId(),
     requestReasonId = useId(),
     requestHelpId = useId();
   const [state, setState] = useState<ReservationState | null>(null);
@@ -385,9 +384,8 @@ export function Reservation({
     <section
       className="panel reservation"
       data-loaded={state ? 'yes' : 'no'}
-      aria-labelledby={headingId}
+      aria-label={text.reservations}
     >
-      <h2 id={headingId}>{text.reservations}</h2>
       {loading && !state ? <p role="status">{text.loading}</p> : null}
       {loadFailed ? (
         <p role="alert">
