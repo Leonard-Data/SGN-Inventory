@@ -225,7 +225,6 @@ const values: Record<string, readonly [string, string]> = {
   address: ['Địa chỉ', 'Address'],
   contact: ['Người liên hệ chung', 'Shared contact'],
   link: ['Liên kết người liên hệ', 'Contact link'],
-  vendor_link: ['Liên kết nhà cung cấp', 'Vendor link'],
   incorrect: ['Thông tin sai', 'Incorrect information'],
   missing: ['Thiếu thông tin', 'Missing information'],
   other: ['Vấn đề khác', 'Other issue'],

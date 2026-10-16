@@ -20,7 +20,7 @@ function optionText(vendor: Vendor) {
 // A property's own Vendor section. Supplier companies stay separate from owners and
 // brokers, and a link never implies ownership, reservation state or occupancy. Every
 // property reader sees the recorded relationships; every active employee can link a
-// recorded vendor and correct a mistaken link without deleting the company or its history.
+// recorded vendor and correct a mistaken link without deleting the company or other links.
 export function PropertyVendors({
   propertyId,
   propertyRevision,

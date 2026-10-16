@@ -23,8 +23,6 @@ const extraLabels: Record<string, readonly [string, string]> = {
     'Địa chỉ được giữ lại trước đó',
     'Retained preceding address',
   ],
-  vendor_id: ['Nhà cung cấp', 'Vendor'],
-  vendor_name: ['Tên công ty nhà cung cấp', 'Vendor company name'],
 };
 export function BusinessValues({
   values,

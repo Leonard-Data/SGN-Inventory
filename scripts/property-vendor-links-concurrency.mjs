@@ -22,7 +22,7 @@ async function freePort() {
   });
 }
 
-export async function propertyVendorLinkConcurrency({ root, check }) {
+export async function propertyVendorLinksConcurrency({ root, check }) {
   const port = await freePort();
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'sgn74-pg-'));
   const databasePassword = randomUUID();
@@ -120,7 +120,7 @@ export async function propertyVendorLinkConcurrency({ root, check }) {
 
     await runRace({
       actor: actorLink,
-      name: 'link race rechecks live membership before writing the link or history',
+      name: 'link race rechecks live membership before writing the link or property history',
       call: `select public.link_property_vendor('${property}','${vendor}','${propertyRevision}')`,
       inspect: async () => {
         assert.deepEqual(
@@ -196,7 +196,7 @@ export async function propertyVendorLinkConcurrency({ root, check }) {
       await secondRequest;
       await second.query('commit');
       const rows = await owner.query(
-        'select property_id,vendor_id,revision from public.property_vendors where property_id=$1 and vendor_id=$2',
+        'select property_id,vendor_id,revision,created_by,created_at from public.property_vendors where property_id=$1 and vendor_id=$2',
         [property, vendor],
       );
       const history = await owner.query(
@@ -212,6 +212,8 @@ export async function propertyVendorLinkConcurrency({ root, check }) {
         assert.equal(secondOutcome?.created, false);
         assert.equal(secondOutcome?.revision, firstOutcome.revision);
         assert.equal(rows.rows.length, 1);
+        assert.equal(rows.rows[0].created_by, actorConcurrent);
+        assert.ok(rows.rows[0].created_at);
         assert.equal(history.rows.length, 0);
       });
     } finally {
@@ -229,7 +231,7 @@ export async function propertyVendorLinkConcurrency({ root, check }) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   let passed = 0;
-  await propertyVendorLinkConcurrency({
+  await propertyVendorLinksConcurrency({
     root: process.env.SGN_PROJECT_ROOT || process.cwd(),
     check: async (name, fn) => {
       await fn();
