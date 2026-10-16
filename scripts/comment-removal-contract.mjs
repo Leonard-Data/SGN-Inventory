@@ -382,9 +382,19 @@ export async function commentRemovalContract({
   await check(
     'history distinguishes author withdrawal from moderated removal and keeps absent reasons absent',
     async () => {
-      for (const actor of [0, 1, 5]) {
+      for (const actor of [0, 1, 4, 5, 'unlinked']) {
         await asUser(actor);
+        assert.deepEqual(
+          (
+            await db.query(
+              'select body,removal_reason from public.property_comment_removals',
+            )
+          ).rows,
+          [],
+          `${actor} cannot read removed text or moderation reasons`,
+        );
         await fails(history, [first, ownComment], '42501');
+        await fails(history, [second, moderationComment], '42501');
       }
       for (const actor of [2, 3]) {
         await asUser(actor);
