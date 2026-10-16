@@ -11,7 +11,12 @@ import type { Locale } from '@/i18n/messages';
 import { fields, formChanges, type Target, type Changes } from './fields';
 import { maintenanceError, maintenanceText, optionLabel } from './messages';
 import { failureRoute } from './refusal-rules';
-import { unitOptionLabels } from './units';
+import {
+  unitCatalogUnavailable,
+  unitOptionLabels,
+  unitSelectionUnavailable,
+  type UnitLevel,
+} from './units';
 import type { Unit } from './data';
 
 export function MutationForm({
@@ -187,7 +192,7 @@ function UnitPicker({
   onDenied,
 }: {
   name: string;
-  level: string;
+  level: UnitLevel;
   parent?: string;
   value: string;
   onChange: (value: string) => void;
@@ -195,10 +200,17 @@ function UnitPicker({
   onDenied: (status: number) => void;
 }) {
   const id = useId(),
-    [units, setUnits] = useState<Unit[]>([]),
-    [error, setError] = useState(false);
+    query =
+      level === 'province' ? 'province' : parent ? `commune:${parent}` : null,
+    // Keyed to the query, so a query change leaves the picker in its initial
+    // loading state without a synchronous state update inside the effect.
+    [catalog, setCatalog] = useState<{
+      query: string;
+      units: Unit[];
+    } | null>(null),
+    [failedQuery, setFailedQuery] = useState<string | null>(null);
   useEffect(() => {
-    if (level !== 'province' && !parent) return;
+    if (!query) return;
     const abort = new AbortController();
     void api<{ units: Unit[] }>(
       '/api/admin-units?' +
@@ -207,7 +219,10 @@ function UnitPicker({
       abort.signal,
     )
       .then((result) => {
-        if (!abort.signal.aborted) setUnits(result.units);
+        if (!abort.signal.aborted) {
+          setCatalog({ query, units: result.units });
+          setFailedQuery(null);
+        }
       })
       .catch((failure) => {
         if (abort.signal.aborted) return;
@@ -216,12 +231,21 @@ function UnitPicker({
           (failure.status === 401 || failure.status === 403)
         )
           onDenied(failure.status);
-        else setError(true);
+        else setFailedQuery(query);
       });
     return () => abort.abort();
-  }, [level, parent, onDenied]);
+  }, [query, level, parent, onDenied]);
   const text = maintenanceText(locale),
-    labels = unitOptionLabels(units);
+    units = catalog?.units ?? [],
+    labels = unitOptionLabels(units),
+    loading =
+      query !== null && catalog?.query !== query && failedQuery !== query,
+    error = query !== null && failedQuery === query,
+    unavailable = unitSelectionUnavailable(
+      value,
+      units,
+      unitCatalogUnavailable(level, parent, loading, error),
+    );
   return (
     <div className="field">
       <label className="field-label" htmlFor={id}>
@@ -232,18 +256,17 @@ function UnitPicker({
         className="select"
         name={name}
         value={value}
+        disabled={unavailable}
         onChange={(event) => onChange(event.target.value)}
       >
         <option value="">{text.catalogEmpty}</option>
-        {value && !units.some((u) => u.id === value) ? (
-          <option value={value}>{value}</option>
-        ) : null}
         {units.map((unit, index) => (
           <option key={unit.id} value={unit.id}>
             {labels[index]}
           </option>
         ))}
       </select>
+      {unavailable ? <input type="hidden" name={name} value={value} /> : null}
       {error ? <span role="alert">{text.unavailable}</span> : null}
     </div>
   );
@@ -263,6 +286,7 @@ export function AddressFields({
 }) {
   const selected = names ? new Set(names) : null,
     includes = (name: string) => selected === null || selected.has(name),
+    showFormat = includes('format') || Boolean(values.id),
     id = useId(),
     [format, setFormat] = useState(String(values.format ?? '')),
     [province, setProvince] = useState(String(values.province_unit_id ?? '')),
@@ -273,7 +297,7 @@ export function AddressFields({
     <>
       {variant === 'address' ? (
         <>
-          {includes('format') ? (
+          {showFormat ? (
             <>
               <p>{text.preserveSource}</p>
               <div className="field">
@@ -284,7 +308,7 @@ export function AddressFields({
                   id={id}
                   className="select"
                   name="format"
-                  required
+                  required={includes('format')}
                   value={format}
                   onChange={(event) => {
                     setFormat(event.target.value);

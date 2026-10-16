@@ -58,11 +58,8 @@ export function useProtectedData<T>(
           signal: abort.signal,
           renderedFor: renderedFor.current,
           onIdentityChange: () => {
-            if (surfaceElement.current) surfaceElement.current.hidden = true;
-            renderedFor.current = null;
-            setData(null);
-            setEmployee(null);
-            onClear?.();
+            clear();
+            setBusy(false);
           },
         });
       if (version !== generation.current) return;
@@ -93,7 +90,7 @@ export function useProtectedData<T>(
         setBusy(false);
       }
     }
-  }, [source, invalidate, onClear]);
+  }, [source, invalidate, onClear, clear]);
   const reload = useCallback(() => {
     setBusy(true);
     setError(null);
