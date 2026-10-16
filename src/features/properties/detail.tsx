@@ -171,7 +171,7 @@ function RecordActionsMenu({
         aria-expanded={open}
         onClick={() => {
           setActiveIndex(0);
-          setOpen((value) => !value);
+          setOpen(open ? false : true);
         }}
       >
         {label}
