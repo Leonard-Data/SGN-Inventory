@@ -377,7 +377,9 @@ button.sgn-nav-item { width: 100%; background: transparent; border: 0; text-alig
 .field-hint { font-size: var(--text-xs); line-height: 1.5; color: var(--muted); }
 .field-unit { position: relative; display: block; }
 .field-unit .input { padding-right: 76px; }
-.field-unit span { position: absolute; right: var(--space-4); top: 50%; transform: translateY(-50%); font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); pointer-events: none; }
+.field-unit > .field-unit-label { position: absolute; right: var(--space-4); top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; align-items: flex-end; gap: 1px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; color: var(--muted); pointer-events: none; }
+.field-unit-label > span { position: static; transform: none; text-transform: none; }
+
 
 .check { display: inline-flex; align-items: center; gap: var(--space-3); min-height: var(--btn-h-sm); font-size: var(--text-sm); color: var(--fg-2); cursor: pointer; }
 .check input { width: 20px; height: 20px; margin: 0; accent-color: var(--accent); cursor: pointer; }
@@ -665,11 +667,15 @@ dialog.sgn-dialog::backdrop { background: color-mix(in oklab, var(--fg) 46%, tra
 .sgn-dialog-body { flex: 1; overflow-y: auto; padding: var(--space-6); }
 .sgn-dialog-foot { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); padding: var(--space-5) var(--space-6); border-top: 1px solid var(--border-soft); background: var(--surface); }
 .sgn-dialog-foot .foot-lead { margin-right: auto; font-size: var(--text-xs); color: var(--muted); }
+/* Search-island adaptation: the filter panel is a form whose Clear/Apply pair wraps
+   instead of overflowing when both localized labels cannot share a narrow dialog foot. */
+.sgn-dialog-foot.filter-dialog-foot { flex-wrap: wrap; }
 
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); }
 .form-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-5); }
 .form-grid .span-all, .form-grid-3 .span-all { grid-column: 1 / -1; }
 .form-section + .form-section { margin-top: var(--space-8); padding-top: var(--space-6); border-top: 1px solid var(--border-soft); }
+.filter-range + .filter-range { margin-top: var(--space-5); }
 .form-section-head { display: flex; align-items: baseline; gap: var(--space-3); margin-bottom: var(--space-5); }
 .form-section-head h2, .form-section-head h3 { font-family: var(--font-body); font-size: var(--text-base); font-weight: 600; }
 .form-section-head .panel-note { margin-left: auto; }

@@ -16,6 +16,7 @@ import { myActivityContract } from './my-activity-contract.mjs';
 import { rankingContract } from './ranking-contract.mjs';
 import { priceHistoryContract } from './price-history-contract.mjs';
 import { inventoryAgeContract } from './inventory-age-contract.mjs';
+import { inventoryFilterContract } from './inventory-filter-contract.mjs';
 import { vendorContract } from './vendor-contract.mjs';
 import { referenceCatalogContract } from './reference-catalog-contract.mjs';
 import { saleCompletionContract } from './sale-completion-contract.mjs';
@@ -588,6 +589,8 @@ await myActivityContract({db,asUser,check,fails,employees});
 await rankingContract({db,asUser,check,fails,employees});
 // Issue #37: explicit original inventory entry dates and eligible chronological ordering.
 await inventoryAgeContract({db,asUser,check,fails,employees});
+// Advance Filter and Search Island: the advanced status/mode/type/price/area inventory filters.
+await inventoryFilterContract({db,asUser,check,fails,employees});
 // Seeded Vietnamese province/city and ward/commune reference catalogue.
 await referenceCatalogContract({db,asUser,check,fails,employees,root});
 // Issue #38: one reviewed logical sale completion and the completed-sale ranking.

@@ -148,6 +148,10 @@ _Avoid_: Oldest record, guessed date
 The number of Vietnam business days from a property's Inventory entry date to today, shown in the chronological inventory views. It does not reset when a property is relisted, repriced, corrected or otherwise updated.
 _Avoid_: Listing age, update age
 
+**Inventory filter set**:
+The optional conditions used to narrow inventory by status, listing mode, property type, price or area. Without a selected listing mode, a price range uses each listing's own asking price; with a selected mode, it uses only that mode's asking price.
+_Avoid_: Fixed sale-price basis
+
 ### Vendors
 
 **Vendor**:

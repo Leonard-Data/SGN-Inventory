@@ -6,6 +6,12 @@ import { messages } from '@/i18n/messages';
 import type { PropertyPage } from './types';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { PropertyCard } from './property-card';
+import { SearchIsland } from './search-island';
+import {
+  activeFilterCount,
+  filterParams,
+  type InventoryFilters,
+} from './filters';
 import {
   isInventoryOrder,
   validTrailToken,
@@ -18,20 +24,26 @@ export function Inventory({
   after,
   trail,
   sort,
+  filters,
 }: {
   initialLocale: Locale;
   initialQuery: string;
   after: string | null;
   trail: string;
   sort: string | null;
+  filters: InventoryFilters;
 }) {
   const activeOrder = isInventoryOrder(sort) ? sort : null;
+  // The filters the address states travel with every read of this view: the free-text search,
+  // the ordering, the paging links and the search island all carry the same set.
+  const activeFilters = filterParams(filters);
   const endpoint =
     '/api/properties?' +
     new URLSearchParams({
       query: initialQuery,
       ...(sort ? { sort } : {}),
       ...(after ? { after } : {}),
+      ...activeFilters,
     });
   const { employee, data, error, busy, surface, logout, clear, reload } =
     useProtectedData<PropertyPage>(endpoint);
@@ -66,18 +78,21 @@ export function Inventory({
       new URLSearchParams({
         query: initialQuery,
         ...(sort ? { sort } : {}),
+        ...activeFilters,
         ...(cursor && cursor !== '~' ? { after: cursor } : {}),
         ...(cursorTrail.length ? { trail: cursorTrail.join(',') } : {}),
       })
     );
   }
-  // Switching order starts a new page-one journey; the ordering never rewrites the search.
+  // Switching order starts a new page-one journey; the ordering never rewrites the search or
+  // the filters.
   function orderHref(next: InventoryOrder | null) {
     return (
       '/properties?' +
       new URLSearchParams({
         query: initialQuery,
         ...(next ? { sort: next } : {}),
+        ...activeFilters,
       })
     );
   }
@@ -163,6 +178,9 @@ export function Inventory({
               </button>
             </div>
             {sort ? <input type="hidden" name="sort" value={sort} /> : null}
+            {Object.entries(activeFilters).map(([name, value]) => (
+              <input key={name} type="hidden" name={name} value={value} />
+            ))}
             <div className="seg" role="group" aria-label={text.sortLabel}>
               {orders.map((order) => (
                 <a
@@ -178,6 +196,12 @@ export function Inventory({
               ))}
             </div>
           </form>
+          <SearchIsland
+            locale={locale}
+            query={initialQuery}
+            sort={sort}
+            filters={filters}
+          />
           <p className="search-hint">{text.searchHint}</p>
           {sort ? <p className="search-hint">{text.ageHint}</p> : null}
           {searchError ? (
@@ -266,7 +290,11 @@ export function Inventory({
                         <path d="M20.5 20.5 16.7 16.7" />
                       </svg>
                     </span>
-                    <h3>{text.empty}</h3>
+                    <h3>
+                      {activeFilterCount(filters)
+                        ? text.emptyFiltered
+                        : text.empty}
+                    </h3>
                   </div>
                 </div>
               ) : (
