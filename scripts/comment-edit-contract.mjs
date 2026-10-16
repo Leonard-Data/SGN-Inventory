@@ -60,6 +60,14 @@ export async function commentEditContract({
     await db.exec('reset role');
     await db.query("select set_config('request.jwt.claim.sub','',false)");
   };
+  const asUnlinked = async () => {
+    await db.exec('reset role');
+    await db.query(
+      "select set_config('request.jwt.claim.sub',$1,false)",
+      ['99999999-9999-4999-8999-999999999999'],
+    );
+    await db.exec('set role authenticated');
+  };
   const iso = (value) => (value == null ? null : new Date(value).toISOString());
   const trim = (value) => value.trim();
 
@@ -864,10 +872,16 @@ export async function commentEditContract({
   await check(
     'reviewer history returns complete ordered edits and author removal evidence while ordinary readers get no payload',
     async () => {
-      for (const actor of [0, 1, 5]) {
+      for (const actor of [0, 1, 4, 5]) {
         await asUser(actor);
         await fails(history, [live, replayComment], '42501');
       }
+      await asUnlinked();
+      assert.deepEqual(
+        (await db.query('select * from public.property_comment_edits')).rows,
+        [],
+      );
+      await fails(history, [live, replayComment], '42501');
       for (const actor of [2, 3]) {
         await asUser(actor);
         const rows = (await db.query(history, [live, replayComment])).rows;

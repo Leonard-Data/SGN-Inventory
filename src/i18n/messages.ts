@@ -180,7 +180,7 @@ const vi = {
   commentHistory: 'Lịch sử bình luận',
   commentHistoryEmpty: 'Chưa có dữ liệu lịch sử.',
   commentHistoryMore:
-    'Còn lịch sử cũ hơn ngoài cửa sổ xem 64 sự kiện này.',
+    'Cửa sổ này giữ 64 sự kiện cũ nhất; các sự kiện mới hơn chưa hiển thị.',
   commentHistoryFailed: 'Chưa tải được lịch sử bình luận. Vui lòng thử lại.',
   viewHistory: 'Xem lịch sử',
   hideHistory: 'Ẩn lịch sử',
@@ -733,7 +733,7 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     commentHistory: 'Comment history',
     commentHistoryEmpty: 'No retained history is available.',
     commentHistoryMore:
-      'More history exists beyond this 64-event review window.',
+      'This window keeps the 64 oldest events; newer events are not shown here.',
     commentHistoryFailed: 'Comment history could not be loaded. Try again.',
     viewHistory: 'View history',
     hideHistory: 'Hide history',

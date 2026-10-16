@@ -296,6 +296,18 @@ async function waitUntil(expression, session = primary, attempts = 60) {
   }
   assert.fail('Timed out waiting for browser state');
 }
+function vietnamHistoryTime(value, locale) {
+  return new Intl.DateTimeFormat(locale === 'vi' ? 'vi-VN' : 'en-GB', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).format(new Date(value));
+}
 function screen(session) {
   return evaluate(
     `() => {
@@ -318,6 +330,8 @@ function screen(session) {
           body: node.querySelector('.comment-history-body')?.textContent ?? null,
           actor: node.querySelector('.comment-history-actor')?.textContent ?? null,
           time: node.querySelector('.comment-history-time')?.getAttribute('datetime') ?? null,
+          displayedTime: node.querySelector('.comment-history-time')?.textContent?.trim() ?? null,
+          timeLabel: node.querySelector('.comment-meta')?.textContent?.trim() ?? null,
           reason: node.querySelector('.comment-history-reason span[translate="no"]')?.textContent ?? null,
         })),
         removeControls: discussion ? [...discussion.querySelectorAll('button')].filter(node => /Gỡ bình luận|^Remove$/.test((node.getAttribute('aria-label') ?? node.textContent).trim())).length : 0,
@@ -328,6 +342,7 @@ function screen(session) {
         historyButtons: discussion ? [...discussion.querySelectorAll('button')].filter(node => /Xem lịch sử|View history|Ẩn lịch sử|Hide history/.test(node.textContent)).length : 0,
         historyEvents: discussion ? [...discussion.querySelectorAll('.comment-history li')].map(node => node.textContent?.trim() ?? '') : [],
         historyMore: Boolean(discussion?.querySelector('.comment-history-more')),
+        historyMoreText: discussion?.querySelector('.comment-history-more')?.textContent?.trim() ?? null,
         historyError: discussion?.querySelector('.comment-history-error')?.textContent ?? null,
         editDraft: discussion?.querySelector('.comment-edit textarea')?.value ?? null,
         editCurrent: discussion?.querySelector('.comment-current .comment-body')?.textContent ?? null,
@@ -437,7 +452,7 @@ class ApplicationSession {
     };
   }
   login(name) {
-    const fixture = fixtures.identities[name];
+    const fixture = name === 'unlinked' ? fixtures.unlinked : fixtures.identities[name];
     return this.request('/api/auth/login', {
       email: fixture.email,
       password: fixture.password,
@@ -2622,10 +2637,12 @@ await settle(secondary);
     'The same text under another edit key stays stale',
   );
   const inactive = await userClient('inactive');
+  const unlinked = await userClient('unlinked');
   for (const [name, client] of [
     ['author', alpha],
     ['colleague', beta],
     ['inactive', inactive],
+    ['unlinked', unlinked],
   ]) {
     const hidden = await client
       .from('property_comment_edits')
@@ -2676,6 +2693,7 @@ await settle(secondary);
     ['colleague', beta],
     ['staff', staff],
     ['inactive', inactive],
+    ['unlinked', unlinked],
   ]) {
     const deniedHistory = await client.rpc('list_property_comment_history', {
       p_property_id: second.id,
@@ -2692,6 +2710,11 @@ await settle(secondary);
     p_comment_id: id,
   });
   assert.ok(anonymousHistory.error, 'Anonymous history is denied');
+  const unlinkedHistory = await unlinked.rpc('list_property_comment_history', {
+    p_property_id: second.id,
+    p_comment_id: id,
+  });
+  assert.equal(unlinkedHistory.error?.code, '42501', 'Unlinked history is denied');
   const ordinaryHistorySession = new ApplicationSession();
   assert.equal(
     (await ordinaryHistorySession.login('alpha')).status,
@@ -2705,6 +2728,20 @@ await settle(secondary);
     deniedHistoryRoute.status,
     403,
     'Ordinary history route access is denied',
+  );
+  const unlinkedHistorySession = new ApplicationSession();
+  assert.equal(
+    (await unlinkedHistorySession.login('unlinked')).status,
+    200,
+    'Unlinked history route session login succeeded',
+  );
+  const deniedUnlinkedHistoryRoute = await unlinkedHistorySession.request(
+    `/api/properties/${second.id}/comments/${id}/history`,
+  );
+  assert.equal(
+    deniedUnlinkedHistoryRoute.status,
+    403,
+    'Unlinked history route access is denied',
   );
   assert.equal(
     reviewerRows.error,
@@ -2907,6 +2944,15 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
     authorHistoryExpected.data.map((event) => [event.body, event.actor_name, event.occurred_at, event.reason]),
     'Author history shows the original text, withdrawal, actor and Vietnam times',
   );
+  assert.deepEqual(
+    authorHistory.historyDetails.map(({ displayedTime }) => displayedTime),
+    authorHistoryExpected.data.map((event) => vietnamHistoryTime(event.occurred_at, 'vi')),
+    'VI renders the retained posting and withdrawal times in Vietnam time',
+  );
+  assert.ok(
+    authorHistory.historyDetails.every(({ timeLabel }) => timeLabel.includes('giờ Việt Nam')),
+    'VI marks history times as Vietnam time',
+  );
   assert.ok(
     authorHistory.historyEvents.some((event) => /Tác giả đã tự gỡ bình luận/.test(event)),
     'Author withdrawal has a distinct history label',
@@ -2931,6 +2977,15 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
     authorHistoryEn.historyDetails.map(({ body, actor, time }) => [body, actor, time]),
     authorHistoryExpected.data.map((event) => [event.body, event.actor_name, event.occurred_at]),
     'English history keeps source text, actors and instants',
+  );
+  assert.deepEqual(
+    authorHistoryEn.historyDetails.map(({ displayedTime }) => displayedTime),
+    authorHistoryExpected.data.map((event) => vietnamHistoryTime(event.occurred_at, 'en')),
+    'EN renders the retained posting and withdrawal times in Vietnam time',
+  );
+  assert.ok(
+    authorHistoryEn.historyDetails.every(({ timeLabel }) => timeLabel.includes('Vietnam time')),
+    'EN marks history times as Vietnam time',
   );
   click('Hide history', secondary);
   evaluate(
@@ -2995,11 +3050,25 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
     'Every saved edit, actor and Vietnam edit time is rendered',
   );
   assert.deepEqual(
+    editedHistory.historyDetails.map(({ displayedTime }) => displayedTime),
+    browserHistoryExpected.data.map((event) => vietnamHistoryTime(event.occurred_at, 'vi')),
+    'VI renders every saved edit time in Vietnam time',
+  );
+  assert.ok(
+    editedHistory.historyDetails.every(({ timeLabel }) => timeLabel.includes('giờ Việt Nam')),
+    'VI marks every edit time as Vietnam time',
+  );
+  assert.deepEqual(
     editedHistory.historyDetails.map(({ body }) => body),
     browserHistoryBodies,
     'The original and every saved edit remain in chronological order',
   );
-  click('Hide history', secondary);
+  click('Làm mới', secondary);
+  await waitUntil(
+    `() => !document.querySelector('.comment-history')`,
+    secondary,
+  );
+  assert.equal(screen(secondary).historyDetails.length, 0, 'Refresh invalidates loaded history');
   openHistory(boundedHistoryPosted.data.id, secondary);
   await waitUntil(
     `() => document.querySelectorAll('.comment-history li').length === 64`,
@@ -3007,6 +3076,11 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
   );
   const boundedHistory = screen(secondary);
   assert.equal(boundedHistory.historyMore, true, 'The 64-event history window reports more history');
+  assert.equal(
+    boundedHistory.historyMoreText,
+    'Cửa sổ này giữ 64 sự kiện cũ nhất; các sự kiện mới hơn chưa hiển thị.',
+    'VI identifies the retained oldest window and omitted newer events',
+  );
   assert.deepEqual(
     boundedHistory.historyDetails.map(({ body, actor, time }) => [body, actor, time]),
     boundedHistoryExpected.data.map((event) => [event.body, event.actor_name, event.occurred_at]),
@@ -3027,6 +3101,20 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
   await settle(secondary);
   const boundedHistoryEn = screen(secondary);
   assert.equal(boundedHistoryEn.historyMore, true, 'The bounded notice is localized in English');
+  assert.equal(
+    boundedHistoryEn.historyMoreText,
+    'This window keeps the 64 oldest events; newer events are not shown here.',
+    'EN identifies the retained oldest window and omitted newer events',
+  );
+  assert.deepEqual(
+    boundedHistoryEn.historyDetails.map(({ displayedTime }) => displayedTime),
+    boundedHistoryExpected.data.map((event) => vietnamHistoryTime(event.occurred_at, 'en')),
+    'EN renders bounded history times in Vietnam time',
+  );
+  assert.ok(
+    boundedHistoryEn.historyDetails.every(({ timeLabel }) => timeLabel.includes('Vietnam time')),
+    'EN marks bounded history times as Vietnam time',
+  );
   assert.ok(
     boundedHistoryEn.historyEvents.some((event) => /Comment edited/.test(event)),
     'English event labels remain visible in the bounded history',
@@ -3064,6 +3152,45 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
     moderationHistory.historyEvents.some((event) => /Lý do kiểm duyệt/.test(event)),
     'Moderation reason is visible to the reviewer',
   );
+  assert.deepEqual(
+    moderationHistory.historyDetails.map(({ displayedTime }) => displayedTime),
+    moderationHistoryExpected.data.map((event) => vietnamHistoryTime(event.occurred_at, 'vi')),
+    'VI renders moderation and posting times in Vietnam time',
+  );
+  assert.ok(
+    moderationHistory.historyDetails.every(({ timeLabel }) => timeLabel.includes('giờ Việt Nam')),
+    'VI marks moderation times as Vietnam time',
+  );
+  switchLocale('en', secondary);
+  await waitUntil(
+    `() => document.querySelector('section.discussion h2')?.textContent === 'Property discussion'`,
+    secondary,
+  );
+  await settle(secondary);
+  const moderationHistoryEn = screen(secondary);
+  assert.ok(
+    moderationHistoryEn.historyEvents.some((event) => /Removed by moderation/.test(event)),
+    'Moderated removal has a distinct English history label',
+  );
+  assert.ok(
+    moderationHistoryEn.historyEvents.some((event) => /Moderation reason/.test(event)),
+    'English moderation reason is visible to the reviewer',
+  );
+  assert.deepEqual(
+    moderationHistoryEn.historyDetails.map(({ displayedTime }) => displayedTime),
+    moderationHistoryExpected.data.map((event) => vietnamHistoryTime(event.occurred_at, 'en')),
+    'EN renders moderation and posting times in Vietnam time',
+  );
+  assert.ok(
+    moderationHistoryEn.historyDetails.every(({ timeLabel }) => timeLabel.includes('Vietnam time')),
+    'EN marks moderation times as Vietnam time',
+  );
+  switchLocale('vi', secondary);
+  await waitUntil(
+    `() => document.querySelector('section.discussion h2')?.textContent === 'Thảo luận bất động sản'`,
+    secondary,
+  );
+  await settle(secondary);
   browser(['open', detail(archived)], secondary);
   await settle(secondary);
   const archivedPage = screen(secondary);

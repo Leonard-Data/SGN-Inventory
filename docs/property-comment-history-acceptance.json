@@ -6,13 +6,13 @@
   "namespace": null,
   "migration": "20261016110000_property_comment_history_window.sql",
   "historyWindow": 64,
-  "historyWindowDecision": "Each read returns at most 64 events, uses a SQL-side 65th-row probe, preserves all retained evidence, and reports hasMore instead of materializing an unbounded response.",
+  "historyWindowDecision": "Each read returns the 64 oldest chronological events, uses a SQL-side 65th-row probe, preserves all retained evidence, and reports hasMore when newer events remain instead of materializing an unbounded response.",
   "requiredObservations": [
     "reviewer reads original, every saved edit, author withdrawal and moderated removal evidence",
     "author and moderated removal labels remain distinct and only moderation carries a reason",
     "archived-property and inactive-author attribution remain readable to a live reviewer",
     "ordinary, staff, author, anonymous, inactive and unlinked bypasses return no retained payload",
-    "history over the SQL window returns 64 events with hasMore true and an honest UI notice",
+    "history over the SQL window returns the 64 oldest events with hasMore true, identifies newer events as omitted, and keeps an honest UI notice",
     "VI/EN rendering preserves source text and localizes event labels, reasons, failures and window notices",
     "reviewer demotion or deactivation clears displayed history on refocus",
     "edit/removal/archive races retain only the serialized committed outcome"

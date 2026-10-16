@@ -90,6 +90,12 @@ export function Discussion({
   const inFlight = useRef<AbortController | null>(null);
   const generation = useRef(0);
   const historyGeneration = useRef(0);
+  const invalidateHistory = useCallback(() => {
+    historyGeneration.current++;
+    setHistory({});
+    setHistoryBusy(null);
+    setHistoryError(null);
+  }, []);
   const editTarget = useRef<string | null>(null);
   // The open editor's identity; a save response only closes the editor it was sent from.
   const editSession = useRef<EditSession | null>(null);
@@ -137,6 +143,7 @@ export function Discussion({
   );
   // Every state update happens after an await, so mounting or refreshing never cascades a render.
   const load = useCallback(async () => {
+    invalidateHistory();
     const version = ++generation.current;
     const target = editTarget.current;
     try {
@@ -193,7 +200,7 @@ export function Discussion({
       // Released unconditionally: a superseding request owns the list, not the spinner.
       setBusy(false);
     }
-  }, [failure, fetchComment, fetchPage]);
+  }, [failure, fetchComment, fetchPage, invalidateHistory]);
   const stop = useCallback(() => {
     generation.current++;
     inFlight.current?.abort();
@@ -204,11 +211,8 @@ export function Discussion({
   }, [load, stop]);
   useEffect(() => {
     if (reviewer) return;
-    historyGeneration.current++;
-    setHistory({});
-    setHistoryBusy(null);
-    setHistoryError(null);
-  }, [reviewer]);
+    invalidateHistory();
+  }, [invalidateHistory, reviewer]);
   function refresh() {
     setBusy(true);
     void load();
@@ -397,6 +401,7 @@ export function Discussion({
     setComments((rows) =>
       rows.map((entry) => (entry.id === updated.id ? updated : entry)),
     );
+    invalidateHistory();
     // A replayed key can converge on an already-withdrawn comment, so the response is not a save.
     if (updated.removedAt !== null) {
       setBusy(true);
@@ -450,6 +455,7 @@ export function Discussion({
     setComments((rows) =>
       rows.map((entry) => (entry.id === removed.id ? removed : entry)),
     );
+    invalidateHistory();
     setReason('');
     setReasonFor(null);
     setRemoveNotice(text.commentRemoved);
