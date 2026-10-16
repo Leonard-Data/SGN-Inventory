@@ -2,6 +2,12 @@ import 'server-only';
 import { ApiError, uuid, type RouteContext } from '@/lib/supabase/route';
 import type { AddressSummary, PropertyPage, PropertySummary } from './types';
 import {
+  filterRpcArgs,
+  INVENTORY_FILTER_KEYS,
+  parseInventoryFilters,
+  type InventoryFilters,
+} from './filters';
+import {
   ageCursorArgs,
   decodeAgeCursor,
   encodeAgeCursor,
@@ -21,18 +27,26 @@ export async function browseProperties(
   if ([...query].length > 120) throw new ApiError(400, 'query-too-long');
   if (sort !== null && !isInventoryOrder(sort))
     throw new ApiError(400, 'invalid-input');
-  const allowed =
-    sort === null ? ['query', 'after'] : ['query', 'after', 'sort'];
+  // A filter the address states must be applied or refused; it is never dropped into a
+  // different inventory than the one the address describes.
+  const filters = parseInventoryFilters(params);
+  if (!filters.ok) throw new ApiError(400, 'invalid-input');
+  const allowed = [
+    ...(sort === null ? ['query', 'after'] : ['query', 'after', 'sort']),
+    ...INVENTORY_FILTER_KEYS,
+  ];
   if ([...params.keys()].some((key) => !allowed.includes(key)))
     throw new ApiError(400, 'invalid-input');
   // The chronological views are a distinct bounded read over eligible inventory; the ordinary
   // UUID-ordered browse keeps serving the full unarchived inventory.
-  if (sort) return listInventoryByAge(context, sort, query, after);
+  if (sort)
+    return listInventoryByAge(context, sort, query, after, filters.filters);
   if (after !== null && !uuid(after)) throw new ApiError(400, 'invalid-input');
   const { data: rows, error } = await context.client
     .rpc('search_properties', {
       p_query: query,
       p_limit: 30,
+      ...filterRpcArgs(filters.filters),
       ...(after ? { p_after: after } : {}),
     })
     .select(
@@ -73,6 +87,7 @@ async function listInventoryByAge(
   order: InventoryOrder,
   query: string,
   after: string | null,
+  filters: InventoryFilters,
 ): Promise<PropertyPage> {
   const decoded = decodeAgeCursor(after);
   if (!decoded.ok) throw new ApiError(400, 'invalid-input');
@@ -83,6 +98,7 @@ async function listInventoryByAge(
       p_query: query,
       // One lookahead row beyond the exposed page decides whether a next page exists.
       p_limit: INVENTORY_PAGE_SIZE + 1,
+      ...filterRpcArgs(filters),
       ...ageCursorArgs(decoded.cursor),
     },
   );

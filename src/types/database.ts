@@ -2113,9 +2113,16 @@ export type Database = {
           p_after_id?: string;
           p_after_on?: string;
           p_after_unknown?: boolean;
+          p_area_max?: number;
+          p_area_min?: number;
           p_direction: string;
           p_limit?: number;
+          p_mode?: string;
+          p_price_max?: number;
+          p_price_min?: number;
           p_query?: string;
+          p_status?: string;
+          p_type?: string;
         };
         Returns: {
           access_type: string | null;
@@ -2139,8 +2146,12 @@ export type Database = {
         Args: {
           p_after?: string;
           p_area_id?: string;
+          p_area_max?: number;
+          p_area_min?: number;
           p_limit?: number;
           p_mode?: string;
+          p_price_max?: number;
+          p_price_min?: number;
           p_query?: string;
           p_status?: string;
           p_type?: string;

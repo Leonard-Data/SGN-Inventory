@@ -665,6 +665,9 @@ dialog.sgn-dialog::backdrop { background: color-mix(in oklab, var(--fg) 46%, tra
 .sgn-dialog-body { flex: 1; overflow-y: auto; padding: var(--space-6); }
 .sgn-dialog-foot { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); padding: var(--space-5) var(--space-6); border-top: 1px solid var(--border-soft); background: var(--surface); }
 .sgn-dialog-foot .foot-lead { margin-right: auto; font-size: var(--text-xs); color: var(--muted); }
+/* Search-island adaptation (#47): the filter panel is a form whose Clear/Apply pair wraps
+   instead of overflowing when both localized labels cannot share a narrow dialog foot. */
+.sgn-dialog-foot.filter-dialog-foot { flex-wrap: wrap; }
 
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); }
 .form-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-5); }

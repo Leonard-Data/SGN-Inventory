@@ -1,0 +1,300 @@
+'use client';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import type { Locale } from '@/i18n/messages';
+import { label, messages } from '@/i18n/messages';
+import { formatDecimal, formatVnd } from './format';
+import {
+  activeFilterCount,
+  filterParams,
+  INVENTORY_LISTING_MODES,
+  INVENTORY_PROPERTY_TYPES,
+  INVENTORY_STATUSES,
+  parseInventoryFilters,
+  squareMetres,
+  wholeVnd,
+  type InventoryFilterKey,
+  type InventoryFilters,
+} from './filters';
+
+// The search island: the same inventory filters in a compact panel opened from the list. It is
+// an addition to the free-text search box, not a replacement, and it applies filters by
+// navigating to the filtered address, so the address stays the single source of truth and the
+// results stay the read's.
+export function SearchIsland({
+  locale,
+  query,
+  sort,
+  filters,
+}: {
+  locale: Locale;
+  query: string;
+  sort: string | null;
+  filters: InventoryFilters;
+}) {
+  const router = useRouter();
+  const text = messages[locale];
+  const [open, setOpen] = useState(false);
+  const [invalid, setInvalid] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (open && !dialog.open) {
+      dialog.showModal();
+      // The panel opens on its first control so a keyboard user lands inside it.
+      dialog.querySelector<HTMLElement>('[data-filter-first]')?.focus();
+    }
+    if (!open && dialog.open) dialog.close();
+  }, [open]);
+  const count = activeFilterCount(filters);
+  // Applying starts a new page-one journey with the stated filters, so a paging cursor from the
+  // previous filter set can never be replayed against this one.
+  function apply(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const submitted = new URLSearchParams();
+    for (const [key, value] of new FormData(event.currentTarget))
+      if (typeof value === 'string') submitted.set(key, value);
+    const parsed = parseInventoryFilters(submitted);
+    if (!parsed.ok) {
+      setInvalid(true);
+      return;
+    }
+    setInvalid(false);
+    setOpen(false);
+    router.push(
+      '/properties?' +
+        new URLSearchParams({
+          query,
+          ...(sort ? { sort } : {}),
+          ...filterParams(parsed.filters),
+        }),
+    );
+  }
+  const vnd = (value: string) =>
+    wholeVnd(value) ? formatVnd(value, locale) : value;
+  const m2 = (value: string) =>
+    squareMetres(value) ? `${formatDecimal(value, locale)} m²` : value;
+  // The current filter set stays visible as removable chips, and each chip removes exactly its
+  // own condition, so the address is still the only place a filter lives.
+  const applied: { key: InventoryFilterKey; label: string }[] = [];
+  if (filters.status)
+    applied.push({
+      key: 'status',
+      label: `${text.status}: ${label(locale, filters.status)}`,
+    });
+  if (filters.mode)
+    applied.push({
+      key: 'mode',
+      label: `${text.listingMode}: ${label(locale, filters.mode)}`,
+    });
+  if (filters.type)
+    applied.push({
+      key: 'type',
+      label: `${text.propertyType}: ${label(locale, filters.type)}`,
+    });
+  if (filters.priceMin)
+    applied.push({
+      key: 'priceMin',
+      label: `${text.priceRangeFrom}: ${vnd(filters.priceMin)}`,
+    });
+  if (filters.priceMax)
+    applied.push({
+      key: 'priceMax',
+      label: `${text.priceRangeTo}: ${vnd(filters.priceMax)}`,
+    });
+  if (filters.areaMin)
+    applied.push({
+      key: 'areaMin',
+      label: `${text.areaRangeFrom}: ${m2(filters.areaMin)}`,
+    });
+  if (filters.areaMax)
+    applied.push({
+      key: 'areaMax',
+      label: `${text.areaRangeTo}: ${m2(filters.areaMax)}`,
+    });
+  function remove(key: InventoryFilterKey) {
+    router.push(
+      '/properties?' +
+        new URLSearchParams({
+          query,
+          ...(sort ? { sort } : {}),
+          ...filterParams({ ...filters, [key]: null }),
+        }),
+    );
+  }
+  const clearHref =
+    '/properties?' + new URLSearchParams({ query, ...(sort ? { sort } : {}) });
+  const select = (
+    name: keyof InventoryFilters,
+    heading: string,
+    options: readonly string[],
+    first = false,
+  ) => (
+    <div className="field" key={`${name}=${filters[name] ?? ''}`}>
+      <label className="field-label" htmlFor={'filter-' + name}>
+        {heading}
+      </label>
+      <select
+        id={'filter-' + name}
+        className="select"
+        name={name}
+        defaultValue={filters[name] ?? ''}
+        data-filter-first={first ? '' : undefined}
+      >
+        <option value="">{text.filtersAny}</option>
+        {options.map((value) => (
+          <option key={value} value={value}>
+            {label(locale, value)}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+  // A field is keyed by its applied value so a soft navigation that changes the address
+  // rebuilds the control with the filter set the address now states.
+  const bound = (
+    name: keyof InventoryFilters,
+    heading: string,
+    unit: string,
+  ) => (
+    <div className="field" key={`${name}=${filters[name] ?? ''}`}>
+      <label className="field-label" htmlFor={'filter-' + name}>
+        {heading}
+      </label>
+      <span className="field-unit">
+        <input
+          className="input"
+          id={'filter-' + name}
+          name={name}
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
+          defaultValue={filters[name] ?? ''}
+          aria-invalid={invalid}
+        />
+        <span aria-hidden="true">{unit}</span>
+      </span>
+    </div>
+  );
+  return (
+    <>
+      <div className="row-between">
+        <button
+          className="btn btn-secondary btn-sm"
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          aria-controls="inventory-filters"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M4 5h16l-6.2 7.4V19l-3.6-1.8v-4.8L4 5z" />
+          </svg>
+          {text.filters}
+          {count ? (
+            <span className="badge" data-tone="neutral">
+              {count}
+            </span>
+          ) : null}
+        </button>
+        {applied.length ? (
+          <div className="chips">
+            {applied.map((condition) => (
+              <span className="chip" key={condition.key}>
+                {condition.label}
+                <button
+                  type="button"
+                  onClick={() => remove(condition.key)}
+                  aria-label={`${text.filtersRemove}: ${condition.label}`}
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M6 6l12 12M18 6L6 18" />
+                  </svg>
+                </button>
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      <dialog
+        id="inventory-filters"
+        ref={dialogRef}
+        className="sgn-dialog"
+        aria-labelledby="inventory-filters-title"
+        onClose={() => setOpen(false)}
+        onCancel={() => setOpen(false)}
+      >
+        <form
+          className="sgn-dialog-panel"
+          method="get"
+          action="/properties"
+          onSubmit={apply}
+        >
+          <div className="sgn-dialog-head">
+            <h2 id="inventory-filters-title">{text.filters}</h2>
+            <button
+              className="sgn-dialog-close"
+              type="button"
+              onClick={() => setOpen(false)}
+              aria-label={text.close}
+            >
+              ×
+            </button>
+          </div>
+          <div className="sgn-dialog-body">
+            <div className="form-section">
+              <div className="form-grid-3">
+                {select('status', text.status, INVENTORY_STATUSES, true)}
+                {select('mode', text.listingMode, INVENTORY_LISTING_MODES)}
+                {select('type', text.propertyType, INVENTORY_PROPERTY_TYPES)}
+              </div>
+            </div>
+            <div className="form-section">
+              <div className="form-grid">
+                {bound('priceMin', text.priceRangeFrom, 'VND')}
+                {bound('priceMax', text.priceRangeTo, 'VND')}
+                {bound('areaMin', text.areaRangeFrom, 'm²')}
+                {bound('areaMax', text.areaRangeTo, 'm²')}
+              </div>
+              <p className="field-hint">{text.filtersHint}</p>
+            </div>
+            {invalid ? (
+              <p className="field-error" role="alert">
+                {text.filtersInvalid}
+              </p>
+            ) : null}
+          </div>
+          <div className="sgn-dialog-foot filter-dialog-foot">
+            <Link
+              className="btn btn-ghost btn-sm"
+              href={clearHref}
+              onClick={() => setOpen(false)}
+            >
+              {text.filtersClear}
+            </Link>
+            <button className="btn btn-primary" type="submit">
+              {text.filtersApply}
+            </button>
+          </div>
+        </form>
+      </dialog>
+    </>
+  );
+}
