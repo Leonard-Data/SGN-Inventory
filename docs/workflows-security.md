@@ -6,8 +6,8 @@
 | --- | --- | --- | --- | --- |
 | Read internal inventory, addresses, contacts/files and employee directory | Yes | Yes | Yes | Yes |
 | Read the vendor directory | Yes | Yes | Yes | Yes |
-| Create/maintain vendors | No | Yes | Yes | Yes |
-| Link or correct a property's vendor | No | Yes | Yes | Yes |
+| Create vendor directory records | No | Yes | Yes | Yes |
+| Link or unlink a property's vendor | Yes | Yes | Yes | Yes |
 | Create property / request reservation | Yes | Yes | Yes | Yes |
 | Edit property/address | Own unarchived | All unarchived | All unarchived | All unarchived |
 | Correct an existing linked shared-contact detail | Yes | Yes | Yes | Yes |
@@ -26,7 +26,7 @@
 | Read area/employee analytics | No | No | Yes | Yes |
 | Read staging/audit directly through API | No | No | No | No |
 
-These roles are company-wide. No team isolation is assumed. The directory includes work emails and employee phones; treat these as internal data.
+These roles are company-wide. Every active employee, Sales included, may read the vendor directory and link or unlink a recorded vendor on a property they can read. Staff, manager and admin create vendor directory records; vendor editing is ticket #75's work. No team isolation is assumed. The directory includes work emails and employee phones; treat these as internal data.
 
 ## Reservation lifecycle
 

@@ -88,8 +88,8 @@ export function PropertyVendors({
       setFound(null);
       setQuery('');
       setChosen('');
-      // The parent re-reads the property, so the section and its history show the committed
-      // relationship and a failed context is replaced by the current revision.
+      // The parent re-reads the property, so the section shows the committed relationship
+      // and a failed context is replaced by the current revision.
       await onChanged();
     } catch (failure) {
       if (

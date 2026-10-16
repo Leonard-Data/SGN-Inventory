@@ -19,8 +19,6 @@ export async function propertyVendorLinkContract({
   const unlink = 'select public.unlink_property_vendor($1,$2,$3) as link';
   const links =
     'select * from public.property_vendors where property_id=$1 order by vendor_id';
-  const history =
-    'select target,actor_id,actor_name,changed_fields,before_values,after_values from public.property_history where property_id=$1 and target=$2 order by occurred_at,id';
   // An authenticated identity with no linked active employee row.
   const asIdentity = async (id) => {
     await db.exec('reset role');
@@ -35,6 +33,11 @@ export async function propertyVendorLinkContract({
   };
   const count = async (sql, params = []) =>
     Number((await db.query(sql, params)).rows[0].n);
+  const historyCount = (id) =>
+    count(
+      'select count(*)::int as n from public.property_history where property_id=$1',
+      [id],
+    );
   const createVendor = async (name) => {
     await asUser(5);
     const created = await db.query(
@@ -59,7 +62,7 @@ export async function propertyVendorLinkContract({
       [id],
     ),
     facts: await count(
-      "select count(*)::int as n from public.property_history where property_id=$1 and target<>'vendor_link'",
+      'select count(*)::int as n from public.property_history where property_id=$1',
       [id],
     ),
     record: (
@@ -235,15 +238,21 @@ export async function propertyVendorLinkContract({
     'a duplicate link converges on the recorded relationship without property history',
     async () => {
       await asUser(5);
+      const historyBefore = await historyCount(property);
       const first = (await db.query(link, [property, vendor])).rows[0].link;
       assert.equal(first.created, false);
       const again = (await db.query(link, [property, vendor])).rows[0].link;
       assert.equal(again.created, false);
       assert.equal(again.revision, first.revision);
       assert.equal((await db.query(links, [property])).rows.length, 1);
+      const recorded = (await db.query(links, [property])).rows[0];
+      assert.equal(recorded.created_by, employees[2]);
+      assert.ok(recorded.created_at);
       await asAdmin();
       const events = (await db.query(history, [property, 'vendor_link'])).rows;
       assert.equal(events.length, 0);
+      const historyAfter = await historyCount(property);
+      assert.equal(historyAfter, historyBefore);
     },
   );
 
@@ -391,6 +400,7 @@ export async function propertyVendorLinkContract({
     'unlinking removes only the current relationship and keeps the vendor and other property relationship',
     async () => {
       await asUser(5);
+      const historyBefore = await historyCount(property);
       const before = (
         await db.query(
           'select revision from public.property_vendors where property_id=$1 and vendor_id=$2',
@@ -420,9 +430,8 @@ export async function propertyVendorLinkContract({
       assert.equal(company.display_name, 'Công ty Vật tư Test');
       assert.equal(company.created_by, employees[5]);
       assert.ok(company.submission_key);
-      await asAdmin();
-      const events = (await db.query(history, [property, 'vendor_link'])).rows;
-      assert.equal(events.length, 0);
+      const historyAfter = await historyCount(property);
+      assert.equal(historyAfter, historyBefore);
     },
   );
 }

@@ -135,7 +135,7 @@ export async function propertyVendorLinksConcurrency({ root, check }) {
         assert.deepEqual(
           (
             await owner.query(
-              "select target,target_id from public.property_history where property_id=$1 and target='vendor_link'",
+              'select target,target_id from public.property_history where property_id=$1',
               [property],
             )
           ).rows,
@@ -176,6 +176,10 @@ export async function propertyVendorLinksConcurrency({ root, check }) {
       }
       const link =
         'select public.link_property_vendor($1,$2,(select revision from public.properties where id=$1)) as link';
+      const historyBefore = await owner.query(
+        'select count(*)::int as n from public.property_history where property_id=$1',
+        [property],
+      );
       const firstOutcome = (await first.query(link, [property, vendor])).rows[0].link;
       let secondSettled = false;
       let secondOutcome;
@@ -199,8 +203,8 @@ export async function propertyVendorLinksConcurrency({ root, check }) {
         'select property_id,vendor_id,revision,created_by,created_at from public.property_vendors where property_id=$1 and vendor_id=$2',
         [property, vendor],
       );
-      const history = await owner.query(
-        "select actor_id,changed_fields from public.property_history where property_id=$1 and target='vendor_link'",
+      const historyAfter = await owner.query(
+        'select count(*)::int as n from public.property_history where property_id=$1',
         [property],
       );
       await check('a concurrent second link waits for the first transaction', () => {
@@ -214,7 +218,7 @@ export async function propertyVendorLinksConcurrency({ root, check }) {
         assert.equal(rows.rows.length, 1);
         assert.equal(rows.rows[0].created_by, actorConcurrent);
         assert.ok(rows.rows[0].created_at);
-        assert.equal(history.rows.length, 0);
+        assert.equal(historyAfter.rows[0].n, historyBefore.rows[0].n);
       });
     } finally {
       await second?.query('rollback').catch(() => {});
