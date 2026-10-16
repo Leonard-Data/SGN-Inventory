@@ -93,17 +93,21 @@ export function Discussion({
   const historyRequestTokens = useRef<Record<string, number>>({});
   const historyAbortControllers = useRef<Record<string, AbortController>>({});
   const nextHistoryRequestToken = useRef(0);
-  const invalidateHistory = useCallback(() => {
+  const mounted = useRef(true);
+  const abortHistory = useCallback(() => {
     historyGeneration.current++;
     Object.values(historyAbortControllers.current).forEach((controller) =>
       controller.abort(),
     );
     historyRequestTokens.current = {};
     historyAbortControllers.current = {};
+  }, []);
+  const invalidateHistory = useCallback(() => {
+    abortHistory();
     setHistory({});
     setHistoryBusy({});
     setHistoryError({});
-  }, []);
+  }, [abortHistory]);
   const editTarget = useRef<string | null>(null);
   // The open editor's identity; a save response only closes the editor it was sent from.
   const editSession = useRef<EditSession | null>(null);
@@ -212,6 +216,12 @@ export function Discussion({
   const stop = useCallback(() => {
     generation.current++;
     inFlight.current?.abort();
+    abortHistory();
+  }, [abortHistory]);
+  useEffect(() => {
+    return () => {
+      mounted.current = false;
+    };
   }, []);
   useEffect(() => {
     void load();
@@ -296,6 +306,7 @@ export function Discussion({
       return;
     }
     // Committed state is authoritative: only now is the draft spent and its key retired.
+    invalidateHistory();
     submissionKey.current = '';
     setDraft('');
     setNotice(text.commentPosted);
@@ -518,9 +529,16 @@ export function Discussion({
         undefined,
         abort.signal,
       );
-      if (!reviewer || requestGeneration !== historyGeneration.current) return;
+      if (
+        !mounted.current ||
+        !reviewer ||
+        requestGeneration !== historyGeneration.current
+      )
+        return;
       setHistory((value) => ({ ...value, [commentId]: result }));
     } catch (error) {
+      if (!mounted.current || requestGeneration !== historyGeneration.current)
+        return;
       if (
         error instanceof RequestError &&
         (error.status === 401 || error.status === 403)
@@ -528,8 +546,7 @@ export function Discussion({
         onDenied(error.status);
         return;
       }
-      if (requestGeneration === historyGeneration.current)
-        setHistoryError((value) => ({ ...value, [commentId]: true }));
+      setHistoryError((value) => ({ ...value, [commentId]: true }));
     } finally {
       if (historyRequestTokens.current[commentId] !== requestToken) return;
       delete historyRequestTokens.current[commentId];
