@@ -59,8 +59,8 @@ export function Discussion({
   const [history, setHistory] = useState<Record<string, CommentHistoryPage>>(
     {},
   );
-  const [historyBusy, setHistoryBusy] = useState<string | null>(null);
-  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyBusy, setHistoryBusy] = useState<Record<string, true>>({});
+  const [historyError, setHistoryError] = useState<Record<string, true>>({});
   const [next, setNext] = useState<CommentCursor | null>(null);
   const [busy, setBusy] = useState(true);
   const [more, setMore] = useState(false);
@@ -90,11 +90,14 @@ export function Discussion({
   const inFlight = useRef<AbortController | null>(null);
   const generation = useRef(0);
   const historyGeneration = useRef(0);
+  const historyRequestTokens = useRef<Record<string, number>>({});
+  const nextHistoryRequestToken = useRef(0);
   const invalidateHistory = useCallback(() => {
     historyGeneration.current++;
+    historyRequestTokens.current = {};
     setHistory({});
-    setHistoryBusy(null);
-    setHistoryError(null);
+    setHistoryBusy({});
+    setHistoryError({});
   }, []);
   const editTarget = useRef<string | null>(null);
   // The open editor's identity; a save response only closes the editor it was sent from.
@@ -479,18 +482,29 @@ export function Discussion({
   };
   const loadingMore = busy || more;
   const loadHistory = async (commentId: string) => {
+    if (historyRequestTokens.current[commentId] !== undefined) return;
     if (history[commentId]) {
       setHistory((value) => {
         const next = { ...value };
         delete next[commentId];
         return next;
       });
-      setHistoryError(null);
+      setHistoryError((value) => {
+        const next = { ...value };
+        delete next[commentId];
+        return next;
+      });
       return;
     }
     const requestGeneration = historyGeneration.current;
-    setHistoryBusy(commentId);
-    setHistoryError(null);
+    const requestToken = ++nextHistoryRequestToken.current;
+    historyRequestTokens.current[commentId] = requestToken;
+    setHistoryBusy((value) => ({ ...value, [commentId]: true }));
+    setHistoryError((value) => {
+      const next = { ...value };
+      delete next[commentId];
+      return next;
+    });
     try {
       const result = await api<CommentHistoryPage>(
         `/api/properties/${propertyId}/comments/${commentId}/history`,
@@ -506,10 +520,16 @@ export function Discussion({
         return;
       }
       if (requestGeneration === historyGeneration.current)
-        setHistoryError(commentId);
+        setHistoryError((value) => ({ ...value, [commentId]: true }));
     } finally {
-      if (requestGeneration === historyGeneration.current)
-        setHistoryBusy(null);
+      if (historyRequestTokens.current[commentId] !== requestToken) return;
+      delete historyRequestTokens.current[commentId];
+      if (requestGeneration !== historyGeneration.current) return;
+      setHistoryBusy((value) => {
+        const next = { ...value };
+        delete next[commentId];
+        return next;
+      });
     }
   };
   return (
@@ -686,11 +706,11 @@ export function Discussion({
                           type="button"
                           className="btn btn-sm btn-ghost"
                           onClick={() => void loadHistory(row.id)}
-                          disabled={historyBusy === row.id}
+                          disabled={historyBusy[row.id] === true}
                         >
                           {history[row.id]
                             ? text.hideHistory
-                            : historyBusy === row.id
+                            : historyBusy[row.id]
                               ? text.loading
                               : text.viewHistory}
                         </button>
@@ -748,7 +768,7 @@ export function Discussion({
                         ) : null}
                       </>
                     ) : null}
-                    {reviewer && historyError === row.id ? (
+                    {reviewer && historyError[row.id] ? (
                       <p role="alert" className="field-error comment-history-error">
                         {text.commentHistoryFailed}{' '}
                         <button

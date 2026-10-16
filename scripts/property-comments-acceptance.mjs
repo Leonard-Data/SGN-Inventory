@@ -1,5 +1,5 @@
-// Issue #44/#45/#46 hosted acceptance: shared Property discussion, accountable removal and
-// author editing with retained revisions.
+// Issue #44/#45/#46/#47 hosted acceptance: shared Property discussion, accountable removal,
+// author editing with retained revisions and reviewer-only history.
 //
 // Real development Supabase Auth/Data API/RLS plus the local real Next.js application and
 // real Chrome sessions. Mock, shim and readiness-page results are not acceptance. Mutates
@@ -65,10 +65,11 @@ const operator = JSON.parse(
 );
 assert.match(
   fixtures.namespace,
-  /^SGN-TEST-4[456]$/,
+  /^SGN-TEST-4[4567]$/,
   'Only a declared synthetic namespace is allowed',
 );
-for (const name of ['alpha', 'beta', 'staff', 'reviewer', 'inactive']) {
+const historyFixture = fixtures.namespace === 'SGN-TEST-47';
+for (const name of ['alpha', 'beta', 'reviewer', 'inactive']) {
   assert.equal(
     typeof fixtures.identities[name]?.employeeId,
     'string',
@@ -76,6 +77,18 @@ for (const name of ['alpha', 'beta', 'staff', 'reviewer', 'inactive']) {
   );
   assert.equal(
     typeof fixtures.displayNames?.[name],
+    'string',
+    'Missing declared fixture display name',
+  );
+}
+if (historyFixture) {
+  assert.equal(
+    typeof fixtures.identities.staff?.employeeId,
+    'string',
+    'Missing declared fixture identity',
+  );
+  assert.equal(
+    typeof fixtures.displayNames?.staff,
     'string',
     'Missing declared fixture display name',
   );
@@ -468,7 +481,7 @@ function initializeBrowser(session) {
 }
 // The auth shell names its language buttons by aria-label, so the switch is selected by the
 // button's lang attribute and the active locale is read from the shell element.
-async function browserLogin(name, session, preferredLocale) {
+async function browserLogin(name, session, preferredLocale, expectedPath = null) {
   browser(['open', origin + '/login'], session);
   if (preferredLocale) {
     evaluate(
@@ -485,7 +498,7 @@ async function browserLogin(name, session, preferredLocale) {
       20,
     );
   }
-  const fixture = fixtures.identities[name];
+  const fixture = name === 'unlinked' ? fixtures.unlinked : fixtures.identities[name];
   fill('Email', fixture.email, session);
   const locale = evaluate(
     `() => document.querySelector('.sgn-auth')?.lang ?? document.documentElement.lang`,
@@ -493,7 +506,12 @@ async function browserLogin(name, session, preferredLocale) {
   );
   fill(locale === 'en' ? 'Password' : 'Mật khẩu', fixture.password, session);
   click(locale === 'en' ? 'Sign in' : 'Đăng nhập', session);
-  wait('Kho bất động sản', session);
+  if (expectedPath)
+    await waitUntil(
+      `() => location.pathname === ${JSON.stringify(expectedPath)}`,
+      session,
+    );
+  else wait('Kho bất động sản', session);
 }
 
 const discussion = fixtures.properties.discussion;
@@ -506,7 +524,7 @@ const detail = (property) => origin + '/properties/' + property.id;
 
 const alpha = await userClient('alpha');
 const beta = await userClient('beta');
-const staff = await userClient('staff');
+const staff = historyFixture ? await userClient('staff') : null;
 const reviewer = await userClient('reviewer');
 const alphaEmployee = fixtures.identities.alpha.employeeId;
 const betaEmployee = fixtures.identities.beta.employeeId;
@@ -1594,28 +1612,30 @@ await settle(secondary);
     false,
     'No moderation reason reaches the ordinary projection',
   );
-  const reviewerHistory = await reviewer.rpc(
-    'list_property_comment_history',
-    { p_property_id: second.id, p_comment_id: seededId },
-  );
-  assert.equal(reviewerHistory.error, null, 'Reviewer history read succeeds');
-  assert.deepEqual(
-    reviewerHistory.data.map((event) => [
-      event.event_kind,
-      event.removal_kind,
-      event.reason,
-    ]),
-    [
-      ['posting', null, null],
-      ['removal', 'moderation', 'Nội dung nhạy cảm, gỡ theo yêu cầu'],
-    ],
-    'Moderated removal history keeps its kind and reason',
-  );
-  const staffHistory = await staff.rpc('list_property_comment_history', {
-    p_property_id: second.id,
-    p_comment_id: seededId,
-  });
-  assert.equal(staffHistory.error?.code, '42501', 'Staff history is denied');
+  if (historyFixture) {
+    const reviewerHistory = await reviewer.rpc(
+      'list_property_comment_history',
+      { p_property_id: second.id, p_comment_id: seededId },
+    );
+    assert.equal(reviewerHistory.error, null, 'Reviewer history read succeeds');
+    assert.deepEqual(
+      reviewerHistory.data.map((event) => [
+        event.event_kind,
+        event.removal_kind,
+        event.reason,
+      ]),
+      [
+        ['posting', null, null],
+        ['removal', 'moderation', 'Nội dung nhạy cảm, gỡ theo yêu cầu'],
+      ],
+      'Moderated removal history keeps its kind and reason',
+    );
+    const staffHistory = await staff.rpc('list_property_comment_history', {
+      p_property_id: second.id,
+      p_comment_id: seededId,
+    });
+    assert.equal(staffHistory.error?.code, '42501', 'Staff history is denied');
+  }
   // Terminal and replay boundaries.
   const again = await reviewer.rpc('remove_property_comment', {
     p_property_id: second.id,
@@ -2669,80 +2689,82 @@ await settle(secondary);
     .from('property_comment_edits')
     .select('comment_id,version,previous_body,body')
     .eq('comment_id', id);
-  const reviewerHistory = await reviewer.rpc(
-    'list_property_comment_history',
-    { p_property_id: second.id, p_comment_id: id },
-  );
-  assert.equal(reviewerHistory.error, null, 'A reviewer reads comment history');
-  assert.deepEqual(
-    reviewerHistory.data.map((event) => [
-      event.event_kind,
-      event.version,
-      event.removal_kind,
-      event.reason,
-      event.has_more,
-    ]),
-    [
-      ['posting', 0, null, null, false],
-      ['edit', 1, null, null, false],
-    ],
-    'History returns the original and saved edit in order',
-  );
-  for (const [name, client] of [
-    ['author', alpha],
-    ['colleague', beta],
-    ['staff', staff],
-    ['inactive', inactive],
-    ['unlinked', unlinked],
-  ]) {
-    const deniedHistory = await client.rpc('list_property_comment_history', {
+  if (historyFixture) {
+    const reviewerHistory = await reviewer.rpc(
+      'list_property_comment_history',
+      { p_property_id: second.id, p_comment_id: id },
+    );
+    assert.equal(reviewerHistory.error, null, 'A reviewer reads comment history');
+    assert.deepEqual(
+      reviewerHistory.data.map((event) => [
+        event.event_kind,
+        event.version,
+        event.removal_kind,
+        event.reason,
+        event.has_more,
+      ]),
+      [
+        ['posting', 0, null, null, false],
+        ['edit', 1, null, null, false],
+      ],
+      'History returns the original and saved edit in order',
+    );
+    for (const [name, client] of [
+      ['author', alpha],
+      ['colleague', beta],
+      ['staff', staff],
+      ['inactive', inactive],
+      ['unlinked', unlinked],
+    ]) {
+      const deniedHistory = await client.rpc('list_property_comment_history', {
+        p_property_id: second.id,
+        p_comment_id: id,
+      });
+      assert.equal(
+        deniedHistory.error?.code,
+        '42501',
+        `${name} cannot read retained history`,
+      );
+    }
+    const anonymousHistory = await anonymous.rpc('list_property_comment_history', {
       p_property_id: second.id,
       p_comment_id: id,
     });
+    assert.ok(anonymousHistory.error, 'Anonymous history is denied');
+    const unlinkedHistory = await unlinked.rpc('list_property_comment_history', {
+      p_property_id: second.id,
+      p_comment_id: id,
+    });
+    assert.equal(unlinkedHistory.error?.code, '42501', 'Unlinked history is denied');
+    const ordinaryHistorySession = new ApplicationSession();
     assert.equal(
-      deniedHistory.error?.code,
-      '42501',
-      `${name} cannot read retained history`,
+      (await ordinaryHistorySession.login('alpha')).status,
+      200,
+      'Ordinary history route session login succeeded',
+    );
+    const deniedHistoryRoute = await ordinaryHistorySession.request(
+      `/api/properties/${second.id}/comments/${id}/history`,
+    );
+    assert.equal(
+      deniedHistoryRoute.status,
+      403,
+      'Ordinary history route access is denied',
+    );
+    const unlinkedHistorySession = new ApplicationSession();
+    assert.equal(
+      (await unlinkedHistorySession.login('unlinked')).status,
+      200,
+      'Unlinked history route session login succeeded',
+    );
+    const deniedUnlinkedHistoryRoute = await unlinkedHistorySession.request(
+      `/api/properties/${second.id}/comments/${id}/history`,
+    );
+    assert.equal(
+      deniedUnlinkedHistoryRoute.status,
+      403,
+      'Unlinked history route access is denied',
     );
   }
-  const anonymousHistory = await anonymous.rpc('list_property_comment_history', {
-    p_property_id: second.id,
-    p_comment_id: id,
-  });
-  assert.ok(anonymousHistory.error, 'Anonymous history is denied');
-  const unlinkedHistory = await unlinked.rpc('list_property_comment_history', {
-    p_property_id: second.id,
-    p_comment_id: id,
-  });
-  assert.equal(unlinkedHistory.error?.code, '42501', 'Unlinked history is denied');
-  const ordinaryHistorySession = new ApplicationSession();
-  assert.equal(
-    (await ordinaryHistorySession.login('alpha')).status,
-    200,
-    'Ordinary history route session login succeeded',
-  );
-  const deniedHistoryRoute = await ordinaryHistorySession.request(
-    `/api/properties/${second.id}/comments/${id}/history`,
-  );
-  assert.equal(
-    deniedHistoryRoute.status,
-    403,
-    'Ordinary history route access is denied',
-  );
-  const unlinkedHistorySession = new ApplicationSession();
-  assert.equal(
-    (await unlinkedHistorySession.login('unlinked')).status,
-    200,
-    'Unlinked history route session login succeeded',
-  );
-  const deniedUnlinkedHistoryRoute = await unlinkedHistorySession.request(
-    `/api/properties/${second.id}/comments/${id}/history`,
-  );
-  assert.equal(
-    deniedUnlinkedHistoryRoute.status,
-    403,
-    'Unlinked history route access is denied',
-  );
   assert.equal(
     reviewerRows.error,
     null,
@@ -2821,8 +2843,9 @@ await settle(secondary);
   );
 }
 
-// --------------------------------------------------------- reviewer history journey
-const authorHistoryEvidence = await reviewer
+if (historyFixture) {
+  // --------------------------------------------------------- reviewer history journey
+  const authorHistoryEvidence = await reviewer
   .from('property_comment_removals')
   .select('comment_id,body,removal_kind,removal_reason,removed_by,removed_actor_name')
   .eq('property_id', discussion.id)
@@ -2925,7 +2948,104 @@ const archivedInactiveHistoryExpected = await reviewer.rpc(
   { p_property_id: archived.id, p_comment_id: archivedInactiveHistoryId },
 );
 assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-author history is readable');
-{
+  const historyInactive = await userClient('inactive');
+  const historyUnlinked = await userClient('unlinked');
+  const historyAnonymous = createClient(
+    environment.supabaseUrl,
+    environment.publishableKey,
+    { auth: { persistSession: false, autoRefreshToken: false } },
+  );
+  for (const [name, client] of [
+    ['staff', staff],
+    ['author', alpha],
+    ['inactive', historyInactive],
+    ['unlinked', historyUnlinked],
+  ]) {
+    const editRows = await client
+      .from('property_comment_edits')
+      .select('comment_id')
+      .eq('comment_id', browserHistoryPosted.data.id);
+    assert.ok(
+      editRows.error || editRows.data.length === 0,
+      `${name} cannot read retained edit history`,
+    );
+    const removalRows = await client
+      .from('property_comment_removals')
+      .select('comment_id')
+      .eq('comment_id', authorHistoryEvidence.data.comment_id);
+    assert.ok(
+      removalRows.error || removalRows.data.length === 0,
+      `${name} cannot read retained removal history`,
+    );
+    const deniedHistory = await client.rpc('list_property_comment_history', {
+      p_property_id: second.id,
+      p_comment_id: browserHistoryPosted.data.id,
+    });
+    assert.equal(deniedHistory.error?.code, '42501', `${name} history RPC is denied`);
+    const routeSession = new ApplicationSession();
+    assert.equal(
+      (await routeSession.login(name === 'author' ? 'alpha' : name)).status,
+      200,
+      `${name} history route session login succeeded`,
+    );
+    const deniedRoute = await routeSession.request(
+      `/api/properties/${second.id}/comments/${browserHistoryPosted.data.id}/history`,
+    );
+    assert.equal(deniedRoute.status, 403, `${name} history route is denied`);
+  }
+  const anonymousEditRows = await historyAnonymous
+    .from('property_comment_edits')
+    .select('comment_id')
+    .eq('comment_id', browserHistoryPosted.data.id);
+  assert.ok(
+    anonymousEditRows.error || anonymousEditRows.data.length === 0,
+    'Anonymous cannot read retained edit history',
+  );
+  const anonymousRemovalRows = await historyAnonymous
+    .from('property_comment_removals')
+    .select('comment_id')
+    .eq('comment_id', authorHistoryEvidence.data.comment_id);
+  assert.ok(
+    anonymousRemovalRows.error || anonymousRemovalRows.data.length === 0,
+    'Anonymous cannot read retained removal history',
+  );
+  const anonymousHistory = await historyAnonymous.rpc('list_property_comment_history', {
+    p_property_id: second.id,
+    p_comment_id: browserHistoryPosted.data.id,
+  });
+  assert.ok(anonymousHistory.error, 'Anonymous history RPC is denied');
+  const anonymousRoute = await new ApplicationSession().request(
+    `/api/properties/${second.id}/comments/${browserHistoryPosted.data.id}/history`,
+  );
+  assert.equal(anonymousRoute.status, 401, 'Anonymous history route is denied');
+  signOut(secondary);
+  await browserLogin('alpha', secondary, 'vi');
+  browser(['open', detail(second)], secondary);
+  await settle(secondary);
+  let deniedHistoryUi = screen(secondary);
+  assert.equal(deniedHistoryUi.historyButtons, 0, 'Ordinary author has no history control');
+  assert.equal(deniedHistoryUi.historyDetails.length, 0, 'Ordinary author has no history payload');
+  signOut(secondary);
+  await browserLogin('staff', secondary, 'vi');
+  browser(['open', detail(second)], secondary);
+  await settle(secondary);
+  deniedHistoryUi = screen(secondary);
+  assert.equal(deniedHistoryUi.historyButtons, 0, 'Staff has no history control');
+  assert.equal(deniedHistoryUi.historyDetails.length, 0, 'Staff has no history payload');
+  signOut(secondary);
+  browser(['open', detail(second)], secondary);
+  await waitUntil(`() => location.pathname === '/login'`, secondary);
+  deniedHistoryUi = screen(secondary);
+  assert.equal(deniedHistoryUi.historyButtons, 0, 'Anonymous has no history control');
+  assert.equal(deniedHistoryUi.historyDetails.length, 0, 'Anonymous has no history payload');
+  await browserLogin('inactive', secondary, 'vi', '/access-denied');
+  deniedHistoryUi = screen(secondary);
+  assert.equal(deniedHistoryUi.historyButtons, 0, 'Inactive has no history control');
+  assert.equal(deniedHistoryUi.historyDetails.length, 0, 'Inactive has no history payload');
+  await browserLogin('unlinked', secondary, 'vi', '/access-denied');
+  deniedHistoryUi = screen(secondary);
+  assert.equal(deniedHistoryUi.historyButtons, 0, 'Unlinked has no history control');
+  assert.equal(deniedHistoryUi.historyDetails.length, 0, 'Unlinked has no history payload');
   signOut(secondary);
   await new Promise((resolve) => setTimeout(resolve, 1000));
   await browserLogin('reviewer', secondary, 'vi');
@@ -3210,7 +3330,22 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
     archivedInactiveHistoryExpected.data.map((event) => [event.body, event.actor_name, event.occurred_at]),
     'Archived history keeps inactive-author text, attribution and Vietnam posting time',
   );
+  const demotionRouteSession = new ApplicationSession();
+  assert.equal(
+    (await demotionRouteSession.login('reviewer')).status,
+    200,
+    'Reviewer demotion route session login succeeded',
+  );
   setReviewerRole('sales');
+  const demotedHistory = await reviewer.rpc('list_property_comment_history', {
+    p_property_id: second.id,
+    p_comment_id: browserHistoryPosted.data.id,
+  });
+  assert.equal(demotedHistory.error?.code, '42501', 'Demoted reviewer history RPC is denied');
+  const demotedHistoryRoute = await demotionRouteSession.request(
+    `/api/properties/${second.id}/comments/${browserHistoryPosted.data.id}/history`,
+  );
+  assert.equal(demotedHistoryRoute.status, 403, 'Demoted reviewer history route is denied');
   evaluate(`() => { window.dispatchEvent(new Event('focus')); return true; }`, secondary);
   await waitUntil(
     `() => location.pathname === '/access-denied'`,
@@ -3743,26 +3878,28 @@ let lastEditRemovalRaceHistory = null;
       assert.equal(await editVersionCount(posted.data.id), 0);
       outcomes.removed++;
     }
-    const raceHistory = await reviewer.rpc('list_property_comment_history', {
-      p_property_id: race.id,
-      p_comment_id: posted.data.id,
-    });
-    assert.equal(raceHistory.error, null, 'Race history remains readable to the reviewer');
-    assert.equal(raceHistory.data.length, 2, 'Race history has posting and one committed transition');
-    assert.deepEqual(
-      raceHistory.data.map((event) => event.event_kind),
-      ['posting', editResult.error ? 'removal' : 'edit'],
-      'Race history matches the serialized committed outcome',
-    );
-    lastEditRemovalRaceCommentId = posted.data.id;
-    lastEditRemovalRaceHistory = raceHistory.data;
+    if (historyFixture) {
+      const raceHistory = await reviewer.rpc('list_property_comment_history', {
+        p_property_id: race.id,
+        p_comment_id: posted.data.id,
+      });
+      assert.equal(raceHistory.error, null, 'Race history remains readable to the reviewer');
+      assert.equal(raceHistory.data.length, 2, 'Race history has posting and one committed transition');
+      assert.deepEqual(
+        raceHistory.data.map((event) => event.event_kind),
+        ['posting', editResult.error ? 'removal' : 'edit'],
+        'Race history matches the serialized committed outcome',
+      );
+      lastEditRemovalRaceCommentId = posted.data.id;
+      lastEditRemovalRaceHistory = raceHistory.data;
+    }
   }
   observed(
     'held parent lock: competing author edit and removal serialize into exactly one transition',
     { rounds: 3, ...outcomes },
   );
 }
-{
+if (historyFixture) {
   await browserLogin('reviewer', secondary, 'vi');
   browser(['open', detail(race)], secondary);
   await settle(secondary);
