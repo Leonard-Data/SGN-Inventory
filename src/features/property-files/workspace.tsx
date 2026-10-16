@@ -22,12 +22,32 @@ type Upload = {
 
 const otherCategoryId = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
 
+function handleProtectedFailure(
+  failure: unknown,
+  onDenied: (status: number) => void,
+  onInvalidate?: () => void,
+) {
+  if (failure instanceof RequestError && failure.status === 404) {
+    onInvalidate?.();
+    return true;
+  }
+  if (
+    failure instanceof RequestError &&
+    (failure.status === 401 || failure.status === 403)
+  ) {
+    onDenied(failure.status);
+    return true;
+  }
+  return false;
+}
+
 export function Workspace({
   propertyId,
   locale,
   employeeId,
   archived,
   onDenied,
+  onInvalidate,
   canEdit,
   coverFileId,
   onCoverChanged,
@@ -37,6 +57,7 @@ export function Workspace({
   employeeId: string | null;
   archived: boolean;
   onDenied: (status: number) => void;
+  onInvalidate?: () => void;
   canEdit: boolean;
   coverFileId: string | null;
   onCoverChanged: () => void;
@@ -109,12 +130,7 @@ export function Workspace({
         setFiles([]);
         setRecoverable([]);
         setCategories([]);
-        if (
-          failure instanceof RequestError &&
-          (failure.status === 401 || failure.status === 403)
-        )
-          onDenied(failure.status);
-        else
+        if (!handleProtectedFailure(failure, onDenied, onInvalidate))
           setError(
             failure instanceof RequestError ? failure.code : 'unavailable',
           );
@@ -124,18 +140,8 @@ export function Workspace({
           setBusy(false);
       });
     return () => abort.abort();
-  }, [propertyId, employeeId, archived, onDenied, revision]);
+  }, [propertyId, employeeId, archived, onDenied, onInvalidate, revision]);
 
-  function denied(failure: unknown) {
-    if (
-      failure instanceof RequestError &&
-      (failure.status === 401 || failure.status === 403)
-    ) {
-      onDenied(failure.status);
-      return true;
-    }
-    return false;
-  }
 
   async function changeCover(fileId: string | null) {
     const version = generation.current;
@@ -149,7 +155,7 @@ export function Workspace({
       if (
         generation.current === version &&
         !signal?.aborted &&
-        !denied(failure)
+        !handleProtectedFailure(failure, onDenied, onInvalidate)
       )
         setCoverError(
           failure instanceof RequestError ? failure.code : 'unavailable',
@@ -176,7 +182,7 @@ export function Workspace({
       if (
         generation.current === version &&
         !signal?.aborted &&
-        !denied(failure)
+        !handleProtectedFailure(failure, onDenied, onInvalidate)
       )
         setCoverError(
           failure instanceof RequestError ? failure.code : 'unavailable',
@@ -201,7 +207,7 @@ export function Workspace({
       window.open(result.url, '_blank', 'noopener,noreferrer');
     } catch (failure) {
       if (generation.current !== version || signal?.aborted) return;
-      if (!denied(failure))
+      if (!handleProtectedFailure(failure, onDenied, onInvalidate))
         setError(
           failure instanceof RequestError ? failure.code : 'unavailable',
         );
@@ -355,7 +361,7 @@ export function Workspace({
         if (
           signal?.aborted ||
           (failure instanceof RequestError &&
-            [401, 403].includes(failure.status))
+            [401, 403, 404].includes(failure.status))
         )
           throw failure;
         // Completion may have committed before its response was lost.
@@ -372,7 +378,11 @@ export function Workspace({
       }
       update('ready');
     } catch (failure) {
-      if (generation.current !== version || signal?.aborted || denied(failure))
+      if (
+        generation.current !== version ||
+        signal?.aborted ||
+        handleProtectedFailure(failure, onDenied, onInvalidate)
+      )
         return false;
       update(
         'failed',
@@ -438,7 +448,7 @@ export function Workspace({
       if (
         generation.current === version &&
         !signal?.aborted &&
-        !denied(failure)
+        !handleProtectedFailure(failure, onDenied, onInvalidate)
       )
         setError(
           failure instanceof RequestError ? failure.code : 'unavailable',
@@ -477,7 +487,7 @@ export function Workspace({
       if (
         generation.current === version &&
         !signal?.aborted &&
-        !denied(failure)
+        !handleProtectedFailure(failure, onDenied, onInvalidate)
       )
         setCategoryError(
           failure instanceof RequestError ? failure.code : 'unavailable',

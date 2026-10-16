@@ -102,10 +102,10 @@ test('an ordinary employee replacing a reviewer conceals the archived snapshot b
     settled = true;
   });
   await flush();
-  assert.deepEqual(events, []);
+  assert.deepEqual(events, ['source-requested']);
   session.resolve(sessionResponse(sales));
   await flush();
-  assert.deepEqual(events, ['conceal', 'source-requested']);
+  assert.deepEqual(events, ['source-requested', 'conceal']);
   assert.equal(settled, false);
   source.resolve(archived);
   assert.deepEqual(await pending, {
@@ -138,10 +138,10 @@ test('the same employee with a different role conceals the manager snapshot befo
     },
   });
   await flush();
-  assert.deepEqual(events, []);
+  assert.deepEqual(events, ['source-requested']);
   session.resolve(sessionResponse({ ...manager, role: 'sales' }));
   await flush();
-  assert.deepEqual(events, ['conceal', 'source-requested']);
+  assert.deepEqual(events, ['source-requested', 'conceal']);
   source.resolve(archived);
   assert.deepEqual(await pending, {
     employee: { ...manager, role: 'sales' },
@@ -236,6 +236,7 @@ test('a first read discards data when identity changes during the source read', 
     },
   });
   await flush();
+  assert.equal(sourceReads, 1);
   firstSession.resolve(sessionResponse(manager, 1));
   await flush();
   assert.equal(sourceReads, 1);
