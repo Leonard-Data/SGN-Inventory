@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { unitCatalogUnavailable, unitOptionLabels } from './units.ts';
+import {
+  missingUnitReplacement,
+  unitCatalogUnavailable,
+  unitOptionLabels,
+} from './units.ts';
 
 test('an official unit option shows the name alone', () => {
   assert.deepEqual(
@@ -35,6 +39,23 @@ test('an unavailable catalog preserves the stored selection path', () => {
   );
   assert.equal(
     unitCatalogUnavailable('commune', 'province-id', false, false),
+    false,
+  );
+});
+
+test('a selected unit replacement requires an available value', () => {
+  assert.equal(
+    missingUnitReplacement(['province_unit_id'], () => ''),
+    true,
+  );
+  assert.equal(
+    missingUnitReplacement(['commune_unit_id'], (name) =>
+      name === 'commune_unit_id' ? 'stored-id' : '',
+    ),
+    false,
+  );
+  assert.equal(
+    missingUnitReplacement(['street'], () => ''),
     false,
   );
 });

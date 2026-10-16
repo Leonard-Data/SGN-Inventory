@@ -14,6 +14,14 @@ export function unitCatalogUnavailable(
 ) {
   return loading || failed || (level === 'commune' && !parent);
 }
+export function missingUnitReplacement(
+  names: readonly string[],
+  valueFor: (name: string) => unknown,
+) {
+  return ['province_unit_id', 'commune_unit_id'].some(
+    (name) => names.includes(name) && !valueFor(name),
+  );
+}
 export function unitOptionLabels(units: readonly UnitOption[]): string[] {
   const seen = new Map<string, number>();
   for (const unit of units)
