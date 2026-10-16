@@ -679,7 +679,7 @@ async function readAllPages(cookies) {
   let cursor = null;
   let pages = 0;
   for (;;) {
-    const parameters = new URLSearchParams({ query: 'SGN73' });
+    const parameters = new URLSearchParams({ query: runToken });
     if (cursor) {
       parameters.set('before', cursor.before);
       parameters.set('beforeId', cursor.beforeId);
