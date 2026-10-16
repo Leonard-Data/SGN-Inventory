@@ -53,6 +53,7 @@ export function CorrectionDraft({
   proposal: incomingProposal = {},
   onSaved,
   onDenied,
+  onInvalidate,
 }: {
   detail: PropertyDetail;
   locale: Locale;
@@ -61,6 +62,7 @@ export function CorrectionDraft({
   proposal?: Json;
   onSaved: () => void | Promise<void>;
   onDenied: (status: number) => void;
+  onInvalidate?: () => void;
 }) {
   const [initial] = useState({
     detail: incomingDetail,
@@ -157,6 +159,10 @@ export function CorrectionDraft({
       setSuccess(true);
       await onSaved();
     } catch (failure) {
+      if (failure instanceof RequestError && failure.status === 404) {
+        onInvalidate?.();
+        return;
+      }
       if (
         failure instanceof RequestError &&
         (failure.status === 401 || failure.status === 403)
@@ -180,6 +186,7 @@ export function CorrectionDraft({
           selected={contactId}
           onSelected={setContactId}
           onDenied={onDenied}
+          onInvalidate={onInvalidate}
         />
       ) : null}
       <form onSubmit={submit}>
@@ -295,6 +302,7 @@ export function CorrectionDraft({
                   locale={locale}
                   values={starting}
                   onDenied={onDenied}
+                  onInvalidate={onInvalidate}
                 />
               ) : (
                 <RecordFields

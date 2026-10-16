@@ -18,11 +18,13 @@ export function ContactPicker({
   selected,
   onSelected,
   onDenied,
+  onInvalidate,
 }: {
   locale: Locale;
   selected: string;
   onSelected: (id: string) => void;
   onDenied: (status: number) => void;
+  onInvalidate?: () => void;
 }) {
   const id = useId(),
     controller = useRef<AbortController | null>(null),
@@ -48,7 +50,9 @@ export function ContactPicker({
       if (!abort.signal.aborted) setPage(result);
     } catch (failure) {
       if (abort.signal.aborted) return;
-      if (
+      if (failure instanceof RequestError && failure.status === 404)
+        onInvalidate?.();
+      else if (
         failure instanceof RequestError &&
         (failure.status === 401 || failure.status === 403)
       )

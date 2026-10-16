@@ -35,12 +35,14 @@ export function Maintenance({
   locale,
   onSaved,
   onDenied,
+  onInvalidate,
 }: {
   detail: PropertyDetail;
   employee: Employee;
   locale: Locale;
   onSaved: () => void | Promise<void>;
   onDenied: (status: number) => void;
+  onInvalidate?: () => void;
 }) {
   const text = maintenanceText(locale),
     property = detail.property,
@@ -121,6 +123,10 @@ export function Maintenance({
         });
     } catch (failure) {
       if (abort.signal.aborted) return;
+      if (failure instanceof RequestError && failure.status === 404) {
+        onInvalidate?.();
+        return;
+      }
       if (
         failure instanceof RequestError &&
         failureRoute(failure.status, failure.code) === 'denied'
@@ -221,6 +227,7 @@ export function Maintenance({
                 save={saveFacts}
                 onSaved={savedFacts}
                 onDenied={onDenied}
+                onInvalidate={onInvalidate}
                 explanation
               >
                 <RecordFields
@@ -330,11 +337,13 @@ export function Maintenance({
                     save={save}
                     onSaved={saved}
                     onDenied={onDenied}
+                    onInvalidate={onInvalidate}
                   >
                     <AddressFields
                       locale={locale}
                       values={editor.values}
                       onDenied={onDenied}
+                      onInvalidate={onInvalidate}
                       variant={editor.target}
                     />
                   </MutationForm>
@@ -434,6 +443,7 @@ export function Maintenance({
                       await onSaved();
                     }}
                     onDenied={onDenied}
+                    onInvalidate={onInvalidate}
                   >
                     <p>{text.wrongPerson}</p>
                     <RecordFields
@@ -472,6 +482,7 @@ export function Maintenance({
                       selected={selected}
                       onSelected={setSelected}
                       onDenied={onDenied}
+                      onInvalidate={onInvalidate}
                     />
                   ) : null}
                   <MutationForm
@@ -481,6 +492,7 @@ export function Maintenance({
                     save={save}
                     onSaved={saved}
                     onDenied={onDenied}
+                    onInvalidate={onInvalidate}
                   >
                     {editor.target === 'contact' ? (
                       <>

@@ -29,12 +29,14 @@ export function SaleCompletion({
   employeeId,
   onDenied,
   onSaved,
+  onInvalidate,
 }: {
   propertyId: string;
   locale: Locale;
   employeeId: string;
   onDenied: (status: number) => void;
   onSaved: () => void;
+  onInvalidate?: () => void;
 }) {
   const text = messages[locale],
     closerId = useId(),
@@ -59,6 +61,10 @@ export function SaleCompletion({
   const dateTouched = useRef(false);
   const failure = useCallback(
     (problem: unknown, set: (code: string) => void) => {
+      if (problem instanceof RequestError && problem.status === 404) {
+        onInvalidate?.();
+        return;
+      }
       if (
         problem instanceof RequestError &&
         (problem.status === 401 || problem.status === 403)
@@ -68,7 +74,7 @@ export function SaleCompletion({
       }
       set(problem instanceof RequestError ? problem.code : 'unavailable');
     },
-    [onDenied],
+    [onDenied, onInvalidate],
   );
   useEffect(() => {
     inFlight.current?.abort();
@@ -125,6 +131,10 @@ export function SaleCompletion({
         (problem.status === 401 || problem.status === 403)
       ) {
         onDenied(problem.status);
+        return;
+      }
+      if (problem instanceof RequestError && problem.status === 404) {
+        onInvalidate?.();
         return;
       }
       // A conflict means the committed state moved on: refetch instead of guessing.

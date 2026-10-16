@@ -176,6 +176,7 @@ export function Reservation({
   archived,
   employeeId,
   onDenied,
+  onInvalidate,
 }: {
   propertyId: string;
   locale: Locale;
@@ -183,6 +184,7 @@ export function Reservation({
   archived: boolean;
   employeeId: string;
   onDenied: (status: number) => void;
+  onInvalidate?: () => void;
 }) {
   const text = messages[locale],
     requestReasonId = useId(),
@@ -212,6 +214,10 @@ export function Reservation({
   }, []);
   const failure = useCallback(
     (problem: unknown, set: (code: string) => void) => {
+      if (problem instanceof RequestError && problem.status === 404) {
+        onInvalidate?.();
+        return;
+      }
       if (
         problem instanceof RequestError &&
         (problem.status === 401 || problem.status === 403)
@@ -221,7 +227,7 @@ export function Reservation({
       }
       set(problem instanceof RequestError ? problem.code : 'unavailable');
     },
-    [onDenied],
+    [onDenied, onInvalidate],
   );
   useEffect(() => {
     inFlight.current?.abort();
@@ -274,6 +280,10 @@ export function Reservation({
         onDenied(problem.status);
         return;
       }
+      if (problem instanceof RequestError && problem.status === 404) {
+        onInvalidate?.();
+        return;
+      }
       // A conflict means the committed state moved on: refetch instead of guessing.
       if (
         problem instanceof RequestError &&
@@ -315,6 +325,10 @@ export function Reservation({
         (problem.status === 401 || problem.status === 403)
       ) {
         onDenied(problem.status);
+        return;
+      }
+      if (problem instanceof RequestError && problem.status === 404) {
+        onInvalidate?.();
         return;
       }
       if (problem instanceof RequestError)
@@ -365,6 +379,10 @@ export function Reservation({
         (problem.status === 401 || problem.status === 403)
       ) {
         onDenied(problem.status);
+        return;
+      }
+      if (problem instanceof RequestError && problem.status === 404) {
+        onInvalidate?.();
         return;
       }
       if (
