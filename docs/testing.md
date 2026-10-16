@@ -504,6 +504,25 @@ The deterministic supplement is `scripts/comment-edit-contract.mjs`, executed by
 
 Record the run with the same harness and fixture rules as the discussion and removal acceptance above, using a task-owned `SGN-TEST-46` namespace and removing exactly that namespace afterwards, and write the sanitized report to `docs/property-comment-edit-acceptance.json`. Do not claim this acceptance from the embedded regressions alone.
 
+### Ticket #47 reviewer history acceptance (hosted run pending)
+
+Scope: [ticket #47 reviewer-only Property comment history](database-contract.md#ticket-47--reviewer-only-property-comment-history) on top of the discussion, removal and edit journeys above. `scripts/property-comments-acceptance.mjs` now owns this journey as a real acceptance harness; the run has **not** been executed in this worktree, so `docs/property-comment-history-acceptance.json` is a sanitized pending-run fixture rather than passing staging evidence.
+
+Prepare a task-owned namespace with active author, second author, active staff, active manager/admin reviewer, inactive linked author, unlinked identity, unarchived and archived Properties, and comments covering an original post, multiple edits, author withdrawal without a reason and moderated removal with a reason. Keep the manifest and operator credentials outside Git.
+
+| Scenario to execute | Required observation |
+| --- | --- |
+| Reviewer opens history on an unarchived comment after post and edits | Original text, every saved version, retained actor names and Vietnam times appear in chronological order; source text is rendered literally and no unrelated property/audit data is returned |
+| Reviewer opens author-withdrawal and moderated-removal histories | Removal labels differ; the author event has no moderation reason, while the moderated event carries its retained reason and removing actor |
+| Reviewer opens history for an archived Property and a comment whose author is inactive | Current reviewer access permits the read and retained historical attribution remains unchanged |
+| Staff, ordinary author, anonymous, inactive and unlinked callers use the UI, endpoint, direct RPC and raw tables | No restricted history payload is returned; guarded calls deny and the UI does not represent denial as an empty history |
+| Reviewer history exceeds the SQL window | The response contains at most 64 events and `hasMore=true`; the UI states that more history exists and does not claim completeness or fail after a large transport payload |
+| Switch VI → EN → VI while history is open | Labels, event distinctions, failure/retry and window notices localize; source text, actor names and the Property stay unchanged |
+| Demote or deactivate a reviewer with an existing JWT while history is displayed, then refocus | Subsequent history reads deny and the current browser clears retained history before rendering it again; sign-out and protected navigation expose no cached evidence |
+| Competing edit/removal/archive sessions and stale revisions | Only a serialized valid transition commits; history matches the committed outcome and no edit resurrects removed text or rewrites evidence |
+
+The embedded supplement in `npm run test:schema` must cover the invoker/RLS boundary, complete event ordering, author-versus-moderated removal, absent reasons, inactive authors, the 64-event SQL bound and `has_more`. The hosted run must use real Auth/RLS and independent browser sessions, write only the sanitized report, and remove the exact task-owned namespace afterward. Do not claim this acceptance from embedded tests or the pending fixture.
+
 ## Contention test procedure
 
 Prepare two pending requests from different employees. In session A use an authenticated reviewer JWT context, call `decide_property_lock(A, true, reason)` within a transaction and hold the transaction open. In session B use a different connection and reviewer context to approve B. B must wait on the same parent property row. Commit A; B must fail with reservation conflict. Query effective locks and audit/events to confirm one approval. Repeat with A rolling back: B may then succeed. Do not treat parallel calls in a single embedded DB connection as a proof of real multi-session locking.

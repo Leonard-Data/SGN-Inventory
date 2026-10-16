@@ -23,7 +23,7 @@ import type {
   CommentCursor,
   CommentPage,
   CommentRemovalKind,
-  CommentHistoryEvent,
+  CommentHistoryPage,
 } from './types';
 
 type EditSession = {
@@ -56,10 +56,11 @@ export function Discussion({
     reasonId = useId(),
     reasonHintId = useId();
   const [comments, setComments] = useState<Comment[]>([]);
-  const [history, setHistory] = useState<Record<string, CommentHistoryEvent[]>>(
+  const [history, setHistory] = useState<Record<string, CommentHistoryPage>>(
     {},
   );
   const [historyBusy, setHistoryBusy] = useState<string | null>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [next, setNext] = useState<CommentCursor | null>(null);
   const [busy, setBusy] = useState(true);
   const [more, setMore] = useState(false);
@@ -88,6 +89,7 @@ export function Discussion({
   const [editNotice, setEditNotice] = useState<string | null>(null);
   const inFlight = useRef<AbortController | null>(null);
   const generation = useRef(0);
+  const historyGeneration = useRef(0);
   const editTarget = useRef<string | null>(null);
   // The open editor's identity; a save response only closes the editor it was sent from.
   const editSession = useRef<EditSession | null>(null);
@@ -200,6 +202,13 @@ export function Discussion({
     void load();
     return stop;
   }, [load, stop]);
+  useEffect(() => {
+    if (reviewer) return;
+    historyGeneration.current++;
+    setHistory({});
+    setHistoryBusy(null);
+    setHistoryError(null);
+  }, [reviewer]);
   function refresh() {
     setBusy(true);
     void load();
@@ -470,22 +479,31 @@ export function Discussion({
         delete next[commentId];
         return next;
       });
+      setHistoryError(null);
       return;
     }
+    const requestGeneration = historyGeneration.current;
     setHistoryBusy(commentId);
+    setHistoryError(null);
     try {
-      const result = await api<{ events: CommentHistoryEvent[] }>(
+      const result = await api<CommentHistoryPage>(
         `/api/properties/${propertyId}/comments/${commentId}/history`,
       );
-      setHistory((value) => ({ ...value, [commentId]: result.events }));
+      if (!reviewer || requestGeneration !== historyGeneration.current) return;
+      setHistory((value) => ({ ...value, [commentId]: result }));
     } catch (error) {
-      onDenied(
-        error instanceof RequestError && error.code === 'access-denied'
-          ? 403
-          : 503,
-      );
+      if (
+        error instanceof RequestError &&
+        (error.status === 401 || error.status === 403)
+      ) {
+        onDenied(error.status);
+        return;
+      }
+      if (requestGeneration === historyGeneration.current)
+        setHistoryError(commentId);
     } finally {
-      setHistoryBusy(null);
+      if (requestGeneration === historyGeneration.current)
+        setHistoryBusy(null);
     }
   };
   return (
@@ -672,37 +690,61 @@ export function Discussion({
                         </button>
                       </div>
                     ) : null}
-                    {history[row.id]?.length ? (
-                      <ol
-                        className="comment-history"
-                        aria-label={text.commentHistory}
-                      >
-                        {history[row.id]!.map((event, index) => (
-                          <li key={`${event.kind}-${event.version ?? index}`}>
-                            <p>
-                              <strong>
-                                {event.kind === 'posting'
-                                  ? text.commentPosted
-                                  : event.kind === 'edit'
-                                    ? text.commentEditedMarker
-                                    : text.commentRemoved}
-                              </strong>{' '}
-                              — <span translate="no">{event.body}</span>
-                            </p>
-                            <p className="comment-meta" translate="no">
-                              {event.actorName} ·{' '}
-                              {vietnamTimestamp(event.occurredAt, locale)} (
-                              {text.vietnamTime})
-                            </p>
-                            {event.reason ? (
-                              <p className="field-hint">
-                                {text.removalReason}:{' '}
-                                <span translate="no">{event.reason}</span>
-                              </p>
-                            ) : null}
-                          </li>
-                        ))}
-                      </ol>
+                    {reviewer && history[row.id] ? (
+                      <>
+                        {history[row.id]!.events.length ? (
+                          <ol
+                            className="comment-history"
+                            aria-label={text.commentHistory}
+                          >
+                            {history[row.id]!.events.map((event, index) => (
+                              <li key={`${event.kind}-${event.version ?? index}`}>
+                                <p>
+                                  <strong>
+                                    {event.kind === 'posting'
+                                      ? text.commentPosted
+                                      : event.kind === 'edit'
+                                        ? text.commentEditedMarker
+                                        : event.removalKind === 'author'
+                                          ? text.commentAuthorWithdrawal
+                                          : text.commentModeratedRemoval}
+                                  </strong>{' '}
+                                  — <span translate="no">{event.body}</span>
+                                </p>
+                                <p className="comment-meta" translate="no">
+                                  {event.actorName} ·{' '}
+                                  {vietnamTimestamp(event.occurredAt, locale)} (
+                                  {text.vietnamTime})
+                                </p>
+                                {event.removalKind === 'moderation' &&
+                                event.reason ? (
+                                  <p className="field-hint">
+                                    {text.removalReason}:{' '}
+                                    <span translate="no">{event.reason}</span>
+                                  </p>
+                                ) : null}
+                              </li>
+                            ))}
+                          </ol>
+                        ) : (
+                          <p className="field-hint">{text.commentHistoryEmpty}</p>
+                        )}
+                        {history[row.id]!.hasMore ? (
+                          <p className="field-hint">{text.commentHistoryMore}</p>
+                        ) : null}
+                      </>
+                    ) : null}
+                    {reviewer && historyError === row.id ? (
+                      <p role="alert" className="field-error">
+                        {text.commentHistoryFailed}{' '}
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          onClick={() => void loadHistory(row.id)}
+                        >
+                          {text.retry}
+                        </button>
+                      </p>
                     ) : null}
                     {!removed && !editingHere && (canWithdraw || reviewer) ? (
                       <div className="comment-actions">

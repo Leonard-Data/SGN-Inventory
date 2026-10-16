@@ -10,8 +10,8 @@ export function GET(
   return runRoute(request, async (context) => {
     await activeEmployee(context);
     const { id, commentId } = await route.params;
-    return NextResponse.json({
-      events: await commentHistory(context, id, commentId),
-    });
+    return NextResponse.json(
+      await commentHistory(context, id, commentId),
+    );
   });
 }

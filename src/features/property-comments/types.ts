@@ -10,7 +10,12 @@ export type CommentHistoryEvent = {
   actorId: string;
   actorName: string;
   occurredAt: string;
+  removalKind: CommentRemovalKind | null;
   reason: string | null;
+};
+export type CommentHistoryPage = {
+  events: CommentHistoryEvent[];
+  hasMore: boolean;
 };
 export interface Comment {
   id: string;

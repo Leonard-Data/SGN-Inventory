@@ -68,7 +68,7 @@ assert.match(
   /^SGN-TEST-4[456]$/,
   'Only a declared synthetic namespace is allowed',
 );
-for (const name of ['alpha', 'beta', 'reviewer', 'inactive']) {
+for (const name of ['alpha', 'beta', 'staff', 'reviewer', 'inactive']) {
   assert.equal(
     typeof fixtures.identities[name]?.employeeId,
     'string',
@@ -312,6 +312,10 @@ function screen(session) {
         moderationReason: discussion?.querySelector('.comment-moderation textarea')?.value ?? null,
         commentEditControls: discussion ? [...discussion.querySelectorAll('button')].filter(node => /Chỉnh sửa bình luận|^Edit comment$/.test((node.getAttribute('aria-label') ?? node.textContent).trim())).length : 0,
         editedMarkers: discussion ? discussion.querySelectorAll('.comment-edited').length : 0,
+        historyButtons: discussion ? [...discussion.querySelectorAll('button')].filter(node => /Xem lịch sử|View history|Ẩn lịch sử|Hide history/.test(node.textContent)).length : 0,
+        historyEvents: discussion ? [...discussion.querySelectorAll('.comment-history li')].map(node => node.textContent?.trim() ?? '') : [],
+        historyMore: discussion ? [...discussion.querySelectorAll('.field-hint')].some(node => /Còn lịch sử cũ hơn|More history exists/.test(node.textContent ?? '')) : false,
+        historyError: discussion?.querySelector('.comment-history ~ .field-error')?.textContent ?? null,
         editDraft: discussion?.querySelector('.comment-edit textarea')?.value ?? null,
         editCurrent: discussion?.querySelector('.comment-current .comment-body')?.textContent ?? null,
         editError: discussion?.querySelector('.comment-edit [role=alert]')?.textContent ?? null,
@@ -460,18 +464,34 @@ const detail = (property) => origin + '/properties/' + property.id;
 
 const alpha = await userClient('alpha');
 const beta = await userClient('beta');
+const staff = await userClient('staff');
 const reviewer = await userClient('reviewer');
 const alphaEmployee = fixtures.identities.alpha.employeeId;
 const betaEmployee = fixtures.identities.beta.employeeId;
+const reviewerEmployee = fixtures.identities.reviewer.employeeId;
+const reviewerRole = operatorSql(
+  `select role from public.employees where id='${reviewerEmployee}'`,
+)[0]?.role;
+assert.ok(
+  reviewerRole === 'manager' || reviewerRole === 'admin',
+  'Reviewer fixture must start as manager/admin',
+);
 function setBetaActive(active) {
   operatorSql(
     `do $$ begin update public.employees set is_active=${active} where id='${betaEmployee}'; end $$;`,
   );
 }
-// Any failure must still return the declared fixture identity to active.
+function setReviewerRole(role) {
+  assert.ok(['sales', 'staff', 'manager', 'admin'].includes(role));
+  operatorSql(
+    `update public.employees set role='${role}' where id='${reviewerEmployee}'`,
+  );
+}
+// Any failure must still return the declared fixture identities to their original state.
 function restoreAndExit(error) {
   try {
     setBetaActive(true);
+    setReviewerRole(reviewerRole);
   } catch {
     console.error('FIXTURE RESTORE FAILED: reactivate ' + betaEmployee);
   }
@@ -1531,6 +1551,28 @@ await settle(secondary);
     false,
     'No moderation reason reaches the ordinary projection',
   );
+  const reviewerHistory = await reviewer.rpc(
+    'list_property_comment_history',
+    { p_property_id: second.id, p_comment_id: seededId },
+  );
+  assert.equal(reviewerHistory.error, null, 'Reviewer history read succeeds');
+  assert.deepEqual(
+    reviewerHistory.data.map((event) => [
+      event.event_kind,
+      event.removal_kind,
+      event.reason,
+    ]),
+    [
+      ['posting', null, null],
+      ['removal', 'moderation', 'Nội dung nhạy cảm, gỡ theo yêu cầu'],
+    ],
+    'Moderated removal history keeps its kind and reason',
+  );
+  const staffHistory = await staff.rpc('list_property_comment_history', {
+    p_property_id: second.id,
+    p_comment_id: seededId,
+  });
+  assert.equal(staffHistory.error?.code, '42501', 'Staff history is denied');
   // Terminal and replay boundaries.
   const again = await reviewer.rpc('remove_property_comment', {
     p_property_id: second.id,
@@ -2582,6 +2624,60 @@ await settle(secondary);
     .from('property_comment_edits')
     .select('comment_id,version,previous_body,body')
     .eq('comment_id', id);
+  const reviewerHistory = await reviewer.rpc(
+    'list_property_comment_history',
+    { p_property_id: second.id, p_comment_id: id },
+  );
+  assert.equal(reviewerHistory.error, null, 'A reviewer reads comment history');
+  assert.deepEqual(
+    reviewerHistory.data.map((event) => [
+      event.event_kind,
+      event.version,
+      event.removal_kind,
+      event.reason,
+      event.has_more,
+    ]),
+    [
+      ['posting', 0, null, null, false],
+      ['edit', 1, null, null, false],
+    ],
+    'History returns the original and saved edit in order',
+  );
+  for (const [name, client] of [
+    ['author', alpha],
+    ['colleague', beta],
+    ['staff', staff],
+    ['inactive', inactive],
+  ]) {
+    const deniedHistory = await client.rpc('list_property_comment_history', {
+      p_property_id: second.id,
+      p_comment_id: id,
+    });
+    assert.equal(
+      deniedHistory.error?.code,
+      '42501',
+      `${name} cannot read retained history`,
+    );
+  }
+  const anonymousHistory = await anonymous.rpc('list_property_comment_history', {
+    p_property_id: second.id,
+    p_comment_id: id,
+  });
+  assert.ok(anonymousHistory.error, 'Anonymous history is denied');
+  const ordinaryHistorySession = new ApplicationSession();
+  assert.equal(
+    (await ordinaryHistorySession.login('alpha')).status,
+    200,
+    'Ordinary history route session login succeeded',
+  );
+  const deniedHistoryRoute = await ordinaryHistorySession.request(
+    `/api/properties/${second.id}/comments/${id}/history`,
+  );
+  assert.equal(
+    deniedHistoryRoute.status,
+    403,
+    'Ordinary history route access is denied',
+  );
   assert.equal(
     reviewerRows.error,
     null,
@@ -2658,6 +2754,104 @@ await settle(secondary);
       replay: replayed.data.id === id,
     },
   );
+}
+
+// --------------------------------------------------------- reviewer history journey
+{
+  signOut(secondary);
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  await browserLogin('reviewer', secondary, 'vi');
+  browser(['open', detail(discussion)], secondary);
+  await settle(secondary);
+  const before = screen(secondary);
+  assert.ok(before.historyButtons > 0, 'Reviewer history controls are visible');
+  evaluate(
+    `() => {
+      const target = [...document.querySelectorAll('section.discussion .comment')].find((node) => node.querySelector('.comment-removed'));
+      target?.querySelector('.comment-actions button')?.click();
+      return Boolean(target);
+    }`,
+    secondary,
+  );
+  await waitUntil(
+    `() => Boolean(document.querySelector('section.discussion .comment-history'))`,
+    secondary,
+  );
+  const authorHistory = screen(secondary);
+  assert.ok(
+    authorHistory.historyEvents.some((event) => /Tác giả đã tự gỡ bình luận/.test(event)),
+    'Author withdrawal has a distinct history label',
+  );
+  assert.equal(
+    authorHistory.historyEvents.some((event) => /Lý do kiểm duyệt/.test(event)),
+    false,
+    'Author withdrawal has no moderation reason',
+  );
+  switchLocale('en', secondary);
+  await waitUntil(
+    `() => document.querySelector('section.discussion h2')?.textContent === 'Property discussion'`,
+    secondary,
+  );
+  await settle(secondary);
+  const authorHistoryEn = screen(secondary);
+  assert.ok(
+    authorHistoryEn.historyEvents.some((event) => /Author withdrew the comment/.test(event)),
+    'Author withdrawal label is localized in English',
+  );
+  browser(['open', detail(second)], secondary);
+  await settle(secondary);
+  evaluate(
+    `() => {
+      const target = [...document.querySelectorAll('section.discussion .comment')].find((node) => node.querySelector('.comment-removed'));
+      target?.querySelector('.comment-actions button')?.click();
+      return Boolean(target);
+    }`,
+    secondary,
+  );
+  await waitUntil(
+    `() => Boolean(document.querySelector('section.discussion .comment-history'))`,
+    secondary,
+  );
+  const moderationHistory = screen(secondary);
+  assert.ok(
+    moderationHistory.historyEvents.some((event) => /Removed by moderation/.test(event)),
+    'Moderated removal has a distinct English history label',
+  );
+  assert.ok(
+    moderationHistory.historyEvents.some((event) => /Moderation reason/.test(event)),
+    'Moderation reason is visible to the reviewer',
+  );
+  switchLocale('vi', secondary);
+  await waitUntil(
+    `() => document.querySelector('section.discussion h2')?.textContent === 'Thảo luận bất động sản'`,
+    secondary,
+  );
+  await settle(secondary);
+  const moderationHistoryVi = screen(secondary);
+  assert.ok(
+    moderationHistoryVi.historyEvents.some((event) => /Đã gỡ do kiểm duyệt/.test(event)),
+    'Moderated removal label is localized in Vietnamese',
+  );
+  assert.ok(
+    moderationHistoryVi.historyEvents.some((event) => /Lý do kiểm duyệt/.test(event)),
+    'Moderation reason label is localized in Vietnamese',
+  );
+  setReviewerRole('sales');
+  evaluate(`() => { window.dispatchEvent(new Event('focus')); return true; }`, secondary);
+  await waitUntil(
+    `() => location.pathname === '/access-denied'`,
+    secondary,
+    30,
+  );
+  const denied = screen(secondary);
+  assert.equal(denied.historyEvents.length, 0, 'Role loss clears history');
+  assert.equal(denied.hasDiscussionText, false, 'Role loss leaves no cached discussion');
+  setReviewerRole(reviewerRole);
+  observed('reviewer history is bilingual, distinguishes removal kinds and clears on role loss', {
+    authorEvents: authorHistory.historyEvents.length,
+    moderationEvents: moderationHistory.historyEvents.length,
+    roleChangePath: denied.path,
+  });
 }
 
 // --------------------------------------------------------- post and archive race

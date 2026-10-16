@@ -14,6 +14,8 @@ export async function commentRemovalContract({
   const remove =
     'select public.remove_property_comment($1,$2,$3,$4,$5) as removed';
   const list = 'select * from public.list_property_comments($1,$2,$3,$4)';
+  const history =
+    'select * from public.list_property_comment_history($1,$2)';
   const post = 'select public.post_property_comment($1,$2,$3) as created';
   const own = async (id) =>
     (
@@ -375,6 +377,31 @@ export async function commentRemovalContract({
         '23514',
       );
       assert.equal(await removalRow(colleagueComment), undefined);
+    },
+  );
+  await check(
+    'history distinguishes author withdrawal from moderated removal and keeps absent reasons absent',
+    async () => {
+      for (const actor of [0, 1, 5]) {
+        await asUser(actor);
+        await fails(history, [first, ownComment], '42501');
+      }
+      for (const actor of [2, 3]) {
+        await asUser(actor);
+        const authorRows = (await db.query(history, [first, ownComment])).rows;
+        assert.equal(authorRows.at(-1).event_kind, 'removal');
+        assert.equal(authorRows.at(-1).removal_kind, 'author');
+        assert.equal(authorRows.at(-1).reason, null);
+        const moderationRows = (
+          await db.query(history, [second, moderationComment])
+        ).rows;
+        assert.equal(moderationRows.at(-1).event_kind, 'removal');
+        assert.equal(moderationRows.at(-1).removal_kind, 'moderation');
+        assert.equal(
+          moderationRows.at(-1).reason,
+          'Nội dung nhạy cảm — gỡ theo yêu cầu',
+        );
+      }
     },
   );
   await check(

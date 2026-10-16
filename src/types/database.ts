@@ -1991,8 +1991,10 @@ export type Database = {
           actor_name: string;
           body: string;
           event_kind: string;
+          has_more: boolean;
           occurred_at: string;
           reason: string | null;
+          removal_kind: string | null;
           version: number | null;
         }[];
       };
