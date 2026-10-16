@@ -25,7 +25,7 @@ import { employeeDeactivationContract } from './employee-deactivation-contract.m
 import { employeeAccountDeletionContract } from './employee-account-deletion-contract.mjs';
 import { auditRetentionContract } from './audit-retention-contract.mjs';
 import { employeeDeactivationConcurrency } from './employee-deactivation-concurrency.mjs';
-import { propertyVendorLinkConcurrency } from './property-vendor-links-concurrency.mjs';
+import { propertyVendorLinksConcurrency } from './property-vendor-links-concurrency.mjs';
 import { applyEmbeddedSchema } from './embedded-schema.mjs';
 const root = process.env.SGN_PROJECT_ROOT || process.cwd();
 const db = new PGlite({extensions:{unaccent,pg_trgm,pgcrypto}});
@@ -612,7 +612,7 @@ await employeeDeactivationContract({db,asUser,check,fails,employees});
 // reference and the historical Auth attribution preserved.
 await employeeAccountDeletionContract({db,asUser,check,fails});
 await employeeDeactivationConcurrency({root,check});
-await propertyVendorLinkConcurrency({root,check});
+await propertyVendorLinksConcurrency({root,check});
 // Ticket #73: the vendor directory authority, validation, retry and paging rules.
 await vendorContract({db,asUser,check,fails,employees});
 // Ticket #74: property-to-vendor links, their correction and the history they project.

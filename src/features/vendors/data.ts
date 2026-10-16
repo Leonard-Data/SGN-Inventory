@@ -79,20 +79,22 @@ export async function vendorDetail(
   id: string,
 ): Promise<{ vendor: Vendor } & VendorLinkedProperties> {
   if (!uuid(id)) throw new ApiError(400, 'invalid-input');
-  const { data, error } = await context.client
-    .from('vendors')
-    .select(
-      'id,display_name,contact_name,phones,email,source_address,notes,created_at',
-    )
-    .eq('id', id)
-    .maybeSingle();
-  if (error) databaseError(error);
-  if (!data) throw new ApiError(404, 'not-found');
-  const vendor = recordOr503(data);
-  const linked = await context.client.rpc('list_vendor_properties', {
-    p_vendor_id: id,
-    p_limit: VENDOR_PROPERTY_PAGE_SIZE + 1,
-  });
+  const [recorded, linked] = await Promise.all([
+    context.client
+      .from('vendors')
+      .select(
+        'id,display_name,contact_name,phones,email,source_address,notes,created_at',
+      )
+      .eq('id', id)
+      .maybeSingle(),
+    context.client.rpc('list_vendor_properties', {
+      p_vendor_id: id,
+      p_limit: VENDOR_PROPERTY_PAGE_SIZE + 1,
+    }),
+  ]);
+  if (recorded.error) databaseError(recorded.error);
+  if (!recorded.data) throw new ApiError(404, 'not-found');
+  const vendor = recordOr503(recorded.data);
   if (linked.error) databaseError(linked.error);
   return linkedOr503(vendor, linked.data);
 }
