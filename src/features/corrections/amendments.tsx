@@ -5,6 +5,7 @@ import { useProtectedData } from '@/features/employees/use-protected-data';
 import { BusinessValues } from '@/features/property-maintenance/history';
 import { maintenanceText } from '@/features/property-maintenance/messages';
 import { vietnamTimestamp } from '@/features/properties/format';
+import { changedValues } from './changes';
 import type { AmendmentPage } from './data';
 function AmendmentList({
   requestId,
@@ -50,7 +51,12 @@ function AmendmentList({
                 </p>
                 <p translate="no">{a.explanation}</p>
                 <h4>{text.observed}</h4>
-                <BusinessValues values={a.observed_values} locale={locale} />
+                <BusinessValues
+                  values={
+                    changedValues(a.observed_values, a.proposed_values).observed
+                  }
+                  locale={locale}
+                />
                 <h4>{text.proposal}</h4>
                 <BusinessValues values={a.proposed_values} locale={locale} />
               </section>
