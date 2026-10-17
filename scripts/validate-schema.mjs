@@ -615,7 +615,8 @@ await employeeDeactivationConcurrency({root,check});
 await propertyVendorLinksConcurrency({root,check});
 // Ticket #73: the vendor directory authority, validation, retry and paging rules.
 await vendorContract({db,asUser,check,fails,employees});
-// Ticket #74: property-to-vendor links, their correction and the history they project.
+// Ticket #74: property-to-vendor links, their correction and the recorded link row as the trail;
+// property history stays price-only, with no link or unlink projection.
 await propertyVendorLinkContract({db,asUser,check,fails,employees,property,other});
 // Audit-trail retention: the window boundary, repeat safety, own-table binding and the
 // application/API denial around the administrative trim.
