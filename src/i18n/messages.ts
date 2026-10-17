@@ -66,6 +66,12 @@ const vi = {
     'Không chọn loại giao dịch: mỗi hồ sơ dùng giá chào riêng — hồ sơ cho thuê dùng giá thuê tháng (VND/tháng), còn hồ sơ bán và bán và cho thuê dùng giá bán (nguyên VND). Chọn Bán hoặc Bán và cho thuê để chỉ so sánh giá bán; chọn Cho thuê để chỉ so sánh giá thuê tháng.',
   areaFilterHint:
     'Diện tích khớp khi diện tích đất hoặc diện tích sàn nằm trong khoảng.',
+  province: 'Tỉnh / thành phố',
+  ward: 'Xã / phường',
+  areaAdminHint:
+    'Lọc theo tỉnh/thành phố và xã/phường của địa chỉ. Chọn tỉnh/thành phố sẽ gồm mọi xã/phường thuộc tỉnh/thành phố đó; chọn xã/phường sẽ thu hẹp trong xã/phường đó. Khi cả hai được chọn, xã/phường là điều kiện có hiệu lực.',
+  areaFilterUnavailable:
+    'Chưa tải được danh mục tỉnh/thành phố và xã/phường. Bộ lọc giá và diện tích vẫn dùng được.',
   priceUnitVnd: 'VND',
   priceUnitMonthly: 'VND/tháng',
   priceRangeFrom: 'Giá từ',
@@ -620,6 +626,12 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
       'With no listing mode selected, each record uses its own asking price: rental records use monthly asking rent (VND/month), while sale and sale-and-rent records use asking sale price in whole VND. Select Sale or Sale and rent to compare asking sale prices only; select Rent to compare monthly asking rents only.',
     areaFilterHint:
       'Area matches when the land area or the floor area is inside the range.',
+    province: 'Province / city',
+    ward: 'Commune / ward',
+    areaAdminHint:
+      "Filter by the address's province/city and commune/ward. Choosing a province/city includes every commune/ward in it; choosing a commune/ward narrows to that ward. When both are set, the ward is the condition in force.",
+    areaFilterUnavailable:
+      'The province and ward catalog could not be loaded. The price and area filters still work.',
     priceUnitVnd: 'VND',
     priceUnitMonthly: 'VND/month',
     priceRangeFrom: 'Price from',

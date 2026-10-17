@@ -1,6 +1,11 @@
 // The inventory filter set as it travels in the page address, plus the one place its bounds are
 // validated. The route validates the same strings the browser carries, so a filter is either
 // applied exactly as the address states or refused as invalid input — never silently dropped.
+// The province/ward pair names official administrative units; the ward is dependent on the
+// province and, when both are set, the narrower ward is the unit the read applies.
+const UNIT_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export const INVENTORY_STATUSES = [
   'draft',
   'available',
@@ -27,6 +32,8 @@ export const INVENTORY_FILTER_KEYS = [
   'priceMax',
   'areaMin',
   'areaMax',
+  'province',
+  'ward',
 ] as const;
 export type InventoryFilterKey = (typeof INVENTORY_FILTER_KEYS)[number];
 export type InventoryFilters = Record<InventoryFilterKey, string | null>;
@@ -39,6 +46,8 @@ export const noInventoryFilters: InventoryFilters = {
   priceMax: null,
   areaMin: null,
   areaMax: null,
+  province: null,
+  ward: null,
 };
 
 const WHOLE_VND = /^\d{1,18}$/;
@@ -66,6 +75,8 @@ export function inventoryFilters(params: URLSearchParams): InventoryFilters {
     priceMax: read('priceMax'),
     areaMin: read('areaMin'),
     areaMax: read('areaMax'),
+    province: read('province'),
+    ward: read('ward'),
   };
 }
 
@@ -76,12 +87,29 @@ export function parseInventoryFilters(
   params: URLSearchParams,
 ): InventoryFilterParse {
   const filters = inventoryFilters(params);
-  const { status, mode, type, priceMin, priceMax, areaMin, areaMax } = filters;
+  const {
+    status,
+    mode,
+    type,
+    priceMin,
+    priceMax,
+    areaMin,
+    areaMax,
+    province,
+    ward,
+  } = filters;
   if (status !== null && !includes(INVENTORY_STATUSES, status)) return refuse();
   if (mode !== null && !includes(INVENTORY_LISTING_MODES, mode))
     return refuse();
   if (type !== null && !includes(INVENTORY_PROPERTY_TYPES, type))
     return refuse();
+  // A unit value is an official catalog identity, so a malformed one is refused here and an
+  // out-of-catalog or wrong-level one is refused by the route's catalog check.
+  for (const unit of [province, ward])
+    if (unit !== null && !UNIT_ID.test(unit)) return refuse();
+  // The ward narrows its parent province; a ward without that province is not a filter set this
+  // panel can produce, so it is refused rather than applied as a different inventory.
+  if (ward !== null && province === null) return refuse();
   for (const price of [priceMin, priceMax])
     if (price !== null && !wholeVnd(price)) return refuse();
   for (const area of [areaMin, areaMax])
@@ -118,6 +146,27 @@ export function activeFilterCount(filters: InventoryFilters): number {
   return Object.keys(filterParams(filters)).length;
 }
 
+// The catalog check the route runs after parsing: a province value must name a province-level
+// unit and a ward value a commune-level one inside the stated province, so absent, out-of-catalog,
+// swapped or mismatched units are refused instead of matching a different inventory.
+export function catalogUnitsMatch(
+  units: readonly {
+    id: string;
+    unit_level: string;
+    parent_id: string | null;
+  }[],
+  filters: InventoryFilters,
+): boolean {
+  const byId = new Map(units.map((unit) => [unit.id, unit]));
+  const { province, ward } = filters;
+  if (province !== null && byId.get(province)?.unit_level !== 'province')
+    return false;
+  if (ward === null) return true;
+  const unit = byId.get(ward);
+  if (unit?.unit_level !== 'commune') return false;
+  return province === null || unit.parent_id === province;
+}
+
 export type InventoryFilterArgs = {
   p_status?: string;
   p_mode?: string;
@@ -126,6 +175,7 @@ export type InventoryFilterArgs = {
   p_price_max?: string;
   p_area_min?: number;
   p_area_max?: number;
+  p_area_id?: string;
 };
 
 // Half of each range is optional; an absent bound leaves the database default (no bound) in
@@ -139,6 +189,10 @@ export function filterRpcArgs(filters: InventoryFilters): InventoryFilterArgs {
   if (filters.priceMax) args.p_price_max = filters.priceMax;
   if (filters.areaMin) args.p_area_min = Number(filters.areaMin);
   if (filters.areaMax) args.p_area_max = Number(filters.areaMax);
+  // Both the browse and the chronological walk take one administrative unit, so the narrower
+  // ward governs and the province is kept in the address only as its parent context.
+  const areaId = filters.ward ?? filters.province;
+  if (areaId) args.p_area_id = areaId;
   return args;
 }
 

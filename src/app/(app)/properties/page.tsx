@@ -16,6 +16,8 @@ export default async function Properties({
     priceMax?: string;
     areaMin?: string;
     areaMax?: string;
+    province?: string;
+    ward?: string;
   }>;
 }) {
   const params = await searchParams;
