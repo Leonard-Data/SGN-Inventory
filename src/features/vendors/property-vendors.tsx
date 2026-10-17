@@ -124,7 +124,9 @@ export function PropertyVendors({
             <span>
               {error === 'invalid-input'
                 ? text.invalidInput
-                : text.vendorPropertyFailed}
+                : error === 'access-changed'
+                  ? text.accessChanged
+                  : text.vendorPropertyFailed}
             </span>
             <button
               type="button"

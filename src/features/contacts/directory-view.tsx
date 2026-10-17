@@ -292,7 +292,9 @@ export function ContactDirectory({
               ? text.invalidInput
               : error === 'sign-out-failed'
                 ? text.signOutFailed
-                : text.contactDirectoryFailed}
+                : error === 'access-changed'
+                  ? text.accessChanged
+                  : text.contactDirectoryFailed}
           </span>
           <button
             type="button"

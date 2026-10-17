@@ -425,6 +425,7 @@ export type Database = {
       };
       employees: {
         Row: {
+          access_revision: number;
           account_deleted_at: string | null;
           auth_user_id: string | null;
           created_at: string;
@@ -437,6 +438,7 @@ export type Database = {
           role: string;
         };
         Insert: {
+          access_revision?: number;
           account_deleted_at?: string | null;
           auth_user_id?: string | null;
           created_at?: string;
@@ -449,6 +451,7 @@ export type Database = {
           role?: string;
         };
         Update: {
+          access_revision?: number;
           account_deleted_at?: string | null;
           auth_user_id?: string | null;
           created_at?: string;

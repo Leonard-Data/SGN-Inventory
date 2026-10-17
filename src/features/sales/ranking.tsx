@@ -112,7 +112,9 @@ export function CompletedSaleRanking({
                 ? text.invalidInput
                 : error === 'sign-out-failed'
                   ? text.signOutFailed
-                  : text.completedSalesFailed}
+                  : error === 'access-changed'
+                    ? text.accessChanged
+                    : text.completedSalesFailed}
           </span>
           <button
             type="button"

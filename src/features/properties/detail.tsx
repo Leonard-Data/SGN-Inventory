@@ -536,7 +536,9 @@ export function Detail({
                 ? text.signOutFailed
                 : error === 'invalid-input'
                   ? text.invalidInput
-                  : text.unavailable}
+                  : error === 'access-changed'
+                    ? text.accessChanged
+                    : text.unavailable}
           </h3>
           <p>
             <button

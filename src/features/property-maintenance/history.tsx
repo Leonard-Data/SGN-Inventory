@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import type { Json } from '@/types/database';
 import type { Locale } from '@/i18n/messages';
-import { label } from '@/i18n/messages';
+import { label, messages } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import {
   formatVnd,
@@ -112,7 +112,11 @@ export function History({
         {busy ? <p role="status">{text.loading}</p> : null}
         {error ? (
           <div className="alert" data-tone="danger" role="alert">
-            <span>{text.unavailable}</span>
+            <span>
+              {error === 'access-changed'
+                ? messages[locale].accessChanged
+                : text.unavailable}
+            </span>
             <button className="btn btn-sm btn-ghost" onClick={reload}>
               {text.refresh}
             </button>

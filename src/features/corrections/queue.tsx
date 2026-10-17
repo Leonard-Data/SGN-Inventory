@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import type { Locale } from '@/i18n/messages';
+import { messages, type Locale } from '@/i18n/messages';
 import type { Employee } from '@/features/employees/types';
 import type { PropertyDetail } from '@/features/properties/detail-data';
 import { useProtectedData } from '@/features/employees/use-protected-data';
@@ -308,7 +308,11 @@ export function CorrectionQueue({
         {busy ? <p role="status">{text.loading}</p> : null}
         {error ? (
           <div className="alert" data-tone="danger" role="alert">
-            <span>{text.unavailable}</span>
+            <span>
+              {error === 'access-changed'
+                ? messages[locale].accessChanged
+                : text.unavailable}
+            </span>
             <button className="btn btn-sm btn-ghost" onClick={reload}>
               {text.refresh}
             </button>
