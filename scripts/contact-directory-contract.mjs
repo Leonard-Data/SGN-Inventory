@@ -185,6 +185,14 @@ export async function contactDirectoryContract({ db, asUser, check, fails }) {
         ),
         { [left]: 'owner', [right]: 'broker' },
       );
+      // Every listed link of an unarchived property is marked unarchived, which is the scan
+      // the directory count reads.
+      assert.deepEqual(
+        Object.fromEntries(
+          owners[0].links.map((row) => [row.property_id, row.archived]),
+        ),
+        { [left]: false, [right]: false },
+      );
       // One contact-scoped correction, no parent property, same operation as the property branch.
       const preview = (await db.query(impact, [shared])).rows[0].impact;
       assert.deepEqual(
@@ -323,12 +331,18 @@ export async function contactDirectoryContract({ db, asUser, check, fails }) {
         await revision('properties', hidden),
         { archived_at: new Date().toISOString() },
       ]);
-      // The reviewer sees the linked archived property and may correct through it.
+      // The reviewer sees the linked archived property — labelled archived, so the stated
+      // count (unarchived links only) and the listed codes cannot be misread — and may
+      // correct through it. An ordinary employee sees neither row nor link.
       const reviewer = await listed('SGN71 Archived Owner', true);
       assert.equal(reviewer.length, 1);
       assert.deepEqual(
-        reviewer[0].links.map((row) => [row.property_id, row.relation]),
-        [[hidden, 'owner']],
+        reviewer[0].links.map((row) => [
+          row.property_id,
+          row.relation,
+          row.archived,
+        ]),
+        [[hidden, 'owner', true]],
       );
       await asUser(0);
       // An ordinary employee sees neither the owner membership nor the link, and the

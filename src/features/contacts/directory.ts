@@ -72,7 +72,8 @@ function contactLink(value: unknown): ContactLink {
     !isUuid(row.property_id) ||
     typeof row.property_code !== 'string' ||
     typeof row.relation !== 'string' ||
-    typeof row.is_primary !== 'boolean'
+    typeof row.is_primary !== 'boolean' ||
+    typeof row.archived !== 'boolean'
   )
     throw new ContactDirectoryError('invalid-input');
   return {
@@ -80,6 +81,7 @@ function contactLink(value: unknown): ContactLink {
     propertyCode: row.property_code,
     relation: row.relation,
     isPrimary: row.is_primary,
+    archived: row.archived,
   };
 }
 
@@ -109,9 +111,9 @@ export function contactSummary(row: unknown): ContactSummary {
     rawPhoneText: optionalText(value.raw_phone_text),
     revision: value.revision,
     links,
-    // The count is derived from the projected readable links, never a separate tally that could
-    // drift from the listed property codes.
-    propertyCount: links.length,
+    // The count is pinned to the unarchived links of the same projection, never a separate tally
+    // that could drift from the listed property codes or from the contact-filtered inventory.
+    propertyCount: links.filter((link) => !link.archived).length,
   };
 }
 

@@ -75,8 +75,6 @@ const vi = {
   contactFilter: 'Người liên hệ',
   contactFilterHint:
     'Chỉ gồm người liên hệ bạn được phép đọc. Bộ lọc này kết hợp với các điều kiện khác.',
-  contactFilterUnavailable:
-    'Chưa tải được danh sách người liên hệ. Các bộ lọc khác vẫn dùng được.',
   priceUnitVnd: 'VND',
   priceUnitMonthly: 'VND/tháng',
   priceRangeFrom: 'Giá từ',
@@ -771,8 +769,6 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     contactFilter: 'Contact',
     contactFilterHint:
       'Only contacts you may read. This filter combines with the other conditions.',
-    contactFilterUnavailable:
-      'The contact list could not be loaded. The other filters still work.',
     priceUnitVnd: 'VND',
     priceUnitMonthly: 'VND/month',
     priceRangeFrom: 'Price from',

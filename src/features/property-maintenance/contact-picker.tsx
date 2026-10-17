@@ -1,5 +1,5 @@
 'use client';
-import { useId, useRef, useState, useEffect, type FormEvent } from 'react';
+import { useId, useRef, useState, useEffect } from 'react';
 import { api, RequestError } from '@/features/employees/api';
 import type { Locale } from '@/i18n/messages';
 import { maintenanceText, optionLabel } from './messages';
@@ -49,29 +49,38 @@ export function ContactPicker({
       if (!abort.signal.aborted) setBusy(false);
     }
   }
-  function submit(event: FormEvent) {
-    event.preventDefault();
+  function submit() {
     void search();
   }
   return (
     <div>
-      <form onSubmit={submit}>
-        <div className="field">
-          <label className="field-label" htmlFor={id}>
-            {text.contactSearch}
-          </label>
-          <input
-            id={id}
-            className="input"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            maxLength={120}
-          />
-        </div>
-        <button className="btn btn-sm" disabled={busy}>
-          {busy ? text.loading : text.contactSearch}
-        </button>
-      </form>
+      <div className="field">
+        <label className="field-label" htmlFor={id}>
+          {text.contactSearch}
+        </label>
+        <input
+          id={id}
+          className="input"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => {
+            // The picker is embedded in a surrounding form, so Enter searches these own
+            // results instead of submitting that form.
+            if (event.key !== 'Enter') return;
+            event.preventDefault();
+            submit();
+          }}
+          maxLength={120}
+        />
+      </div>
+      <button
+        type="button"
+        className="btn btn-sm"
+        disabled={busy}
+        onClick={submit}
+      >
+        {busy ? text.loading : text.contactSearch}
+      </button>
       {error ? <p role="alert">{text.unavailable}</p> : null}
       {page ? (
         <ul className="contact-choices">
