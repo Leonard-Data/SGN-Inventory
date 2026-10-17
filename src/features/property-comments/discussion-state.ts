@@ -45,6 +45,26 @@ export function changedCommentIds(
     .map((row) => row.id);
 }
 
+export function droppedCommentIds(
+  current: Comment[],
+  kept: Comment[],
+): string[] {
+  const retained = new Set(kept.map((row) => row.id));
+  return current.filter((row) => !retained.has(row.id)).map((row) => row.id);
+}
+
+export function staleHistoryIds(
+  appended: Comment[],
+  fetchedFor: Record<string, string>,
+): string[] {
+  return appended
+    .filter((row) => {
+      const revision = fetchedFor[row.id];
+      return revision !== undefined && revision !== row.revision;
+    })
+    .map((row) => row.id);
+}
+
 function sameComment(left: Comment, right: Comment): boolean {
   return (
     left.id === right.id &&

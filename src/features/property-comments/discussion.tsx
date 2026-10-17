@@ -14,9 +14,11 @@ import { COMMENT_MAX_LENGTH, COMMENT_REASON_MAX_LENGTH } from './types';
 import { IconAction } from '@/features/icon-action';
 import {
   changedCommentIds,
+  droppedCommentIds,
   mergePage,
   mergeStaleEditState,
   retainEditTarget,
+  staleHistoryIds,
   withPost,
 } from './discussion-state';
 import type {
@@ -92,6 +94,7 @@ export function Discussion({
   const generation = useRef(0);
   const historyRequestTokens = useRef<Record<string, number>>({});
   const historyAbortControllers = useRef<Record<string, AbortController>>({});
+  const historyFetchedFor = useRef<Record<string, string>>({});
   const nextHistoryRequestToken = useRef(0);
   const mounted = useRef(true);
   const abortHistory = useCallback((commentId?: string) => {
@@ -111,11 +114,13 @@ export function Discussion({
     (commentId?: string) => {
       abortHistory(commentId);
       if (commentId === undefined) {
+        historyFetchedFor.current = {};
         setHistory({});
         setHistoryBusy({});
         setHistoryError({});
         return;
       }
+      delete historyFetchedFor.current[commentId];
       setHistory((value) => {
         const next = { ...value };
         delete next[commentId];
@@ -269,6 +274,16 @@ export function Discussion({
     try {
       const page = await fetchPage(next);
       if (version !== generation.current) return;
+      const seenBefore = new Set(comments.map((row) => row.id));
+      const appended = mergePage(comments, page.comments).filter(
+        (row) => !seenBefore.has(row.id),
+      );
+      for (const commentId of staleHistoryIds(
+        appended,
+        historyFetchedFor.current,
+      )) {
+        invalidateHistory(commentId);
+      }
       setComments((rows) => {
         const seen = new Set(rows.map((row) => row.id));
         return [
@@ -345,6 +360,12 @@ export function Discussion({
         if (commentId !== created.id) invalidateHistory(commentId);
       }
       const merged = withPost(created, page.comments, !!page.nextCursor);
+      for (const commentId of droppedCommentIds(
+        comments,
+        retainEditTarget(merged.rows, comments, editTarget.current),
+      )) {
+        invalidateHistory(commentId);
+      }
       setComments((rows) =>
         retainEditTarget(
           withPost(created, mergePage(rows, page.comments), !!page.nextCursor)
@@ -358,6 +379,12 @@ export function Discussion({
     } catch {
       if (version !== generation.current) return;
       const merged = withPost(created, comments, !!next);
+      for (const commentId of droppedCommentIds(
+        comments,
+        retainEditTarget(merged.rows, comments, editTarget.current),
+      )) {
+        invalidateHistory(commentId);
+      }
       setComments((rows) =>
         retainEditTarget(
           withPost(created, rows, !!next).rows,
@@ -529,6 +556,7 @@ export function Discussion({
   const loadHistory = async (commentId: string) => {
     if (historyRequestTokens.current[commentId] !== undefined) return;
     if (history[commentId]) {
+      delete historyFetchedFor.current[commentId];
       setHistory((value) => {
         const next = { ...value };
         delete next[commentId];
@@ -541,6 +569,7 @@ export function Discussion({
       });
       return;
     }
+    const row = comments.find((entry) => entry.id === commentId);
     const requestToken = ++nextHistoryRequestToken.current;
     const abort = new AbortController();
     historyRequestTokens.current[commentId] = requestToken;
@@ -564,6 +593,7 @@ export function Discussion({
       )
         return;
       setHistory((value) => ({ ...value, [commentId]: result }));
+      historyFetchedFor.current[commentId] = row?.revision ?? '';
     } catch (error) {
       if (
         !mounted.current ||
