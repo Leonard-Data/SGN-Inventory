@@ -446,7 +446,6 @@ const vi = {
   vendorLinkedPropertiesEmpty:
     'Nhà cung cấp này chưa được liên kết với bất động sản nào bạn được phép đọc.',
   vendorLinkedPropertiesMore: 'Hiển thị 50 bất động sản đã liên kết đầu tiên.',
-  vendorLinkedPropertiesFailed: 'Không thể tải bất động sản đã liên kết.',
   vendorLinkedAt: 'Liên kết lúc',
   vendorLinkedArchived: 'Đã lưu trữ',
   // People → Contacts (#71): the shared-identity directory, its Owners view and the
@@ -1061,7 +1060,6 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     vendorLinkedPropertiesEmpty:
       'This vendor is not linked to any property you may read.',
     vendorLinkedPropertiesMore: 'Showing the first 50 linked properties.',
-    vendorLinkedPropertiesFailed: 'Linked properties could not be loaded.',
     vendorLinkedAt: 'Linked',
     vendorLinkedArchived: 'Archived',
     // People → Contacts (#71): the shared-identity directory, its Owners view and the
