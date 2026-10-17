@@ -1,8 +1,12 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import type { Locale } from '@/i18n/messages';
 import { detailMessages } from './messages';
+import {
+  fields,
+  validateChanges,
+} from '@/features/property-maintenance/fields';
 import { maintenanceText } from '@/features/property-maintenance/messages';
 import type { MapPoint } from './location-map';
 
@@ -115,9 +119,29 @@ export function LocationEditor({
   }, [values.latitude, values.longitude]);
   const [point, setPoint] = useState<MapPoint | null>(initial);
   const [tilesFailed, setTilesFailed] = useState(false);
+  const [typedLat, setTypedLat] = useState(''),
+    [typedLng, setTypedLng] = useState(''),
+    [typedInvalid, setTypedInvalid] = useState(false);
+  const latId = useId(),
+    lngId = useId();
   const center: [number, number] = point
     ? [point.lat, point.lng]
     : DEFAULT_CENTER;
+  function applyTyped() {
+    try {
+      const changes = validateChanges('property', {
+        latitude: typedLat.trim(),
+        longitude: typedLng.trim(),
+      });
+      setPoint({
+        lat: Number(changes.latitude),
+        lng: Number(changes.longitude),
+      });
+      setTypedInvalid(false);
+    } catch {
+      setTypedInvalid(true);
+    }
+  }
 
   return (
     <div className="field">
@@ -133,31 +157,22 @@ export function LocationEditor({
         name="longitude"
         value={point ? coordinateText(point.lng) : ''}
       />
+      <div
+        className="sgn-map-frame"
+        role="group"
+        aria-label={mt.locationMapLabel}
+      >
+        <LocationMap
+          center={center}
+          marker={point ? [point.lat, point.lng] : null}
+          zoom={point ? 16 : 11}
+          onPick={(picked) => setPoint(picked)}
+          onTileError={() => setTilesFailed(true)}
+        />
+      </div>
       {tilesFailed ? (
-        <p className="field-hint">{mt.mapUnavailable}</p>
-      ) : (
-        <div
-          className="sgn-map-frame"
-          role="img"
-          aria-label={
-            point
-              ? mt.locationRecorded +
-                ': ' +
-                coordinateLabel(point.lat) +
-                ', ' +
-                coordinateLabel(point.lng)
-              : mt.locationNoPoint
-          }
-        >
-          <LocationMap
-            center={center}
-            marker={point ? [point.lat, point.lng] : null}
-            zoom={point ? 16 : 11}
-            onPick={(picked) => setPoint(picked)}
-            onTileError={() => setTilesFailed(true)}
-          />
-        </div>
-      )}
+        <p className="field-hint">{mt.locationTilesFailed}</p>
+      ) : null}
       {point ? (
         <div className="sgn-map-actions">
           <span className="sgn-map-caption">
@@ -175,6 +190,52 @@ export function LocationEditor({
       ) : (
         <p className="sgn-map-caption">{mt.locationNoPoint}</p>
       )}
+      <div className="field">
+        <span className="field-label">{mt.locationTyped}</span>
+        <p className="field-hint">{mt.locationTypedHint}</p>
+        <div className="sgn-map-actions">
+          <div className="field">
+            <label className="field-label" htmlFor={latId}>
+              {fields.latitude![locale]}
+            </label>
+            <input
+              id={latId}
+              className="input"
+              type="number"
+              inputMode="decimal"
+              min={-90}
+              max={90}
+              step="any"
+              value={typedLat}
+              onChange={(event) => setTypedLat(event.target.value)}
+            />
+          </div>
+          <div className="field">
+            <label className="field-label" htmlFor={lngId}>
+              {fields.longitude![locale]}
+            </label>
+            <input
+              id={lngId}
+              className="input"
+              type="number"
+              inputMode="decimal"
+              min={-180}
+              max={180}
+              step="any"
+              value={typedLng}
+              onChange={(event) => setTypedLng(event.target.value)}
+            />
+          </div>
+          <button type="button" className="btn btn-sm" onClick={applyTyped}>
+            {mt.locationApply}
+          </button>
+        </div>
+        {typedInvalid ? (
+          <p role="alert" className="field-error">
+            {mt.locationInvalid}
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }

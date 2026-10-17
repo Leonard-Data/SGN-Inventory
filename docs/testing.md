@@ -323,6 +323,22 @@ Prepare distinct active sales/staff/manager/admin identities, an inactive and an
 
 Add embedded database regressions only for consumer-visible invariants and run `npm run test:schema` when implementing the schema/workflow changes. Browser, real Data API/Storage boundaries and separate-session contention remain distinct staging proof. Record sanitized observations without tokens, private source payloads or customer records; no scenario above has been executed by this documentation change.
 
+## Property map location acceptance
+
+Scope: the property detail and edit location surfaces. Tiles are OpenStreetMap raster tiles only (`https://tile.openstreetmap.org`), loaded client-side with no API key, no second tile stack and no geocoding service; addresses are never resolved from or written to a map service. OpenStreetMap's tile usage policy allows rate limiting, so a shared office IP or an offline/blocked tile host can produce `tileerror` events mid-session.
+
+| Scenario | Required observation |
+| --- | --- |
+| Recorded point on the detail page | The map shows the recorded point with an "open in map" OpenStreetMap link; the read-only map is announced as an image whose text alternative states the recorded latitude and longitude |
+| No recorded point | The detail page states that no location is recorded and renders no map |
+| Place, move and clear a point in the editor | Clicking the map places/moves the marker, a typed latitude and longitude can be applied instead of clicking, clearing removes both coordinates, and the save writes both or neither through the maintenance RPC; range and precision are rejected exactly as the save path rejects them |
+| Tiles fail to load in the editor | The map stays mounted and the capture surface stays usable: the localized notice says the background could not load, and both clicking the blank map and typing coordinates still set the point; no page reload is needed |
+| Tiles fail to load on the detail page | The localized notice says the background could not load and the open-in-map link remains the usable path |
+| Keyboard and screen reader | The interactive map is a labelled group that says what it is for, never a static image; the typed latitude/longitude inputs and their apply action are reachable and operable by keyboard alone, with localized VI/EN labels, hint and invalid-coordinate message |
+| VI/EN switching | Labels, hints, the tile-failure notice and the no-location state are equivalent in both languages and no coordinate value is rewritten |
+
+Embedded coverage applies to the shared save-path validation (`npm run test:unit` and `npm run test:schema`); the tile-failure behaviour, the real Leaflet rendering and the keyboard journey require the browser gate above and are not claimed by those tests.
+
 ## Shared-contact detail-edit acceptance (ticket #70)
 
 Scope: the confirmed requirement that any Active employee may edit owner and property contact details, with the correction applied to the shared person (property history no longer records contact changes), plus the [implemented contract](maintenance-contract.md#shared-identities-and-local-links). Use the authorized isolated development/staging target with real Supabase Auth, Data API/RLS and the actual VI/EN browser interface; two independent sessions are required for the race and stale-context rows. Embedded `scripts/maintenance-contract.mjs` assertions are the deterministic supplement, not this acceptance.
