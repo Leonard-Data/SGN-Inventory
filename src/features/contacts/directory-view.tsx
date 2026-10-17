@@ -593,7 +593,7 @@ export function ContactDirectory({
                                         onSaved={saved}
                                         onDenied={denied}
                                       >
-                                        <p>{copy.wrongPerson}</p>
+                                        <p>{text.contactSharedIdentityNote}</p>
                                         <label className="check">
                                           <input type="checkbox" required />
                                           {copy.confirmImpact}

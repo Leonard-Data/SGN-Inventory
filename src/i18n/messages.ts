@@ -456,6 +456,8 @@ const vi = {
   contactClassifiedAs: 'Phân loại chung',
   contactRawPhoneText: 'Văn bản điện thoại gốc',
   contactEditorTitle: 'Đính chính người liên hệ dùng chung',
+  contactSharedIdentityNote:
+    'Đây là người liên hệ dùng chung: đính chính sẽ áp dụng cho mọi bất động sản đang gắn với người này.',
   saving: 'Đang lưu…',
   notes: 'Ghi chú',
   languageName: 'Ngôn ngữ / Language',
@@ -1039,6 +1041,8 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     contactClassifiedAs: 'General classification',
     contactRawPhoneText: 'Original phone text',
     contactEditorTitle: 'Correct the shared contact',
+    contactSharedIdentityNote:
+      'This is the shared contact: a correction applies to every property linked to it.',
     saving: 'Saving…',
     notes: 'Notes',
     signInHelp:
