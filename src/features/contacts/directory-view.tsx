@@ -271,7 +271,11 @@ export function ContactDirectory({
       {notice ? <p role="status">{copy.saved}</p> : null}
 
       {error ? (
-        <div className="alert" data-tone="danger" role="alert">
+        <div
+          className="alert"
+          data-tone={error === 'invalid-input' ? 'neutral' : 'danger'}
+          role="alert"
+        >
           <svg
             viewBox="0 0 24 24"
             fill="none"
@@ -473,7 +477,11 @@ export function ContactDirectory({
                                   {detailError ? (
                                     <div
                                       className="alert"
-                                      data-tone="danger"
+                                      data-tone={
+                                        detailError === 'contact-refusal'
+                                          ? 'neutral'
+                                          : 'danger'
+                                      }
                                       role="alert"
                                     >
                                       <span>
