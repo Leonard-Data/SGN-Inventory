@@ -410,7 +410,7 @@ const vi = {
   employeeInviteSubmit: 'Gửi lời mời',
   employeeInviteTarget: 'Người được mời',
   employeeInviteState: 'Trạng thái lời mời',
-  employeeInvitePendingLabel: 'Đang chờ nhà cung cấp xác nhận',
+  employeeInvitePendingLabel: 'Chưa có xác nhận từ nhà cung cấp',
   employeeInviteReconciliationLabel: 'Cần đối soát lời mời',
   employeeInviteRecordedLabel: 'Đã ghi nhận lời mời',
   employeeInviteDeliveryNote:
@@ -1083,7 +1083,7 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     employeeInviteSubmit: 'Send invitation',
     employeeInviteTarget: 'Invited person',
     employeeInviteState: 'Invitation state',
-    employeeInvitePendingLabel: 'Waiting for provider confirmation',
+    employeeInvitePendingLabel: 'No provider confirmation yet',
     employeeInviteReconciliationLabel: 'Invitation reconciliation required',
     employeeInviteRecordedLabel: 'Invitation recorded',
     employeeInviteDeliveryNote:

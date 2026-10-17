@@ -156,6 +156,7 @@ async function createFixtures() {
     ['adminB', 'admin'],
     ['sales', 'sales'],
     ['manager', 'manager'],
+    ['staff', 'staff'],
     ['inactive', 'sales'],
     ['unlinked', 'sales'],
   ]) {
@@ -585,7 +586,7 @@ try {
   );
 
   // --- Authority ---------------------------------------------------------------------------
-  for (const name of ['sales', 'manager', 'inactive', 'unlinked']) {
+  for (const name of ['sales', 'staff', 'manager', 'inactive', 'unlinked']) {
     const identity = manifest.identities[name];
     const deniedAddress = `${namespace.toLowerCase()}.${runToken}.denied@example.test`;
     const attempt = await begin(
