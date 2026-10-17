@@ -40,7 +40,7 @@ src/
     login/, access-denied/     # Localized sign-in and explicit membership denial
     recover/, reset-password/  # Real delivered recovery, including denied identities
     properties/                # Protected browse and read-only details
-    auth/                      # PKCE/token-hash recovery callbacks
+    auth/                      # PKCE/token-hash callbacks and the fixed invitation destination
     api/                       # Validated auth/session/inventory/locale + health
     globals.css                # Shared responsive presentation
     sgn-auth.css               # Canonical authentication tokens + components (#50)
