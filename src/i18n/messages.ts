@@ -179,6 +179,13 @@ const vi = {
   myActivityEmpty:
     'Không có hoạt động nào được ghi nhận trong khoảng đã chọn. Mỗi ngày vẫn hiển thị với giá trị 0.',
   discussion: 'Thảo luận bất động sản',
+  commentHistory: 'Lịch sử bình luận',
+  commentHistoryEmpty: 'Chưa có dữ liệu lịch sử.',
+  commentHistoryMore:
+    'Cửa sổ này giữ 64 sự kiện cũ nhất; các sự kiện mới hơn chưa hiển thị.',
+  commentHistoryFailed: 'Chưa tải được lịch sử bình luận. Vui lòng thử lại.',
+  viewHistory: 'Xem lịch sử',
+  hideHistory: 'Ẩn lịch sử',
   addComment: 'Bình luận',
   commentHint: 'Viết bình luận chung cho bất động sản này. Tối đa 2.000 ký tự.',
   postComment: 'Gửi bình luận',
@@ -213,6 +220,8 @@ const vi = {
   removing: 'Đang gỡ…',
   cancel: 'Huỷ',
   commentRemoved: 'Bình luận đã được gỡ.',
+  commentAuthorWithdrawal: 'Tác giả đã tự gỡ bình luận.',
+  commentModeratedRemoval: 'Đã gỡ do kiểm duyệt.',
   removalReason: 'Lý do kiểm duyệt',
   removalReasonHint:
     'Bắt buộc. Lý do được lưu lại cho quản lý và quản trị viên.',
@@ -725,6 +734,13 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     myActivityEmpty:
       'No activity was recorded in the selected period. Every day still appears with zero values.',
     discussion: 'Property discussion',
+    commentHistory: 'Comment history',
+    commentHistoryEmpty: 'No retained history is available.',
+    commentHistoryMore:
+      'This window keeps the 64 oldest events; newer events are not shown here.',
+    commentHistoryFailed: 'Comment history could not be loaded. Try again.',
+    viewHistory: 'View history',
+    hideHistory: 'Hide history',
     addComment: 'Comment',
     commentHint:
       'Write a shared comment about this property. Up to 2,000 characters.',
@@ -760,6 +776,8 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     removing: 'Removing…',
     cancel: 'Cancel',
     commentRemoved: 'Comment removed.',
+    commentAuthorWithdrawal: 'Author withdrew the comment.',
+    commentModeratedRemoval: 'Removed by moderation.',
     removalReason: 'Moderation reason',
     removalReasonHint:
       'Required. The reason is retained for managers and admins.',

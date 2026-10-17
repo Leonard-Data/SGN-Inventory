@@ -13,9 +13,12 @@ import { vietnamTimestamp } from '@/features/properties/format';
 import { COMMENT_MAX_LENGTH, COMMENT_REASON_MAX_LENGTH } from './types';
 import { IconAction } from '@/features/icon-action';
 import {
+  changedCommentIds,
+  droppedCommentIds,
   mergePage,
   mergeStaleEditState,
   retainEditTarget,
+  staleHistoryIds,
   withPost,
 } from './discussion-state';
 import type {
@@ -23,6 +26,7 @@ import type {
   CommentCursor,
   CommentPage,
   CommentRemovalKind,
+  CommentHistoryPage,
 } from './types';
 
 type EditSession = {
@@ -55,6 +59,11 @@ export function Discussion({
     reasonId = useId(),
     reasonHintId = useId();
   const [comments, setComments] = useState<Comment[]>([]);
+  const [history, setHistory] = useState<Record<string, CommentHistoryPage>>(
+    {},
+  );
+  const [historyBusy, setHistoryBusy] = useState<Record<string, true>>({});
+  const [historyError, setHistoryError] = useState<Record<string, true>>({});
   const [next, setNext] = useState<CommentCursor | null>(null);
   const [busy, setBusy] = useState(true);
   const [more, setMore] = useState(false);
@@ -83,6 +92,50 @@ export function Discussion({
   const [editNotice, setEditNotice] = useState<string | null>(null);
   const inFlight = useRef<AbortController | null>(null);
   const generation = useRef(0);
+  const historyRequestTokens = useRef<Record<string, number>>({});
+  const historyAbortControllers = useRef<Record<string, AbortController>>({});
+  const nextHistoryRequestToken = useRef(0);
+  const mounted = useRef(true);
+  const abortHistory = useCallback((commentId?: string) => {
+    if (commentId !== undefined) {
+      historyAbortControllers.current[commentId]?.abort();
+      delete historyAbortControllers.current[commentId];
+      delete historyRequestTokens.current[commentId];
+      return;
+    }
+    Object.values(historyAbortControllers.current).forEach((controller) =>
+      controller.abort(),
+    );
+    historyRequestTokens.current = {};
+    historyAbortControllers.current = {};
+  }, []);
+  const invalidateHistory = useCallback(
+    (commentId?: string) => {
+      abortHistory(commentId);
+      if (commentId === undefined) {
+        setHistory({});
+        setHistoryBusy({});
+        setHistoryError({});
+        return;
+      }
+      setHistory((value) => {
+        const next = { ...value };
+        delete next[commentId];
+        return next;
+      });
+      setHistoryBusy((value) => {
+        const next = { ...value };
+        delete next[commentId];
+        return next;
+      });
+      setHistoryError((value) => {
+        const next = { ...value };
+        delete next[commentId];
+        return next;
+      });
+    },
+    [abortHistory],
+  );
   const editTarget = useRef<string | null>(null);
   // The open editor's identity; a save response only closes the editor it was sent from.
   const editSession = useRef<EditSession | null>(null);
@@ -130,6 +183,7 @@ export function Discussion({
   );
   // Every state update happens after an await, so mounting or refreshing never cascades a render.
   const load = useCallback(async () => {
+    invalidateHistory();
     const version = ++generation.current;
     const target = editTarget.current;
     try {
@@ -186,15 +240,28 @@ export function Discussion({
       // Released unconditionally: a superseding request owns the list, not the spinner.
       setBusy(false);
     }
-  }, [failure, fetchComment, fetchPage]);
+  }, [failure, fetchComment, fetchPage, invalidateHistory]);
   const stop = useCallback(() => {
     generation.current++;
     inFlight.current?.abort();
+    abortHistory();
+  }, [abortHistory]);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
   }, []);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- whole-surface reload clears retained history before its fetch settles
     void load();
     return stop;
   }, [load, stop]);
+  useEffect(() => {
+    if (reviewer) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- demotion clears rendered history before it can show again
+    invalidateHistory();
+  }, [invalidateHistory, reviewer]);
   function refresh() {
     setBusy(true);
     void load();
@@ -207,6 +274,13 @@ export function Discussion({
     try {
       const page = await fetchPage(next);
       if (version !== generation.current) return;
+      const seenBefore = new Set(comments.map((row) => row.id));
+      const appended = mergePage(comments, page.comments).filter(
+        (row) => !seenBefore.has(row.id),
+      );
+      for (const commentId of staleHistoryIds(appended, history)) {
+        invalidateHistory(commentId);
+      }
       setComments((rows) => {
         const seen = new Set(rows.map((row) => row.id));
         return [
@@ -270,6 +344,7 @@ export function Discussion({
       return;
     }
     // Committed state is authoritative: only now is the draft spent and its key retired.
+    invalidateHistory(created.id);
     submissionKey.current = '';
     setDraft('');
     setNotice(text.commentPosted);
@@ -278,7 +353,16 @@ export function Discussion({
     try {
       const page = await fetchPage(null);
       if (version !== generation.current) return;
+      for (const commentId of changedCommentIds(comments, page.comments)) {
+        if (commentId !== created.id) invalidateHistory(commentId);
+      }
       const merged = withPost(created, page.comments, !!page.nextCursor);
+      for (const commentId of droppedCommentIds(
+        comments,
+        retainEditTarget(merged.rows, comments, editTarget.current),
+      )) {
+        invalidateHistory(commentId);
+      }
       setComments((rows) =>
         retainEditTarget(
           withPost(created, mergePage(rows, page.comments), !!page.nextCursor)
@@ -292,6 +376,12 @@ export function Discussion({
     } catch {
       if (version !== generation.current) return;
       const merged = withPost(created, comments, !!next);
+      for (const commentId of droppedCommentIds(
+        comments,
+        retainEditTarget(merged.rows, comments, editTarget.current),
+      )) {
+        invalidateHistory(commentId);
+      }
       setComments((rows) =>
         retainEditTarget(
           withPost(created, rows, !!next).rows,
@@ -383,6 +473,7 @@ export function Discussion({
     setComments((rows) =>
       rows.map((entry) => (entry.id === updated.id ? updated : entry)),
     );
+    invalidateHistory(updated.id);
     // A replayed key can converge on an already-withdrawn comment, so the response is not a save.
     if (updated.removedAt !== null) {
       setBusy(true);
@@ -436,6 +527,7 @@ export function Discussion({
     setComments((rows) =>
       rows.map((entry) => (entry.id === removed.id ? removed : entry)),
     );
+    invalidateHistory(removed.id);
     setReason('');
     setReasonFor(null);
     setRemoveNotice(text.commentRemoved);
@@ -458,6 +550,69 @@ export function Discussion({
     return text.editFailed;
   };
   const loadingMore = busy || more;
+  const loadHistory = async (commentId: string) => {
+    if (historyRequestTokens.current[commentId] !== undefined) return;
+    if (history[commentId]) {
+      setHistory((value) => {
+        const next = { ...value };
+        delete next[commentId];
+        return next;
+      });
+      setHistoryError((value) => {
+        const next = { ...value };
+        delete next[commentId];
+        return next;
+      });
+      return;
+    }
+    const requestToken = ++nextHistoryRequestToken.current;
+    const abort = new AbortController();
+    historyRequestTokens.current[commentId] = requestToken;
+    historyAbortControllers.current[commentId] = abort;
+    setHistoryBusy((value) => ({ ...value, [commentId]: true }));
+    setHistoryError((value) => {
+      const next = { ...value };
+      delete next[commentId];
+      return next;
+    });
+    try {
+      const result = await api<CommentHistoryPage>(
+        `/api/properties/${propertyId}/comments/${commentId}/history`,
+        undefined,
+        abort.signal,
+      );
+      if (
+        !mounted.current ||
+        !reviewer ||
+        historyRequestTokens.current[commentId] !== requestToken
+      )
+        return;
+      setHistory((value) => ({ ...value, [commentId]: result }));
+    } catch (error) {
+      if (
+        !mounted.current ||
+        historyRequestTokens.current[commentId] !== requestToken
+      )
+        return;
+      if (
+        error instanceof RequestError &&
+        (error.status === 401 || error.status === 403)
+      ) {
+        onDenied(error.status);
+        return;
+      }
+      setHistoryError((value) => ({ ...value, [commentId]: true }));
+    } finally {
+      if (historyRequestTokens.current[commentId] !== requestToken) return;
+      delete historyRequestTokens.current[commentId];
+      delete historyAbortControllers.current[commentId];
+      setHistoryBusy((value) => {
+        const next = { ...value };
+        delete next[commentId];
+        return next;
+      });
+    }
+  };
   return (
     <section className="panel discussion" aria-labelledby={headingId}>
       <div className="panel-head">
@@ -507,7 +662,7 @@ export function Discussion({
             const canEdit = canWithdraw && !removed;
             return (
               <li key={row.id}>
-                <article className="comment">
+                <article className="comment" data-comment-id={row.id}>
                   <span className="sgn-avatar" aria-hidden="true">
                     {initials}
                   </span>
@@ -626,6 +781,103 @@ export function Discussion({
                         {row.body}
                       </p>
                     )}
+                    {reviewer ? (
+                      <div className="comment-actions">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          onClick={() => void loadHistory(row.id)}
+                          disabled={historyBusy[row.id] === true}
+                        >
+                          {history[row.id]
+                            ? text.hideHistory
+                            : historyBusy[row.id]
+                              ? text.loading
+                              : text.viewHistory}
+                        </button>
+                      </div>
+                    ) : null}
+                    {reviewer && history[row.id] ? (
+                      <>
+                        {history[row.id]!.events.length ? (
+                          <ol
+                            className="comment-history"
+                            aria-label={text.commentHistory}
+                          >
+                            {history[row.id]!.events.map((event, index) => (
+                              <li
+                                key={`${event.kind}-${event.version ?? index}`}
+                                data-history-kind={event.kind}
+                                data-history-version={event.version ?? ''}
+                              >
+                                <p>
+                                  <strong>
+                                    {event.kind === 'posting'
+                                      ? text.commentPosted
+                                      : event.kind === 'edit'
+                                        ? text.commentEditedMarker
+                                        : event.removalKind === 'author'
+                                          ? text.commentAuthorWithdrawal
+                                          : text.commentModeratedRemoval}
+                                  </strong>{' '}
+                                  —{' '}
+                                  <span
+                                    className="comment-history-body"
+                                    translate="no"
+                                  >
+                                    {event.body}
+                                  </span>
+                                </p>
+                                <p className="comment-meta" translate="no">
+                                  <span className="comment-history-actor">
+                                    {event.actorName}
+                                  </span>{' '}
+                                  ·{' '}
+                                  <time
+                                    className="comment-history-time"
+                                    dateTime={event.occurredAt}
+                                  >
+                                    {vietnamTimestamp(event.occurredAt, locale)}
+                                  </time>{' '}
+                                  ({text.vietnamTime})
+                                </p>
+                                {event.removalKind === 'moderation' &&
+                                event.reason ? (
+                                  <p className="field-hint comment-history-reason">
+                                    {text.removalReason}:{' '}
+                                    <span translate="no">{event.reason}</span>
+                                  </p>
+                                ) : null}
+                              </li>
+                            ))}
+                          </ol>
+                        ) : (
+                          <p className="field-hint">
+                            {text.commentHistoryEmpty}
+                          </p>
+                        )}
+                        {history[row.id]!.hasMore ? (
+                          <p className="field-hint comment-history-more">
+                            {text.commentHistoryMore}
+                          </p>
+                        ) : null}
+                      </>
+                    ) : null}
+                    {reviewer && historyError[row.id] ? (
+                      <p
+                        role="alert"
+                        className="field-error comment-history-error"
+                      >
+                        {text.commentHistoryFailed}{' '}
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          onClick={() => void loadHistory(row.id)}
+                        >
+                          {text.retry}
+                        </button>
+                      </p>
+                    ) : null}
                     {!removed && !editingHere && (canWithdraw || reviewer) ? (
                       <div className="comment-actions">
                         {canEdit ? (

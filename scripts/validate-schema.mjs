@@ -31,11 +31,19 @@ await applyEmbeddedSchema({root,exec:(sql)=>db.exec(sql)});
 // Supabase defaults may grant privileges on future objects. Test our explicit revokes.
 const users = ['00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000003','00000000-0000-4000-8000-000000000004','00000000-0000-4000-8000-000000000005','00000000-0000-4000-8000-000000000006'];
 const employees = ['10000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000002','10000000-0000-4000-8000-000000000003','10000000-0000-4000-8000-000000000004','10000000-0000-4000-8000-000000000005','10000000-0000-4000-8000-000000000006'];
+const unlinkedUser = '00000000-0000-4000-8000-000000000007';
+const unlinkedEmployee = '10000000-0000-4000-8000-000000000007';
 for(let i=0;i<users.length;i++) {
   await db.query('insert into auth.users values ($1)',[users[i]]);
   await db.query('insert into public.employees(id,auth_user_id,email,display_name,role,is_active) values ($1,$2,$3,$4,$5,$6)',
     [employees[i],users[i],`fixture${i}@example.test`,`Fixture ${i}`,['sales','sales','manager','admin','sales','staff'][i],i!==4]);
 }
+await db.query('insert into auth.users values ($1)', [unlinkedUser]);
+// employees_check requires an unlinked employee row (auth_user_id null) to be inactive.
+await db.query(
+  "insert into public.employees(id,auth_user_id,email,display_name,role,is_active) values ($1,null,'unlinked@example.test','Unlinked fixture','sales',false)",
+  [unlinkedEmployee],
+);
 const property = '20000000-0000-4000-8000-000000000001';
 const other = '20000000-0000-4000-8000-000000000002';
 await db.query("insert into public.properties(id,property_code,listing_mode,status,created_by) values ($1,'SGN-001','sale','available',$2),($3,'SGN-002','sale','available',$4)",[property,employees[0],other,employees[1]]);
@@ -45,7 +53,7 @@ await db.query("insert into public.admin_unit_versions(id,official_code,name_vi,
 await db.query("insert into public.admin_unit_versions(id,official_code,name_vi,unit_level,parent_id,valid_from,source_url) values($1,'TEST-C','Fixture Commune','commune',$2,'2025-07-01','https://example.test/catalog')",[commune,provinceA]);
 let passed = 0;
 async function check(name,fn){ await fn(); passed++; console.log('PASS',name); }
-async function asUser(index){await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[index===null?'':users[index]]);await db.exec(`set role ${index===null?'anon':'authenticated'}`);}
+async function asUser(index){await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[index==='unlinked'?unlinkedUser:index===null?'':users[index]]);await db.exec(`set role ${index===null?'anon':'authenticated'}`);}
 async function fails(sql,params=[],code){let error;try{await db.query(sql,params);}catch(e){error=e;}assert.ok(error,'expected query to be rejected');if(code)assert.equal(error.code,code);}
 await check('all app tables have RLS',async()=>{
  const r=await db.query("select relname from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('public','private') and c.relkind='r' and not c.relrowsecurity");assert.equal(r.rows.length,0);
@@ -66,7 +74,7 @@ await check('salesperson cannot mark property sold',()=>fails("update public.pro
 await check('salesperson cannot grant admin role',async()=>assert.equal((await db.query("update public.employees set role='admin' where id=$1 returning id",[employees[0]])).rows.length,0));
 // The admin employee list is an application-level surface; the employee rows stay readable to
 // every active employee because reservation, comment and history attribution read them.
-await check('active employee keeps the directory read used for business attribution',async()=>assert.equal((await db.query('select id from public.employees')).rows.length,employees.length));
+await check('active employee keeps the directory read used for business attribution',async()=>assert.equal((await db.query('select id from public.employees')).rows.length,employees.length + 1));
 await check('salesperson cannot read import or audit tables',()=>fails('select * from private.audit_events',[],'42501'));
 const lock=(await db.query('select public.request_property_lock($1,$2) as id',[property,'Customer reached agreement; manager review needed'])).rows[0].id;
 await check('pending request does not reserve property',async()=>assert.equal((await db.query('select * from public.v_effective_property_locks')).rows.length,0));

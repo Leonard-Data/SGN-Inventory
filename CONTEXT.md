@@ -254,6 +254,10 @@ _Avoid_: Draft identity, temporary ID
 An employee-scoped key identifying one author edit operation. Retrying the same comment, opening revision and validated replacement text recovers that accepted operation without adding another retained version; another use is rejected.
 _Avoid_: Comment revision, submission key
 
+**Reviewer-only comment history**:
+A manager/admin-only chronological view of a comment's original post, retained edits and one removal event, including each retained actor and Vietnam time. Author withdrawal has no moderation reason; moderated removal retains its reason. The read keeps the 64 oldest events and reports newer events as omitted; ordinary, inactive, unlinked and anonymous callers cannot read it.
+_Avoid_: Discussion feed, audit log, retention deletion
+
 
 ### Property files
 
