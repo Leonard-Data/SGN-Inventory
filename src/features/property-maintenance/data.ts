@@ -145,9 +145,9 @@ export async function maintainProperty(
 export async function contactDetail(context: RouteContext, id: string) {
   if (!uuid(id)) throw new ApiError(400, 'invalid-input');
   // The guarded impact RPC denies incomplete affected-property disclosure before the
-  // response is built; the two reads it describes are independent, so they go out with it
-  // in one round trip rather than a waterfall.
-  const [impact, contact, links] = await Promise.all([
+  // response is built; the identity read is independent, so it goes out with it in one
+  // round trip rather than a waterfall.
+  const [impact, contact] = await Promise.all([
     context.client.rpc('contact_impact', { p_contact_id: id }),
     context.client
       .from('contacts')
@@ -156,35 +156,16 @@ export async function contactDetail(context: RouteContext, id: string) {
       )
       .eq('id', id)
       .maybeSingle(),
-    // The relationship is property-scoped: the same identity may be an owner on one
-    // property and a broker on another. The links read shares the impact read boundary, so
-    // the two always describe the same affected set.
-    context.client
-      .from('property_contacts')
-      .select('property_id,relation,is_primary')
-      .eq('contact_id', id),
   ]);
   databaseError(impact.error);
   databaseError(contact.error);
-  databaseError(links.error);
   if (!contact.data) throw new ApiError(404, 'not-found');
-  const byProperty = new Map(
-    (links.data ?? []).map((row) => [row.property_id, row]),
-  );
   return {
     contact: contact.data,
     impact: impact.data as {
       revision: string;
       properties: { id: string; property_code: string }[];
     },
-    links: (
-      impact.data as { properties: { id: string; property_code: string }[] }
-    ).properties.map((property) => ({
-      propertyId: property.id,
-      propertyCode: property.property_code,
-      relation: byProperty.get(property.id)?.relation ?? 'unknown',
-      isPrimary: byProperty.get(property.id)?.is_primary ?? false,
-    })),
   };
 }
 export async function createContact(

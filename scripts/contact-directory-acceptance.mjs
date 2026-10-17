@@ -1128,6 +1128,21 @@ try {
     unlinkedPerson,
     'the identity is listed while its correction stays narrowed',
   );
+  const unlinkedPreview = await appGet(
+    staffCookies,
+    '/api/contacts/' + unlinkedPerson,
+  );
+  assert.equal(unlinkedPreview.status, 200, 'unlinked identity detail read');
+  const unlinkedSave = await appPost(
+    staffCookies,
+    '/api/contacts/' + unlinkedPerson,
+    {
+      revision: unlinkedPreview.body.impact.revision,
+      changes: { notes: 'directory save on an unlinked identity' },
+    },
+  );
+  assert.equal(unlinkedSave.status, 403, 'unlinked identity save withheld');
+  assert.equal(unlinkedSave.body.error, 'contact-refusal');
   const allPages = await readDirectoryPages(salesCookies, 'SGN71');
   assert.equal(allPages.pages > 1, true, 'the directory paged');
   const ownersPage = await appGet(
@@ -1172,7 +1187,6 @@ try {
   const detailRead = await appGet(salesCookies, '/api/contacts/' + shared);
   assert.equal(detailRead.status, 200, 'contact detail read');
   assert.equal(detailRead.body.contact.id, shared);
-  assert.equal(detailRead.body.links.length, 2, 'both relationships disclosed');
   const endpointSave = await appPost(salesCookies, '/api/contacts/' + shared, {
     revision: detailRead.body.impact.revision,
     changes: { raw_phone_text: '0900 000 003 (Zalo)' },

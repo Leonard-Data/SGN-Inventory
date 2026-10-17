@@ -417,20 +417,22 @@ export function ContactDirectory({
                               className="cell-actions"
                               data-label={text.contactColumnActions}
                             >
-                              <button
-                                type="button"
-                                className="btn btn-secondary btn-sm"
-                                aria-expanded={openId === record.id}
-                                onClick={() =>
-                                  openId === record.id
-                                    ? close()
-                                    : void open(record)
-                                }
-                              >
-                                {openId === record.id
-                                  ? text.contactClose
-                                  : text.contactOpen}
-                              </button>
+                              {record.links.length ? (
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-sm"
+                                  aria-expanded={openId === record.id}
+                                  onClick={() =>
+                                    openId === record.id
+                                      ? close()
+                                      : void open(record)
+                                  }
+                                >
+                                  {openId === record.id
+                                    ? text.contactClose
+                                    : text.contactOpen}
+                                </button>
+                              ) : null}
                             </td>
                           </tr>
                           {openId === record.id ? (

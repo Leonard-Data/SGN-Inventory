@@ -51,8 +51,9 @@ export async function listContacts(
 // the property maintenance branch delegates to: the same allowlist, revision check,
 // affected-set boundary and archived-property refusal. A recorded shared-contact correction
 // appends no property history row (issue #109 narrowed `property_history` to asking prices)
-// and still raises the pending review flag on every linked property. No parent property is
-// supplied or invented, so an unlinked identity is corrected on its own terms.
+// and still raises the pending review flag on every linked property. Unlinked-identity
+// correction from the directory is withheld until C2 (#72), so the save requires at least
+// one readable property link.
 export async function maintainContact(
   context: RouteContext,
   id: string,
@@ -61,6 +62,13 @@ export async function maintainContact(
   exactKeys(body, ['revision', 'changes']);
   if (!uuid(id) || !uuid(body.revision))
     throw new ApiError(400, 'invalid-input');
+  const impact = await context.client.rpc('contact_impact', {
+    p_contact_id: id,
+  });
+  databaseError(impact.error);
+  const affected = (impact.data as { properties: { id: string }[] } | null)
+    ?.properties;
+  if (!affected?.length) throw new ApiError(403, 'contact-refusal');
   const { data, error } = await context.client.rpc('maintain_contact', {
     p_contact_id: id,
     p_expected_revision: body.revision,
