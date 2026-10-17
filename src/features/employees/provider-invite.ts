@@ -1,11 +1,21 @@
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/database';
+import { providerDetail } from './deactivation';
 import {
   invitationDestination,
+  isUuid,
+  normalizeEmail,
   providerInviteResult,
   type InvitationSender,
+  type ProviderIdentity,
 } from './invitation';
+
+// The Admin API lists identities page by page instead of looking one address up, so the refused
+// retry reads a bounded number of pages. The page size is the provider's own documented default,
+// so no response can be capped below it, and only a page that returned nothing can mean `absent`.
+const IDENTITY_PAGE_SIZE = 50;
+const IDENTITY_PAGE_LIMIT = 20;
 
 // Issue #68: the server-only invitation boundary. The Auth admin call needs a secret/
 // service-role key; it is read from server configuration only, never exposed through a
@@ -34,6 +44,43 @@ export function supabaseInvitationSender(
         },
         request.email,
       );
+    },
+    // Issue #68 follow-up: the address the provider just refused may already hold an identity,
+    // because an accepted invitation whose recording was lost had already created it. The
+    // identity is matched on exactly the recorded normalized address, and only an exhausted
+    // list may answer `absent`.
+    async identity(email): Promise<ProviderIdentity> {
+      try {
+        for (let page = 1; page <= IDENTITY_PAGE_LIMIT; page += 1) {
+          const { data, error } = await admin.auth.admin.listUsers({
+            page,
+            perPage: IDENTITY_PAGE_SIZE,
+          });
+          if (error)
+            return {
+              outcome: 'unknown',
+              detail: providerDetail(new Error(error.message)),
+            };
+          const users = data?.users ?? [];
+          const match = users.find(
+            (user) => normalizeEmail(user.email) === email,
+          );
+          if (match)
+            return isUuid(match.id)
+              ? { outcome: 'found', providerUserId: match.id }
+              : {
+                  outcome: 'unknown',
+                  detail: 'the provider identity is unreadable',
+                };
+          if (users.length === 0) return { outcome: 'absent' };
+        }
+        return {
+          outcome: 'unknown',
+          detail: 'the provider identity list was not exhausted',
+        };
+      } catch (failure) {
+        return { outcome: 'unknown', detail: providerDetail(failure) };
+      }
     },
   };
 }

@@ -260,8 +260,18 @@ export function invitationDestination(appUrl: string): string {
 
 export type InvitationSendRequest = { email: string };
 
+// What the server adapter can prove about one address the provider refused. `unknown` is kept
+// apart from `absent`: only a lookup that read every page may claim there is no identity.
+export type ProviderIdentity =
+  | { outcome: 'found'; providerUserId: string }
+  | { outcome: 'absent' }
+  | { outcome: 'unknown'; detail: string };
+
 export interface InvitationSender {
   send(request: InvitationSendRequest): Promise<InvitationProviderResult>;
+  // The address lookup used when a refusal needs classifying; absent when the adapter cannot
+  // ask the provider anything but the invitation call itself.
+  identity?(email: string): Promise<ProviderIdentity>;
 }
 
 export type InvitationRecordRequest = {
@@ -294,7 +304,7 @@ export async function administerInvitation(
 ): Promise<EmployeeInvitation> {
   const invitation = await gateway.begin(input.email, input.role, input.key);
   if (invitation.state === 'recorded') return invitation;
-  const result = await attemptInvitationSend(sender, {
+  const result = await settleInvitationSend(sender, {
     email: invitation.email,
   });
   return gateway.record({
@@ -318,6 +328,32 @@ export async function attemptInvitationSend(
   } catch (failure) {
     return { outcome: 'ambiguous', detail: providerDetail(failure) };
   }
+}
+
+// A 4xx refusal of an address the provider already holds is the stuck case: an earlier send was
+// accepted but its recording was lost, so the address has an identity and every later retry is
+// refused for it. Recording that as `failed` strands an invitation that reached the person, so
+// the refusal is only recorded as `accepted` when the lookup returns the identity of exactly
+// that address; a definite `failed` needs a lookup that read every address and found none, and
+// an inconclusive lookup stays ambiguous rather than claiming a refusal it did not prove.
+export async function settleInvitationSend(
+  sender: InvitationSender,
+  request: InvitationSendRequest,
+): Promise<InvitationProviderResult> {
+  const result = await attemptInvitationSend(sender, request);
+  if (result.outcome !== 'failed' || !sender.identity) return result;
+  let identity: ProviderIdentity;
+  try {
+    identity = await sender.identity(request.email);
+  } catch (failure) {
+    return { outcome: 'ambiguous', detail: providerDetail(failure) };
+  }
+  if (identity.outcome === 'found')
+    return isUuid(identity.providerUserId)
+      ? { outcome: 'accepted', providerUserId: identity.providerUserId }
+      : { outcome: 'ambiguous', detail: 'the provider identity is unreadable' };
+  if (identity.outcome === 'absent') return result;
+  return { outcome: 'ambiguous', detail: identity.detail };
 }
 
 export type InvitationFailure = { code: string; ambiguous: boolean };
