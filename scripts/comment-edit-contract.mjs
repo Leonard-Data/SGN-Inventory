@@ -738,6 +738,39 @@ export async function commentEditContract({
         'versions survive deactivation',
       );
       assert.equal(await editCount(ownComment), 1);
+      for (const actor of [2, 3]) {
+        await asUser(actor);
+        const retained = (await db.query(history, [live, ownComment])).rows;
+        assert.deepEqual(
+          retained.map((row) => [row.event_kind, row.version]),
+          [
+            ['posting', 0],
+            ['edit', 1],
+          ],
+          `reviewer ${actor} keeps reading a deactivated author's history`,
+        );
+        assert.equal(retained[0].body, 'Nội dung gốc của tác giả');
+        assert.equal(retained[0].actor_name, 'Fixture 1');
+        assert.equal(
+          retained[1].body,
+          'Nội dung đã sửa\nDòng thứ hai — giữ dấu.',
+        );
+        assert.equal(retained[1].actor_name, 'Fixture 1');
+        const withdrawal = (await db.query(history, [other, removedComment]))
+          .rows;
+        assert.deepEqual(
+          withdrawal.map((row) => [row.event_kind, row.removal_kind]),
+          [
+            ['posting', null],
+            ['removal', 'author'],
+          ],
+        );
+        assert.equal(withdrawal[0].body, 'Nội dung sẽ bị gỡ');
+        assert.equal(withdrawal[0].actor_name, 'Fixture 1');
+        assert.equal(withdrawal[1].body, 'Nội dung sẽ bị gỡ');
+        assert.equal(withdrawal[1].actor_name, 'Fixture 1');
+      }
+      await asAdmin();
       await db.query('update public.employees set is_active=true where id=$1', [
         employees[1],
       ]);

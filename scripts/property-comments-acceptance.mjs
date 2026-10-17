@@ -623,7 +623,10 @@ async function cleanupHistoryRows() {
     await resetRaceProperty(race.id);
   }
 }
+let restoring = false;
 async function restoreAndExit(error) {
+  if (restoring) return;
+  restoring = true;
   try {
     await cleanupHistoryRows();
   } catch {
@@ -644,6 +647,11 @@ async function restoreAndExit(error) {
 }
 process.on('uncaughtException', restoreAndExit);
 process.on('unhandledRejection', restoreAndExit);
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+  process.on(signal, () => {
+    void restoreAndExit(new Error('Interrupted by ' + signal));
+  });
+}
 
 // ------------------------------------------------------------------ browser journey
 initializeBrowser(primary);
