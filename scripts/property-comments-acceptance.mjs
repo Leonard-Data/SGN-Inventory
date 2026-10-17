@@ -3289,7 +3289,7 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
   );
   const scopedHistoryEditedBody = 'Lịch sử phạm vi đã sửa';
   fill('Chỉnh sửa bình luận', scopedHistoryEditedBody, secondary);
-  click('Lưu bình luận', secondary);
+  click('Lưu thay đổi', secondary);
   await waitUntil(
     `() => {
       const scoped = document.querySelector('[data-comment-id="${scopedHistoryPosted.data.id}"]');
