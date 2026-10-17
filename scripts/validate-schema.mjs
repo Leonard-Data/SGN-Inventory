@@ -81,6 +81,18 @@ await check('salesperson cannot grant admin role',async()=>assert.equal((await d
 // The admin employee list is an application-level surface; the employee rows stay readable to
 // every active employee because reservation, comment and history attribution read them.
 await check('active employee keeps the directory read used for business attribution',async()=>assert.equal((await db.query('select id from public.employees')).rows.length,employees.length + 1));
+// An access revision advances only when a recorded access fact changes, and it is assigned on
+// every update so no client can choose it; a protected read compares it with the session it
+// authorized on. Fixture 5 is restored to staff and active at the end.
+const accessRevision=async(sql,params)=>(await db.query(sql,params)).rows[0].access_revision;
+await db.exec('reset role');
+await check('an ordinary employee edit keeps the access revision',async()=>assert.equal(await accessRevision("update public.employees set preferred_locale='en' where id=$1 returning access_revision",[employees[5]]),0));
+await check('a role change advances the access revision once',async()=>assert.equal(await accessRevision("update public.employees set role='manager' where id=$1 returning access_revision",[employees[5]]),1));
+await check('deactivation and reactivation each advance the access revision',async()=>{
+  assert.equal(await accessRevision('update public.employees set is_active=false where id=$1 returning access_revision',[employees[5]]),2);
+  assert.equal(await accessRevision("update public.employees set role='staff',is_active=true where id=$1 returning access_revision",[employees[5]]),3);
+});
+await asUser(0);
 await check('salesperson cannot read import or audit tables',()=>fails('select * from private.audit_events',[],'42501'));
 const lock=(await db.query('select public.request_property_lock($1,$2) as id',[property,'Customer reached agreement; manager review needed'])).rows[0].id;
 await check('pending request does not reserve property',async()=>assert.equal((await db.query('select * from public.v_effective_property_locks')).rows.length,0));
