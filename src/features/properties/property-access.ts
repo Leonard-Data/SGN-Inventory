@@ -1,5 +1,6 @@
 import 'server-only';
 import { ApiError, type RouteContext } from '@/lib/supabase/route';
+import { classifyPropertyRead } from './property-access-core';
 
 export async function requireReadableProperty(
   context: RouteContext,
@@ -10,9 +11,6 @@ export async function requireReadableProperty(
     .select('id')
     .eq('id', propertyId)
     .maybeSingle();
-  if (error) {
-    if (error.code === '42501') throw new ApiError(403, 'access-denied');
-    throw new ApiError(503, 'unavailable');
-  }
-  if (!data) throw new ApiError(404, 'property-not-found');
+  const failure = classifyPropertyRead({ data, error });
+  if (failure) throw new ApiError(failure.status, failure.code);
 }
