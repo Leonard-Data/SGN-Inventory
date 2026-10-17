@@ -517,10 +517,7 @@ export function Workspace({
       </div>
       <div className="panel-body">
         {!archived && employeeId ? (
-          <fieldset
-            className="dropzone"
-            disabled={fileInputDisabled}
-          >
+          <fieldset className="dropzone" disabled={fileInputDisabled}>
             <legend className="sr">{fileText.purpose}</legend>
             <label className="check">
               <input
