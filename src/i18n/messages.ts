@@ -412,6 +412,7 @@ const vi = {
   employeeInviteState: 'Trạng thái lời mời',
   employeeInvitePendingLabel: 'Chưa có xác nhận từ nhà cung cấp',
   employeeInviteReconciliationLabel: 'Cần đối soát lời mời',
+  employeeInviteNoneLabel: 'Chưa ghi nhận lời mời',
   employeeInviteRecordedLabel: 'Đã ghi nhận lời mời',
   employeeInviteDeliveryNote:
     'Nhà cung cấp đã nhận yêu cầu gửi lời mời. Điều này không xác nhận hộp thư đã nhận được thư và không bật quyền truy cập.',
@@ -1085,6 +1086,7 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     employeeInviteState: 'Invitation state',
     employeeInvitePendingLabel: 'No provider confirmation yet',
     employeeInviteReconciliationLabel: 'Invitation reconciliation required',
+    employeeInviteNoneLabel: 'No invitation recorded',
     employeeInviteRecordedLabel: 'Invitation recorded',
     employeeInviteDeliveryNote:
       'The provider accepted the invitation request. This does not confirm the mailbox received the message and enables no access.',

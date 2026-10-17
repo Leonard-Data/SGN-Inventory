@@ -1,5 +1,11 @@
 'use client';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react';
 import { messages, label, type Locale } from '@/i18n/messages';
 import { api, RequestError } from './api';
 import {
@@ -37,6 +43,7 @@ export function EmployeeInvitationForm({
   const [refresh, setRefresh] = useState(0);
   const [loading, setLoading] = useState(false);
   const [loadProblem, setLoadProblem] = useState<string | null>(null);
+  const targetRef = useRef<string | null>(null);
   const [problem, setProblem] = useState<InvitationFailure | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -45,6 +52,7 @@ export function EmployeeInvitationForm({
   );
 
   const reconcile = useCallback((address: string) => {
+    targetRef.current = address;
     setSubmitted(address);
     setLoading(true);
     setRefresh((value) => value + 1);
@@ -59,6 +67,7 @@ export function EmployeeInvitationForm({
       abort.signal,
     )
       .then((value) => {
+        if (targetRef.current !== submitted) return;
         setRecord(value);
         setLoadProblem(null);
         setProblem((current) =>
@@ -107,7 +116,7 @@ export function EmployeeInvitationForm({
         ? text.employeeInviteReconciliationLabel
         : status === 'pending'
           ? text.employeeInvitePendingLabel
-          : null;
+          : text.employeeInviteNoneLabel;
   const statusTone =
     status === 'recorded'
       ? 'success'
@@ -126,6 +135,12 @@ export function EmployeeInvitationForm({
 
   async function send(address: string, targetRole: EmployeeRole) {
     if (busy || !actionKey) return;
+    targetRef.current = address;
+    if (record?.employee && record.employee.email !== address) {
+      setRecord(null);
+      setSubmitted(null);
+      setLoading(false);
+    }
     setBusy(true);
     setLoadProblem(null);
     setProblem(null);
@@ -261,12 +276,10 @@ export function EmployeeInvitationForm({
               <dd>
                 {loading ? (
                   text.loading
-                ) : statusLabel ? (
+                ) : (
                   <span className="badge" data-tone={statusTone}>
                     {statusLabel}
                   </span>
-                ) : (
-                  text.unknown
                 )}
               </dd>
             </div>
