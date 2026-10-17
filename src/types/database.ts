@@ -1873,6 +1873,14 @@ export type Database = {
         Args: { p_email: string; p_role: string; p_key: string };
         Returns: Json;
       };
+      accept_employee_invitation: {
+        Args: {
+          p_invitation_id: string;
+          p_revision: number;
+          p_display_name: string;
+        };
+        Returns: Json;
+      };
       record_employee_invitation_result: {
         Args: {
           p_invitation_id: string;
