@@ -201,9 +201,11 @@ export function invitationFromRow(
   });
 }
 
-// The one status the list and the form render. `recorded` means the provider accepted the
-// invitation request; a pending or failed provider step is a reconciliation state and is
-// never displayed as a delivered or accepted invitation.
+// The one status the list and the form render. `recorded` means the provider holds an identity
+// for the recorded address — from an accepted request, or from the lookup that classified a
+// refused retry and cannot tell an identity this invitation created from one that already
+// existed; a pending or failed provider step is a reconciliation state, and nothing here is
+// displayed as a delivered message or a completed acceptance.
 export function invitationStatus(
   invitation: EmployeeInvitation | null,
 ): 'none' | 'pending' | 'reconciliation' | 'recorded' {

@@ -13,7 +13,7 @@ import {
 
 // The Admin API lists identities page by page instead of looking one address up, so the refused
 // retry reads a bounded number of pages. The page size is the provider's own documented default,
-// so no response can be capped below it, and only a page that returned nothing can mean `absent`.
+// so no response can be capped below it, and only a page shorter than it proves the list ended.
 const IDENTITY_PAGE_SIZE = 50;
 const IDENTITY_PAGE_LIMIT = 20;
 
@@ -61,7 +61,12 @@ export function supabaseInvitationSender(
               outcome: 'unknown',
               detail: providerDetail(new Error(error.message)),
             };
-          const users = data?.users ?? [];
+          const users = data?.users;
+          if (!Array.isArray(users))
+            return {
+              outcome: 'unknown',
+              detail: 'the provider identity list is unreadable',
+            };
           const match = users.find(
             (user) => normalizeEmail(user.email) === email,
           );
@@ -72,7 +77,7 @@ export function supabaseInvitationSender(
                   outcome: 'unknown',
                   detail: 'the provider identity is unreadable',
                 };
-          if (users.length === 0) return { outcome: 'absent' };
+          if (users.length < IDENTITY_PAGE_SIZE) return { outcome: 'absent' };
         }
         return {
           outcome: 'unknown',

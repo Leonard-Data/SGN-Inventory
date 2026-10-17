@@ -417,7 +417,7 @@ const vi = {
   employeeInviteNoneLabel: 'Chưa ghi nhận lời mời',
   employeeInviteRecordedLabel: 'Đã ghi nhận lời mời',
   employeeInviteDeliveryNote:
-    'Nhà cung cấp đã nhận yêu cầu gửi lời mời. Điều này không xác nhận hộp thư đã nhận được thư và không bật quyền truy cập.',
+    'Đã có danh tính nhà cung cấp cho địa chỉ này. Điều này không xác nhận hộp thư đã nhận được thư và không bật quyền truy cập.',
   employeeInviteUnconfirmedNote:
     'Chưa xác nhận việc gửi thư và chưa bật quyền truy cập nào.',
   employeeInviteSuccess:
@@ -1091,7 +1091,7 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     employeeInviteNoneLabel: 'No invitation recorded',
     employeeInviteRecordedLabel: 'Invitation recorded',
     employeeInviteDeliveryNote:
-      'The provider accepted the invitation request. This does not confirm the mailbox received the message and enables no access.',
+      'The provider holds an identity for this address. This does not confirm the mailbox received the message and enables no access.',
     employeeInviteUnconfirmedNote:
       'No delivery is confirmed and no access is enabled.',
     employeeInviteSuccess:
