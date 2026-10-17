@@ -366,7 +366,7 @@ Prepare sanitized fixtures: a sales employee, a staff/manager creator, an identi
 
 Remaining limits: this run used one headless Chromium session per journey, so keyboard-only operation and the 360px stacked-row breakpoint remain staging gates rather than observed evidence here; sustained multi-session contention at production load is likewise unclaimed. The committed report was produced before the review-round gating and copy fixes, so those behaviours are re-verified against the final head before the pull request is considered green. It is development evidence, not production acceptance.
 
-
+Embedded coverage: `scripts/contact-directory-contract.mjs` (in `npm run test:schema`, 9 assertions) proves both operations are invoker wrappers with explicit grants, a salesperson reading the directory and correcting a linked shared identity from it without inventing a parent property, Owner membership taken from the recorded `relation='owner'` link rather than the identity classification, the archived and unlinked affected-property refusals with the reviewer read retained, a stale or unchanged save refused and recording nothing, the literal bounded name fragment with complete deterministic paging, anonymous/unlinked/inactive callers refused `42501`, and a direct shared-contact write still denied. `src/features/contacts/directory.test.ts` (in `npm run test:unit`) covers the blank browse and trimmed fragment, the query/id-cursor/view allowlist and the 120-character bound, the 30-row page with its ascending-id cursor, recorded values with unknown markers and per-property relationships, and refusal of a malformed row or relationship.
 
 ## Property files staging acceptance
 
