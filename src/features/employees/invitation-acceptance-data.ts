@@ -7,7 +7,6 @@ import {
   acceptanceSessionBody,
   parseAcceptedEmployee,
   type AcceptanceInput,
-  type AcceptedEmployee,
 } from './invitation-acceptance';
 
 // Issue #69: the session-scoped acceptance journey. The invitee's own session is the
@@ -133,24 +132,18 @@ export async function invitationSessionStatus(
   };
 }
 
-// The guarded acceptance: validate the session and inputs, set the credential, then link and
-// activate through the invoker RPC. The RPC re-derives the caller's identity and checks the
-// recorded invitation, its revision and the still-unlinked, live employee, so a repeated or
-// interrupted setup can never assign the invitation to another person or role.
+// The guarded acceptance: validate the inputs and session, link and activate through the
+// invoker RPC, and only then set the credential. The RPC re-derives the caller's identity and
+// checks the recorded invitation, its revision and the still-unlinked, live employee, so no
+// credential is written for a caller the invitation does not name, and a repeated or
+// interrupted setup converges on the same person and role.
 export async function acceptInvitation(
   context: RouteContext,
   body: Record<string, unknown>,
-): Promise<AcceptedEmployee> {
+): Promise<void> {
   const input: AcceptanceInput | null = acceptanceBody(body);
   if (!input) throw new ApiError(400, 'invalid-input');
   await invitationUser(context);
-  const { error: passwordError } = await context.client.auth.updateUser({
-    password: input.password,
-  });
-  if (passwordError)
-    throw authOutage(passwordError)
-      ? new ApiError(503, 'unavailable')
-      : new ApiError(400, 'invalid-input');
   const { data, error } = await context.client.rpc(
     'accept_employee_invitation',
     {
@@ -160,8 +153,13 @@ export async function acceptInvitation(
     },
   );
   if (error) throw workflowError(error);
-  const employee = parseAcceptedEmployee(data);
-  if (!employee) throw new ApiError(503, 'unavailable');
+  if (!parseAcceptedEmployee(data)) throw new ApiError(503, 'unavailable');
+  const { error: passwordError } = await context.client.auth.updateUser({
+    password: input.password,
+  });
+  if (passwordError)
+    throw authOutage(passwordError)
+      ? new ApiError(503, 'unavailable')
+      : new ApiError(400, 'invalid-input');
   context.setLocale(input.locale);
-  return employee;
 }

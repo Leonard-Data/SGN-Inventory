@@ -195,11 +195,11 @@ export function InviteScreen({ initialLocale }: { initialLocale: Locale }) {
             ? text.inviteDoneTitle
             : text.inviteTitle}
         </h1>
-        <p className="lead">
-          {phase === 'done' || phase === 'active'
-            ? text.inviteDoneLead
-            : text.inviteLead}
-        </p>
+        {phase === 'done' || phase === 'active' ? (
+          <p className="lead">{text.inviteDoneLead}</p>
+        ) : phase === 'setup' ? (
+          <p className="lead">{text.inviteLead}</p>
+        ) : null}
 
         {phase === 'verifying' ? (
           <div className="auth-form">
