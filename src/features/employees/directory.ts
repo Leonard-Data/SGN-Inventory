@@ -36,8 +36,8 @@ export type DirectoryDeactivation = {
   outcome: string | null;
 };
 
-// The recorded invitation state for one employee. `recorded` is the provider accepting the
-// invitation request, not proof that the mailbox received the message, and never active
+// The recorded invitation state for one employee. `recorded` is the provider holding an identity
+// for the invited address, not proof that the mailbox received the message, and never active
 // access.
 export type DirectoryInvitation = {
   state: InvitationState;
