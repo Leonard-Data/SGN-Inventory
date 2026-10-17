@@ -1,6 +1,7 @@
 'use client';
 import { useState, useCallback, type FormEvent } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import type { Locale } from '@/i18n/messages';
 import { messages } from '@/i18n/messages';
 import type { PropertyPage } from './types';
@@ -14,6 +15,7 @@ import {
 } from './filters';
 import {
   isInventoryOrder,
+  reversedOrder,
   validTrailToken,
   type InventoryOrder,
 } from './age-cursor';
@@ -34,6 +36,7 @@ export function Inventory({
   filters: InventoryFilters;
 }) {
   const activeOrder = isInventoryOrder(sort) ? sort : null;
+  const router = useRouter();
   // The filters the address states travel with every read of this view: the free-text search,
   // the ordering, the paging links and the search island all carry the same set.
   const activeFilters = filterParams(filters);
@@ -52,6 +55,8 @@ export function Inventory({
   const locale = initialLocale;
   const text = messages[locale];
   const [searchError, setSearchError] = useState(false);
+  // The toolbar owns the filter panel's trigger, so the island below only renders the dialog.
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const denyFiles = useCallback(
     (status: number) => {
       clear();
@@ -102,6 +107,8 @@ export function Inventory({
     { value: 'oldest', label: text.sortOldest },
     { value: 'newest', label: text.sortNewest },
   ];
+  const reversed = reversedOrder(activeOrder);
+  const filterCount = activeFilterCount(filters);
   return (
     <>
       <div className="page-head">
@@ -125,14 +132,138 @@ export function Inventory({
 
       <section className="panel page-section">
         <div className="panel-body">
-          <form
-            className="toolbar"
-            action="/properties"
-            method="get"
-            onSubmit={search}
-            role="search"
-          >
-            <div className="search">
+          <div className="toolbar">
+            <form
+              className="toolbar-search"
+              action="/properties"
+              method="get"
+              onSubmit={search}
+              role="search"
+            >
+              <div className="search">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="M20.5 20.5 16.7 16.7" />
+                </svg>
+                <label className="sr" htmlFor="query">
+                  {text.search}
+                </label>
+                <input
+                  className="input"
+                  id="query"
+                  name="query"
+                  type="search"
+                  autoComplete="off"
+                  defaultValue={initialQuery}
+                  aria-invalid={searchError}
+                  placeholder={text.search}
+                />
+                <button
+                  className="search-btn"
+                  type="submit"
+                  aria-label={text.search}
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="11" cy="11" r="7" />
+                    <path d="M20.5 20.5 16.7 16.7" />
+                  </svg>
+                </button>
+              </div>
+              {sort ? <input type="hidden" name="sort" value={sort} /> : null}
+              {Object.entries(activeFilters).map(([name, value]) => (
+                <input key={name} type="hidden" name={name} value={value} />
+              ))}
+            </form>
+            <label className="sr" htmlFor="inventory-sort">
+              {text.sortLabel}
+            </label>
+            <select
+              id="inventory-sort"
+              className="select toolbar-sort"
+              key={sort ?? 'default'}
+              defaultValue={sort ?? ''}
+              onChange={(event) => {
+                const next = event.currentTarget.value;
+                router.push(orderHref(isInventoryOrder(next) ? next : null));
+              }}
+            >
+              {orders.map((order) => (
+                <option
+                  key={order.value ?? 'default'}
+                  value={order.value ?? ''}
+                >
+                  {order.label}
+                </option>
+              ))}
+            </select>
+            {reversed ? (
+              <Link
+                className="btn btn-secondary btn-sm toolbar-dir"
+                href={orderHref(reversed)}
+                prefetch={false}
+                title={`${text.orderReverse}: ${reversed === 'oldest' ? text.sortOldest : text.sortNewest}`}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M8 20V6M8 6 5 9M8 6l3 3" />
+                  <path d="M16 4v14M16 18l3-3M16 18l-3-3" />
+                </svg>
+                {reversed === 'oldest' ? text.sortOldest : text.sortNewest}
+              </Link>
+            ) : (
+              <button
+                className="btn btn-secondary btn-sm toolbar-dir"
+                type="button"
+                disabled
+                title={text.orderReverseHint}
+                aria-label={`${text.orderReverse}: ${text.orderReverseHint}`}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M8 20V6M8 6 5 9M8 6l3 3" />
+                  <path d="M16 4v14M16 18l3-3M16 18l-3-3" />
+                </svg>
+                {text.orderReverse}
+              </button>
+            )}
+            <button
+              className="btn btn-secondary btn-sm"
+              type="button"
+              onClick={() => setFiltersOpen(true)}
+              aria-haspopup="dialog"
+              aria-expanded={filtersOpen}
+              aria-controls="inventory-filters"
+            >
               <svg
                 viewBox="0 0 24 24"
                 fill="none"
@@ -142,65 +273,23 @@ export function Inventory({
                 strokeLinejoin="round"
                 aria-hidden="true"
               >
-                <circle cx="11" cy="11" r="7" />
-                <path d="M20.5 20.5 16.7 16.7" />
+                <path d="M4 5h16l-6.2 7.4V19l-3.6-1.8v-4.8L4 5z" />
               </svg>
-              <label className="sr" htmlFor="query">
-                {text.search}
-              </label>
-              <input
-                className="input"
-                id="query"
-                name="query"
-                type="search"
-                autoComplete="off"
-                defaultValue={initialQuery}
-                aria-invalid={searchError}
-                placeholder={text.search}
-              />
-              <button
-                className="search-btn"
-                type="submit"
-                aria-label={text.search}
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <circle cx="11" cy="11" r="7" />
-                  <path d="M20.5 20.5 16.7 16.7" />
-                </svg>
-              </button>
-            </div>
-            {sort ? <input type="hidden" name="sort" value={sort} /> : null}
-            {Object.entries(activeFilters).map(([name, value]) => (
-              <input key={name} type="hidden" name={name} value={value} />
-            ))}
-            <div className="seg" role="group" aria-label={text.sortLabel}>
-              {orders.map((order) => (
-                <a
-                  key={order.value ?? 'default'}
-                  className="seg-btn"
-                  href={orderHref(order.value)}
-                  aria-current={
-                    activeOrder === order.value ? 'true' : undefined
-                  }
-                >
-                  {order.label}
-                </a>
-              ))}
-            </div>
-          </form>
+              {text.filters}
+              {filterCount ? (
+                <span className="badge" data-tone="neutral">
+                  {filterCount}
+                </span>
+              ) : null}
+            </button>
+          </div>
           <SearchIsland
             locale={locale}
             query={initialQuery}
             sort={sort}
             filters={filters}
+            open={filtersOpen}
+            onOpen={setFiltersOpen}
           />
           <p className="search-hint">{text.searchHint}</p>
           {sort ? <p className="search-hint">{text.ageHint}</p> : null}

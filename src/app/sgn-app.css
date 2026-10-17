@@ -435,6 +435,10 @@ button.sgn-nav-item { width: 100%; background: transparent; border: 0; text-alig
 
 /* ── toolbar + search ───────────────────────────────────────────────────── */
 .toolbar { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+/* The inventory toolbar is one wrapping row: search form, sort select, direction toggle, filters. */
+.toolbar-search { display: flex; flex: 1 1 320px; min-width: 0; }
+.toolbar-sort { flex: 0 0 auto; width: auto; }
+.toolbar-dir { flex: 0 0 auto; }
 .search { position: relative; flex: 1 1 320px; min-width: 240px; }
 .search > svg { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; color: var(--muted); pointer-events: none; }
 .search .input { padding-left: 46px; padding-right: 60px; }
@@ -918,8 +922,8 @@ dialog.sgn-dialog::backdrop { background: color-mix(in oklab, var(--fg) 46%, tra
   .price-who { text-align: left; }
   .doc-row { grid-template-columns: 40px minmax(0, 1fr); }
   .doc-actions { grid-column: 2; }
-  .toolbar .seg { width: 100%; justify-content: space-between; }
-  .seg-btn { flex: 1; justify-content: center; }
+  .toolbar-search { flex-basis: 100%; }
+  .toolbar-sort { flex: 1 1 auto; }
   .toast { left: var(--space-4); right: var(--space-4); bottom: var(--space-4); }
   .sgn-dialog-panel { width: calc(100vw - 24px); max-height: 92vh; }
 }

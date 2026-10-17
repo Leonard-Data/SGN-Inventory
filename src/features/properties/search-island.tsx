@@ -6,7 +6,6 @@ import type { Locale } from '@/i18n/messages';
 import { label, messages } from '@/i18n/messages';
 import { formatDecimal, formatVnd } from './format';
 import {
-  activeFilterCount,
   filterParams,
   INVENTORY_FILTER_KEYS,
   INVENTORY_LISTING_MODES,
@@ -28,11 +27,15 @@ export function SearchIsland({
   query,
   sort,
   filters,
+  open,
+  onOpen,
 }: {
   locale: Locale;
   query: string;
   sort: string | null;
   filters: InventoryFilters;
+  open: boolean;
+  onOpen: (open: boolean) => void;
 }) {
   const router = useRouter();
   const text = messages[locale];
@@ -42,12 +45,11 @@ export function SearchIsland({
     sort,
     ...INVENTORY_FILTER_KEYS.map((key) => filters[key]),
   ]);
-  const [open, setOpen] = useState(false);
   const [invalid, setInvalid] = useState(false);
   const [mode, setMode] = useState(appliedMode);
   const dialogRef = useRef<HTMLDialogElement>(null);
   function dismiss() {
-    setOpen(false);
+    onOpen(false);
     setInvalid(false);
     setMode(appliedMode);
   }
@@ -65,7 +67,6 @@ export function SearchIsland({
     setMode(appliedMode);
     setInvalid(false);
   }, [appliedMode, appliedStateKey]);
-  const count = activeFilterCount(filters);
   // Applying starts a new page-one journey with the stated filters, so a paging cursor from the
   // previous filter set can never be replayed against this one.
   function apply(event: FormEvent<HTMLFormElement>) {
@@ -221,59 +222,31 @@ export function SearchIsland({
   );
   return (
     <>
-      <div className="row-between">
-        <button
-          className="btn btn-secondary btn-sm"
-          type="button"
-          onClick={() => setOpen(true)}
-          aria-haspopup="dialog"
-          aria-expanded={open}
-          aria-controls="inventory-filters"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.7"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M4 5h16l-6.2 7.4V19l-3.6-1.8v-4.8L4 5z" />
-          </svg>
-          {text.filters}
-          {count ? (
-            <span className="badge" data-tone="neutral">
-              {count}
-            </span>
-          ) : null}
-        </button>
-        {applied.length ? (
-          <div className="chips">
-            {applied.map((condition) => (
-              <span className="chip" key={condition.key}>
-                {condition.label}
-                <button
-                  type="button"
-                  onClick={() => remove(condition.key)}
-                  aria-label={`${text.filtersRemove}: ${condition.label}`}
+      {applied.length ? (
+        <div className="chips">
+          {applied.map((condition) => (
+            <span className="chip" key={condition.key}>
+              {condition.label}
+              <button
+                type="button"
+                onClick={() => remove(condition.key)}
+                aria-label={`${text.filtersRemove}: ${condition.label}`}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  aria-hidden="true"
                 >
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M6 6l12 12M18 6L6 18" />
-                  </svg>
-                </button>
-              </span>
-            ))}
-          </div>
-        ) : null}
-      </div>
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
       <dialog
         id="inventory-filters"
         ref={dialogRef}
