@@ -417,7 +417,7 @@ const vi = {
   employeeInviteNoneLabel: 'Chưa ghi nhận lời mời',
   employeeInviteRecordedLabel: 'Đã ghi nhận lời mời',
   employeeInviteDeliveryNote:
-    'Nhà cung cấp đã nhận yêu cầu gửi lời mời. Điều này không xác nhận hộp thư đã nhận được thư và không bật quyền truy cập.',
+    'Đã có danh tính nhà cung cấp cho địa chỉ này. Điều này không xác nhận hộp thư đã nhận được thư và không bật quyền truy cập.',
   employeeInviteUnconfirmedNote:
     'Chưa xác nhận việc gửi thư và chưa bật quyền truy cập nào.',
   employeeInviteSuccess:
@@ -425,7 +425,7 @@ const vi = {
   employeeInvitePending:
     'Yêu cầu mời đã được ghi nhận; nhà cung cấp chưa xác nhận.',
   employeeInviteFailed:
-    'Yêu cầu mời đã thành công, nhưng bước gửi của nhà cung cấp chưa hoàn tất. Lời mời đã ghi nhận bên dưới hiển thị trạng thái cần đối soát và chi tiết từ nhà cung cấp; hãy thử lại với cùng thao tác.',
+    'Yêu cầu mời đã được ghi nhận, nhưng bước gửi của nhà cung cấp chưa hoàn tất và chưa xác nhận việc gửi thư. Lời mời đã ghi nhận bên dưới hiển thị trạng thái cần đối soát và chi tiết từ nhà cung cấp; hãy thử lại với cùng thao tác.',
   employeeInviteEmailRecorded:
     'Email này đã thuộc một nhân viên đã ghi nhận, không phải người mới; hãy xử lý theo chính sách người quay lại.',
   employeeInviteAlreadyRecorded: 'Đã có lời mời được ghi nhận cho người này.',
@@ -1091,7 +1091,7 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     employeeInviteNoneLabel: 'No invitation recorded',
     employeeInviteRecordedLabel: 'Invitation recorded',
     employeeInviteDeliveryNote:
-      'The provider accepted the invitation request. This does not confirm the mailbox received the message and enables no access.',
+      'The provider holds an identity for this address. This does not confirm the mailbox received the message and enables no access.',
     employeeInviteUnconfirmedNote:
       'No delivery is confirmed and no access is enabled.',
     employeeInviteSuccess:
@@ -1099,7 +1099,7 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     employeeInvitePending:
       'The invitation request is recorded; the provider has not confirmed it yet.',
     employeeInviteFailed:
-      'The invitation request succeeded, but the provider step did not complete. The recorded invitation below shows the reconciliation state and the provider detail; retry under the same action.',
+      'The invitation request is recorded, but the provider step did not complete and no delivery is confirmed. The recorded invitation below shows the reconciliation state and the provider detail; retry under the same action.',
     employeeInviteEmailRecorded:
       'This email already belongs to a recorded employee, not a new person; handle it through the returning-person policy.',
     employeeInviteAlreadyRecorded:

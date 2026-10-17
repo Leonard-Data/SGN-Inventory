@@ -201,9 +201,11 @@ export function invitationFromRow(
   });
 }
 
-// The one status the list and the form render. `recorded` means the provider accepted the
-// invitation request; a pending or failed provider step is a reconciliation state and is
-// never displayed as a delivered or accepted invitation.
+// The one status the list and the form render. `recorded` means the provider holds an identity
+// for the recorded address — from an accepted request, or from the lookup that classified a
+// refused retry and cannot tell an identity this invitation created from one that already
+// existed; a pending or failed provider step is a reconciliation state, and nothing here is
+// displayed as a delivered message or a completed acceptance.
 export function invitationStatus(
   invitation: EmployeeInvitation | null,
 ): 'none' | 'pending' | 'reconciliation' | 'recorded' {
@@ -249,6 +251,65 @@ export function providerInviteResult(
   return { outcome: 'accepted', providerUserId: id };
 }
 
+// One page of the provider identity list, classified before the scan reads another page. Only a
+// page shorter than the page size proves the list ended, so only such a page without the address
+// may answer `absent`: a full page proves nothing, and a payload that is not a list of identities
+// is never evidence that an identity is missing.
+export type ProviderIdentityPage = ProviderIdentity | { outcome: 'continue' };
+
+export function providerIdentityPage(
+  users: unknown,
+  email: string,
+  pageSize: number,
+): ProviderIdentityPage {
+  if (!Array.isArray(users))
+    return {
+      outcome: 'unknown',
+      detail: 'the provider identity list is unreadable',
+    };
+  const identities = users as { id?: unknown; email?: unknown }[];
+  const match = identities.find(
+    (identity) => normalizeEmail(identity.email) === email,
+  );
+  if (match)
+    return isUuid(match.id)
+      ? { outcome: 'found', providerUserId: match.id }
+      : {
+          outcome: 'unknown',
+          detail: 'the provider identity is unreadable',
+        };
+  return identities.length < pageSize
+    ? { outcome: 'absent' }
+    : { outcome: 'continue' };
+}
+
+// The whole scan, with the page read injected so the end-of-list guard is executable away from
+// the provider: only a page that proved the list ended may answer `absent`, and an errored read,
+// an unreadable payload or a scan that ran out of pages stays `unknown`.
+export async function providerIdentityScan(
+  email: string,
+  pageSize: number,
+  pageLimit: number,
+  readPage: (page: number, pageSize: number) => Promise<unknown>,
+): Promise<ProviderIdentity> {
+  try {
+    for (let page = 1; page <= pageLimit; page += 1) {
+      const decision = providerIdentityPage(
+        await readPage(page, pageSize),
+        email,
+        pageSize,
+      );
+      if (decision.outcome !== 'continue') return decision;
+    }
+  } catch (failure) {
+    return { outcome: 'unknown', detail: providerDetail(failure) };
+  }
+  return {
+    outcome: 'unknown',
+    detail: 'the provider identity list was not exhausted',
+  };
+}
+
 // The fixed application destination for an invitation email. It is built from the configured
 // application origin and a constant path, so no request can redirect it; the separate
 // acceptance ticket serves this destination and owns what the invitee does there.
@@ -260,8 +321,18 @@ export function invitationDestination(appUrl: string): string {
 
 export type InvitationSendRequest = { email: string };
 
+// What the server adapter can prove about one address the provider refused. `unknown` is kept
+// apart from `absent`: only a lookup that read every page may claim there is no identity.
+export type ProviderIdentity =
+  | { outcome: 'found'; providerUserId: string }
+  | { outcome: 'absent' }
+  | { outcome: 'unknown'; detail: string };
+
 export interface InvitationSender {
   send(request: InvitationSendRequest): Promise<InvitationProviderResult>;
+  // The address lookup that classifies a refused send by telling `failed` from an address the
+  // provider already holds.
+  identity(email: string): Promise<ProviderIdentity>;
 }
 
 export type InvitationRecordRequest = {
@@ -294,7 +365,7 @@ export async function administerInvitation(
 ): Promise<EmployeeInvitation> {
   const invitation = await gateway.begin(input.email, input.role, input.key);
   if (invitation.state === 'recorded') return invitation;
-  const result = await attemptInvitationSend(sender, {
+  const result = await settleInvitationSend(sender, {
     email: invitation.email,
   });
   return gateway.record({
@@ -318,6 +389,32 @@ export async function attemptInvitationSend(
   } catch (failure) {
     return { outcome: 'ambiguous', detail: providerDetail(failure) };
   }
+}
+
+// A 4xx refusal of an address the provider already holds is the stuck case: an earlier send was
+// accepted but its recording was lost, so the address has an identity and every later retry is
+// refused for it. Recording that as `failed` strands an invitation that reached the person, so
+// the refusal is only recorded as `accepted` when the lookup returns the identity of exactly
+// that address; a definite `failed` needs a lookup that read every address and found none, and
+// an inconclusive lookup stays ambiguous rather than claiming a refusal it did not prove.
+export async function settleInvitationSend(
+  sender: InvitationSender,
+  request: InvitationSendRequest,
+): Promise<InvitationProviderResult> {
+  const result = await attemptInvitationSend(sender, request);
+  if (result.outcome !== 'failed') return result;
+  let identity: ProviderIdentity;
+  try {
+    identity = await sender.identity(request.email);
+  } catch (failure) {
+    return { outcome: 'ambiguous', detail: providerDetail(failure) };
+  }
+  if (identity.outcome === 'found')
+    return isUuid(identity.providerUserId)
+      ? { outcome: 'accepted', providerUserId: identity.providerUserId }
+      : { outcome: 'ambiguous', detail: 'the provider identity is unreadable' };
+  if (identity.outcome === 'absent') return result;
+  return { outcome: 'ambiguous', detail: identity.detail };
 }
 
 export type InvitationFailure = { code: string; ambiguous: boolean };
