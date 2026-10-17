@@ -3,6 +3,7 @@
 // recorded administration state and the role rule here leaves them testable without a session.
 import type { DeactivationState } from './deactivation.ts';
 import { mayAdministerEmployees } from './deactivation.ts';
+import type { InvitationState } from './invitation.ts';
 
 export const DIRECTORY_PAGE_SIZE = 30;
 
@@ -18,8 +19,9 @@ export type DirectoryRow = {
 };
 
 // Derived only from the recorded Auth link, activation flag and retained account-deleted
-// state. The schema records no invitation, so an employee without a linked sign-in identity
-// is `unlinked` — never presented as invited. `account_deleted` is a retained lifecycle state
+// state. An employee without a linked sign-in identity is `unlinked` — never presented as
+// invited: a recorded invitation is separate evidence with its own marker, so nothing here
+// infers one from a null Auth link. `account_deleted` is a retained lifecycle state
 // of the same employee row, so a deleted sign-in account is never confused with a person who
 // was never linked or whose access was only disabled.
 export type EmployeeAccess =
@@ -34,6 +36,15 @@ export type DirectoryDeactivation = {
   outcome: string | null;
 };
 
+// The recorded invitation state for one employee. `recorded` is the provider accepting the
+// invitation request, not proof that the mailbox received the message, and never active
+// access.
+export type DirectoryInvitation = {
+  state: InvitationState;
+  revision: number;
+  updatedAt: string;
+};
+
 export type DirectoryEntry = {
   id: string;
   displayName: string;
@@ -46,6 +57,9 @@ export type DirectoryEntry = {
   // deactivation or the reverse: each kind has its own recorded state.
   deactivation: DirectoryDeactivation | null;
   deletion: DirectoryDeactivation | null;
+  // The recorded invitation state, or null when this employee has never been invited. An
+  // unlinked imported person carries none, so nothing here invents an invitation marker.
+  invitation: DirectoryInvitation | null;
 };
 
 // The columns the operation lookup returns; rows arrive newest-first so the first row of a
@@ -62,6 +76,15 @@ export type DirectoryOperationRow = {
 export type DirectoryPage = {
   employees: DirectoryEntry[];
   nextCursor: string | null;
+};
+
+// The columns the invitation lookup returns; rows arrive newest-first so the first row for an
+// employee is the invitation the list reports.
+export type DirectoryInvitationRow = {
+  employee_id: string;
+  state: string;
+  revision: number;
+  updated_at: string;
 };
 
 export type DirectoryQuery = { after: string | null };
@@ -128,6 +151,39 @@ export function directoryOperations(
   return latest;
 }
 
+// The recorded invitations the list marks, from the same newest-first rows: the invitation
+// list extension uses real lifecycle markers, never a status guessed from a null Auth link. A
+// row whose state this projection does not recognise is skipped, never guessed.
+const invitationStates: readonly InvitationState[] = [
+  'provider_pending',
+  'provider_failed',
+  'recorded',
+];
+
+export function directoryInvitations(
+  rows: readonly DirectoryInvitationRow[],
+): Map<string, DirectoryInvitation> {
+  const latest = new Map<string, DirectoryInvitation>();
+  for (const row of rows) {
+    if (
+      !row.employee_id ||
+      !invitationStates.includes(row.state as InvitationState) ||
+      typeof row.revision !== 'number' ||
+      !Number.isInteger(row.revision) ||
+      typeof row.updated_at !== 'string' ||
+      !Number.isFinite(Date.parse(row.updated_at)) ||
+      latest.has(row.employee_id)
+    )
+      continue;
+    latest.set(row.employee_id, {
+      state: row.state as InvitationState,
+      revision: row.revision,
+      updatedAt: row.updated_at,
+    });
+  }
+  return latest;
+}
+
 export function directoryPage(
   rows: readonly DirectoryRow[],
   operations: {
@@ -146,6 +202,7 @@ export function directoryPage(
       access: accessState(row),
       deactivation: operations.deactivation?.get(row.id) ?? null,
       deletion: operations.deletion?.get(row.id) ?? null,
+      invitation: null,
     })),
     nextCursor: rows.length > DIRECTORY_PAGE_SIZE && last ? last.id : null,
   };

@@ -4,9 +4,9 @@ Design record (2026-10-12). Status: **implemented** for the token layer, the app
 
 ## 1. Scope
 
-Covers the authenticated app shell, the shared component vocabulary, and the layout of every planned page: `/properties`, `/properties/[id]`, `/properties/new`, `/requests`, `/reviews/*`, `/rentals`, `/rentals/[id]`, `/people/employees`, `/people/contacts`, `/reports/activity`, `/reports/company`, `/admin/categories`, `/admin/units`. The auth pages (`/login`, `/recover`, `/reset-password`, `/access-denied`) already exist and are unchanged except that the shell never wraps them.
+Covers the authenticated app shell, the shared component vocabulary, and the layout of every planned page: `/properties`, `/properties/[id]`, `/properties/new`, `/requests`, `/reviews/*`, `/rentals`, `/rentals/[id]`, `/people/employees`, `/people/contacts`, `/reports/activity`, `/reports/company`, `/admin/categories`, `/admin/units`. The auth pages (`/login`, `/recover`, `/reset-password`, `/access-denied` and the shell-free `/auth/invite` invitation destination) already exist; the shell never wraps them.
 
-Reuse rule: the visual language is the *Saigon New House* design package, ported verbatim into `src/app/app.css` (tokens at `:root`) and `src/app/sgn-app.css` (the class vocabulary). **Those class names are the contract** — a screen composes them, it does not restyle them. Anything the package does not draw lives in `src/app/globals.css` (repo-only surfaces: maintenance disclosures, history comparison, owner contact, correction proposals, reservation states) and `src/app/sgn-surfaces.css` (extensions to package components); the repo-only record-surface controls join `.card-entry` in `sgn-app.css` (see §2). All three are valued on the same tokens, and none introduces a colour, radius or spacing value the token layer does not define. The auth surfaces keep their own `.sgn-auth` layout sheet over the same tokens.
+Reuse rule: the visual language is the *Saigon New House* design package, ported verbatim into `src/app/app.css` (tokens at `:root`) and `src/app/sgn-app.css` (the class vocabulary). **Those class names are the contract** — a screen composes them, it does not restyle them. Anything the package does not draw lives in `src/app/globals.css` (repo-only surfaces: maintenance disclosures, history comparison, owner contact, correction proposals, reservation states and the recorded employee administration blocks) and `src/app/sgn-surfaces.css` (extensions to package components); the repo-only record-surface controls join `.card-entry` in `sgn-app.css` (see §2). All three are valued on the same tokens, and none introduces a colour, radius or spacing value the token layer does not define. The auth surfaces keep their own `.sgn-auth` layout sheet over the same tokens.
 
 ## 2. Token decision (D1)
 
@@ -191,12 +191,16 @@ Routes: `/reviews/corrections` (shipped as **Correction requests**: page-intro p
 ```
 Master (agreement) + detail (months/payments), reusing `.details` grid.
 
-### 5.6 `/people/employees` (shipped: list, guarded deactivation and permanent account deletion, admin)
+### 5.6 `/people/employees` (shipped: list, invitation, guarded deactivation and permanent account deletion, admin)
 
 ```
 page-intro (.example · h1 · .intro-copy)
-panel Employees → .data-table.stackable: name · email · role · access state · actions
-  access badge + recorded deactivation badge + recorded deletion badge
+panel Employees → details.maintenance [Record an invitation]
+  email field + existing-role select → [Send invitation]
+  recorded invitation summary: invited address · role · state badge (pending / reconciliation required / recorded / none recorded)
+  provider-acceptance note (not delivery) · recorded provider failure detail · [Retry]
+  .data-table.stackable: name · email · role · access state · actions
+  access badge + recorded invitation badge + recorded deactivation badge + recorded deletion badge
   [Deactivate access]/[Reconcile sign-in block] → .deactivation-panel
     target identity · recorded action state · outstanding reservations (effective/pending + expiry)
     release-or-expiry note · finite provider-ban note · [Confirm deactivation]/[Retry] · [Close]
@@ -207,11 +211,13 @@ panel Employees → .data-table.stackable: name · email · role · access state
   .panel-foot → .pagination (.page-info + .page-buttons > .pager-btn)
   states: .panel-note[role=status] (loading) · .state-panel (empty) · .alert[data-tone=danger] (error)
 ```
-Shipped: the list reads existing employee identities from `GET /api/employees` and shows the recorded display name, email, role and access state (`Đang hoạt động` / `Đã tắt truy cập` / `Chưa liên kết đăng nhập` / `Đã xóa tài khoản đăng nhập`), at most 30 rows per page with a keyset cursor. An unlinked imported person is labelled not linked, never invited, and is never presented as a deleted person: the schema records no invitation, and account deletion is a separate recorded state. The rail renders the destination for admin only and the proxy refuses a direct visit by another role. A live admin confirms deactivation from the row: membership is disabled first, the exact Auth sign-in block is confirmed through the server-only adapter, and the recorded `provider_pending` / `provider_failed` / `completed` state is shown next to the access badge so a disabled membership is never presented as a completed deactivation. The panel lists the departing employee's outstanding reservations with their expiries and states that release or expiry stays with the existing claimant, reviewer and expiry rules; no reservation is transferred or rewritten, and the finite provider ban is described with its renewal rule rather than as infinite. While the provider step is pending or failed, an admin can reopen the row and retry the same action.
+Shipped: the list reads existing employee identities from `GET /api/employees` and shows the recorded display name, email, role, access state (`Đang hoạt động` / `Đã tắt truy cập` / `Chưa liên kết đăng nhập` / `Đã xóa tài khoản đăng nhập`) and the recorded invitation state, at most 30 rows per page with a keyset cursor. An employee with no recorded invitation is labelled not linked and never invited, and is never presented as a deleted person: the marker comes only from a recorded invitation row, and account deletion is a separate recorded state. The rail renders the destination for admin only and the proxy refuses a direct visit by another role. A live admin confirms deactivation from the row: membership is disabled first, the exact Auth sign-in block is confirmed through the server-only adapter, and the recorded `provider_pending` / `provider_failed` / `completed` state is shown next to the access badge so a disabled membership is never presented as a completed deactivation. The panel lists the departing employee's outstanding reservations with their expiries and states that release or expiry stays with the existing claimant, reviewer and expiry rules; no reservation is transferred or rewritten, and the finite provider ban is described with its renewal rule rather than as infinite. While the provider step is pending or failed, an admin can reopen the row and retry the same action.
 
 Permanent account deletion is a second, separately recorded control on the same row, offered only for an employee whose sign-in account is still linked. Its confirmation names the exact retained employee and states that the sign-in account is permanently removed while the business record remains, describes the Storage ownership preflight and reassignment without promising to delete a file, lists the same outstanding reservations, and keeps its destructive control disabled until the employee's own email is typed — the target-specific confirmation vocabulary, reusing the existing field, hint, badge and panel classes rather than a remote dialog. The recorded state distinguishes `provider_pending`, `provider_failed`, `storage_blocked` and `completed`, so a blocked Storage ownership step is never shown as a generic failure or as a deletion. Deletion, inactive access and an unlinked imported person are three different badges, and a completed deletion row offers no lifecycle action at all.
 
-Still planned, not shipped: the `[Invite employee]` disclosure, the last-activity column, the `[Activate]` and `[Change role]` row actions and any per-employee route.
+A live admin also records an invitation from the `[Record an invitation]` disclosure: one validated normalized email and one existing company role, sent to that recorded address through the server-only adapter, with the recorded `provider_pending` / `provider_failed` / `recorded` state shown in the form and beside the row. A recorded invitation is described as the provider accepting the request, never as delivered mail or as active access; a refused address (already a recorded employee), a conflicting role for an open invitation and a reused submission key each show their own message, and an ambiguous or failed send keeps the same recorded invitation and offers a retry. When the reconciliation read returns an employee with no invitation row, the summary says no invitation is recorded instead of leaving the state unknown.
+
+Still planned, not shipped: the last-activity column, the `[Activate]` and `[Change role]` row actions, the invitee account-setup journey that will replace the placeholder body at the fixed `/auth/invite` destination, and any per-employee route.
 
 ### 5.6b `/people/vendors` + `/people/vendors/[id]` (shipped, issue #73)
 
@@ -282,6 +288,7 @@ page-intro · [New category] / [New unit]
 
 ## 6. Cross-cutting states
 
+- **Fixed invitation destination:** `/auth/invite` is the shell-free `(auth)` route an invitation email points at (issue #68). It renders an `auth-card` that states what is recorded and links to sign-in; it reads, verifies, displays and logs nothing from the invitation link, claims no access or delivery, and the account-setup journey that will replace its body is the separate invitation ticket.
 - **Denied / inactive:** the shell is never rendered. `/access-denied` stays in the `(auth)` group and is shown shell-free; a membership or identity denial returns `403` with a localized access-denied message, never an empty inventory. An object-level refusal (`contact-refusal`) keeps the current page and its state with a localized inline message instead ([maintenance contract](maintenance-contract.md#shared-identities-and-local-links)).
 - **Loading / empty / error:** the package's own states — `.busy-line` (+ `.spinner`) and `.busy-bar` for progress, `.skeleton`/`.sk-card` where the final geometry is known, `.state-panel` (with `.state-mark`, `.state-title`, optional `data-tone="danger"`) for empty and error, `.alert` for inline feedback and `.toast` for transient confirmation — each with localized text. Empty ≠ denied and empty ≠ zero: an event-free day is an explicit `0`, not a blank.
 - **Failed saves:** keep the draft, show a localized error, never a false success.

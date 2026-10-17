@@ -541,6 +541,44 @@ export type Database = {
           },
         ];
       };
+      employee_invitations: {
+        Row: {
+          actor_id: string;
+          created_at: string;
+          email: string;
+          employee_id: string;
+          id: string;
+          idempotency_key: string;
+          provider_attempted_at: string | null;
+          provider_detail: string | null;
+          provider_outcome: string | null;
+          provider_user_id: string | null;
+          recorded_at: string | null;
+          requested_at: string;
+          revision: number;
+          role: string;
+          state: string;
+          updated_at: string;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [
+          {
+            foreignKeyName: 'employee_invitations_actor_id_fkey';
+            columns: ['actor_id'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'employee_invitations_employee_id_fkey';
+            columns: ['employee_id'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       lock_events: {
         Row: {
           action: string;
@@ -1826,6 +1864,22 @@ export type Database = {
       };
       begin_employee_deactivation: {
         Args: { p_employee_id: string; p_key: string };
+        Returns: Json;
+      };
+      begin_employee_invitation: {
+        Args: { p_email: string; p_role: string; p_key: string };
+        Returns: Json;
+      };
+      record_employee_invitation_result: {
+        Args: {
+          p_invitation_id: string;
+          p_revision: number;
+          p_actor_id: string;
+          p_email: string;
+          p_outcome: string;
+          p_provider_user_id?: string | null;
+          p_detail?: string | null;
+        };
         Returns: Json;
       };
       employee_storage_preflight: {

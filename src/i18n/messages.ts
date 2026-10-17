@@ -308,7 +308,7 @@ const vi = {
   employeesLink: 'Nhân viên',
   employeeDirectory: 'Danh sách nhân viên',
   employeeDirectoryNote:
-    'Các danh tính nhân viên đã được ghi nhận. “Chưa liên kết đăng nhập” nghĩa là chưa có tài khoản đăng nhập nào được liên kết: hệ thống không ghi nhận lời mời, nên trạng thái này không phải là “đã mời”.',
+    'Các danh tính nhân viên đã được ghi nhận. “Chưa liên kết đăng nhập” chỉ nói về tài khoản đăng nhập; trạng thái lời mời được hiển thị riêng theo bản ghi lời mời thực tế.',
   employeeDirectoryEmpty: 'Chưa có danh tính nhân viên nào được ghi nhận.',
   employeeDirectoryFailed: 'Không thể tải danh sách nhân viên.',
   employeePageInfo: 'Trang này: {n} nhân viên',
@@ -400,6 +400,50 @@ const vi = {
   employeeDeleteProviderUnavailable:
     'Máy chủ chưa có cấu hình xóa tài khoản đăng nhập. Quyền truy cập đã bị tắt; hãy thử lại sau khi cấu hình được khôi phục.',
   employeeDeleteLoadFailed: 'Không thể tải trạng thái xóa tài khoản đăng nhập.',
+  // Employee invitation (issue #68).
+  employeeInviteNote:
+    'Ghi nhận một lời mời cho đúng địa chỉ email và vai trò đã chọn. Người được mời chưa có quyền truy cập cho đến khi tự thiết lập tài khoản trong bước riêng.',
+  employeeInviteEmailHint:
+    'Địa chỉ được chuẩn hóa (bỏ khoảng trắng thừa, chữ thường) trước khi ghi nhận.',
+  employeeInviteRoleHint:
+    'Một trong các vai trò công ty hiện có. Vai trò được ghi vào hồ sơ nhân viên, không ghi vào thông tin đăng nhập.',
+  employeeInviteSubmit: 'Gửi lời mời',
+  employeeInviteTarget: 'Người được mời',
+  employeeInviteState: 'Trạng thái lời mời',
+  employeeInvitePendingLabel: 'Chưa có xác nhận từ nhà cung cấp',
+  employeeInviteReconciliationLabel: 'Cần đối soát lời mời',
+  employeeInviteNoneLabel: 'Chưa ghi nhận lời mời',
+  employeeInviteRecordedLabel: 'Đã ghi nhận lời mời',
+  employeeInviteDeliveryNote:
+    'Nhà cung cấp đã nhận yêu cầu gửi lời mời. Điều này không xác nhận hộp thư đã nhận được thư và không bật quyền truy cập.',
+  employeeInviteUnconfirmedNote:
+    'Chưa xác nhận việc gửi thư và chưa bật quyền truy cập nào.',
+  employeeInviteSuccess:
+    'Đã ghi nhận lời mời; chưa có quyền truy cập nào được bật.',
+  employeeInvitePending:
+    'Yêu cầu mời đã được ghi nhận; nhà cung cấp chưa xác nhận.',
+  employeeInviteFailed:
+    'Yêu cầu mời đã thành công, nhưng bước gửi của nhà cung cấp chưa hoàn tất. Lời mời đã ghi nhận bên dưới hiển thị trạng thái cần đối soát và chi tiết từ nhà cung cấp; hãy thử lại với cùng thao tác.',
+  employeeInviteEmailRecorded:
+    'Email này đã thuộc một nhân viên đã ghi nhận, không phải người mới; hãy xử lý theo chính sách người quay lại.',
+  employeeInviteAlreadyRecorded: 'Đã có lời mời được ghi nhận cho người này.',
+  employeeInviteRoleConflict:
+    'Một vai trò khác đã được ghi nhận cho lời mời đang mở này.',
+  employeeInviteKeyConflict:
+    'Mã thao tác đã được dùng cho một lời mời khác. Hãy mở lại biểu mẫu mời.',
+  employeeInviteStale:
+    'Trạng thái lời mời đã thay đổi. Hãy tải lại trước khi thử lại.',
+  employeeInviteChanged:
+    'Nhân viên này đã thay đổi trong lúc gửi; hãy bắt đầu lại lời mời.',
+  employeeInviteProviderUnavailable:
+    'Máy chủ chưa có cấu hình gửi lời mời. Yêu cầu đã được ghi nhận; hãy thử lại sau khi cấu hình được khôi phục.',
+  employeeInviteLoadFailed: 'Không thể tải trạng thái lời mời.',
+  employeeInviteOpen: 'Ghi nhận lời mời',
+  // The fixed invitation destination (issue #68). The account-setup journey itself is a
+  // separate ticket, so this surface claims no access and no delivery.
+  inviteTitle: 'Điểm đến của liên kết lời mời',
+  inviteLead:
+    'Đây là điểm đến cố định của một liên kết lời mời. Trang này không đọc thông tin về bất kỳ lời mời nào và không xác nhận lời mời của bạn. Bước tự thiết lập tài khoản cho người được mời chưa được mở trong phiên bản này; khi bước đó sẵn sàng, người được mời có thể đăng nhập bằng địa chỉ email được mời. Trang này không xác nhận hộp thư đã nhận được thư và không bật quyền truy cập.',
   // People → Vendors (#73): the company directory and its one bounded create.
   vendorsLink: 'Nhà cung cấp',
   vendorDirectory: 'Danh sách nhà cung cấp',
@@ -937,7 +981,7 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     employeesLink: 'Employees',
     employeeDirectory: 'Employee list',
     employeeDirectoryNote:
-      'Recorded employee identities. “Not linked to sign-in” means no sign-in account is linked: the system records no invitation, so it is not shown as invited.',
+      'Recorded employee identities. “Not linked to sign-in” only describes the sign-in account; a recorded invitation is shown as its own marker.',
     employeeDirectoryEmpty: 'No employee identities are recorded.',
     employeeDirectoryFailed: 'The employee list could not be loaded.',
     employeePageInfo: 'This page: {n} employees',
@@ -1030,6 +1074,51 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     employeeDeleteProviderUnavailable:
       'The server has no account-deletion configuration. Access is disabled; retry after configuration is restored.',
     employeeDeleteLoadFailed: 'Deletion state did not load.',
+    // Employee invitation (issue #68).
+    employeeInviteNote:
+      'Records one invitation for the chosen email address and role. The invitee has no access until they set up their own account in a separate step.',
+    employeeInviteEmailHint:
+      'The address is normalized (extra whitespace removed, lower case) before it is recorded.',
+    employeeInviteRoleHint:
+      'One of the existing company roles. The role is recorded on the employee record, never in sign-in metadata.',
+    employeeInviteSubmit: 'Send invitation',
+    employeeInviteTarget: 'Invited person',
+    employeeInviteState: 'Invitation state',
+    employeeInvitePendingLabel: 'No provider confirmation yet',
+    employeeInviteReconciliationLabel: 'Invitation reconciliation required',
+    employeeInviteNoneLabel: 'No invitation recorded',
+    employeeInviteRecordedLabel: 'Invitation recorded',
+    employeeInviteDeliveryNote:
+      'The provider accepted the invitation request. This does not confirm the mailbox received the message and enables no access.',
+    employeeInviteUnconfirmedNote:
+      'No delivery is confirmed and no access is enabled.',
+    employeeInviteSuccess:
+      'The invitation is recorded; no access has been enabled.',
+    employeeInvitePending:
+      'The invitation request is recorded; the provider has not confirmed it yet.',
+    employeeInviteFailed:
+      'The invitation request succeeded, but the provider step did not complete. The recorded invitation below shows the reconciliation state and the provider detail; retry under the same action.',
+    employeeInviteEmailRecorded:
+      'This email already belongs to a recorded employee, not a new person; handle it through the returning-person policy.',
+    employeeInviteAlreadyRecorded:
+      'An invitation is already recorded for this person.',
+    employeeInviteRoleConflict:
+      'A different role is already recorded for this open invitation.',
+    employeeInviteKeyConflict:
+      'This action key was used for a different invitation. Reopen the invitation form.',
+    employeeInviteStale:
+      'The invitation state changed. Reload before retrying.',
+    employeeInviteChanged:
+      'This employee changed while the invitation was sent; restart the invitation.',
+    employeeInviteProviderUnavailable:
+      'The server has no invitation configuration. The request is recorded; retry after configuration is restored.',
+    employeeInviteLoadFailed: 'The invitation state did not load.',
+    employeeInviteOpen: 'Record an invitation',
+    // The fixed invitation destination (issue #68). The account-setup journey itself is a
+    // separate ticket, so this surface claims no access and no delivery.
+    inviteTitle: 'Invitation link destination',
+    inviteLead:
+      'This is the fixed destination of an invitation link. This page reads nothing about any invitation and does not confirm your invitation. The account-setup step for an invited person is not open in this release; once it is, an invited person can sign in with the invited email address. This page does not confirm the mailbox received the message and enables no access.',
     // People → Vendors (#73): the company directory and its one bounded create.
     vendorsLink: 'Vendors',
     vendorDirectory: 'Vendor directory',
