@@ -48,7 +48,6 @@ export function PropertyVendors({
   const [confirming, setConfirming] = useState<string | null>(null);
   const [actionProblem, setActionProblem] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
 
   async function search() {
     setSearching(true);
@@ -76,14 +75,12 @@ export function PropertyVendors({
 
   // A kept draft and a read-back of the recorded relationships: no optimistic local link
   // and no automatic resubmission after an unconfirmed outcome.
-  async function call(work: () => Promise<unknown>, done: string) {
+  async function call(work: () => Promise<unknown>) {
     if (actionBusy) return;
     setActionBusy(true);
     setActionProblem(null);
-    setNotice(null);
     try {
       await work();
-      setNotice(done);
       setConfirming(null);
       setFound(null);
       setQuery('');
@@ -174,16 +171,14 @@ export function PropertyVendors({
                               className="btn btn-sm"
                               disabled={actionBusy}
                               onClick={() =>
-                                void call(
-                                  () =>
-                                    api(
-                                      '/api/properties/' +
-                                        propertyId +
-                                        '/vendors/' +
-                                        vendor.vendorId,
-                                      { revision: vendor.revision },
-                                    ),
-                                  text.vendorUnlinked,
+                                void call(() =>
+                                  api(
+                                    '/api/properties/' +
+                                      propertyId +
+                                      '/vendors/' +
+                                      vendor.vendorId,
+                                    { revision: vendor.revision },
+                                  ),
                                 )
                               }
                             >
@@ -202,10 +197,7 @@ export function PropertyVendors({
                           <button
                             type="button"
                             className="btn btn-sm btn-ghost"
-                            onClick={() => {
-                              setNotice(null);
-                              setConfirming(vendor.vendorId);
-                            }}
+                            onClick={() => setConfirming(vendor.vendorId)}
                           >
                             {text.vendorUnlink}
                           </button>
@@ -220,7 +212,6 @@ export function PropertyVendors({
             </>
           ) : null}
         </div>
-        {notice ? <p role="status">{notice}</p> : null}
         {actionProblem ? (
           <div className="alert" data-tone="danger" role="alert">
             <span>{actionProblem}</span>
@@ -296,13 +287,11 @@ export function PropertyVendors({
                     className="btn btn-sm"
                     disabled={actionBusy || chosen === ''}
                     onClick={() =>
-                      void call(
-                        () =>
-                          api('/api/properties/' + propertyId + '/vendors', {
-                            vendorId: chosen,
-                            propertyRevision,
-                          }),
-                        text.vendorLinkLinked,
+                      void call(() =>
+                        api('/api/properties/' + propertyId + '/vendors', {
+                          vendorId: chosen,
+                          propertyRevision,
+                        }),
                       )
                     }
                   >
