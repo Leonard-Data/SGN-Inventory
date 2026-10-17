@@ -203,11 +203,13 @@ test('the narrower administrative unit is the read parameter', () => {
 
 test('the catalog check refuses an absent or wrong-level unit', () => {
   const province = '11111111-1111-4111-8111-111111111111';
+  const otherProvince = '44444444-4444-4444-8444-444444444444';
   const ward = '22222222-2222-4222-8222-222222222222';
   const absent = '33333333-3333-4333-8333-333333333333';
   const units = [
-    { id: province, unit_level: 'province' },
-    { id: ward, unit_level: 'commune' },
+    { id: province, unit_level: 'province', parent_id: null },
+    { id: otherProvince, unit_level: 'province', parent_id: null },
+    { id: ward, unit_level: 'commune', parent_id: province },
   ];
   assert.equal(
     catalogUnitsMatch(units, { ...noInventoryFilters, province }),
@@ -245,5 +247,14 @@ test('the catalog check refuses an absent or wrong-level unit', () => {
     }),
     false,
     'an unknown ward',
+  );
+  assert.equal(
+    catalogUnitsMatch(units, {
+      ...noInventoryFilters,
+      province: otherProvince,
+      ward,
+    }),
+    false,
+    'a ward from a different province',
   );
 });

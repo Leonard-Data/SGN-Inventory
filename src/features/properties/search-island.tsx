@@ -66,7 +66,8 @@ export function SearchIsland({
   const [ward, setWard] = useState(appliedWard);
   const [provinces, setProvinces] = useState<AdminUnit[]>([]);
   const [wards, setWards] = useState<AdminUnit[]>([]);
-  const [catalogFailed, setCatalogFailed] = useState(false);
+  const [provinceFailed, setProvinceFailed] = useState(false);
+  const [wardFailed, setWardFailed] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
   function dismiss() {
     onOpen(false);
@@ -103,7 +104,7 @@ export function SearchIsland({
       .then((result) => {
         if (abort.signal.aborted) return;
         setProvinces(result.units);
-        setCatalogFailed(false);
+        setProvinceFailed(false);
       })
       .catch((failure) => {
         if (abort.signal.aborted) return;
@@ -112,12 +113,13 @@ export function SearchIsland({
           (failure.status === 401 || failure.status === 403)
         )
           onDenied(failure.status);
-        else setCatalogFailed(true);
+        else setProvinceFailed(true);
       });
     return () => abort.abort();
   }, [onDenied]);
   useEffect(() => {
     setWards([]);
+    setWardFailed(false);
     if (!province) return;
     const abort = new AbortController();
     void api<{ units: AdminUnit[] }>(
@@ -129,7 +131,7 @@ export function SearchIsland({
       .then((result) => {
         if (abort.signal.aborted) return;
         setWards(result.units);
-        setCatalogFailed(false);
+        setWardFailed(false);
       })
       .catch((failure) => {
         if (abort.signal.aborted) return;
@@ -138,7 +140,7 @@ export function SearchIsland({
           (failure.status === 401 || failure.status === 403)
         )
           onDenied(failure.status);
-        else setCatalogFailed(true);
+        else setWardFailed(true);
       });
     return () => abort.abort();
   }, [province, onDenied]);
@@ -429,7 +431,7 @@ export function SearchIsland({
                 ) : null}
               </div>
               <p className="field-hint">{text.areaAdminHint}</p>
-              {catalogFailed ? (
+              {provinceFailed || wardFailed ? (
                 <p className="field-error" role="alert">
                   {text.areaFilterUnavailable}
                 </p>

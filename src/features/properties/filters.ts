@@ -147,17 +147,24 @@ export function activeFilterCount(filters: InventoryFilters): number {
 }
 
 // The catalog check the route runs after parsing: a province value must name a province-level
-// unit and a ward value a commune-level one, so absent, out-of-catalog or swapped units are
-// refused instead of matching a different inventory.
+// unit and a ward value a commune-level one inside the stated province, so absent, out-of-catalog,
+// swapped or mismatched units are refused instead of matching a different inventory.
 export function catalogUnitsMatch(
-  units: readonly { id: string; unit_level: string }[],
+  units: readonly {
+    id: string;
+    unit_level: string;
+    parent_id: string | null;
+  }[],
   filters: InventoryFilters,
 ): boolean {
-  const level = new Map(units.map((unit) => [unit.id, unit.unit_level]));
-  return (
-    (filters.province === null || level.get(filters.province) === 'province') &&
-    (filters.ward === null || level.get(filters.ward) === 'commune')
-  );
+  const byId = new Map(units.map((unit) => [unit.id, unit]));
+  const { province, ward } = filters;
+  if (province !== null && byId.get(province)?.unit_level !== 'province')
+    return false;
+  if (ward === null) return true;
+  const unit = byId.get(ward);
+  if (unit?.unit_level !== 'commune') return false;
+  return province === null || unit.parent_id === province;
 }
 
 export type InventoryFilterArgs = {

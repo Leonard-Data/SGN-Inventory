@@ -152,8 +152,9 @@ function accessError(code: string | undefined): ApiError {
     : new ApiError(503, 'unavailable');
 }
 
-// The province must be a province-level catalog unit and the ward a commune-level one, so an
-// address that swaps them is refused rather than applied to a different unit.
+// The province must be a province-level catalog unit and the ward a commune-level unit inside
+// that province, so an address that swaps or mismatches them is refused rather than applied to a
+// different unit.
 async function assertAreaUnits(
   context: RouteContext,
   filters: InventoryFilters,
@@ -162,7 +163,7 @@ async function assertAreaUnits(
   if (province === null && ward === null) return;
   const { data, error } = await context.client
     .from('admin_unit_versions')
-    .select('id,unit_level')
+    .select('id,unit_level,parent_id')
     .in(
       'id',
       [province, ward].filter((id): id is string => id !== null),
