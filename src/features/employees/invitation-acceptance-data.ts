@@ -45,6 +45,21 @@ export type InvitationSessionStatus =
   | { status: 'setup'; setup: InvitationSetup }
   | { status: 'active'; employee: AcceptedEmployee };
 
+// A transient Auth/provider failure is retryable, not a refusal of the invitation.
+async function invitationUser(context: RouteContext) {
+  const {
+    data: { user },
+    error,
+  } = await context.client.auth.getUser();
+  if (
+    error &&
+    (error.name === 'AuthRetryableFetchError' || (error.status ?? 0) >= 500)
+  )
+    throw new ApiError(503, 'unavailable');
+  if (error || !user) throw new ApiError(401, 'invitation-invalid');
+  return user;
+}
+
 // The delivered link carries the invite session in its fragment (implicit flow); the client
 // reads the fragment and posts the two tokens here, where the session is established with the
 // user's own publishable-key client. A revisit with an already-signed-in cookie session posts
@@ -62,16 +77,7 @@ export async function establishInvitationSession(
     });
     if (error) throw new ApiError(401, 'invitation-invalid');
   }
-  const {
-    data: { user },
-    error,
-  } = await context.client.auth.getUser();
-  if (
-    error &&
-    (error.name === 'AuthRetryableFetchError' || (error.status ?? 0) >= 500)
-  )
-    throw new ApiError(503, 'unavailable');
-  if (error || !user) throw new ApiError(401, 'invitation-invalid');
+  await invitationUser(context);
 }
 
 // The recorded invitation for the caller's own sign-in identity, read through the server-only
@@ -80,10 +86,7 @@ export async function establishInvitationSession(
 export async function invitationSessionStatus(
   context: RouteContext,
 ): Promise<InvitationSessionStatus> {
-  const {
-    data: { user },
-  } = await context.client.auth.getUser();
-  if (!user) throw new ApiError(401, 'invitation-invalid');
+  const user = await invitationUser(context);
   const admin = createEmployeeAdminClient(context.environment);
   if (!admin) throw new ApiError(503, 'provider-unavailable');
   const { data, error } = await admin
@@ -147,17 +150,7 @@ export async function acceptInvitation(
 ): Promise<AcceptedEmployee> {
   const input: AcceptanceInput | null = acceptanceBody(body);
   if (!input) throw new ApiError(400, 'invalid-input');
-  const {
-    data: { user },
-    error: authError,
-  } = await context.client.auth.getUser();
-  if (
-    authError &&
-    (authError.name === 'AuthRetryableFetchError' ||
-      (authError.status ?? 0) >= 500)
-  )
-    throw new ApiError(503, 'unavailable');
-  if (authError || !user) throw new ApiError(401, 'invitation-invalid');
+  await invitationUser(context);
   const { error: passwordError } = await context.client.auth.updateUser({
     password: input.password,
   });

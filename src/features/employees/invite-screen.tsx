@@ -58,6 +58,11 @@ export function InviteScreen({ initialLocale }: { initialLocale: Locale }) {
   const passwordRef = useRef<HTMLInputElement>(null);
   const confirmRef = useRef<HTMLInputElement>(null);
   const errorSurface = useRef<HTMLParagraphElement>(null);
+  // The delivered invite session arrives in the fragment (implicit flow). It is read once into
+  // this ref so a retry re-posts the same tokens, and it is dropped from the URL only after the
+  // session endpoint has answered, so a failed attempt stays recoverable in this tab.
+  const sessionBody = useRef<Record<string, unknown>>({});
+  const [attempt, setAttempt] = useState(0);
   const text = messages[locale];
   const evaluation = evaluatePassword(password);
 
@@ -68,29 +73,28 @@ export function InviteScreen({ initialLocale }: { initialLocale: Locale }) {
   useEffect(() => {
     let cancelled = false;
     async function open() {
-      // The delivered invite session arrives in the fragment (implicit flow). Read it once,
-      // then drop it from the URL so it never lingers in history or leaks through a referrer.
-      let body: Record<string, unknown> = {};
-      if (typeof window !== 'undefined' && window.location.hash) {
+      if (!Object.keys(sessionBody.current).length && window.location.hash) {
         const params = new URLSearchParams(window.location.hash.slice(1));
         const accessToken = params.get('access_token');
         const refreshToken = params.get('refresh_token');
         if (accessToken && refreshToken) {
-          body = { accessToken, refreshToken };
+          sessionBody.current = { accessToken, refreshToken };
         }
-        window.history.replaceState(
-          null,
-          '',
-          window.location.pathname + window.location.search,
-        );
       }
       try {
         const result = await api<{
           status: 'setup' | 'active';
           setup?: { invitationId: string; revision: number; email: string };
           employee?: { displayName: string };
-        }>('/api/auth/invite/session', body);
+        }>('/api/auth/invite/session', sessionBody.current);
         if (cancelled) return;
+        if (window.location.hash) {
+          window.history.replaceState(
+            null,
+            '',
+            window.location.pathname + window.location.search,
+          );
+        }
         if (result.status === 'active') {
           setPhase('active');
           return;
@@ -117,7 +121,13 @@ export function InviteScreen({ initialLocale }: { initialLocale: Locale }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [attempt]);
+
+  function retry() {
+    setFormError('');
+    setPhase('verifying');
+    setAttempt((value) => value + 1);
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -203,6 +213,15 @@ export function InviteScreen({ initialLocale }: { initialLocale: Locale }) {
             <StatusAlert tone="error" innerRef={errorSurface}>
               {formError ? text[formError] : text.inviteInvalid}
             </StatusAlert>
+            {formError === 'unavailable' ? (
+              <button
+                type="button"
+                className={buttonClass('primary', { block: true })}
+                onClick={retry}
+              >
+                <span className="btn-label">{text.retry}</span>
+              </button>
+            ) : null}
             <a
               className={buttonClass('primary', { block: true })}
               href={'/login?lang=' + locale}
