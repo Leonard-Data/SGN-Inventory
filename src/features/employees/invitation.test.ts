@@ -552,10 +552,9 @@ test('only a fully read identity list may answer absent', async () => {
     providerIdentityScan(target, 50, pageLimit, async (page) => readPage(page));
 
   assert.deepEqual(await scan(() => identities(3)), { outcome: 'absent' });
-  assert.deepEqual(
-    await scan((page) => identities(page === 2 ? 1 : 50)),
-    { outcome: 'absent' },
-  );
+  assert.deepEqual(await scan((page) => identities(page === 2 ? 1 : 50)), {
+    outcome: 'absent',
+  });
   assert.deepEqual(await scan(() => identities(1, target)), {
     outcome: 'found',
     providerUserId,
@@ -572,7 +571,10 @@ test('only a fully read identity list may answer absent', async () => {
       detail: 'the provider identity list was not exhausted',
     },
   );
-  assert.deepEqual(read, Array.from({ length: 20 }, (_, index) => index + 1));
+  assert.deepEqual(
+    read,
+    Array.from({ length: 20 }, (_, index) => index + 1),
+  );
 
   assert.deepEqual(
     await scan((page) =>
