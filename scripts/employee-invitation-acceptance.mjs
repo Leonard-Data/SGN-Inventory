@@ -466,9 +466,16 @@ try {
     body: JSON.stringify({
       email: inviteEmail,
       role: 'staff',
-      key: randomUUID(),
+      key,
     }),
   });
+  assert.equal(
+    endpoint.status,
+    200,
+    'the endpoint returns the recorded invitation',
+  );
+  assert.equal(endpoint.body.invitation.state, 'recorded');
+  assert.equal(endpoint.body.employee.id, begun.data.employeeId);
   const redisplayed = await appFetch(
     adminACookie,
     `/api/employees/invitations?email=${encodeURIComponent(inviteEmail)}`,

@@ -9,6 +9,7 @@ import {
   invitationBody,
   invitationDestination,
   invitationFailure,
+  invitationFromRow,
   invitationProblemAfterLoad,
   invitationQuery,
   invitationStatus,
@@ -165,6 +166,7 @@ test('a recorded invitation is revalidated at the boundary', () => {
     }),
     invitation({ state: 'provider_pending', providerOutcome: 'accepted' }),
     invitation({ state: 'provider_failed', providerOutcome: 'accepted' }),
+    invitation({ state: 'provider_failed', providerOutcome: null }),
     invitation({ requestedAt: 'not-an-instant' }),
     invitation({
       state: 'recorded',
@@ -173,6 +175,42 @@ test('a recorded invitation is revalidated at the boundary', () => {
     }),
   ])
     assert.equal(parseInvitation(value), null, JSON.stringify(value));
+});
+
+test('a database row is read back through the same boundary rules', () => {
+  const row = {
+    id: invitationId,
+    employee_id: employeeId,
+    actor_id: actorId,
+    email: 'invitee@example.test',
+    role: 'sales',
+    state: 'recorded',
+    revision: 2,
+    provider_outcome: 'accepted',
+    provider_detail: null,
+    provider_attempted_at: '2026-10-15T09:04:00+07:00',
+    requested_at: '2026-10-15T09:00:00+07:00',
+    recorded_at: '2026-10-15T09:05:00+07:00',
+  };
+  assert.deepEqual(
+    invitationFromRow(row),
+    invitation({
+      state: 'recorded',
+      revision: 2,
+      providerOutcome: 'accepted',
+      providerAttemptedAt: '2026-10-15T09:04:00+07:00',
+      recordedAt: '2026-10-15T09:05:00+07:00',
+    }),
+  );
+  assert.equal(
+    invitationFromRow({
+      ...row,
+      state: 'provider_failed',
+      provider_outcome: null,
+      recorded_at: null,
+    }),
+    null,
+  );
 });
 
 test('the invitation status never presents a pending or failed send as recorded', () => {
@@ -377,11 +415,11 @@ test('a recorded invitation is never re-sent and a failed sender stays reconcila
     actorId,
   });
   assert.deepEqual(outcomes, [
-    { outcome: 'failed', detail: 'transport closed' },
+    { outcome: 'ambiguous', detail: 'transport closed' },
   ]);
   assert.deepEqual(
     await attemptInvitationSend(failing, { email: 'invitee@example.test' }),
-    { outcome: 'failed', detail: 'transport closed' },
+    { outcome: 'ambiguous', detail: 'transport closed' },
   );
 });
 

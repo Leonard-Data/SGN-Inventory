@@ -6,6 +6,7 @@ import type { Employee } from './types';
 import { activeEmployee } from './access';
 import {
   administerInvitation,
+  invitationFromRow,
   parseInvitation,
   type EmployeeRole,
   type InvitationGateway,
@@ -114,8 +115,8 @@ export async function loadInvitation(
     .order('id', { ascending: false })
     .limit(1);
   if (invitationError) throw databaseError(invitationError);
-  const latest = data?.[0];
-  const invitation = latest ? parseInvitation(latest) : null;
+  const latest = data?.[0] as Record<string, unknown> | undefined;
+  const invitation = latest ? invitationFromRow(latest) : null;
   if (latest && !invitation) throw new ApiError(503, 'unavailable');
   return {
     employee: {

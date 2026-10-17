@@ -158,7 +158,12 @@ export function parseInvitation(value: unknown): EmployeeInvitation | null {
   if ((state === 'recorded') !== (recordedAt !== null)) return null;
   if (state === 'recorded' && outcome !== 'accepted') return null;
   if (state === 'provider_pending' && outcome !== null) return null;
-  if (state === 'provider_failed' && outcome === 'accepted') return null;
+  if (
+    state === 'provider_failed' &&
+    outcome !== 'failed' &&
+    outcome !== 'ambiguous'
+  )
+    return null;
   return {
     id: row.id,
     employeeId: row.employeeId,
@@ -173,6 +178,27 @@ export function parseInvitation(value: unknown): EmployeeInvitation | null {
     requestedAt,
     recordedAt,
   };
+}
+
+// The `employee_invitations` row projection: the database read returns snake_case, so it is
+// mapped here once and every read path shares the same boundary rules.
+export function invitationFromRow(
+  row: Record<string, unknown>,
+): EmployeeInvitation | null {
+  return parseInvitation({
+    id: row.id,
+    employeeId: row.employee_id,
+    actorId: row.actor_id,
+    email: row.email,
+    role: row.role,
+    state: row.state,
+    revision: row.revision,
+    providerOutcome: row.provider_outcome,
+    providerDetail: row.provider_detail,
+    providerAttemptedAt: row.provider_attempted_at,
+    requestedAt: row.requested_at,
+    recordedAt: row.recorded_at,
+  });
 }
 
 // The one status the list and the form render. `recorded` means the provider accepted the
@@ -280,8 +306,9 @@ export async function administerInvitation(
   });
 }
 
-// The sender is the only path that may claim an accepted provider request. An unexpected
-// failure is a failed reconciliation state, never a recorded invitation.
+// The sender is the only path that may claim an accepted provider request. A thrown transport
+// failure may have reached the provider, so it is ambiguous rather than a definite refusal,
+// and never a recorded invitation.
 export async function attemptInvitationSend(
   sender: InvitationSender,
   request: InvitationSendRequest,
@@ -289,7 +316,7 @@ export async function attemptInvitationSend(
   try {
     return await sender.send(request);
   } catch (failure) {
-    return { outcome: 'failed', detail: providerDetail(failure) };
+    return { outcome: 'ambiguous', detail: providerDetail(failure) };
   }
 }
 
