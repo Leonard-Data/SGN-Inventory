@@ -61,7 +61,9 @@ export function EmployeeInvitationForm({
       .then((value) => {
         setRecord(value);
         setLoadProblem(null);
-        setProblem((current) => invitationProblemAfterLoad(current));
+        setProblem((current) =>
+          value.employee ? invitationProblemAfterLoad(current) : current,
+        );
       })
       .catch((failure: unknown) => {
         if (abort.signal.aborted) return;
