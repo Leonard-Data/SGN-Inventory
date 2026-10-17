@@ -149,8 +149,8 @@ The number of Vietnam business days from a property's Inventory entry date to to
 _Avoid_: Listing age, update age
 
 **Inventory filter set**:
-The optional conditions used to narrow inventory by status, listing mode, property type, price or area. Without a selected listing mode, a price range uses each listing's own asking price; with a selected mode, it uses only that mode's asking price.
-_Avoid_: Fixed sale-price basis
+The optional conditions used to narrow inventory by status, listing mode, property type, price, land or floor area in square metres, or the administrative area of an address (province/city and its dependent commune/ward; the narrower ward governs when both are selected). Without a selected listing mode, a price range uses each listing's own asking price; with a selected mode, it uses only that mode's asking price.
+_Avoid_: Fixed sale-price basis; "area" for province/ward
 
 ### Vendors
 

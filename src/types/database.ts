@@ -2200,6 +2200,7 @@ export type Database = {
           p_after_id?: string;
           p_after_on?: string;
           p_after_unknown?: boolean;
+          p_area_id?: string;
           p_area_max?: number;
           p_area_min?: number;
           p_direction: string;

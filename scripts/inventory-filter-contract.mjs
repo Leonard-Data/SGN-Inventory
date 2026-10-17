@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 
 // Advance Filter and Search Island embedded regressions for the advanced inventory filters. It proves the mode-aware
-// asking-price range, the land-or-floor area range, composition with the free-text query, the
+// asking-price range, the land-or-floor area range, the province/ward administrative-area match
+// (a province includes its wards, a ward narrows), composition with the free-text query, the
 // chronological cursor walk over a filtered eligible set, the retained archived exclusion, the
 // database refusal of unknown and out-of-range bounds, the invoker/stable shape of both
 // interfaces and the unchanged active-employee boundary. Real browser/Data API acceptance stays
@@ -61,6 +62,35 @@ export async function inventoryFilterContract({
       marker,
     ],
   );
+  // Two fixture provinces with a ward each, and one property left on a legacy address with no
+  // official unit. The province/ward filter must use the recorded units, never the raw text.
+  const provinceOne = '48000000-0000-4000-8000-000000000001';
+  const provinceTwo = '48000000-0000-4000-8000-000000000002';
+  const wardOne = '48000000-0000-4000-8000-000000000003';
+  const wardTwo = '48000000-0000-4000-8000-000000000004';
+  const wardThree = '48000000-0000-4000-8000-000000000005';
+  await db.query(
+    `insert into public.admin_unit_versions(id,official_code,name_vi,unit_level,parent_id,valid_from,source_url) values
+      ($1,'FILTER-P1','Filter Province One','province',null,'2025-07-01','https://example.test/catalog'),
+      ($2,'FILTER-P2','Filter Province Two','province',null,'2025-07-01','https://example.test/catalog'),
+      ($3,'FILTER-C1','Filter Ward One','commune',$1,'2025-07-01','https://example.test/catalog'),
+      ($4,'FILTER-C2','Filter Ward Two','commune',$1,'2025-07-01','https://example.test/catalog'),
+      ($5,'FILTER-C3','Filter Ward Three','commune',$2,'2025-07-01','https://example.test/catalog')`,
+    [provinceOne, provinceTwo, wardOne, wardTwo, wardThree],
+  );
+  // A verified legacy address stays immutable, so each area fixture is a current address beside
+  // it, exactly as an addressed property records one.
+  for (const [propertyId, provinceId, communeId] of [
+    [saleHouse, provinceOne, wardOne],
+    [rentHouse, provinceOne, wardTwo],
+    [bothFlat, provinceTwo, wardThree],
+    [draftHouse, provinceOne, wardOne],
+    [archivedHouse, provinceOne, wardOne],
+  ])
+    await db.query(
+      "insert into public.property_addresses(property_id,format,address_text,province_unit_id,commune_unit_id) values ($1,'current',$2,$3,$4)",
+      [propertyId, `${marker} current`, provinceId, communeId],
+    );
   await asUser(0);
   const mine = new Set([
     saleHouse,
@@ -77,13 +107,14 @@ export async function inventoryFilterContract({
   const search = (filters = {}) =>
     db
       .query(
-        `select id from public.search_properties($1::text,$2::text,$3::text,$4::text,null::uuid,null::uuid,50,
-          $5::numeric,$6::numeric,$7::numeric,$8::numeric)`,
+        `select id from public.search_properties($1::text,$2::text,$3::text,$4::text,$5::uuid,null::uuid,50,
+          $6::numeric,$7::numeric,$8::numeric,$9::numeric)`,
         [
           filters.query ?? '',
           filters.status ?? null,
           filters.mode ?? null,
           filters.type ?? null,
+          filters.areaId ?? null,
           filters.priceMin ?? null,
           filters.priceMax ?? null,
           filters.areaMin ?? null,
@@ -95,7 +126,7 @@ export async function inventoryFilterContract({
     db
       .query(
         `select id from public.list_inventory_by_age($1::text,$2::text,$3::date,$4::uuid,$5::boolean,$6::integer,
-          $7::text,$8::text,$9::text,$10::numeric,$11::numeric,$12::numeric,$13::numeric)`,
+          $7::text,$8::text,$9::text,$10::numeric,$11::numeric,$12::numeric,$13::numeric,$14::uuid)`,
         [
           direction,
           '',
@@ -110,6 +141,7 @@ export async function inventoryFilterContract({
           filters.priceMax ?? null,
           filters.areaMin ?? null,
           filters.areaMax ?? null,
+          filters.areaId ?? null,
         ],
       )
       .then((result) => scoped(result.rows));
@@ -275,6 +307,71 @@ export async function inventoryFilterContract({
     },
   );
   await check(
+    'a province filter includes its wards and a ward filter narrows',
+    async () => {
+      assert.deepEqual(await search({ areaId: provinceOne }), [
+        saleHouse,
+        rentHouse,
+        draftHouse,
+      ]);
+      assert.deepEqual(await search({ areaId: provinceTwo }), [bothFlat]);
+      assert.deepEqual(await search({ areaId: wardOne }), [
+        saleHouse,
+        draftHouse,
+      ]);
+      assert.deepEqual(await search({ areaId: wardTwo }), [rentHouse]);
+      // A legacy address without official units is never assigned to a province by text.
+      assert.ok(
+        !(await search({ areaId: provinceOne })).includes(negotiatingLand),
+      );
+    },
+  );
+  await check('the area filter composes with the other filters', async () => {
+    assert.deepEqual(await search({ areaId: provinceOne, mode: 'rent' }), [
+      rentHouse,
+    ]);
+    assert.deepEqual(await search({ areaId: wardOne, status: 'available' }), [
+      saleHouse,
+    ]);
+    assert.deepEqual(await search({ areaId: provinceOne, query: marker }), [
+      saleHouse,
+      rentHouse,
+      draftHouse,
+    ]);
+  });
+  await check(
+    'the area filter keeps the chronological walk paging consistently',
+    async () => {
+      assert.deepEqual(await age({ areaId: provinceOne }), [
+        saleHouse,
+        rentHouse,
+      ]);
+      assert.deepEqual(await age({ areaId: wardOne }), [saleHouse]);
+      assert.deepEqual(await age({ areaId: provinceOne }, 'newest'), [
+        rentHouse,
+        saleHouse,
+      ]);
+      const first = await age({ areaId: provinceOne }, 'oldest', {}, 1);
+      assert.deepEqual(first, [saleHouse]);
+      const second = await age(
+        { areaId: provinceOne },
+        'oldest',
+        { unknown: true, id: first[0] },
+        1,
+      );
+      assert.deepEqual(second, [rentHouse]);
+      assert.deepEqual(
+        await age(
+          { areaId: provinceOne },
+          'oldest',
+          { unknown: true, id: second[0] },
+          1,
+        ),
+        [],
+      );
+    },
+  );
+  await check(
     'unknown or out-of-range bounds are refused, never silently matched',
     async () => {
       const rejected = [
@@ -332,7 +429,7 @@ export async function inventoryFilterContract({
         from pg_proc p
         where p.oid in (
           'public.search_properties(text,text,text,text,uuid,uuid,integer,numeric,numeric,numeric,numeric)'::regprocedure,
-          'public.list_inventory_by_age(text,text,date,uuid,boolean,integer,text,text,text,numeric,numeric,numeric,numeric)'::regprocedure)
+          'public.list_inventory_by_age(text,text,date,uuid,boolean,integer,text,text,text,numeric,numeric,numeric,numeric,uuid)'::regprocedure)
         order by signature`,
       );
       assert.equal(shapes.rows.length, 2);
@@ -353,11 +450,11 @@ export async function inventoryFilterContract({
         `select has_function_privilege('authenticated',
             'public.search_properties(text,text,text,text,uuid,uuid,integer,numeric,numeric,numeric,numeric)', 'execute')
           and has_function_privilege('authenticated',
-            'public.list_inventory_by_age(text,text,date,uuid,boolean,integer,text,text,text,numeric,numeric,numeric,numeric)', 'execute')
+            'public.list_inventory_by_age(text,text,date,uuid,boolean,integer,text,text,text,numeric,numeric,numeric,numeric,uuid)', 'execute')
           and not has_function_privilege('anon',
             'public.search_properties(text,text,text,text,uuid,uuid,integer,numeric,numeric,numeric,numeric)', 'execute')
           and not has_function_privilege('anon',
-            'public.list_inventory_by_age(text,text,date,uuid,boolean,integer,text,text,text,numeric,numeric,numeric,numeric)', 'execute') as allowed`,
+            'public.list_inventory_by_age(text,text,date,uuid,boolean,integer,text,text,text,numeric,numeric,numeric,numeric,uuid)', 'execute') as allowed`,
       );
       assert.equal(granted.rows[0].allowed, true);
     },

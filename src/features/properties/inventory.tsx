@@ -290,6 +290,7 @@ export function Inventory({
             filters={filters}
             open={filtersOpen}
             onOpen={setFiltersOpen}
+            onDenied={denyFiles}
           />
           <p className="search-hint">{text.searchHint}</p>
           {sort ? <p className="search-hint">{text.ageHint}</p> : null}

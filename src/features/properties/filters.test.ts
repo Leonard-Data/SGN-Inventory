@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   activeFilterCount,
+  catalogUnitsMatch,
   filterParams,
   filterRpcArgs,
   noInventoryFilters,
@@ -24,6 +25,8 @@ test('a complete filter set is applied exactly as the address stated it', () => 
     priceMax: '25000000',
     areaMin: '45.5',
     areaMax: '120',
+    province: '11111111-1111-4111-8111-111111111111',
+    ward: '22222222-2222-4222-8222-222222222222',
   });
   assert.ok(result.ok);
   assert.deepEqual(result.filters, {
@@ -34,6 +37,8 @@ test('a complete filter set is applied exactly as the address stated it', () => 
     priceMax: '25000000',
     areaMin: '45.5',
     areaMax: '120',
+    province: '11111111-1111-4111-8111-111111111111',
+    ward: '22222222-2222-4222-8222-222222222222',
   });
 });
 
@@ -109,6 +114,32 @@ test('a bound size is compared exactly, never as a rounded number', () => {
   );
 });
 
+test('a province or ward value is an official unit identity', () => {
+  const province = '11111111-1111-4111-8111-111111111111';
+  const ward = '22222222-2222-4222-8222-222222222222';
+  const provinceOnly = parse({ province });
+  assert.ok(provinceOnly.ok);
+  assert.equal(provinceOnly.filters.province, province);
+  assert.equal(provinceOnly.filters.ward, null);
+  const both = parse({ province, ward });
+  assert.ok(both.ok);
+  assert.equal(both.filters.province, province);
+  assert.equal(both.filters.ward, ward);
+});
+
+test('a malformed unit and a ward without its province are refused', () => {
+  for (const values of [
+    { province: 'ho-chi-minh' },
+    { province: '1111' },
+    { ward: '22222222-2222-4222-8222-222222222222' },
+    {
+      province: '11111111-1111-4111-8111-111111111111',
+      ward: 'ward-14',
+    },
+  ])
+    assert.equal(parse(values).ok, false, JSON.stringify(values));
+});
+
 test('only set filters become link and RPC parameters', () => {
   assert.deepEqual(filterParams(noInventoryFilters), {});
   assert.deepEqual(
@@ -150,5 +181,80 @@ test('only set filters become link and RPC parameters', () => {
       p_price_min: '100000000000000000',
       p_price_max: '999999999999999999',
     },
+  );
+});
+
+test('the narrower administrative unit is the read parameter', () => {
+  const province = '11111111-1111-4111-8111-111111111111';
+  const ward = '22222222-2222-4222-8222-222222222222';
+  assert.deepEqual(filterParams({ ...noInventoryFilters, province, ward }), {
+    province,
+    ward,
+  });
+  assert.equal(activeFilterCount({ ...noInventoryFilters, province, ward }), 2);
+  assert.deepEqual(filterRpcArgs({ ...noInventoryFilters, province }), {
+    p_area_id: province,
+  });
+  // A ward is always inside its province, so the ward is the unit that governs.
+  assert.deepEqual(filterRpcArgs({ ...noInventoryFilters, province, ward }), {
+    p_area_id: ward,
+  });
+});
+
+test('the catalog check refuses an absent or wrong-level unit', () => {
+  const province = '11111111-1111-4111-8111-111111111111';
+  const otherProvince = '44444444-4444-4444-8444-444444444444';
+  const ward = '22222222-2222-4222-8222-222222222222';
+  const absent = '33333333-3333-4333-8333-333333333333';
+  const units = [
+    { id: province, unit_level: 'province', parent_id: null },
+    { id: otherProvince, unit_level: 'province', parent_id: null },
+    { id: ward, unit_level: 'commune', parent_id: province },
+  ];
+  assert.equal(
+    catalogUnitsMatch(units, { ...noInventoryFilters, province }),
+    true,
+  );
+  assert.equal(
+    catalogUnitsMatch(units, { ...noInventoryFilters, province, ward }),
+    true,
+  );
+  assert.equal(catalogUnitsMatch([], noInventoryFilters), true);
+  assert.equal(
+    catalogUnitsMatch(units, { ...noInventoryFilters, province: ward }),
+    false,
+    'a ward value in the province slot',
+  );
+  assert.equal(
+    catalogUnitsMatch(units, {
+      ...noInventoryFilters,
+      province,
+      ward: province,
+    }),
+    false,
+    'a province value in the ward slot',
+  );
+  assert.equal(
+    catalogUnitsMatch(units, { ...noInventoryFilters, province: absent }),
+    false,
+    'an unknown province',
+  );
+  assert.equal(
+    catalogUnitsMatch(units, {
+      ...noInventoryFilters,
+      province,
+      ward: absent,
+    }),
+    false,
+    'an unknown ward',
+  );
+  assert.equal(
+    catalogUnitsMatch(units, {
+      ...noInventoryFilters,
+      province: otherProvince,
+      ward,
+    }),
+    false,
+    'a ward from a different province',
   );
 });
