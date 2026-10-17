@@ -3353,6 +3353,10 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
     false,
     'The omitted newer event is not rendered as if complete',
   );
+  assert.ok(
+    boundedHistory.historyEvents.some((event) => /^đã chỉnh sửa —/.test(event)),
+    'VI renders the edit marker in the bounded history',
+  );
   switchLocale('en', secondary);
   await waitUntil(
     `() => document.querySelector('section.discussion h2')?.textContent === 'Property discussion'`,
@@ -3376,7 +3380,7 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
     'EN marks bounded history times as Vietnam time',
   );
   assert.ok(
-    boundedHistoryEn.historyEvents.some((event) => /Comment edited/.test(event)),
+    boundedHistoryEn.historyEvents.some((event) => /^edited —/.test(event)),
     'English event labels remain visible in the bounded history',
   );
   assert.deepEqual(
