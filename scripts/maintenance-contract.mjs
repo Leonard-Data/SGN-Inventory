@@ -638,6 +638,90 @@ export async function maintenanceContract({
       );
     },
   );
+  await check(
+    'link create, wrong-person and unlink leave an attributable audit trail with before/after',
+    async () => {
+      const auditSubject = (
+        await db.query('select public.create_contact($1) as id', [
+          { display_name: 'Audit subject person' },
+        ])
+      ).rows[0].id;
+      const auditReplacement = (
+        await db.query('select public.create_contact($1) as id', [
+          { display_name: 'Audit replacement person' },
+        ])
+      ).rows[0].id;
+      const staffAuth = (
+        await db.query(
+          'select auth_user_id from public.employees where id=$1',
+          [employees[5]],
+        )
+      ).rows[0].auth_user_id;
+      // Create, wrong-person replace and unlink all run through the guarded link branch.
+      await db.query(mutate, [
+        created,
+        'link',
+        null,
+        await revision('properties', created),
+        { contact_id: auditSubject, relation: 'unknown' },
+      ]);
+      const linkRev = (
+        await db.query(
+          'select revision from public.property_contacts where property_id=$1 and contact_id=$2',
+          [created, auditSubject],
+        )
+      ).rows[0].revision;
+      await db.query(mutate, [
+        created,
+        'link',
+        auditSubject,
+        linkRev,
+        { contact_id: auditReplacement, relation: 'broker' },
+      ]);
+      const relinkRev = (
+        await db.query(
+          'select revision from public.property_contacts where property_id=$1 and contact_id=$2',
+          [created, auditReplacement],
+        )
+      ).rows[0].revision;
+      await db.query(mutate, [
+        created,
+        'link',
+        auditReplacement,
+        relinkRev,
+        { remove: true },
+      ]);
+      // property_history stays price-only, but the private audit trail still attributes the
+      // relationship changes with actor, time and before/after (issue #72 + #109).
+      await db.exec('reset role');
+      const rows = (
+        await db.query(
+          "select actor_user_id,action,before_data,after_data,created_at from private.audit_events where table_name='property_contacts' and record_key=$1 and (before_data->>'contact_id'=$2 or after_data->>'contact_id'=$2 or before_data->>'contact_id'=$3 or after_data->>'contact_id'=$3) order by id",
+          [created, auditSubject, auditReplacement],
+        )
+      ).rows;
+      const insertRow = rows.find((r) => r.action === 'INSERT');
+      assert.ok(insertRow, 'create writes an audit INSERT row');
+      assert.equal(insertRow.actor_user_id, staffAuth);
+      assert.equal(insertRow.before_data, null);
+      assert.equal(insertRow.after_data.contact_id, auditSubject);
+      assert.ok(insertRow.created_at);
+      const updateRow = rows.find((r) => r.action === 'UPDATE');
+      assert.ok(
+        updateRow,
+        'wrong-person replacement writes an audit UPDATE row',
+      );
+      assert.equal(updateRow.actor_user_id, staffAuth);
+      assert.equal(updateRow.before_data.contact_id, auditSubject);
+      assert.equal(updateRow.after_data.contact_id, auditReplacement);
+      const deleteRow = rows.find((r) => r.action === 'DELETE');
+      assert.ok(deleteRow, 'unlink writes an audit DELETE row');
+      assert.equal(deleteRow.actor_user_id, staffAuth);
+      assert.equal(deleteRow.before_data.contact_id, auditReplacement);
+      assert.equal(deleteRow.after_data, null);
+      await asUser(5);
+    },
+  );
   // Sales journey fixture: a shared contact linked to two of another employee's readable properties,
   // plus an unlinked identity that stays outside the settled linked-detail permission.
   await db.query(mutate, [

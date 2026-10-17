@@ -125,7 +125,7 @@ A separately attributed addition to an open Correction request's explanation, pr
 _Avoid_: Replacement request, edited original
 
 **Property change history**:
-The record of who changed a Property's asking price, when, and its before/after values. Only recorded asking-price changes add rows; creation, address, contact, link, note and status changes are not recorded, and rows recorded before this rule was applied are retained and stay readable.
+The record of who changed a Property's asking price, when, and its before/after values. Only recorded asking-price changes add rows; creation, address, contact, link, note and status changes are not recorded here — they are attributed instead in the private audit trail, which carries the actor, time and before/after values — and rows recorded before this rule was applied are retained and stay readable.
 _Avoid_: Approval queue, page-view history
 
 **Asking-price history**:

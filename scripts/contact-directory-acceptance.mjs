@@ -755,6 +755,22 @@ try {
   await linkContact(staff, left, classifiedOwner, 'broker');
   await linkContact(staff, right, ownerElsewhere, 'owner');
   await linkContact(manager, archived, archivedOnly, 'owner');
+  // Issue #109: a property–contact link is not a property business-history entry — the
+  // relationship change is attributed in the private audit trail instead. Confirm the
+  // freshly linked properties carry no link-derived `property_history` row.
+  const linkedHistory = await retryResult('read linked-property history', () =>
+    sales
+      .from('property_history')
+      .select('id')
+      .in('property_id', [left, right])
+      .limit(1),
+  );
+  assert.equal(linkedHistory.error, null, 'read linked-property history');
+  assert.deepEqual(
+    linkedHistory.data,
+    [],
+    'a property–contact link records no property_history row',
+  );
   await archiveProperty(manager, archived);
   Object.assign(manifest.properties, { left, right, archived });
   Object.assign(manifest.contacts, {
