@@ -140,6 +140,15 @@ async function persistManifest() {
     mode: 0o600,
   });
 }
+const manifestEmployeeIds = () =>
+  [
+    ...Object.values(manifest.identities).map(
+      (identity) => identity.employeeId,
+    ),
+    manifest.importedEmployeeId,
+    manifest.invitedEmployeeId,
+    manifest.conflictEmployeeId,
+  ].filter(Boolean);
 async function createFixtures() {
   await persistManifest();
   for (const [name, role] of [
@@ -196,14 +205,7 @@ async function sessionFor(identity) {
   return client;
 }
 async function cleanup() {
-  const employeeIds = [
-    manifest.invitedEmployeeId,
-    manifest.importedEmployeeId,
-    manifest.conflictEmployeeId,
-    ...Object.values(manifest.identities).map(
-      (identity) => identity.employeeId,
-    ),
-  ].filter(Boolean);
+  const employeeIds = manifestEmployeeIds();
   if (employeeIds.length) {
     const list = employeeIds.map(sqlText).join(',');
     // The invitation guard retains the recorded evidence, so the owner connection removes the
@@ -340,8 +342,13 @@ async function findListed(cookie, employeeId) {
 
 let cleaned = false;
 try {
-  await createFixtures();
   const baseline = employeeCount();
+  await createFixtures();
+  assert.equal(
+    employeeCount(),
+    baseline + manifestEmployeeIds().length,
+    'every synthetic fixture employee was created',
+  );
   await startApp();
   const adminACookie = await appLogin(manifest.identities.adminA);
   const adminA = await sessionFor(manifest.identities.adminA);
@@ -633,8 +640,8 @@ try {
 
   assert.equal(
     employeeCount(),
-    baseline + 2,
-    'only the invited and conflict employees were added',
+    baseline + manifestEmployeeIds().length,
+    'only the recorded synthetic employees were added',
   );
   await cleanup();
   cleaned = true;
