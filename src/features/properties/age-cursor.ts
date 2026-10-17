@@ -24,6 +24,15 @@ export function isInventoryOrder(value: unknown): value is InventoryOrder {
   return value === 'oldest' || value === 'newest';
 }
 
+// The direction toggle has a target only when an entry-date ordering is active: the default
+// order has no chronology to reverse.
+export function reversedOrder(
+  order: InventoryOrder | null,
+): InventoryOrder | null {
+  if (order === null) return null;
+  return order === 'oldest' ? 'newest' : 'oldest';
+}
+
 export function encodeAgeCursor(row: {
   entryOn: string | null;
   id: string;

@@ -52,6 +52,8 @@ const vi = {
   sortDefault: 'Mặc định',
   sortOldest: 'Cũ nhất trước',
   sortNewest: 'Mới nhất trước',
+  orderReverse: 'Đảo chiều',
+  orderReverseHint: 'Chọn thứ tự theo ngày nhập kho để đảo chiều thứ tự.',
   ageHint:
     'Chỉ gồm hồ sơ đang chào hoặc đang thương lượng, chưa lưu trữ. Thứ tự dùng ngày nhập kho gốc, không đổi khi cập nhật, đổi giá hoặc đăng lại. Hồ sơ chưa xác định ngày nhập kho được liệt kê sau cùng, không bị ẩn.',
   filters: 'Bộ lọc',
@@ -594,6 +596,8 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     sortDefault: 'Default',
     sortOldest: 'Oldest first',
     sortNewest: 'Newest first',
+    orderReverse: 'Reverse',
+    orderReverseHint: 'Choose an entry-date order to reverse it.',
     ageHint:
       'Available and negotiating unarchived inventory only. Order uses the original inventory entry date and does not change on update, price edit or relisting. Records with an unknown entry date are listed last, never hidden.',
     filters: 'Filters',
