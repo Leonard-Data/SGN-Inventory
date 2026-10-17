@@ -128,8 +128,14 @@ begin
   -- invitation row so every writer follows the same order.
   perform pg_advisory_xact_lock(hashtextextended('public.employee_invitations:'||normalized,0));
   select * into existing from public.employee_invitations
-    where actor_id = me and idempotency_key = p_key for update;
+    where actor_id = me and idempotency_key = p_key;
   if existing.id is not null then
+    select * into target from public.employees where employees.id = existing.employee_id for update;
+    select * into existing from public.employee_invitations
+      where employee_id = target.id and actor_id = me and idempotency_key = p_key for update;
+    if existing.id is null then
+      raise exception 'invitation not found' using errcode = 'P0023';
+    end if;
     if existing.email <> normalized or existing.role <> requested_role then
       raise exception 'submission key reused for a different invitation' using errcode = '23505';
     end if;
