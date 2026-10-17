@@ -212,14 +212,16 @@ function endpointFailure(result) {
 }
 async function recordedLink(client, propertyId, vendorId, label) {
   return (
-    await readRows(label, () =>
-      client
-        .from('property_vendors')
-        .select('vendor_id,revision')
-        .eq('property_id', propertyId)
-        .eq('vendor_id', vendorId),
-    )
-  )[0] ?? null;
+    (
+      await readRows(label, () =>
+        client
+          .from('property_vendors')
+          .select('vendor_id,revision')
+          .eq('property_id', propertyId)
+          .eq('vendor_id', vendorId),
+      )
+    )[0] ?? null
+  );
 }
 async function unlinkRpcCall(label, client, args, attempts = 4) {
   for (let attempt = 1; attempt <= attempts; attempt++) {
@@ -279,7 +281,8 @@ async function unlinkEndpointCall(
     }
     const transient = thrown
       ? isTransient(thrown)
-      : response?.status === 0 || [502, 503, 504].includes(response?.status ?? 0);
+      : response?.status === 0 ||
+        [502, 503, 504].includes(response?.status ?? 0);
     if (!transient) {
       if (thrown)
         return { status: 0, body: null, observedError: failureDetails(thrown) };
@@ -1370,11 +1373,7 @@ async function vendorLinkJourney({
     p_vendor_id: vendor.id,
     p_expected_link_revision: section.data[0].revision,
   });
-  assert.equal(
-    removed.error,
-    null,
-    refusal(rpcFailure(removed), 'no error'),
-  );
+  assert.equal(removed.error, null, refusal(rpcFailure(removed), 'no error'));
   assert.equal(
     removed.data.removed,
     true,
