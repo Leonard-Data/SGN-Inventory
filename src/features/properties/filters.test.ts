@@ -27,6 +27,7 @@ test('a complete filter set is applied exactly as the address stated it', () => 
     areaMax: '120',
     province: '11111111-1111-4111-8111-111111111111',
     ward: '22222222-2222-4222-8222-222222222222',
+    contact: '33333333-3333-4333-8333-333333333333',
   });
   assert.ok(result.ok);
   assert.deepEqual(result.filters, {
@@ -39,6 +40,7 @@ test('a complete filter set is applied exactly as the address stated it', () => 
     areaMax: '120',
     province: '11111111-1111-4111-8111-111111111111',
     ward: '22222222-2222-4222-8222-222222222222',
+    contact: '33333333-3333-4333-8333-333333333333',
   });
 });
 
@@ -138,6 +140,37 @@ test('a malformed unit and a ward without its province are refused', () => {
     },
   ])
     assert.equal(parse(values).ok, false, JSON.stringify(values));
+});
+
+test('a contact value is a recorded identity, independent of the area filters', () => {
+  const contact = '33333333-3333-4333-8333-333333333333';
+  const result = parse({ contact });
+  assert.ok(result.ok);
+  assert.equal(result.filters.contact, contact);
+  // The contact is its own condition: it needs no province or ward beside it.
+  assert.equal(result.filters.province, null);
+  assert.equal(result.filters.ward, null);
+  // It composes with the other filters instead of replacing them.
+  const composed = parse({ contact, status: 'available', areaMax: '80' });
+  assert.ok(composed.ok);
+  assert.deepEqual(filterParams(composed.filters), {
+    status: 'available',
+    areaMax: '80',
+    contact,
+  });
+  assert.deepEqual(filterRpcArgs(composed.filters), {
+    p_status: 'available',
+    p_area_max: 80,
+    p_contact_id: contact,
+  });
+  // A malformed identity is refused; a blank one is simply no filter.
+  for (const value of [
+    'not-a-contact',
+    '33333333-3333-4333-8333',
+    ' 40000000 ',
+  ])
+    assert.equal(parse({ contact: value }).ok, false, value);
+  assert.equal(parse({ contact: '' }).ok, true);
 });
 
 test('only set filters become link and RPC parameters', () => {

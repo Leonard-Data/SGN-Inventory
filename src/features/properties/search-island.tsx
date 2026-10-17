@@ -6,6 +6,7 @@ import type { Locale } from '@/i18n/messages';
 import { label, messages } from '@/i18n/messages';
 import { formatDecimal, formatVnd } from './format';
 import { api, RequestError } from '@/features/employees/api';
+import type { ContactPage } from '@/features/contacts/types';
 import {
   unitOptionLabels,
   type UnitOption,
@@ -53,6 +54,7 @@ export function SearchIsland({
   const appliedMode = filters.mode ?? '';
   const appliedProvince = filters.province ?? '';
   const appliedWard = filters.ward ?? '';
+  const appliedContact = filters.contact ?? '';
   const appliedStateKey = JSON.stringify([
     query,
     sort,
@@ -61,13 +63,20 @@ export function SearchIsland({
   const [invalid, setInvalid] = useState(false);
   const [mode, setMode] = useState(appliedMode);
   // The dialog's live province selection drives the dependent ward list; applying or dismissing
-  // returns both to the filter set the address currently states.
+  // returns both to the filter set the address currently states. The contact selection is the
+  // same shape: it starts at the applied value and returns to it on dismiss.
   const [province, setProvince] = useState(appliedProvince);
   const [ward, setWard] = useState(appliedWard);
+  const [contact, setContact] = useState(appliedContact);
   const [provinces, setProvinces] = useState<AdminUnit[]>([]);
   const [wards, setWards] = useState<AdminUnit[]>([]);
+  const [contactOptions, setContactOptions] = useState<
+    { id: string; name: string }[]
+  >([]);
   const [provinceFailed, setProvinceFailed] = useState(false);
   const [wardFailed, setWardFailed] = useState(false);
+  const [contactFailed, setContactFailed] = useState(false);
+  const [contactLoaded, setContactLoaded] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
   function dismiss() {
     onOpen(false);
@@ -75,6 +84,7 @@ export function SearchIsland({
     setMode(appliedMode);
     setProvince(appliedProvince);
     setWard(appliedWard);
+    setContact(appliedContact);
   }
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -91,7 +101,14 @@ export function SearchIsland({
     setInvalid(false);
     setProvince(appliedProvince);
     setWard(appliedWard);
-  }, [appliedMode, appliedProvince, appliedWard, appliedStateKey]);
+    setContact(appliedContact);
+  }, [
+    appliedMode,
+    appliedProvince,
+    appliedWard,
+    appliedContact,
+    appliedStateKey,
+  ]);
   // The catalog is the same official list the address form reads. A denial clears the protected
   // surface through the handler the inventory list already uses.
   useEffect(() => {
@@ -144,6 +161,48 @@ export function SearchIsland({
       });
     return () => abort.abort();
   }, [province, onDenied]);
+  // The contact filter lists only identities the caller may read, through the same bounded
+  // directory endpoint People → Contacts uses. It loads when the panel is opened or when the
+  // address already applies a contact, so a plain inventory visit issues no extra read. The
+  // ascending id cursor is followed until the directory is exhausted, so a contact past the first
+  // page stays selectable; a repeated cursor ends the walk rather than looping.
+  useEffect(() => {
+    if (contactLoaded || (!open && !appliedContact)) return;
+    const abort = new AbortController();
+    void (async () => {
+      try {
+        const options: { id: string; name: string }[] = [];
+        const seen = new Set<string>();
+        let after: string | null = null;
+        for (;;) {
+          const page: ContactPage = await api<ContactPage>(
+            '/api/contacts?' + new URLSearchParams(after ? { after } : {}),
+            undefined,
+            abort.signal,
+          );
+          if (abort.signal.aborted) return;
+          for (const record of page.contacts)
+            options.push({ id: record.id, name: record.displayName });
+          if (!page.nextCursor || seen.has(page.nextCursor)) break;
+          seen.add(page.nextCursor);
+          after = page.nextCursor;
+        }
+        options.sort((left, right) => left.name.localeCompare(right.name));
+        setContactOptions(options);
+        setContactFailed(false);
+        setContactLoaded(true);
+      } catch (failure) {
+        if (abort.signal.aborted) return;
+        if (
+          failure instanceof RequestError &&
+          (failure.status === 401 || failure.status === 403)
+        )
+          onDenied(failure.status);
+        else setContactFailed(true);
+      }
+    })();
+    return () => abort.abort();
+  }, [open, appliedContact, contactLoaded, onDenied]);
   // Applying starts a new page-one journey with the stated filters, so a paging cursor from the
   // previous filter set can never be replayed against this one.
   function apply(event: FormEvent<HTMLFormElement>) {
@@ -203,6 +262,8 @@ export function SearchIsland({
     });
   const unitName = (units: readonly AdminUnit[], id: string) =>
     units.find((unit) => unit.id === id)?.name_vi ?? id;
+  const contactName = (id: string) =>
+    contactOptions.find((option) => option.id === id)?.name ?? id;
   if (filters.province)
     applied.push({
       key: 'province',
@@ -212,6 +273,11 @@ export function SearchIsland({
     applied.push({
       key: 'ward',
       label: `${text.ward}: ${unitName(wards, filters.ward)}`,
+    });
+  if (filters.contact)
+    applied.push({
+      key: 'contact',
+      label: `${text.contactFilter}: ${contactName(filters.contact)}`,
     });
   if (filters.priceMin)
     applied.push({
@@ -376,6 +442,39 @@ export function SearchIsland({
                 {select('mode', text.listingMode, INVENTORY_LISTING_MODES)}
                 {select('type', text.propertyType, INVENTORY_PROPERTY_TYPES)}
               </div>
+            </div>
+            <div className="form-section">
+              <div className="form-grid">
+                <div className="field">
+                  <label className="field-label" htmlFor="filter-contact">
+                    {text.contactFilter}
+                  </label>
+                  <select
+                    id="filter-contact"
+                    className="select"
+                    name="contact"
+                    value={contact}
+                    onChange={(event) => setContact(event.currentTarget.value)}
+                  >
+                    <option value="">{text.filtersAny}</option>
+                    {contact &&
+                    !contactOptions.some((option) => option.id === contact) ? (
+                      <option value={contact}>{contactName(contact)}</option>
+                    ) : null}
+                    {contactOptions.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <p className="field-hint">{text.contactFilterHint}</p>
+              {contactFailed ? (
+                <p className="field-error" role="alert">
+                  {text.contactFilterUnavailable}
+                </p>
+              ) : null}
             </div>
             <div className="form-section">
               <div className="form-grid">

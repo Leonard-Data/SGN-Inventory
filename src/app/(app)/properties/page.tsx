@@ -18,6 +18,7 @@ export default async function Properties({
     areaMax?: string;
     province?: string;
     ward?: string;
+    contact?: string;
   }>;
 }) {
   const params = await searchParams;

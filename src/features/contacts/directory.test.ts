@@ -126,6 +126,7 @@ test('recorded values, unknown details and per-property relationships survive', 
     rawPhoneText: null,
     revision,
     links: [],
+    propertyCount: 0,
   });
   assert.deepEqual(
     contactSummary(
@@ -165,8 +166,20 @@ test('recorded values, unknown details and per-property relationships survive', 
           isPrimary: false,
         },
       ],
+      propertyCount: 2,
     },
   );
+});
+
+test('the property count is derived from the readable links', () => {
+  // The count and the listed property codes come from the same projected links, so they cannot
+  // drift; a contact with no readable link counts zero and keeps the unlinked reading in the UI.
+  const one = contactSummary(row(20, { links: [link()] }));
+  assert.equal(one.propertyCount, 1);
+  assert.equal(one.propertyCount, one.links.length);
+  const none = contactSummary(row(21));
+  assert.equal(none.propertyCount, 0);
+  assert.equal(none.propertyCount, none.links.length);
 });
 
 test('a malformed row or relationship is a failed read, not a partial person', () => {

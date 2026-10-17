@@ -72,6 +72,11 @@ const vi = {
     'Lọc theo tỉnh/thành phố và xã/phường của địa chỉ. Chọn tỉnh/thành phố sẽ gồm mọi xã/phường thuộc tỉnh/thành phố đó; chọn xã/phường sẽ thu hẹp trong xã/phường đó. Khi cả hai được chọn, xã/phường là điều kiện có hiệu lực.',
   areaFilterUnavailable:
     'Chưa tải được danh mục tỉnh/thành phố và xã/phường. Bộ lọc giá và diện tích vẫn dùng được.',
+  contactFilter: 'Người liên hệ',
+  contactFilterHint:
+    'Chỉ gồm người liên hệ bạn được phép đọc. Bộ lọc này kết hợp với các điều kiện khác.',
+  contactFilterUnavailable:
+    'Chưa tải được danh sách người liên hệ. Các bộ lọc khác vẫn dùng được.',
   priceUnitVnd: 'VND',
   priceUnitMonthly: 'VND/tháng',
   priceRangeFrom: 'Giá từ',
@@ -529,6 +534,7 @@ const vi = {
   contactColumnProperties: 'Bất động sản liên quan',
   contactColumnActions: 'Thao tác',
   contactNoProperties: 'Chưa gắn bất động sản nào',
+  contactPropertyCount: '{n} bất động sản liên quan',
   contactPageInfo: 'Trang này: {n} người liên hệ',
   contactDirectoryEmpty: 'Chưa có người liên hệ nào được ghi nhận.',
   contactDirectoryEmptyQuery: 'Không tìm thấy người liên hệ phù hợp.',
@@ -762,6 +768,11 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
       "Filter by the address's province/city and commune/ward. Choosing a province/city includes every commune/ward in it; choosing a commune/ward narrows to that ward. When both are set, the ward is the condition in force.",
     areaFilterUnavailable:
       'The province and ward catalog could not be loaded. The price and area filters still work.',
+    contactFilter: 'Contact',
+    contactFilterHint:
+      'Only contacts you may read. This filter combines with the other conditions.',
+    contactFilterUnavailable:
+      'The contact list could not be loaded. The other filters still work.',
     priceUnitVnd: 'VND',
     priceUnitMonthly: 'VND/month',
     priceRangeFrom: 'Price from',
@@ -1204,6 +1215,7 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     contactColumnProperties: 'Linked properties',
     contactColumnActions: 'Actions',
     contactNoProperties: 'No linked property',
+    contactPropertyCount: '{n} linked properties',
     contactPageInfo: 'This page: {n} contacts',
     contactDirectoryEmpty: 'No contacts are recorded.',
     contactDirectoryEmptyQuery: 'No contacts match this search.',

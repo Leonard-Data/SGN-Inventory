@@ -16,6 +16,10 @@ export type ContactSummary = {
   rawPhoneText: string | null;
   revision: string;
   links: ContactLink[];
+  // The number of readable linked properties: exactly the length of `links`, so the stated count
+  // and the listed property codes can never disagree. An archived link outside the caller's
+  // authority is excluded from both. Zero means the contact has no readable link.
+  propertyCount: number;
 };
 
 export type ContactView = 'all' | 'owners';
