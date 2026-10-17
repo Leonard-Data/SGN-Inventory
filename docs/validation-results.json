@@ -1,7 +1,7 @@
 {
-  "checked_at": "2026-10-17T08:02:44.707Z",
+  "checked_at": "2026-10-17T08:05:17.738Z",
   "engine": "PGlite embedded PostgreSQL plus an embedded real PostgreSQL engine for the two-connection last-admin and property-vendor-link races; mocked auth/storage schemas",
-  "passed": 509,
+  "passed": 511,
   "limitations": [
     "Not a live Supabase integration test",
     "HTTP Auth, signed URLs, Vercel and browser flows not exercised",

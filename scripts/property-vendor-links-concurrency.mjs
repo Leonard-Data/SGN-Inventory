@@ -81,9 +81,10 @@ export async function propertyVendorLinksConcurrency({ root, check }) {
         second = new pg.Client(connectionConfig);
         await first.connect();
         await second.connect();
-        await second.query("select set_config('request.jwt.claim.sub',$1,false)", [
-          actor,
-        ]);
+        await second.query(
+          "select set_config('request.jwt.claim.sub',$1,false)",
+          [actor],
+        );
         await second.query('set role authenticated');
         await first.query('begin');
         await first.query('select private.maintenance_gate()');
@@ -101,14 +102,19 @@ export async function propertyVendorLinksConcurrency({ root, check }) {
         );
         await sleep(750);
         const waited = !settled;
-        await first.query('update public.employees set is_active=false where id=$1', [
-          actor,
-        ]);
+        await first.query(
+          'update public.employees set is_active=false where id=$1',
+          [actor],
+        );
         await first.query('commit');
         const outcome = await pending;
         await second.query('rollback').catch(() => {});
         await check(name, async () => {
-          assert.equal(waited, true, 'the guarded call must wait on the maintenance gate');
+          assert.equal(
+            waited,
+            true,
+            'the guarded call must wait on the maintenance gate',
+          );
           assert.equal(outcome?.code, '42501');
           await inspect();
         });
@@ -168,9 +174,10 @@ export async function propertyVendorLinksConcurrency({ root, check }) {
       await first.connect();
       await second.connect();
       for (const client of [first, second]) {
-        await client.query("select set_config('request.jwt.claim.sub',$1,false)", [
-          actorConcurrent,
-        ]);
+        await client.query(
+          "select set_config('request.jwt.claim.sub',$1,false)",
+          [actorConcurrent],
+        );
         await client.query('set role authenticated');
         await client.query('begin');
       }
@@ -180,7 +187,8 @@ export async function propertyVendorLinksConcurrency({ root, check }) {
         'select count(*)::int as n from public.property_history where property_id=$1',
         [property],
       );
-      const firstOutcome = (await first.query(link, [property, vendor])).rows[0].link;
+      const firstOutcome = (await first.query(link, [property, vendor])).rows[0]
+        .link;
       let secondSettled = false;
       let secondOutcome;
       let secondError;
@@ -207,19 +215,25 @@ export async function propertyVendorLinksConcurrency({ root, check }) {
         'select count(*)::int as n from public.property_history where property_id=$1',
         [property],
       );
-      await check('a concurrent second link waits for the first transaction', () => {
-        assert.equal(waited, true);
-      });
-      await check('two authenticated link sessions converge on one current row without property history', () => {
-        assert.equal(secondError, undefined);
-        assert.equal(firstOutcome.created, true);
-        assert.equal(secondOutcome?.created, false);
-        assert.equal(secondOutcome?.revision, firstOutcome.revision);
-        assert.equal(rows.rows.length, 1);
-        assert.equal(rows.rows[0].created_by, actorConcurrent);
-        assert.ok(rows.rows[0].created_at);
-        assert.equal(historyAfter.rows[0].n, historyBefore.rows[0].n);
-      });
+      await check(
+        'a concurrent second link waits for the first transaction',
+        () => {
+          assert.equal(waited, true);
+        },
+      );
+      await check(
+        'two authenticated link sessions converge on one current row without property history',
+        () => {
+          assert.equal(secondError, undefined);
+          assert.equal(firstOutcome.created, true);
+          assert.equal(secondOutcome?.created, false);
+          assert.equal(secondOutcome?.revision, firstOutcome.revision);
+          assert.equal(rows.rows.length, 1);
+          assert.equal(rows.rows[0].created_by, actorConcurrent);
+          assert.ok(rows.rows[0].created_at);
+          assert.equal(historyAfter.rows[0].n, historyBefore.rows[0].n);
+        },
+      );
     } finally {
       await second?.query('rollback').catch(() => {});
       await first?.query('rollback').catch(() => {});
@@ -233,7 +247,10 @@ export async function propertyVendorLinksConcurrency({ root, check }) {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
   let passed = 0;
   await propertyVendorLinksConcurrency({
     root: process.env.SGN_PROJECT_ROOT || process.cwd(),
