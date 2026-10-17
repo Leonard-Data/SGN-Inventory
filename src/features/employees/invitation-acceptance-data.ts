@@ -46,17 +46,19 @@ export type InvitationSessionStatus =
   | { status: 'active'; employee: AcceptedEmployee };
 
 // A transient Auth/provider failure is retryable, not a refusal of the invitation.
+function authFailure(error: { name?: string; status?: number }): ApiError {
+  return error.name === 'AuthRetryableFetchError' || (error.status ?? 0) >= 500
+    ? new ApiError(503, 'unavailable')
+    : new ApiError(401, 'invitation-invalid');
+}
+
 async function invitationUser(context: RouteContext) {
   const {
     data: { user },
     error,
   } = await context.client.auth.getUser();
-  if (
-    error &&
-    (error.name === 'AuthRetryableFetchError' || (error.status ?? 0) >= 500)
-  )
-    throw new ApiError(503, 'unavailable');
-  if (error || !user) throw new ApiError(401, 'invitation-invalid');
+  if (error) throw authFailure(error);
+  if (!user) throw new ApiError(401, 'invitation-invalid');
   return user;
 }
 
@@ -75,7 +77,7 @@ export async function establishInvitationSession(
       access_token: input.accessToken,
       refresh_token: input.refreshToken,
     });
-    if (error) throw new ApiError(401, 'invitation-invalid');
+    if (error) throw authFailure(error);
   }
   await invitationUser(context);
 }
