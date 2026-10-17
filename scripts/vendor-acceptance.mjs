@@ -1095,6 +1095,7 @@ async function vendorLinkJourney({
     'a sales employee links and unlinks while direct writes stay blocked',
   );
 
+  const beforeLink = await propertyRevisionOf(staff, liveProperty);
   const created = await rpcCall(
     'first confirmed link',
     staff,
@@ -1224,7 +1225,8 @@ async function vendorLinkJourney({
   );
   assert.equal(ownership.length, 0);
   const facts = await propertyRevisionOf(staff, liveProperty);
-  assert.equal(facts.record_review_status, 'pending');
+  assert.equal(facts.record_review_status, beforeLink.record_review_status);
+  assert.equal(facts.revision, beforeLink.revision);
   assert.equal(facts.status, 'available');
   observed(
     'linking writes no owner link, lock, owner-contact credit or property-fact change',

@@ -413,7 +413,6 @@ const vi = {
   vendorLinkNone:
     'Không có nhà cung cấp phù hợp. Ghi nhận công ty trong danh sách nhà cung cấp trước.',
   vendorLinkSubmit: 'Liên kết với bất động sản này',
-  vendorLinkLinked: 'Đã liên kết nhà cung cấp với bất động sản này.',
   vendorLinkStale:
     'Thông tin bất động sản đã thay đổi. Đọc lại trang rồi liên kết lại; chưa có thay đổi nào được lưu.',
   vendorLinkInvalid: 'Liên kết không hợp lệ. Chọn lại nhà cung cấp.',
@@ -424,7 +423,6 @@ const vi = {
   vendorUnlinkConfirm:
     'Gỡ liên kết này? Chỉ mối liên hệ hiện tại bị gỡ; nhà cung cấp và các liên kết khác vẫn được giữ.',
   vendorUnlinkYes: 'Xác nhận gỡ liên kết',
-  vendorUnlinked: 'Đã gỡ liên kết. Nhà cung cấp vẫn được giữ.',
   vendorLinkedProperties: 'Bất động sản đã liên kết',
   vendorLinkedPropertiesNote:
     'Chỉ các bất động sản bạn được phép đọc. Bất động sản đã lưu trữ không hiển thị ngoài quyền của bạn.',
@@ -973,7 +971,6 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     vendorLinkNone:
       'No vendor matches. Record the company in the vendor directory first.',
     vendorLinkSubmit: 'Link to this property',
-    vendorLinkLinked: 'The vendor is linked to this property.',
     vendorLinkStale:
       'The property changed. Reload the page and link again; nothing was saved.',
     vendorLinkInvalid: 'That link was refused. Choose the vendor again.',
@@ -984,7 +981,6 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     vendorUnlinkConfirm:
       'Unlink this relationship? Only the current link is removed; the vendor and its other links remain.',
     vendorUnlinkYes: 'Confirm unlink',
-    vendorUnlinked: 'The link was removed. The vendor remains.',
     vendorLinkedProperties: 'Linked properties',
     vendorLinkedPropertiesNote:
       'Only properties you may read. An archived property stays hidden outside your role.',

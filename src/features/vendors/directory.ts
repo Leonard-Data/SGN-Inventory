@@ -99,8 +99,8 @@ export function vendorPage(rows: readonly unknown[]): VendorPage {
 }
 
 // C5: every active employee may read the directory; only staff/manager/admin may create
-// or maintain a vendor. Named once so the route guard and the tests share it; the database
-// re-checks the live role on every call.
+// or maintain a vendor. Named once so the route guard, the rendered create panel and the
+// tests share it; the database re-checks the live role on every call.
 export function mayMaintainVendors(role: string): boolean {
   return role === 'staff' || role === 'manager' || role === 'admin';
 }
