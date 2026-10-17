@@ -85,7 +85,6 @@ export function InviteScreen({ initialLocale }: { initialLocale: Locale }) {
         const result = await api<{
           status: 'setup' | 'active';
           setup?: { invitationId: string; revision: number; email: string };
-          employee?: { displayName: string };
         }>('/api/auth/invite/session', sessionBody.current);
         if (cancelled) return;
         if (window.location.hash) {

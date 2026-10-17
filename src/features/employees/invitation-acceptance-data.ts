@@ -42,12 +42,15 @@ export type InvitationSetup = {
 };
 
 export type InvitationSessionStatus =
-  | { status: 'setup'; setup: InvitationSetup }
-  | { status: 'active'; employee: AcceptedEmployee };
+  { status: 'setup'; setup: InvitationSetup } | { status: 'active' };
 
 // A transient Auth/provider failure is retryable, not a refusal of the invitation.
+function authOutage(error: { name?: string; status?: number }): boolean {
+  return error.name === 'AuthRetryableFetchError' || (error.status ?? 0) >= 500;
+}
+
 function authFailure(error: { name?: string; status?: number }): ApiError {
-  return error.name === 'AuthRetryableFetchError' || (error.status ?? 0) >= 500
+  return authOutage(error)
     ? new ApiError(503, 'unavailable')
     : new ApiError(401, 'invitation-invalid');
 }
@@ -108,27 +111,15 @@ export async function invitationSessionStatus(
     throw new ApiError(409, 'invitation-not-accepted');
   const { data: employee, error: employeeError } = await admin
     .from('employees')
-    .select(
-      'id,display_name,email,role,auth_user_id,is_active,account_deleted_at,preferred_locale',
-    )
+    .select('auth_user_id,is_active,account_deleted_at')
     .eq('id', invitation.employeeId)
     .maybeSingle();
   if (employeeError) throw databaseError(employeeError);
   if (!employee) throw new ApiError(409, 'invitation-changed');
   if (employee.account_deleted_at)
     throw new ApiError(409, 'invitation-changed');
-  if (employee.auth_user_id === user.id && employee.is_active) {
-    return {
-      status: 'active',
-      employee: {
-        id: employee.id,
-        displayName: employee.display_name,
-        email: employee.email,
-        role: employee.role as AcceptedEmployee['role'],
-        locale: employee.preferred_locale === 'en' ? 'en' : 'vi',
-      },
-    };
-  }
+  if (employee.auth_user_id === user.id && employee.is_active)
+    return { status: 'active' };
   if (employee.auth_user_id !== null)
     throw new ApiError(409, 'invitation-changed');
   return {
@@ -156,7 +147,10 @@ export async function acceptInvitation(
   const { error: passwordError } = await context.client.auth.updateUser({
     password: input.password,
   });
-  if (passwordError) throw new ApiError(503, 'unavailable');
+  if (passwordError)
+    throw authOutage(passwordError)
+      ? new ApiError(503, 'unavailable')
+      : new ApiError(400, 'invalid-input');
   const { data, error } = await context.client.rpc(
     'accept_employee_invitation',
     {

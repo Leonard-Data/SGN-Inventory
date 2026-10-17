@@ -7,7 +7,7 @@ One company's shared property inventory, employee access, contacts, reservations
 ### Employees and access
 
 **Employee invitation**:
-An offer to join the company's internal inventory. Acceptance alone does not establish active employee access.
+An offer to join the company's internal inventory, recorded against the intended employee and address. Acceptance by that intended invitee links and activates the retained employee immediately, with no separate approval.
 _Avoid_: Access approval
 
 **Linked employee**:
