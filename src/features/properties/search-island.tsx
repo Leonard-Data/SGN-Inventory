@@ -161,13 +161,14 @@ export function SearchIsland({
   // The contact filter lists only identities the caller may read, through the bounded name
   // search and paging the property maintenance picker already uses: a page at a time on
   // request, never a walk over the whole directory. The applied filter's label is the one
-  // bounded identity read below, so a reloaded or shared address still names the person.
+  // bounded name-only read below, so a reloaded or shared address still names the person even
+  // when the guarded affected-property detail would refuse.
   useEffect(() => {
     setContactLabel(null);
     if (!appliedContact) return;
     const abort = new AbortController();
     void api<unknown>(
-      '/api/contacts/' + appliedContact,
+      '/api/contacts/' + appliedContact + '/name',
       undefined,
       abort.signal,
     )
@@ -181,12 +182,11 @@ export function SearchIsland({
       })
       .catch((failure) => {
         if (abort.signal.aborted) return;
-        // A contact the caller may read but may not preview is that contact's own refusal, not
-        // a lost session, so only a genuine denial clears the protected surface.
+        // A genuine miss keeps the neutral label; only a lost session or membership clears the
+        // protected surface.
         if (
           failure instanceof RequestError &&
-          (failure.status === 401 ||
-            (failure.status === 403 && failure.code !== 'contact-refusal'))
+          (failure.status === 401 || failure.status === 403)
         )
           onDenied(failure.status);
       });
