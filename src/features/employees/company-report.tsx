@@ -117,7 +117,9 @@ export function CompanyReport({
                       .replace('{to}', initialTo)
                   : error === 'sign-out-failed'
                     ? text.signOutFailed
-                    : text.unavailable}
+                    : error === 'access-changed'
+                      ? text.accessChanged
+                      : text.unavailable}
           </span>
           <button
             type="button"

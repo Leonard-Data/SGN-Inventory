@@ -130,7 +130,9 @@ export function EmployeeDirectory({
               ? text.invalidInput
               : error === 'sign-out-failed'
                 ? text.signOutFailed
-                : text.employeeDirectoryFailed}
+                : error === 'access-changed'
+                  ? text.accessChanged
+                  : text.employeeDirectoryFailed}
           </span>
           <button
             type="button"

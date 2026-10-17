@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Employee, EmployeeSession } from './types';
 import { api, RequestError } from './api';
 import {
+  AccessChangedError,
   loadProtected,
   refocusAction,
   renderedSession,
@@ -91,7 +92,13 @@ export function useProtectedData<T>(
         );
         return;
       }
-      setError(failure instanceof RequestError ? failure.code : 'unavailable');
+      setError(
+        failure instanceof AccessChangedError
+          ? 'access-changed'
+          : failure instanceof RequestError
+            ? failure.code
+            : 'unavailable',
+      );
     } finally {
       if (version === generation.current) {
         reading.current = false;

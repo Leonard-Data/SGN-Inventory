@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  AccessChangedError,
   loadProtected,
   refocusAction,
   renderedSession,
@@ -91,7 +92,7 @@ test('an advanced access revision conceals the rendered snapshot before its data
   await flush();
   session.resolve(sessionResponse(reviewer, 1));
   await flush();
-  assert.deepEqual(events, ['source-requested', 'conceal']);
+  assert.deepEqual(events, ['conceal', 'source-requested']);
   assert.equal(settled, false);
   source.resolve(archived);
   assert.deepEqual(await pending, {
@@ -128,7 +129,7 @@ test('an ordinary employee replacing a reviewer conceals the archived snapshot b
   await flush();
   session.resolve(sessionResponse(sales));
   await flush();
-  assert.deepEqual(events, ['source-requested', 'conceal']);
+  assert.deepEqual(events, ['conceal', 'source-requested']);
   assert.equal(settled, false);
   source.resolve(archived);
   assert.deepEqual(await pending, {
@@ -163,7 +164,7 @@ test('the same employee with a different role conceals the manager snapshot befo
   await flush();
   session.resolve(sessionResponse({ ...manager, role: 'sales' }));
   await flush();
-  assert.deepEqual(events, ['source-requested', 'conceal']);
+  assert.deepEqual(events, ['conceal', 'source-requested']);
   source.resolve(archived);
   assert.deepEqual(await pending, {
     employee: { ...manager, role: 'sales' },
@@ -217,6 +218,28 @@ test('a revision advancing during the read discards the data it was read under',
     data: { property: { id: 'read-2' } },
     accessRevision: 3,
   });
+});
+
+test('a revision that never settles stops after three attempts without publishing', async (t) => {
+  let sessionReads = 0;
+  let sourceReads = 0;
+  t.mock.method(globalThis, 'fetch', async () =>
+    sessionResponse(sales, ++sessionReads),
+  );
+  await assert.rejects(
+    loadProtected({
+      source: async () => {
+        sourceReads++;
+        return archived;
+      },
+      signal: new AbortController().signal,
+      renderedFor: renderedSession(sales),
+      renderedAccessRevision: 0,
+      onIdentityChange: () => {},
+    }),
+    AccessChangedError,
+  );
+  assert.equal(sourceReads, 3);
 });
 
 test('a denied session rejects without publishing or concealing', async (t) => {

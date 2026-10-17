@@ -55,7 +55,9 @@ export function VendorDetailView({
         ? text.invalidInput
         : error === 'sign-out-failed'
           ? text.signOutFailed
-          : text.vendorDetailFailed;
+          : error === 'access-changed'
+            ? text.accessChanged
+            : text.vendorDetailFailed;
   return (
     <>
       <p className="page-section">

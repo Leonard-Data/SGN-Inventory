@@ -286,6 +286,8 @@ const vi = {
   northwest: 'Tây Bắc',
   signOutFailed:
     'Đăng xuất chưa hoàn tất. Thông tin đã được ẩn; vui lòng thử lại.',
+  accessChanged:
+    'Quyền truy cập của bạn đã thay đổi. Tải lại trang để tiếp tục.',
   // Canonical authentication design foundation (tickets #50–#52).
   brandRole: 'Hệ Thống quản lý bất động sản',
   brandTitle: 'Hệ thống quản lý bất động sản Saigon New House.',
@@ -1236,6 +1238,7 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     northwest: 'Northwest',
     signOutFailed:
       'Sign-out did not complete. Information is hidden; please retry.',
+    accessChanged: 'Your access changed. Reload the page to continue.',
     // Canonical authentication design foundation (tickets #50–#52).
     brandRole: 'Real estate management system',
     brandTitle: "Saigon New House's real estate management system.",

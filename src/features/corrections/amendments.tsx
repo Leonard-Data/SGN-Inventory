@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import type { Locale } from '@/i18n/messages';
+import { messages, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { BusinessValues } from '@/features/property-maintenance/history';
 import { maintenanceText } from '@/features/property-maintenance/messages';
@@ -27,7 +27,9 @@ function AmendmentList({
       {busy ? <p role="status">{text.loading}</p> : null}
       {error ? (
         <p role="alert">
-          {text.unavailable}{' '}
+          {error === 'access-changed'
+            ? messages[locale].accessChanged
+            : text.unavailable}{' '}
           <button className="btn btn-sm btn-ghost" onClick={reload}>
             {text.refresh}
           </button>

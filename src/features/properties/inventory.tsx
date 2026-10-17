@@ -339,7 +339,9 @@ export function Inventory({
                     ? text.signOutFailed
                     : error === 'invalid-input'
                       ? text.invalidInput
-                      : text.unavailable}
+                      : error === 'access-changed'
+                        ? text.accessChanged
+                        : text.unavailable}
               </h3>
               <button
                 className="btn btn-secondary btn-sm"

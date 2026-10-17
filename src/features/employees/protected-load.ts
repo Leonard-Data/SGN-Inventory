@@ -31,6 +31,10 @@ export function refocusAction(
   return renderedFor ? 'recheck' : 'reload';
 }
 
+// The bounded read gave up without ever observing a stable session, so the surface
+// stops instead of reading again.
+export class AccessChangedError extends Error {}
+
 export async function loadProtected<T>(options: {
   source: string | ((signal: AbortSignal) => Promise<T>);
   signal: AbortSignal;
@@ -42,14 +46,14 @@ export async function loadProtected<T>(options: {
     typeof options.source === 'string'
       ? api<T>(options.source, undefined, options.signal)
       : options.source(options.signal);
-  let sourcePromise = readSource();
-  void sourcePromise.catch(() => {});
+  // The session read brackets the data read on both sides, so the data is only
+  // accepted when the access it was authorized on did not move under it.
   let session = await api<EmployeeSession>(
     '/api/session',
     undefined,
     options.signal,
   );
-  for (;;) {
+  for (let attempt = 0; attempt < 3; attempt++) {
     options.signal.throwIfAborted();
     if (
       sessionDiffers(
@@ -60,10 +64,8 @@ export async function loadProtected<T>(options: {
     )
       options.onIdentityChange();
     options.signal.throwIfAborted();
-    const data = await sourcePromise;
+    const data = await readSource();
     options.signal.throwIfAborted();
-    // Read the session again after the data so a change during the read cannot
-    // publish data authorized on the session that has just been superseded.
     const current = await api<EmployeeSession>(
       '/api/session',
       undefined,
@@ -85,7 +87,6 @@ export async function loadProtected<T>(options: {
     if (options.renderedFor !== null) options.onIdentityChange();
     options.signal.throwIfAborted();
     session = current;
-    sourcePromise = readSource();
-    void sourcePromise.catch(() => {});
   }
+  throw new AccessChangedError();
 }
