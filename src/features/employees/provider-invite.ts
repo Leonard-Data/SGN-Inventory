@@ -4,8 +4,7 @@ import type { Database } from '@/types/database';
 import { providerDetail } from './deactivation';
 import {
   invitationDestination,
-  isUuid,
-  normalizeEmail,
+  providerIdentityPage,
   providerInviteResult,
   type InvitationSender,
   type ProviderIdentity,
@@ -61,23 +60,12 @@ export function supabaseInvitationSender(
               outcome: 'unknown',
               detail: providerDetail(new Error(error.message)),
             };
-          const users = data?.users;
-          if (!Array.isArray(users))
-            return {
-              outcome: 'unknown',
-              detail: 'the provider identity list is unreadable',
-            };
-          const match = users.find(
-            (user) => normalizeEmail(user.email) === email,
+          const decision = providerIdentityPage(
+            data?.users,
+            email,
+            IDENTITY_PAGE_SIZE,
           );
-          if (match)
-            return isUuid(match.id)
-              ? { outcome: 'found', providerUserId: match.id }
-              : {
-                  outcome: 'unknown',
-                  detail: 'the provider identity is unreadable',
-                };
-          if (users.length < IDENTITY_PAGE_SIZE) return { outcome: 'absent' };
+          if (decision.outcome !== 'continue') return decision;
         }
         return {
           outcome: 'unknown',

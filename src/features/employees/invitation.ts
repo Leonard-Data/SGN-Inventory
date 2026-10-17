@@ -251,6 +251,38 @@ export function providerInviteResult(
   return { outcome: 'accepted', providerUserId: id };
 }
 
+// One page of the provider identity list, classified before the scan reads another page. Only a
+// page shorter than the page size proves the list ended, so only such a page without the address
+// may answer `absent`: a full page proves nothing, and a payload that is not a list of identities
+// is never evidence that an identity is missing.
+export type ProviderIdentityPage = ProviderIdentity | { outcome: 'continue' };
+
+export function providerIdentityPage(
+  users: unknown,
+  email: string,
+  pageSize: number,
+): ProviderIdentityPage {
+  if (!Array.isArray(users))
+    return {
+      outcome: 'unknown',
+      detail: 'the provider identity list is unreadable',
+    };
+  const identities = users as { id?: unknown; email?: unknown }[];
+  const match = identities.find(
+    (identity) => normalizeEmail(identity.email) === email,
+  );
+  if (match)
+    return isUuid(match.id)
+      ? { outcome: 'found', providerUserId: match.id }
+      : {
+          outcome: 'unknown',
+          detail: 'the provider identity is unreadable',
+        };
+  return identities.length < pageSize
+    ? { outcome: 'absent' }
+    : { outcome: 'continue' };
+}
+
 // The fixed application destination for an invitation email. It is built from the configured
 // application origin and a constant path, so no request can redirect it; the separate
 // acceptance ticket serves this destination and owns what the invitee does there.
@@ -271,9 +303,9 @@ export type ProviderIdentity =
 
 export interface InvitationSender {
   send(request: InvitationSendRequest): Promise<InvitationProviderResult>;
-  // The address lookup used when a refusal needs classifying; absent when the adapter cannot
-  // ask the provider anything but the invitation call itself.
-  identity?(email: string): Promise<ProviderIdentity>;
+  // The address lookup that classifies a refused send by telling `failed` from an address the
+  // provider already holds.
+  identity(email: string): Promise<ProviderIdentity>;
 }
 
 export type InvitationRecordRequest = {
@@ -343,7 +375,7 @@ export async function settleInvitationSend(
   request: InvitationSendRequest,
 ): Promise<InvitationProviderResult> {
   const result = await attemptInvitationSend(sender, request);
-  if (result.outcome !== 'failed' || !sender.identity) return result;
+  if (result.outcome !== 'failed') return result;
   let identity: ProviderIdentity;
   try {
     identity = await sender.identity(request.email);

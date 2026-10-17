@@ -425,7 +425,7 @@ const vi = {
   employeeInvitePending:
     'Yêu cầu mời đã được ghi nhận; nhà cung cấp chưa xác nhận.',
   employeeInviteFailed:
-    'Yêu cầu mời đã thành công, nhưng bước gửi của nhà cung cấp chưa hoàn tất. Lời mời đã ghi nhận bên dưới hiển thị trạng thái cần đối soát và chi tiết từ nhà cung cấp; hãy thử lại với cùng thao tác.',
+    'Yêu cầu mời đã được ghi nhận, nhưng bước gửi của nhà cung cấp chưa hoàn tất và chưa xác nhận việc gửi thư. Lời mời đã ghi nhận bên dưới hiển thị trạng thái cần đối soát và chi tiết từ nhà cung cấp; hãy thử lại với cùng thao tác.',
   employeeInviteEmailRecorded:
     'Email này đã thuộc một nhân viên đã ghi nhận, không phải người mới; hãy xử lý theo chính sách người quay lại.',
   employeeInviteAlreadyRecorded: 'Đã có lời mời được ghi nhận cho người này.',
@@ -1099,7 +1099,7 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     employeeInvitePending:
       'The invitation request is recorded; the provider has not confirmed it yet.',
     employeeInviteFailed:
-      'The invitation request succeeded, but the provider step did not complete. The recorded invitation below shows the reconciliation state and the provider detail; retry under the same action.',
+      'The invitation request is recorded, but the provider step did not complete and no delivery is confirmed. The recorded invitation below shows the reconciliation state and the provider detail; retry under the same action.',
     employeeInviteEmailRecorded:
       'This email already belongs to a recorded employee, not a new person; handle it through the returning-person policy.',
     employeeInviteAlreadyRecorded:

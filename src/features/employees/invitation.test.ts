@@ -15,6 +15,7 @@ import {
   invitationStatus,
   normalizeEmail,
   parseInvitation,
+  providerIdentityPage,
   providerInviteResult,
   settleInvitationSend,
   type EmployeeInvitation,
@@ -349,6 +350,9 @@ test('the invitation is sent to the recorded address and its outcome is recorded
       sent.push(request.email);
       return { outcome: 'accepted', providerUserId };
     },
+    async identity() {
+      throw new Error('an accepted send needs no identity lookup');
+    },
   };
   const result = await administerInvitation(gateway, sender, {
     email: 'invitee@example.test',
@@ -367,6 +371,9 @@ test('a recorded invitation is never re-sent and a failed sender stays reconcila
     async send() {
       sends += 1;
       return { outcome: 'accepted', providerUserId };
+    },
+    async identity() {
+      throw new Error('an accepted send needs no identity lookup');
     },
   };
   const settled: InvitationGateway = {
@@ -407,6 +414,9 @@ test('a recorded invitation is never re-sent and a failed sender stays reconcila
   const failing: InvitationSender = {
     async send() {
       throw new Error('transport closed');
+    },
+    async identity() {
+      throw new Error('an unproven send needs no identity lookup');
     },
   };
   await administerInvitation(reconciling, failing, {
@@ -493,22 +503,61 @@ test('an accepted invitation whose recording failed recovers on the refused retr
   assert.equal(invitationStatus(recovered), 'recorded');
 });
 
+test('only a short identity page may claim the address has no identity', () => {
+  const page = (length: number, email = 'other@example.test') =>
+    Array.from({ length }, () => ({ id: providerUserId, email }));
+  const target = 'invitee@example.test';
+
+  assert.deepEqual(providerIdentityPage(page(3), target, 50), {
+    outcome: 'absent',
+  });
+  assert.deepEqual(providerIdentityPage([], target, 50), { outcome: 'absent' });
+  assert.deepEqual(providerIdentityPage(page(50), target, 50), {
+    outcome: 'continue',
+  });
+  assert.deepEqual(providerIdentityPage(page(50, target), target, 50), {
+    outcome: 'found',
+    providerUserId,
+  });
+  assert.deepEqual(
+    providerIdentityPage(page(1, 'invitee@example.test '), target, 50),
+    { outcome: 'found', providerUserId },
+  );
+  assert.equal(
+    providerIdentityPage(page(1, 'not-a-uuid@example.test'), target, 50)
+      .outcome,
+    'absent',
+  );
+  assert.equal(
+    providerIdentityPage([{ id: 'not-a-uuid', email: target }], target, 50)
+      .outcome,
+    'unknown',
+  );
+  // An unreadable payload is never evidence that the address has no identity.
+  for (const payload of [undefined, null, {}, 'page', 50]) {
+    assert.equal(
+      providerIdentityPage(payload, target, 50).outcome,
+      'unknown',
+      `a ${JSON.stringify(payload)} payload stays inconclusive`,
+    );
+  }
+});
+
 test('a refused retry is failed only when no identity exists for the address', async () => {
   const refused: InvitationProviderResult = {
     outcome: 'failed',
     detail: 'User already registered',
   };
   const sender = (
-    identity?: InvitationSender['identity'],
+    identity: InvitationSender['identity'],
   ): InvitationSender => ({
     async send() {
       return refused;
     },
-    ...(identity ? { identity } : {}),
+    identity,
   });
   const request = { email: 'invitee@example.test' };
 
-  assert.deepEqual(await settleInvitationSend(sender(), request), refused);
   assert.deepEqual(
     await settleInvitationSend(
       sender(async () => ({ outcome: 'absent' })),
