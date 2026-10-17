@@ -4,11 +4,7 @@ import type { Locale } from '@/i18n/messages';
 import type { Json } from '@/types/database';
 import type { Employee } from '@/features/employees/types';
 import { ContactPicker } from '@/features/property-maintenance/contact-picker';
-import {
-  api,
-  isPropertyAccessFailure,
-  RequestError,
-} from '@/features/employees/api';
+import { api, RequestError } from '@/features/employees/api';
 import type { PropertyDetail } from '@/features/properties/detail-data';
 import {
   AddressFields,
@@ -57,7 +53,6 @@ export function CorrectionDraft({
   proposal: incomingProposal = {},
   onSaved,
   onDenied,
-  onInvalidate,
 }: {
   detail: PropertyDetail;
   locale: Locale;
@@ -66,7 +61,6 @@ export function CorrectionDraft({
   proposal?: Json;
   onSaved: () => void | Promise<void>;
   onDenied: (status: number) => void;
-  onInvalidate?: () => void;
 }) {
   const [initial] = useState({
     detail: incomingDetail,
@@ -163,10 +157,6 @@ export function CorrectionDraft({
       setSuccess(true);
       await onSaved();
     } catch (failure) {
-      if (isPropertyAccessFailure(failure)) {
-        onInvalidate?.();
-        return;
-      }
       if (
         failure instanceof RequestError &&
         (failure.status === 401 || failure.status === 403)
@@ -190,7 +180,6 @@ export function CorrectionDraft({
           selected={contactId}
           onSelected={setContactId}
           onDenied={onDenied}
-          onInvalidate={onInvalidate}
         />
       ) : null}
       <form onSubmit={submit}>
@@ -306,7 +295,6 @@ export function CorrectionDraft({
                   locale={locale}
                   values={starting}
                   onDenied={onDenied}
-                  onInvalidate={onInvalidate}
                 />
               ) : (
                 <RecordFields

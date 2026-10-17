@@ -2,11 +2,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { Locale } from '@/i18n/messages';
 import type { Employee } from '@/features/employees/types';
-import {
-  api,
-  isPropertyAccessFailure,
-  RequestError,
-} from '@/features/employees/api';
+import { api, RequestError } from '@/features/employees/api';
 import type { PropertyDetail } from '@/features/properties/detail-data';
 import type { ContactDetail } from './data';
 import { MutationForm, RecordFields, AddressFields } from './forms';
@@ -127,10 +123,6 @@ export function Maintenance({
         });
     } catch (failure) {
       if (abort.signal.aborted) return;
-      if (isPropertyAccessFailure(failure)) {
-        onInvalidate?.();
-        return;
-      }
       if (
         failure instanceof RequestError &&
         failureRoute(failure.status, failure.code) === 'denied'
@@ -347,7 +339,6 @@ export function Maintenance({
                       locale={locale}
                       values={editor.values}
                       onDenied={onDenied}
-                      onInvalidate={onInvalidate}
                       variant={editor.target}
                     />
                   </MutationForm>
@@ -486,7 +477,6 @@ export function Maintenance({
                       selected={selected}
                       onSelected={setSelected}
                       onDenied={onDenied}
-                      onInvalidate={onInvalidate}
                     />
                   ) : null}
                   <MutationForm

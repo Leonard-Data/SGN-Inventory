@@ -1266,7 +1266,6 @@ export function Detail({
                     locale={locale}
                     role={employee.role}
                     onDenied={denyFiles}
-                    onInvalidate={recoverChildAfterInvalidation}
                     onSaved={changed}
                   />
                 </DetailActionDialog>
