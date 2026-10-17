@@ -37,7 +37,6 @@ export type InvitationSetup = {
   invitationId: string;
   revision: number;
   email: string;
-  role: string;
 };
 
 export type InvitationSessionStatus =
@@ -127,7 +126,6 @@ export async function invitationSessionStatus(
       invitationId: invitation.id,
       revision: invitation.revision,
       email: invitation.email,
-      role: invitation.role,
     },
   };
 }

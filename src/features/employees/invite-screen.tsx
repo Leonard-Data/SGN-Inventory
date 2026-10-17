@@ -259,9 +259,10 @@ export function InviteScreen({ initialLocale }: { initialLocale: Locale }) {
             onSubmit={submit}
           >
             <div className="field">
-              <label>{text.inviteEmailLabel}</label>
+              <label htmlFor="invite-email">{text.inviteEmailLabel}</label>
               <span className="input-wrap">
                 <input
+                  id="invite-email"
                   className="input"
                   type="email"
                   value={email}

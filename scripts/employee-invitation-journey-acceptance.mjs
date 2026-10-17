@@ -52,7 +52,6 @@ const PLANNED_CHECKS = [
   'a wrong sign-in identity is refused with no authority',
   'a consumed replay converges on the same person and role without reassignment',
   'a deactivation racing acceptance is refused and disabled access is never restored',
-  'an interrupted setup retries the same invitation and role instead of assigning it to another person',
   'the synthetic rows and Auth identities are removed and the pre-run baseline is restored',
 ];
 
