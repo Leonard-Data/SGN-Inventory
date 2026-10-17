@@ -5,6 +5,7 @@ import {
   CONTACT_QUERY_MAX_LENGTH,
   ContactDirectoryError,
   contactDirectoryQuery,
+  contactName,
   contactPage,
   contactSummary,
 } from './directory.ts';
@@ -210,6 +211,23 @@ test('an archived linked property is listed but never counted', () => {
   );
   assert.equal(mixed.links.length, 2);
   assert.equal(mixed.propertyCount, 1);
+});
+
+test('the applied contact name is read from one bounded identity read', () => {
+  assert.equal(
+    contactName({ contact: { display_name: 'Nguyễn Văn A' }, impact: {} }),
+    'Nguyễn Văn A',
+  );
+  // An unreadable or malformed detail response is a failed name, never a person named by id.
+  for (const broken of [
+    null,
+    {},
+    { contact: null },
+    { contact: { display_name: '' } },
+    { contact: { display_name: 7 } },
+    { contact: [] },
+  ])
+    assert.throws(() => contactName(broken), ContactDirectoryError);
 });
 
 test('a malformed row or relationship is a failed read, not a partial person', () => {

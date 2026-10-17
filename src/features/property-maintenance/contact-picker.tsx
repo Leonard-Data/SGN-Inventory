@@ -7,11 +7,15 @@ import type { ContactPage } from '@/features/contacts/types';
 export function ContactPicker({
   locale,
   selected,
+  selectedName,
   onSelected,
   onDenied,
 }: {
   locale: Locale;
   selected: string;
+  // The recorded name of an already-applied selection the current results page cannot contain,
+  // so the chosen-contact line never presents a bare identifier.
+  selectedName?: string | null;
   onSelected: (id: string) => void;
   onDenied: (status: number) => void;
 }) {
@@ -120,7 +124,8 @@ export function ContactPicker({
         {text.chooseContact}:{' '}
         <span translate="no">
           {page?.contacts.find((c) => c.id === selected)?.displayName ??
-            (selected || text.unknown)}
+            selectedName ??
+            text.unknown}
         </span>
       </p>
     </div>

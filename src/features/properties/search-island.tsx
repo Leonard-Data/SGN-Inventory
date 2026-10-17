@@ -6,6 +6,7 @@ import type { Locale } from '@/i18n/messages';
 import { label, messages } from '@/i18n/messages';
 import { formatDecimal, formatVnd } from './format';
 import { api, RequestError } from '@/features/employees/api';
+import { contactName } from '@/features/contacts/directory';
 import { ContactPicker } from '@/features/property-maintenance/contact-picker';
 import {
   unitOptionLabels,
@@ -68,6 +69,7 @@ export function SearchIsland({
   const [province, setProvince] = useState(appliedProvince);
   const [ward, setWard] = useState(appliedWard);
   const [contact, setContact] = useState(appliedContact);
+  const [contactLabel, setContactLabel] = useState<string | null>(null);
   const [provinces, setProvinces] = useState<AdminUnit[]>([]);
   const [wards, setWards] = useState<AdminUnit[]>([]);
   const [provinceFailed, setProvinceFailed] = useState(false);
@@ -158,7 +160,38 @@ export function SearchIsland({
   }, [province, onDenied]);
   // The contact filter lists only identities the caller may read, through the bounded name
   // search and paging the property maintenance picker already uses: a page at a time on
-  // request, never a walk over the whole directory.
+  // request, never a walk over the whole directory. The applied filter's label is the one
+  // bounded identity read below, so a reloaded or shared address still names the person.
+  useEffect(() => {
+    setContactLabel(null);
+    if (!appliedContact) return;
+    const abort = new AbortController();
+    void api<unknown>(
+      '/api/contacts/' + appliedContact,
+      undefined,
+      abort.signal,
+    )
+      .then((result) => {
+        if (abort.signal.aborted) return;
+        try {
+          setContactLabel(contactName(result));
+        } catch {
+          setContactLabel(null);
+        }
+      })
+      .catch((failure) => {
+        if (abort.signal.aborted) return;
+        // A contact the caller may read but may not preview is that contact's own refusal, not
+        // a lost session, so only a genuine denial clears the protected surface.
+        if (
+          failure instanceof RequestError &&
+          (failure.status === 401 ||
+            (failure.status === 403 && failure.code !== 'contact-refusal'))
+        )
+          onDenied(failure.status);
+      });
+    return () => abort.abort();
+  }, [appliedContact, onDenied]);
   // Applying starts a new page-one journey with the stated filters, so a paging cursor from the
   // previous filter set can never be replayed against this one.
   function apply(event: FormEvent<HTMLFormElement>) {
@@ -231,7 +264,7 @@ export function SearchIsland({
   if (filters.contact)
     applied.push({
       key: 'contact',
-      label: `${text.contactFilter}: ${filters.contact}`,
+      label: `${text.contactFilter}: ${contactLabel ?? text.unknown}`,
     });
   if (filters.priceMin)
     applied.push({
@@ -402,6 +435,9 @@ export function SearchIsland({
                 <ContactPicker
                   locale={locale}
                   selected={contact}
+                  selectedName={
+                    contact === appliedContact ? contactLabel : null
+                  }
                   onSelected={setContact}
                   onDenied={onDenied}
                 />
