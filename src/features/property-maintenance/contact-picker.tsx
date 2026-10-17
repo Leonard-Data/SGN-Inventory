@@ -3,16 +3,7 @@ import { useId, useRef, useState, useEffect, type FormEvent } from 'react';
 import { api, RequestError } from '@/features/employees/api';
 import type { Locale } from '@/i18n/messages';
 import { maintenanceText, optionLabel } from './messages';
-type Page = {
-  contacts: {
-    id: string;
-    display_name: string;
-    contact_type: string;
-    phones: string[];
-    raw_phone_text: string | null;
-  }[];
-  nextCursor: string | null;
-};
+import type { ContactPage } from '@/features/contacts/types';
 export function ContactPicker({
   locale,
   selected,
@@ -27,7 +18,7 @@ export function ContactPicker({
   const id = useId(),
     controller = useRef<AbortController | null>(null),
     [query, setQuery] = useState(''),
-    [page, setPage] = useState<Page | null>(null),
+    [page, setPage] = useState<ContactPage | null>(null),
     [error, setError] = useState(false),
     [busy, setBusy] = useState(false),
     text = maintenanceText(locale);
@@ -39,7 +30,7 @@ export function ContactPicker({
     setBusy(true);
     setError(false);
     try {
-      const result = await api<Page>(
+      const result = await api<ContactPage>(
         '/api/contacts?' +
           new URLSearchParams({ query, ...(after ? { after } : {}) }),
         undefined,
@@ -93,10 +84,10 @@ export function ContactPicker({
                 onClick={() => onSelected(contact.id)}
                 translate="no"
               >
-                {contact.display_name} ·{' '}
-                {optionLabel(locale, contact.contact_type)}
+                {contact.displayName} ·{' '}
+                {optionLabel(locale, contact.contactType)}
                 <small>
-                  {contact.raw_phone_text ||
+                  {contact.rawPhoneText ||
                     contact.phones.join(' / ') ||
                     text.unknown}
                 </small>
@@ -119,7 +110,7 @@ export function ContactPicker({
       <p>
         {text.chooseContact}:{' '}
         <span translate="no">
-          {page?.contacts.find((c) => c.id === selected)?.display_name ??
+          {page?.contacts.find((c) => c.id === selected)?.displayName ??
             (selected || text.unknown)}
         </span>
       </p>
