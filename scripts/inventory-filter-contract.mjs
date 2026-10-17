@@ -91,6 +91,24 @@ export async function inventoryFilterContract({
       "insert into public.property_addresses(property_id,format,address_text,province_unit_id,commune_unit_id) values ($1,'current',$2,$3,$4)",
       [propertyId, `${marker} current`, provinceId, communeId],
     );
+  // Two recorded contacts. The first is linked to an unarchived sale, an unarchived rental and
+  // the archived property; the second is linked only to the 'both' listing. The contact filter
+  // must match through the recorded link, compose with the other filters and leave the archived
+  // link outside both readable inventory reads.
+  const contactOne = '49000000-0000-4000-8000-000000000001';
+  const contactTwo = '49000000-0000-4000-8000-000000000002';
+  await db.query(
+    "insert into public.contacts(id,display_name) values ($1,'Filter Contact One'),($2,'Filter Contact Two')",
+    [contactOne, contactTwo],
+  );
+  await db.query(
+    `insert into public.property_contacts(property_id,contact_id,relation,is_primary) values
+      ($1,$5,'owner',true),
+      ($2,$5,'broker',false),
+      ($3,$6,'owner',true),
+      ($4,$5,'owner',false)`,
+    [saleHouse, rentHouse, bothFlat, archivedHouse, contactOne, contactTwo],
+  );
   await asUser(0);
   const mine = new Set([
     saleHouse,
@@ -108,7 +126,7 @@ export async function inventoryFilterContract({
     db
       .query(
         `select id from public.search_properties($1::text,$2::text,$3::text,$4::text,$5::uuid,null::uuid,50,
-          $6::numeric,$7::numeric,$8::numeric,$9::numeric)`,
+          $6::numeric,$7::numeric,$8::numeric,$9::numeric,$10::uuid)`,
         [
           filters.query ?? '',
           filters.status ?? null,
@@ -119,6 +137,7 @@ export async function inventoryFilterContract({
           filters.priceMax ?? null,
           filters.areaMin ?? null,
           filters.areaMax ?? null,
+          filters.contact ?? null,
         ],
       )
       .then((result) => scoped(result.rows));
@@ -126,7 +145,7 @@ export async function inventoryFilterContract({
     db
       .query(
         `select id from public.list_inventory_by_age($1::text,$2::text,$3::date,$4::uuid,$5::boolean,$6::integer,
-          $7::text,$8::text,$9::text,$10::numeric,$11::numeric,$12::numeric,$13::numeric,$14::uuid)`,
+          $7::text,$8::text,$9::text,$10::numeric,$11::numeric,$12::numeric,$13::numeric,$14::uuid,$15::uuid)`,
         [
           direction,
           '',
@@ -142,6 +161,7 @@ export async function inventoryFilterContract({
           filters.areaMin ?? null,
           filters.areaMax ?? null,
           filters.areaId ?? null,
+          filters.contact ?? null,
         ],
       )
       .then((result) => scoped(result.rows));
@@ -372,6 +392,62 @@ export async function inventoryFilterContract({
     },
   );
   await check(
+    'a contact filter matches through the recorded property contact link',
+    async () => {
+      // Only the properties recorded against the contact match, and the archived link is never
+      // part of the readable inventory. The contact composes with the other filters instead of
+      // replacing them.
+      assert.deepEqual(await search({ contact: contactOne }), [
+        saleHouse,
+        rentHouse,
+      ]);
+      assert.deepEqual(await search({ contact: contactTwo }), [bothFlat]);
+      assert.deepEqual(await search({ contact: contactOne, mode: 'rent' }), [
+        rentHouse,
+      ]);
+      assert.deepEqual(
+        await search({ contact: contactOne, status: 'available' }),
+        [saleHouse, rentHouse],
+      );
+      // A readable contact with no unarchived link matches nothing, never everything.
+      assert.deepEqual(
+        await search({ contact: '49000000-0000-4000-8000-0000000000ff' }),
+        [],
+      );
+    },
+  );
+  await check(
+    'the contact filter keeps the chronological walk paging consistently',
+    async () => {
+      assert.deepEqual(await age({ contact: contactOne }), [
+        saleHouse,
+        rentHouse,
+      ]);
+      assert.deepEqual(await age({ contact: contactOne }, 'newest'), [
+        rentHouse,
+        saleHouse,
+      ]);
+      const first = await age({ contact: contactOne }, 'oldest', {}, 1);
+      assert.deepEqual(first, [saleHouse]);
+      const second = await age(
+        { contact: contactOne },
+        'oldest',
+        { unknown: true, id: first[0] },
+        1,
+      );
+      assert.deepEqual(second, [rentHouse]);
+      assert.deepEqual(
+        await age(
+          { contact: contactOne },
+          'oldest',
+          { unknown: true, id: second[0] },
+          1,
+        ),
+        [],
+      );
+    },
+  );
+  await check(
     'unknown or out-of-range bounds are refused, never silently matched',
     async () => {
       const rejected = [
@@ -428,8 +504,8 @@ export async function inventoryFilterContract({
           coalesce(array_to_string(p.proconfig,','),'') as config
         from pg_proc p
         where p.oid in (
-          'public.search_properties(text,text,text,text,uuid,uuid,integer,numeric,numeric,numeric,numeric)'::regprocedure,
-          'public.list_inventory_by_age(text,text,date,uuid,boolean,integer,text,text,text,numeric,numeric,numeric,numeric,uuid)'::regprocedure)
+          'public.search_properties(text,text,text,text,uuid,uuid,integer,numeric,numeric,numeric,numeric,uuid)'::regprocedure,
+          'public.list_inventory_by_age(text,text,date,uuid,boolean,integer,text,text,text,numeric,numeric,numeric,numeric,uuid,uuid)'::regprocedure)
         order by signature`,
       );
       assert.equal(shapes.rows.length, 2);
@@ -448,13 +524,13 @@ export async function inventoryFilterContract({
       }
       const granted = await db.query(
         `select has_function_privilege('authenticated',
-            'public.search_properties(text,text,text,text,uuid,uuid,integer,numeric,numeric,numeric,numeric)', 'execute')
+            'public.search_properties(text,text,text,text,uuid,uuid,integer,numeric,numeric,numeric,numeric,uuid)', 'execute')
           and has_function_privilege('authenticated',
-            'public.list_inventory_by_age(text,text,date,uuid,boolean,integer,text,text,text,numeric,numeric,numeric,numeric,uuid)', 'execute')
+            'public.list_inventory_by_age(text,text,date,uuid,boolean,integer,text,text,text,numeric,numeric,numeric,numeric,uuid,uuid)', 'execute')
           and not has_function_privilege('anon',
-            'public.search_properties(text,text,text,text,uuid,uuid,integer,numeric,numeric,numeric,numeric)', 'execute')
+            'public.search_properties(text,text,text,text,uuid,uuid,integer,numeric,numeric,numeric,numeric,uuid)', 'execute')
           and not has_function_privilege('anon',
-            'public.list_inventory_by_age(text,text,date,uuid,boolean,integer,text,text,text,numeric,numeric,numeric,numeric,uuid)', 'execute') as allowed`,
+            'public.list_inventory_by_age(text,text,date,uuid,boolean,integer,text,text,text,numeric,numeric,numeric,numeric,uuid,uuid)', 'execute') as allowed`,
       );
       assert.equal(granted.rows[0].allowed, true);
     },

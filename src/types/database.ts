@@ -2294,6 +2294,7 @@ export type Database = {
           p_area_id?: string;
           p_area_max?: number;
           p_area_min?: number;
+          p_contact_id?: string;
           p_direction: string;
           p_limit?: number;
           p_mode?: string;
@@ -2327,6 +2328,7 @@ export type Database = {
           p_area_id?: string;
           p_area_max?: number;
           p_area_min?: number;
+          p_contact_id?: string;
           p_limit?: number;
           p_mode?: string;
           p_price_max?: string;

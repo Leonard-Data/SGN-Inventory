@@ -100,6 +100,7 @@ export function contactSummary(row: unknown): ContactSummary {
     !Array.isArray(value.links)
   )
     throw new ContactDirectoryError('invalid-input');
+  const links = (value.links as unknown[]).map(contactLink);
   return {
     id: value.id,
     displayName: value.display_name,
@@ -107,7 +108,10 @@ export function contactSummary(row: unknown): ContactSummary {
     phones: value.phones as string[],
     rawPhoneText: optionalText(value.raw_phone_text),
     revision: value.revision,
-    links: (value.links as unknown[]).map(contactLink),
+    links,
+    // The count is derived from the projected readable links, never a separate tally that could
+    // drift from the listed property codes.
+    propertyCount: links.length,
   };
 }
 
