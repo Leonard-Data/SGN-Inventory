@@ -107,7 +107,6 @@ export function VendorDetailView({
             className="panel page-section"
             aria-labelledby="vendor-record"
           >
-            {' '}
             <div className="panel-head">
               <h2 id="vendor-record">{text.vendorDetailTitle}</h2>
               <span className="panel-note">{text.vendorCreateNote}</span>
