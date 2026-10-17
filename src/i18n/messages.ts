@@ -421,7 +421,7 @@ const vi = {
   employeeInvitePending:
     'Yêu cầu mời đã được ghi nhận; nhà cung cấp chưa xác nhận.',
   employeeInviteFailed:
-    'Thao tác chưa hoàn tất. Trạng thái đã ghi vẫn được giữ nguyên.',
+    'Yêu cầu mời đã thành công, nhưng bước gửi của nhà cung cấp chưa hoàn tất. Lời mời đã ghi nhận bên dưới hiển thị trạng thái cần đối soát và chi tiết từ nhà cung cấp; hãy thử lại với cùng thao tác.',
   employeeInviteEmailRecorded:
     'Email này đã thuộc một nhân viên đã ghi nhận, không phải người mới; hãy xử lý theo chính sách người quay lại.',
   employeeInviteAlreadyRecorded: 'Đã có lời mời được ghi nhận cho người này.',

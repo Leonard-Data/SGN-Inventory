@@ -269,7 +269,7 @@ async function stopApp() {
   if (app.exitCode === null) app.kill('SIGKILL');
   app = null;
 }
-async function appLogin(identity) {
+async function appLogin(identity, expectedStatus = 200) {
   const response = await fetch(`${appUrl}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -279,7 +279,20 @@ async function appLogin(identity) {
       locale: 'vi',
     }),
   });
-  assert.equal(response.status, 200, `app sign-in for ${identity.email}`);
+  assert.equal(
+    response.status,
+    expectedStatus,
+    `app sign-in for ${identity.email}`,
+  );
+  if (expectedStatus !== 200) {
+    const body = await response.json().catch(() => null);
+    assert.equal(
+      body?.error,
+      'access-denied',
+      `sign-in refusal ${identity.email}`,
+    );
+    return null;
+  }
   return response.headers
     .getSetCookie()
     .map((value) => value.split(';')[0])
@@ -571,18 +584,19 @@ try {
       randomUUID(),
     );
     assert.equal(attempt.error?.code, '42501', `${name} begin`);
-    const denied = await appFetch(
-      await appLogin(identity),
-      '/api/employees/invitations',
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          email: deniedAddress,
-          role: 'sales',
-          key: randomUUID(),
-        }),
-      },
-    );
+    // An inactive or unlinked identity cannot hold an app session at all, so its app sign-in
+    // is refused before the endpoint; only the live non-admin roles reach the endpoint denial.
+    const refusedSession = name === 'inactive' || name === 'unlinked';
+    const cookie = await appLogin(identity, refusedSession ? 403 : 200);
+    if (refusedSession) continue;
+    const denied = await appFetch(cookie, '/api/employees/invitations', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: deniedAddress,
+        role: 'sales',
+        key: randomUUID(),
+      }),
+    });
     assert.equal(denied.status, 403, `${name} endpoint`);
   }
   const anonymous = await appFetch(null, '/api/employees/invitations', {
