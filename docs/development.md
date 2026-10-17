@@ -72,7 +72,7 @@ scripts/
   vendor-contract.mjs           # Embedded vendor authority, validation, retry and paging regressions
   vendor-acceptance.mjs         # Hosted vendor directory acceptance (executed 14 October 2026)
   contact-directory-contract.mjs    # Embedded shared-contact directory read/correction regressions
-  contact-directory-acceptance.mjs  # Written real browser/Supabase contact-directory acceptance (not yet executed here)
+  contact-directory-acceptance.mjs  # Hosted real browser/Supabase contact-directory acceptance (executed 17 October 2026)
   sale-completion-contract.mjs   # Embedded sale-completion authority, atomicity, retry and ranking regressions
   sale-completion-acceptance.mjs # Written real browser/Supabase sale-completion acceptance (not yet executed here)
   employee-access-acceptance.mjs # Real app/browser/Auth/RLS dev fixture acceptance
