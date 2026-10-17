@@ -6,7 +6,7 @@ import type { Locale } from '@/i18n/messages';
 import { label, messages } from '@/i18n/messages';
 import { formatDecimal, formatVnd } from './format';
 import { api, RequestError } from '@/features/employees/api';
-import type { ContactPage } from '@/features/contacts/types';
+import { ContactPicker } from '@/features/property-maintenance/contact-picker';
 import {
   unitOptionLabels,
   type UnitOption,
@@ -70,13 +70,8 @@ export function SearchIsland({
   const [contact, setContact] = useState(appliedContact);
   const [provinces, setProvinces] = useState<AdminUnit[]>([]);
   const [wards, setWards] = useState<AdminUnit[]>([]);
-  const [contactOptions, setContactOptions] = useState<
-    { id: string; name: string }[]
-  >([]);
   const [provinceFailed, setProvinceFailed] = useState(false);
   const [wardFailed, setWardFailed] = useState(false);
-  const [contactFailed, setContactFailed] = useState(false);
-  const [contactLoaded, setContactLoaded] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
   function dismiss() {
     onOpen(false);
@@ -161,48 +156,9 @@ export function SearchIsland({
       });
     return () => abort.abort();
   }, [province, onDenied]);
-  // The contact filter lists only identities the caller may read, through the same bounded
-  // directory endpoint People → Contacts uses. It loads when the panel is opened or when the
-  // address already applies a contact, so a plain inventory visit issues no extra read. The
-  // ascending id cursor is followed until the directory is exhausted, so a contact past the first
-  // page stays selectable; a repeated cursor ends the walk rather than looping.
-  useEffect(() => {
-    if (contactLoaded || (!open && !appliedContact)) return;
-    const abort = new AbortController();
-    void (async () => {
-      try {
-        const options: { id: string; name: string }[] = [];
-        const seen = new Set<string>();
-        let after: string | null = null;
-        for (;;) {
-          const page: ContactPage = await api<ContactPage>(
-            '/api/contacts?' + new URLSearchParams(after ? { after } : {}),
-            undefined,
-            abort.signal,
-          );
-          if (abort.signal.aborted) return;
-          for (const record of page.contacts)
-            options.push({ id: record.id, name: record.displayName });
-          if (!page.nextCursor || seen.has(page.nextCursor)) break;
-          seen.add(page.nextCursor);
-          after = page.nextCursor;
-        }
-        options.sort((left, right) => left.name.localeCompare(right.name));
-        setContactOptions(options);
-        setContactFailed(false);
-        setContactLoaded(true);
-      } catch (failure) {
-        if (abort.signal.aborted) return;
-        if (
-          failure instanceof RequestError &&
-          (failure.status === 401 || failure.status === 403)
-        )
-          onDenied(failure.status);
-        else setContactFailed(true);
-      }
-    })();
-    return () => abort.abort();
-  }, [open, appliedContact, contactLoaded, onDenied]);
+  // The contact filter lists only identities the caller may read, through the bounded name
+  // search and paging the property maintenance picker already uses: a page at a time on
+  // request, never a walk over the whole directory.
   // Applying starts a new page-one journey with the stated filters, so a paging cursor from the
   // previous filter set can never be replayed against this one.
   function apply(event: FormEvent<HTMLFormElement>) {
@@ -262,8 +218,6 @@ export function SearchIsland({
     });
   const unitName = (units: readonly AdminUnit[], id: string) =>
     units.find((unit) => unit.id === id)?.name_vi ?? id;
-  const contactName = (id: string) =>
-    contactOptions.find((option) => option.id === id)?.name ?? id;
   if (filters.province)
     applied.push({
       key: 'province',
@@ -277,7 +231,7 @@ export function SearchIsland({
   if (filters.contact)
     applied.push({
       key: 'contact',
-      label: `${text.contactFilter}: ${contactName(filters.contact)}`,
+      label: `${text.contactFilter}: ${filters.contact}`,
     });
   if (filters.priceMin)
     applied.push({
@@ -445,36 +399,15 @@ export function SearchIsland({
             </div>
             <div className="form-section">
               <div className="form-grid">
-                <div className="field">
-                  <label className="field-label" htmlFor="filter-contact">
-                    {text.contactFilter}
-                  </label>
-                  <select
-                    id="filter-contact"
-                    className="select"
-                    name="contact"
-                    value={contact}
-                    onChange={(event) => setContact(event.currentTarget.value)}
-                  >
-                    <option value="">{text.filtersAny}</option>
-                    {contact &&
-                    !contactOptions.some((option) => option.id === contact) ? (
-                      <option value={contact}>{contactName(contact)}</option>
-                    ) : null}
-                    {contactOptions.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <ContactPicker
+                  locale={locale}
+                  selected={contact}
+                  onSelected={setContact}
+                  onDenied={onDenied}
+                />
               </div>
+              <input type="hidden" name="contact" value={contact} />
               <p className="field-hint">{text.contactFilterHint}</p>
-              {contactFailed ? (
-                <p className="field-error" role="alert">
-                  {text.contactFilterUnavailable}
-                </p>
-              ) : null}
             </div>
             <div className="form-section">
               <div className="form-grid">

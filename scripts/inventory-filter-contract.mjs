@@ -91,23 +91,34 @@ export async function inventoryFilterContract({
       "insert into public.property_addresses(property_id,format,address_text,province_unit_id,commune_unit_id) values ($1,'current',$2,$3,$4)",
       [propertyId, `${marker} current`, provinceId, communeId],
     );
-  // Two recorded contacts. The first is linked to an unarchived sale, an unarchived rental and
-  // the archived property; the second is linked only to the 'both' listing. The contact filter
-  // must match through the recorded link, compose with the other filters and leave the archived
-  // link outside both readable inventory reads.
+  // Three recorded contacts. The first is linked to an unarchived sale, an unarchived rental and
+  // the archived property; the second is linked only to the 'both' listing; the third is linked
+  // only to the archived property, so it is readable with zero unarchived links. The contact
+  // filter must match through the recorded link, compose with the other filters and leave the
+  // archived link outside both readable inventory reads.
   const contactOne = '49000000-0000-4000-8000-000000000001';
   const contactTwo = '49000000-0000-4000-8000-000000000002';
+  const contactArchivedOnly = '49000000-0000-4000-8000-000000000003';
   await db.query(
-    "insert into public.contacts(id,display_name) values ($1,'Filter Contact One'),($2,'Filter Contact Two')",
-    [contactOne, contactTwo],
+    "insert into public.contacts(id,display_name) values ($1,'Filter Contact One'),($2,'Filter Contact Two'),($3,'Filter Archived Only')",
+    [contactOne, contactTwo, contactArchivedOnly],
   );
   await db.query(
     `insert into public.property_contacts(property_id,contact_id,relation,is_primary) values
       ($1,$5,'owner',true),
       ($2,$5,'broker',false),
       ($3,$6,'owner',true),
-      ($4,$5,'owner',false)`,
-    [saleHouse, rentHouse, bothFlat, archivedHouse, contactOne, contactTwo],
+      ($4,$5,'owner',false),
+      ($4,$7,'broker',false)`,
+    [
+      saleHouse,
+      rentHouse,
+      bothFlat,
+      archivedHouse,
+      contactOne,
+      contactTwo,
+      contactArchivedOnly,
+    ],
   );
   await asUser(0);
   const mine = new Set([
@@ -409,11 +420,10 @@ export async function inventoryFilterContract({
         await search({ contact: contactOne, status: 'available' }),
         [saleHouse, rentHouse],
       );
-      // A readable contact with no unarchived link matches nothing, never everything.
-      assert.deepEqual(
-        await search({ contact: '49000000-0000-4000-8000-0000000000ff' }),
-        [],
-      );
+      // A readable contact with no unarchived link matches nothing, never everything: this
+      // contact exists and is linked only to the archived property.
+      assert.deepEqual(await search({ contact: contactArchivedOnly }), []);
+      assert.deepEqual(await age({ contact: contactArchivedOnly }), []);
     },
   );
   await check(

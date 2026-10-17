@@ -6,6 +6,9 @@ export type ContactLink = {
   propertyCode: string;
   relation: string;
   isPrimary: boolean;
+  // A readable link on an archived property still reaches the reader, but it is outside the
+  // unarchived inventory boundary the contact filter reads.
+  archived: boolean;
 };
 
 export type ContactSummary = {
@@ -16,9 +19,10 @@ export type ContactSummary = {
   rawPhoneText: string | null;
   revision: string;
   links: ContactLink[];
-  // The number of readable linked properties: exactly the length of `links`, so the stated count
-  // and the listed property codes can never disagree. An archived link outside the caller's
-  // authority is excluded from both. Zero means the contact has no readable link.
+  // The number of readable, unarchived linked properties, derived from the same `links` the row
+  // lists, so the count and the contact-filtered inventory can never disagree. A readable link
+  // on an archived property stays listed (labelled) and is never counted. Zero means no
+  // unarchived readable link.
   propertyCount: number;
 };
 
