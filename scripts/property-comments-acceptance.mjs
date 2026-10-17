@@ -307,10 +307,10 @@ function screen(session) {
           edited: Boolean(node.querySelector('.comment-edited')),
           actions: Boolean(node.querySelector('.comment-actions')),
         })),
-        removeControls: discussion ? [...discussion.querySelectorAll('button')].filter(node => /Gỡ bình luận|^Remove$/.test(node.textContent.trim())).length : 0,
-        moderateControls: discussion ? [...discussion.querySelectorAll('button')].filter(node => /Gỡ kèm lý do|Remove with reason/.test(node.textContent)).length : 0,
+        removeControls: discussion ? [...discussion.querySelectorAll('button')].filter(node => /Gỡ bình luận|^Remove$/.test((node.getAttribute('aria-label') ?? node.textContent).trim())).length : 0,
+        moderateControls: discussion ? [...discussion.querySelectorAll('button')].filter(node => /Gỡ kèm lý do|Remove with reason/.test(node.getAttribute('aria-label') ?? node.textContent)).length : 0,
         moderationReason: discussion?.querySelector('.comment-moderation textarea')?.value ?? null,
-        commentEditControls: discussion ? [...discussion.querySelectorAll('button')].filter(node => /Chỉnh sửa bình luận|^Edit comment$/.test(node.textContent.trim())).length : 0,
+        commentEditControls: discussion ? [...discussion.querySelectorAll('button')].filter(node => /Chỉnh sửa bình luận|^Edit comment$/.test((node.getAttribute('aria-label') ?? node.textContent).trim())).length : 0,
         editedMarkers: discussion ? discussion.querySelectorAll('.comment-edited').length : 0,
         editDraft: discussion?.querySelector('.comment-edit textarea')?.value ?? null,
         editCurrent: discussion?.querySelector('.comment-current .comment-body')?.textContent ?? null,
@@ -318,7 +318,7 @@ function screen(session) {
         statuses: [...(discussion?.querySelectorAll('[role=status],[role=alert]') ?? [])].map(node => node.textContent),
         empty: discussion ? discussion.innerText.includes('Chưa có bình luận nào.') || discussion.innerText.includes('No comments yet.') : null,
         more: discussion ? Boolean([...discussion.querySelectorAll('button')].find(node => /Xem bình luận cũ hơn|More comments/.test(node.textContent))) : null,
-        refresh: discussion ? Boolean([...discussion.querySelectorAll('button')].find(node => /Làm mới|Refresh/.test(node.textContent))) : null,
+        refresh: discussion ? Boolean([...discussion.querySelectorAll('button')].find(node => /Làm mới|Refresh/.test(node.getAttribute('aria-label') ?? node.textContent))) : null,
         postButton: discussion ? Boolean([...discussion.querySelectorAll('button[type=submit]')].length) : null,
         maintenanceActions: Boolean(document.querySelector('.maintenance-actions')),
         injected: Boolean(document.querySelector('script[data-injected], img[data-injected]')),
@@ -643,7 +643,7 @@ await settle(primary);
   evaluate(
     `() => {
       const target = [...document.querySelectorAll('section.discussion .comment')].find((node) => (node.querySelector('.comment-body')?.textContent ?? '') === 'Bình luận cũ đang sửa');
-      [...target.querySelectorAll('.comment-actions button')].find((button) => button.textContent.trim() === 'Chỉnh sửa bình luận').click();
+      [...target.querySelectorAll('.comment-actions button')].find((button) => (button.getAttribute('aria-label') ?? button.textContent).trim() === 'Chỉnh sửa bình luận').click();
       return true;
     }`,
     primary,
@@ -2159,7 +2159,7 @@ await settle(secondary);
   await waitUntil(
     `() => {
       const buttons = [...document.querySelectorAll('section.discussion .comment-actions button')]
-        .filter((button) => /Chỉnh sửa bình luận|^Edit comment$/.test(button.textContent.trim()));
+        .filter((button) => /Chỉnh sửa bình luận|^Edit comment$/.test((button.getAttribute('aria-label') ?? button.textContent).trim()));
       return buttons.length > 0 && buttons.every((button) => button.disabled);
     }`,
     primary,
@@ -2173,7 +2173,7 @@ await settle(secondary);
   evaluate(
     `() => {
       const button = [...document.querySelectorAll('section.discussion .comment-actions button')]
-        .find((node) => /Chỉnh sửa bình luận|^Edit comment$/.test(node.textContent.trim()));
+        .find((node) => /Chỉnh sửa bình luận|^Edit comment$/.test((node.getAttribute('aria-label') ?? node.textContent).trim()));
       button?.click();
       return true;
     }`,
@@ -2242,7 +2242,7 @@ await settle(secondary);
   evaluate(
     `() => {
       const target = [...document.querySelectorAll('section.discussion .comment')].find((node) => (node.querySelector('.comment-body')?.textContent ?? '') === 'Nội dung phát lại sau khi gỡ');
-      [...target.querySelectorAll('.comment-actions button')].find((button) => button.textContent.trim() === 'Chỉnh sửa bình luận').click();
+      [...target.querySelectorAll('.comment-actions button')].find((button) => (button.getAttribute('aria-label') ?? button.textContent).trim() === 'Chỉnh sửa bình luận').click();
       return true;
     }`,
     primary,

@@ -11,6 +11,7 @@ import { messages, type Locale } from '@/i18n/messages';
 import { api, RequestError } from '@/features/employees/api';
 import { vietnamTimestamp } from '@/features/properties/format';
 import { COMMENT_MAX_LENGTH, COMMENT_REASON_MAX_LENGTH } from './types';
+import { IconAction } from '@/features/icon-action';
 import {
   mergePage,
   mergeStaleEditState,
@@ -461,342 +462,347 @@ export function Discussion({
     <section className="panel discussion" aria-labelledby={headingId}>
       <div className="panel-head">
         <h2 id={headingId}>{text.discussion}</h2>
-        <button
-          type="button"
-          className="btn btn-sm btn-ghost"
-          onClick={refresh}
+        <IconAction
+          name="refresh"
+          label={text.refresh}
           disabled={loadingMore}
-        >
-          {text.refresh}
-        </button>
+          onClick={refresh}
+        />
       </div>
-      {busy ? <p role="status">{text.loading}</p> : null}
-      {error ? (
-        <p role="alert">
-          {error === 'not-found'
-            ? text.notFound
-            : error === 'invalid-input'
-              ? text.invalidInput
-              : text.unavailable}{' '}
-          <button
-            type="button"
-            className="btn btn-sm btn-ghost"
-            onClick={refresh}
-          >
-            {text.retry}
-          </button>
-        </p>
-      ) : null}
-      <ol>
-        {comments.map((row) => {
-          const parts = row.authorName.trim().split(/\s+/);
-          const initials = parts
-            .slice(-2)
-            .map((p) => p.charAt(0))
-            .join('')
-            .toUpperCase();
-          const removed = row.removedAt !== null;
-          const editingHere = editing?.id === row.id;
-          // Author withdrawal and editing are the author's own controls and are blocked on an
-          // archived Property; reasoned moderation stays available there for a reviewer.
-          const canWithdraw =
-            !archived && employeeId !== null && employeeId === row.authorId;
-          const canEdit = canWithdraw && !removed;
-          return (
-            <li key={row.id}>
-              <article className="comment">
-                <span className="sgn-avatar" aria-hidden="true">
-                  {initials}
-                </span>
-                <div>
-                  <p className="comment-author" translate="no">
-                    {row.authorName}
-                  </p>
-                  <p className="comment-meta">
-                    <time dateTime={row.createdAt}>
-                      {vietnamTimestamp(row.createdAt, locale)}
-                    </time>{' '}
-                    <span className="field-hint">({text.vietnamTime})</span>
-                    {!removed && row.editedAt !== null ? (
-                      <>
-                        {' '}
-                        <span
-                          className="comment-edited"
-                          title={
-                            vietnamTimestamp(row.editedAt, locale) ?? undefined
-                          }
-                        >
-                          ({text.commentEditedMarker})
-                        </span>
-                      </>
-                    ) : null}
-                  </p>
-                  {removed && !editingHere ? (
-                    <p className="comment-body comment-removed">
-                      {text.commentRemoved}
+      {/* The package draws the discussion rows without the panel inset every other panel
+          body has, which left the cards flush against the panel edge. The wrapper gives
+          them the same card padding at both widths. */}
+      <div className="panel-body">
+        {busy ? <p role="status">{text.loading}</p> : null}
+        {error ? (
+          <p role="alert">
+            {error === 'not-found'
+              ? text.notFound
+              : error === 'invalid-input'
+                ? text.invalidInput
+                : text.unavailable}{' '}
+            <button
+              type="button"
+              className="btn btn-sm btn-ghost"
+              onClick={refresh}
+            >
+              {text.retry}
+            </button>
+          </p>
+        ) : null}
+        <ol>
+          {comments.map((row) => {
+            const parts = row.authorName.trim().split(/\s+/);
+            const initials = parts
+              .slice(-2)
+              .map((p) => p.charAt(0))
+              .join('')
+              .toUpperCase();
+            const removed = row.removedAt !== null;
+            const editingHere = editing?.id === row.id;
+            // Author withdrawal and editing are the author's own controls and are blocked on an
+            // archived Property; reasoned moderation stays available there for a reviewer.
+            const canWithdraw =
+              !archived && employeeId !== null && employeeId === row.authorId;
+            const canEdit = canWithdraw && !removed;
+            return (
+              <li key={row.id}>
+                <article className="comment">
+                  <span className="sgn-avatar" aria-hidden="true">
+                    {initials}
+                  </span>
+                  <div>
+                    <p className="comment-author" translate="no">
+                      {row.authorName}
                     </p>
-                  ) : null}
-                  {/* An entry removed by another session while its editor was open keeps both the
-                      marker and the unsent draft, so the edit is never silently lost. */}
-                  {editingHere ? (
-                    <form
-                      className="comment-edit"
-                      onSubmit={(event) => {
-                        event.preventDefault();
-                        void saveEdit(row);
-                      }}
-                    >
-                      {editReconciled ? (
-                        <div className="field comment-current">
-                          <p className="field-label">{text.commentCurrent}</p>
-                          <p
-                            className={`comment-body${removed ? ' comment-removed' : ''}`}
-                            translate={removed ? undefined : 'no'}
+                    <p className="comment-meta">
+                      <time dateTime={row.createdAt}>
+                        {vietnamTimestamp(row.createdAt, locale)}
+                      </time>{' '}
+                      <span className="field-hint">({text.vietnamTime})</span>
+                      {!removed && row.editedAt !== null ? (
+                        <>
+                          {' '}
+                          <span
+                            className="comment-edited"
+                            title={
+                              vietnamTimestamp(row.editedAt, locale) ??
+                              undefined
+                            }
                           >
-                            {removed ? text.commentRemoved : row.body}
-                          </p>
-                        </div>
+                            ({text.commentEditedMarker})
+                          </span>
+                        </>
                       ) : null}
-                      <div className="field">
-                        <label
-                          className="field-label"
-                          htmlFor={`${editId}-${row.id}`}
-                        >
-                          {text.editComment}
-                        </label>
-                        <textarea
-                          id={`${editId}-${row.id}`}
-                          className="textarea"
-                          rows={4}
-                          maxLength={COMMENT_MAX_LENGTH}
-                          value={editDraft}
-                          onChange={(event) => setEditDraft(event.target.value)}
-                          aria-describedby={`${editHintId}-${row.id}`}
-                          disabled={savingEdit}
-                          autoFocus
-                        />
-                      </div>
-                      <p className="field-hint" id={`${editHintId}-${row.id}`}>
-                        {text.editHint}{' '}
-                        <span translate="no">
-                          {[...editDraft.trim()].length}/{COMMENT_MAX_LENGTH}
-                        </span>
+                    </p>
+                    {removed && !editingHere ? (
+                      <p className="comment-body comment-removed">
+                        {text.commentRemoved}
                       </p>
-                      {editAction?.id === row.id ? (
-                        <p role="alert" className="field-error">
-                          {editMessage(editAction.code)}{' '}
+                    ) : null}
+                    {/* An entry removed by another session while its editor was open keeps both the
+                      marker and the unsent draft, so the edit is never silently lost. */}
+                    {editingHere ? (
+                      <form
+                        className="comment-edit"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          void saveEdit(row);
+                        }}
+                      >
+                        {editReconciled ? (
+                          <div className="field comment-current">
+                            <p className="field-label">{text.commentCurrent}</p>
+                            <p
+                              className={`comment-body${removed ? ' comment-removed' : ''}`}
+                              translate={removed ? undefined : 'no'}
+                            >
+                              {removed ? text.commentRemoved : row.body}
+                            </p>
+                          </div>
+                        ) : null}
+                        <div className="field">
+                          <label
+                            className="field-label"
+                            htmlFor={`${editId}-${row.id}`}
+                          >
+                            {text.editComment}
+                          </label>
+                          <textarea
+                            id={`${editId}-${row.id}`}
+                            className="textarea"
+                            rows={4}
+                            maxLength={COMMENT_MAX_LENGTH}
+                            value={editDraft}
+                            onChange={(event) =>
+                              setEditDraft(event.target.value)
+                            }
+                            aria-describedby={`${editHintId}-${row.id}`}
+                            disabled={savingEdit}
+                            autoFocus
+                          />
+                        </div>
+                        <p
+                          className="field-hint"
+                          id={`${editHintId}-${row.id}`}
+                        >
+                          {text.editHint}{' '}
+                          <span translate="no">
+                            {[...editDraft.trim()].length}/{COMMENT_MAX_LENGTH}
+                          </span>
+                        </p>
+                        {editAction?.id === row.id ? (
+                          <p role="alert" className="field-error">
+                            {editMessage(editAction.code)}{' '}
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-ghost"
+                              onClick={refresh}
+                            >
+                              {text.refresh}
+                            </button>
+                          </p>
+                        ) : null}
+                        <div className="composer-foot">
+                          <button
+                            type="submit"
+                            className="btn btn-primary btn-sm"
+                            disabled={savingEdit}
+                          >
+                            {savingEdit ? text.savingComment : text.saveComment}
+                          </button>
                           <button
                             type="button"
-                            className="btn btn-sm btn-ghost"
-                            onClick={refresh}
+                            className="btn btn-ghost btn-sm"
+                            onClick={cancelEdit}
+                            disabled={savingEdit}
                           >
-                            {text.refresh}
+                            {text.cancel}
                           </button>
-                        </p>
-                      ) : null}
-                      <div className="composer-foot">
-                        <button
-                          type="submit"
-                          className="btn btn-primary btn-sm"
-                          disabled={savingEdit}
-                        >
-                          {savingEdit ? text.savingComment : text.saveComment}
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-sm"
-                          onClick={cancelEdit}
-                          disabled={savingEdit}
-                        >
-                          {text.cancel}
-                        </button>
-                      </div>
-                    </form>
-                  ) : removed ? null : (
-                    <p className="comment-body" translate="no">
-                      {row.body}
-                    </p>
-                  )}
-                  {!removed && !editingHere && (canWithdraw || reviewer) ? (
-                    <div className="comment-actions">
-                      {canEdit ? (
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-ghost"
-                          onClick={() => beginEdit(row)}
-                          disabled={savingEdit || removing === row.id}
-                        >
-                          {text.editComment}
-                        </button>
-                      ) : null}
-                      {canWithdraw ? (
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-ghost"
-                          onClick={() => void remove(row, 'author')}
-                          disabled={removing === row.id}
-                        >
-                          {text.removeComment}
-                        </button>
-                      ) : null}
-                      {reviewer ? (
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-ghost"
-                          aria-expanded={reasonFor === row.id}
-                          aria-controls={`${reasonId}-${row.id}`}
-                          onClick={() => {
-                            setReasonFor(reasonFor === row.id ? null : row.id);
-                            setReason('');
-                            setAction(null);
-                          }}
-                          disabled={removing === row.id}
-                        >
-                          {text.moderateComment}
-                        </button>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  {reasonFor === row.id && !removed ? (
-                    <form
-                      className="comment-moderation"
-                      onSubmit={(event) => {
-                        event.preventDefault();
-                        void remove(row, 'moderation');
-                      }}
-                    >
-                      <div className="field">
-                        <label
-                          className="field-label"
-                          htmlFor={`${reasonId}-${row.id}`}
-                        >
-                          {text.removalReason}
-                        </label>
-                        <textarea
-                          id={`${reasonId}-${row.id}`}
-                          className="textarea"
-                          rows={3}
-                          maxLength={COMMENT_REASON_MAX_LENGTH}
-                          value={reason}
-                          onChange={(event) => setReason(event.target.value)}
-                          aria-describedby={reasonHintId}
-                          disabled={removing === row.id}
-                          autoFocus
-                        />
-                      </div>
-                      <p className="field-hint" id={reasonHintId}>
-                        {text.removalReasonHint}{' '}
-                        <span translate="no">
-                          {[...reason.trim()].length}/
-                          {COMMENT_REASON_MAX_LENGTH}
-                        </span>
+                        </div>
+                      </form>
+                    ) : removed ? null : (
+                      <p className="comment-body" translate="no">
+                        {row.body}
                       </p>
-                      <div className="composer-foot">
-                        <button
-                          type="submit"
-                          className="btn btn-danger btn-sm"
-                          disabled={removing === row.id}
-                        >
-                          {removing === row.id
-                            ? text.removing
-                            : text.confirmRemove}
-                        </button>
+                    )}
+                    {!removed && !editingHere && (canWithdraw || reviewer) ? (
+                      <div className="comment-actions">
+                        {canEdit ? (
+                          <IconAction
+                            name="edit"
+                            label={text.editComment}
+                            disabled={savingEdit || removing === row.id}
+                            onClick={() => beginEdit(row)}
+                          />
+                        ) : null}
+                        {canWithdraw ? (
+                          <IconAction
+                            name="remove"
+                            label={text.removeComment}
+                            disabled={removing === row.id}
+                            onClick={() => void remove(row, 'author')}
+                          />
+                        ) : null}
+                        {reviewer ? (
+                          <IconAction
+                            name="moderate"
+                            label={text.moderateComment}
+                            expanded={reasonFor === row.id}
+                            controls={`${reasonId}-${row.id}`}
+                            disabled={removing === row.id}
+                            onClick={() => {
+                              setReasonFor(
+                                reasonFor === row.id ? null : row.id,
+                              );
+                              setReason('');
+                              setAction(null);
+                            }}
+                          />
+                        ) : null}
+                      </div>
+                    ) : null}
+                    {reasonFor === row.id && !removed ? (
+                      <form
+                        className="comment-moderation"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          void remove(row, 'moderation');
+                        }}
+                      >
+                        <div className="field">
+                          <label
+                            className="field-label"
+                            htmlFor={`${reasonId}-${row.id}`}
+                          >
+                            {text.removalReason}
+                          </label>
+                          <textarea
+                            id={`${reasonId}-${row.id}`}
+                            className="textarea"
+                            rows={3}
+                            maxLength={COMMENT_REASON_MAX_LENGTH}
+                            value={reason}
+                            onChange={(event) => setReason(event.target.value)}
+                            aria-describedby={reasonHintId}
+                            disabled={removing === row.id}
+                            autoFocus
+                          />
+                        </div>
+                        <p className="field-hint" id={reasonHintId}>
+                          {text.removalReasonHint}{' '}
+                          <span translate="no">
+                            {[...reason.trim()].length}/
+                            {COMMENT_REASON_MAX_LENGTH}
+                          </span>
+                        </p>
+                        <div className="composer-foot">
+                          <button
+                            type="submit"
+                            className="btn btn-danger btn-sm"
+                            disabled={removing === row.id}
+                          >
+                            {removing === row.id
+                              ? text.removing
+                              : text.confirmRemove}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => {
+                              setReasonFor(null);
+                              setReason('');
+                              setAction(null);
+                            }}
+                            disabled={removing === row.id}
+                          >
+                            {text.cancel}
+                          </button>
+                        </div>
+                      </form>
+                    ) : null}
+                    {action?.id === row.id ? (
+                      <p role="alert" className="field-error">
+                        {actionMessage(action.code)}{' '}
                         <button
                           type="button"
-                          className="btn btn-ghost btn-sm"
-                          onClick={() => {
-                            setReasonFor(null);
-                            setReason('');
-                            setAction(null);
-                          }}
-                          disabled={removing === row.id}
+                          className="btn btn-sm btn-ghost"
+                          onClick={refresh}
                         >
-                          {text.cancel}
+                          {text.refresh}
                         </button>
-                      </div>
-                    </form>
-                  ) : null}
-                  {action?.id === row.id ? (
-                    <p role="alert" className="field-error">
-                      {actionMessage(action.code)}{' '}
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-ghost"
-                        onClick={refresh}
-                      >
-                        {text.refresh}
-                      </button>
-                    </p>
-                  ) : null}
-                </div>
-              </article>
-            </li>
-          );
-        })}
-      </ol>
-      {!busy && !error && !comments.length ? <p>{text.noComments}</p> : null}
-      {editNotice ? <p role="status">{editNotice}</p> : null}
-      {removeNotice ? <p role="status">{removeNotice}</p> : null}
-      {next ? (
-        <p>
-          <button
-            type="button"
-            className="btn btn-sm btn-ghost"
-            onClick={() => void loadMore()}
-            disabled={loadingMore}
-          >
-            {more ? text.loading : text.moreComments}
-          </button>
-        </p>
-      ) : null}
-      {archived ? null : (
-        <form className="composer" onSubmit={submit}>
-          <div className="field">
-            <label className="field-label" htmlFor={fieldId}>
-              {text.addComment}
-            </label>
-            <textarea
-              id={fieldId}
-              className="textarea"
-              name="comment"
-              rows={4}
-              maxLength={COMMENT_MAX_LENGTH}
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              aria-describedby={helpId}
-              disabled={posting}
-            />
-          </div>
-          <p className="field-hint" id={helpId}>
-            {text.commentHint}{' '}
-            <span translate="no">
-              {[...draft.trim()].length}/{COMMENT_MAX_LENGTH}
-            </span>
-          </p>
-          {postError ? (
-            <p role="alert">
-              {postError}{' '}
-              <button
-                type="button"
-                className="btn btn-sm btn-ghost"
-                onClick={refresh}
-              >
-                {text.refresh}
-              </button>
-            </p>
-          ) : null}
-          {notice ? <p role="status">{notice}</p> : null}
-          <div className="composer-foot">
+                      </p>
+                    ) : null}
+                  </div>
+                </article>
+              </li>
+            );
+          })}
+        </ol>
+        {!busy && !error && !comments.length ? <p>{text.noComments}</p> : null}
+        {editNotice ? <p role="status">{editNotice}</p> : null}
+        {removeNotice ? <p role="status">{removeNotice}</p> : null}
+        {next ? (
+          <p>
             <button
-              type="submit"
-              className="btn btn-primary btn-sm"
-              disabled={posting}
+              type="button"
+              className="btn btn-sm btn-ghost"
+              onClick={() => void loadMore()}
+              disabled={loadingMore}
             >
-              {posting ? text.posting : text.postComment}
+              {more ? text.loading : text.moreComments}
             </button>
-          </div>
-        </form>
-      )}
+          </p>
+        ) : null}
+        {archived ? null : (
+          <form className="composer" onSubmit={submit}>
+            <div className="field">
+              <label className="field-label" htmlFor={fieldId}>
+                {text.addComment}
+              </label>
+              <textarea
+                id={fieldId}
+                className="textarea"
+                name="comment"
+                rows={4}
+                maxLength={COMMENT_MAX_LENGTH}
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                aria-describedby={helpId}
+                disabled={posting}
+              />
+            </div>
+            <p className="field-hint" id={helpId}>
+              {text.commentHint}{' '}
+              <span translate="no">
+                {[...draft.trim()].length}/{COMMENT_MAX_LENGTH}
+              </span>
+            </p>
+            {postError ? (
+              <p role="alert">
+                {postError}{' '}
+                <button
+                  type="button"
+                  className="btn btn-sm btn-ghost"
+                  onClick={refresh}
+                >
+                  {text.refresh}
+                </button>
+              </p>
+            ) : null}
+            {notice ? <p role="status">{notice}</p> : null}
+            <div className="composer-foot">
+              <button
+                type="submit"
+                className="btn btn-primary btn-sm"
+                disabled={posting}
+              >
+                {posting ? text.posting : text.postComment}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
     </section>
   );
 }

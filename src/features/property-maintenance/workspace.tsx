@@ -10,6 +10,7 @@ import { targetFields, type Target, type Changes } from './fields';
 import { maintenanceError, maintenanceText, optionLabel } from './messages';
 import { ContactPicker } from './contact-picker';
 import { failureRoute } from './refusal-rules';
+import { useNarrowSections } from './narrow-view';
 import {
   SECTIONS,
   DEFAULT_SECTION,
@@ -48,6 +49,7 @@ export function Maintenance({
     // property, independent of property-fact authority. Links, creation and unlink stay staff-only.
     canEditContact = !property.archived_at || reviewer;
   const [section, setSection] = useState<Section>(DEFAULT_SECTION),
+    narrow = useNarrowSections(),
     [editor, setEditor] = useState<Editor | null>(null),
     [selected, setSelected] = useState(''),
     [contactBusy, setContactBusy] = useState(false),
@@ -169,37 +171,55 @@ export function Maintenance({
     contact: text.tabContacts,
   };
   return (
-    <section className="panel">
-      <div className="panel-head">
-        <h2>{text.editFacts}</h2>
-      </div>
+    <section className="panel" aria-label={text.editFacts}>
       <div className="panel-body">
         <p>{text.immediate}</p>
         {notice ? <p role="status">{text.saved}</p> : null}
-        <div className="tabs" role="tablist" aria-label={text.editFacts}>
-          {SECTIONS.map((id) => (
-            <button
-              key={id}
-              className="tab"
-              type="button"
-              role="tab"
-              id={'maintenance-tab-' + id}
-              aria-controls={'maintenance-panel-' + id}
-              aria-selected={section === id}
-              tabIndex={section === id ? 0 : -1}
-              onClick={() => setSection(id)}
-              onKeyDown={onSectionKeyDown}
+        {narrow ? (
+          <div className="field">
+            <label className="field-label" htmlFor="maintenance-section">
+              {text.section}
+            </label>
+            <select
+              id="maintenance-section"
+              className="select"
+              value={section}
+              onChange={(event) => setSection(event.target.value as Section)}
             >
-              {sectionLabel[id]}
-            </button>
-          ))}
-        </div>
+              {SECTIONS.map((id) => (
+                <option key={id} value={id}>
+                  {sectionLabel[id]}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div className="tabs" role="tablist" aria-label={text.editFacts}>
+            {SECTIONS.map((id) => (
+              <button
+                key={id}
+                className="tab"
+                type="button"
+                role="tab"
+                id={'maintenance-tab-' + id}
+                aria-controls={'maintenance-panel-' + id}
+                aria-selected={section === id}
+                tabIndex={section === id ? 0 : -1}
+                onClick={() => setSection(id)}
+                onKeyDown={onSectionKeyDown}
+              >
+                {sectionLabel[id]}
+              </button>
+            ))}
+          </div>
+        )}
 
         <section
           className="tabpanel"
-          role="tabpanel"
           id="maintenance-panel-property"
-          aria-labelledby="maintenance-tab-property"
+          role={narrow ? undefined : 'tabpanel'}
+          aria-labelledby={narrow ? undefined : 'maintenance-tab-property'}
+          aria-label={narrow ? sectionLabel.property : undefined}
           hidden={section !== 'property'}
         >
           {canEdit ? (
@@ -258,9 +278,10 @@ export function Maintenance({
 
         <section
           className="tabpanel"
-          role="tabpanel"
           id="maintenance-panel-address"
-          aria-labelledby="maintenance-tab-address"
+          role={narrow ? undefined : 'tabpanel'}
+          aria-labelledby={narrow ? undefined : 'maintenance-tab-address'}
+          aria-label={narrow ? sectionLabel.address : undefined}
           hidden={section !== 'address'}
         >
           {canEdit ? (
@@ -358,9 +379,10 @@ export function Maintenance({
 
         <section
           className="tabpanel"
-          role="tabpanel"
           id="maintenance-panel-contact"
-          aria-labelledby="maintenance-tab-contact"
+          role={narrow ? undefined : 'tabpanel'}
+          aria-labelledby={narrow ? undefined : 'maintenance-tab-contact'}
+          aria-label={narrow ? sectionLabel.contact : undefined}
           hidden={section !== 'contact'}
         >
           {canEditContact || staff ? (

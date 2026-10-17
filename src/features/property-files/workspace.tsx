@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { messages as globalMessages, type Locale } from '@/i18n/messages';
 import { fileMessages } from './messages';
+import { IconAction } from '@/features/icon-action';
 import { api, RequestError } from '@/features/employees/api';
 import { CoverImage } from './cover-image';
 import type {
@@ -21,6 +22,10 @@ type Upload = {
 };
 
 const otherCategoryId = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
+
+// A record can carry many attachments. The list is bounded to one page at a time so it
+// never grows past the panel, and the pager is the only way to reach the rest.
+const FILES_PER_PAGE = 5;
 
 export function Workspace({
   propertyId,
@@ -67,9 +72,12 @@ export function Workspace({
   const [coverBusy, setCoverBusy] = useState(false);
   const [coverError, setCoverError] = useState<string | null>(null);
   const [checkingPhoto, setCheckingPhoto] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   const text = globalMessages[locale];
   const fileText = fileMessages[locale];
+  const fileInputDisabled = uploading || creatingCategory || busy;
 
   useEffect(() => {
     const version = ++generation.current;
@@ -208,6 +216,15 @@ export function Workspace({
     } finally {
       if (generation.current === version && !signal?.aborted) setSigning(null);
     }
+  }
+
+  // The cover slot asks for the record's own photograph: the upload control switches to
+  // the Property-photo purpose, which is the only purpose the cover RPC accepts.
+  function addCoverImage() {
+    setPurpose('photo');
+    fileInput.current?.focus();
+    fileInput.current?.scrollIntoView({ block: 'center' });
+    fileInput.current?.click();
   }
 
   function categoryName(id: string): string {
@@ -487,6 +504,12 @@ export function Workspace({
     }
   }
 
+  const pageCount = Math.max(1, Math.ceil(files.length / FILES_PER_PAGE));
+  const currentPage = Math.min(page, pageCount - 1);
+  const visibleFiles = files.slice(
+    currentPage * FILES_PER_PAGE,
+    currentPage * FILES_PER_PAGE + FILES_PER_PAGE,
+  );
   return (
     <section className="panel" aria-label={fileText.files}>
       <div className="panel-head">
@@ -494,10 +517,7 @@ export function Workspace({
       </div>
       <div className="panel-body">
         {!archived && employeeId ? (
-          <fieldset
-            className="dropzone"
-            disabled={uploading || creatingCategory || busy}
-          >
+          <fieldset className="dropzone" disabled={fileInputDisabled}>
             <legend className="sr">{fileText.purpose}</legend>
             <label className="check">
               <input
@@ -580,6 +600,7 @@ export function Workspace({
               </label>
               <input
                 id={'files-' + propertyId}
+                ref={fileInput}
                 type="file"
                 multiple
                 accept="application/pdf,image/jpeg,image/png,image/webp"
@@ -651,21 +672,34 @@ export function Workspace({
         ) : null}
         <section className="cover-section" aria-label={fileText.cover}>
           <h3>{fileText.cover}</h3>
-          <CoverImage
-            propertyId={propertyId}
-            fileId={coverFileId}
-            locale={locale}
-            onDenied={onDenied}
-          />
+          {/* An empty cover slot is an action, not a picture: the page offers the button
+              that adds the record's photograph instead of an empty image frame. */}
+          {canEdit && !archived && !coverFileId ? (
+            <div className="cover-slot">
+              <IconAction
+                name="imagePlus"
+                label={fileText.addCover}
+                disabled={fileInputDisabled}
+                onClick={addCoverImage}
+              />
+              <p className="field-hint">{fileText.addCoverHint}</p>
+            </div>
+          ) : (
+            <CoverImage
+              propertyId={propertyId}
+              fileId={coverFileId}
+              locale={locale}
+              onDenied={onDenied}
+            />
+          )}
           {canEdit && !archived && coverFileId ? (
-            <button
-              type="button"
-              className="btn btn-sm btn-ghost"
-              disabled={coverBusy || checkingPhoto !== null}
+            <IconAction
+              name="remove"
+              label={coverBusy ? fileText.changingCover : fileText.clearCover}
+              busy={coverBusy}
+              disabled={checkingPhoto !== null}
               onClick={() => void changeCover(null)}
-            >
-              {coverBusy ? fileText.changingCover : fileText.clearCover}
-            </button>
+            />
           ) : null}
           {coverError ? (
             <p role="alert">
@@ -689,7 +723,7 @@ export function Workspace({
         {!busy && !error && !files.length ? <p>{fileText.noFiles}</p> : null}
         {!busy ? (
           <ul className="file-list">
-            {files.map((file) => (
+            {visibleFiles.map((file) => (
               <li key={file.id} className="doc-row">
                 <span className="doc-icon" aria-hidden="true">
                   <svg
@@ -724,22 +758,19 @@ export function Workspace({
                   </span>
                 </span>
                 <span className="doc-actions">
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-ghost"
+                  <IconAction
+                    name="open"
+                    label={fileText.open}
+                    busy={signing === file.id}
                     disabled={signing !== null}
                     onClick={() => void open(file.id, false)}
-                  >
-                    {signing === file.id ? fileText.signingFile : fileText.open}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-ghost"
+                  />
+                  <IconAction
+                    name="download"
+                    label={fileText.download}
                     disabled={signing !== null}
                     onClick={() => void open(file.id, true)}
-                  >
-                    {fileText.download}
-                  </button>
+                  />
                   {canEdit && !archived && file.purpose === 'photo' ? (
                     file.validated_at && file.validated_object_id ? (
                       coverFileId === file.id ? (
@@ -747,30 +778,25 @@ export function Workspace({
                           {fileText.selectedCover}
                         </span>
                       ) : (
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-ghost"
+                        <IconAction
+                          name="imagePlus"
+                          label={
+                            coverFileId
+                              ? fileText.replaceCover
+                              : fileText.setCover
+                          }
                           disabled={coverBusy || checkingPhoto !== null}
                           onClick={() => void changeCover(file.id)}
-                        >
-                          {coverBusy
-                            ? fileText.changingCover
-                            : coverFileId
-                              ? fileText.replaceCover
-                              : fileText.setCover}
-                        </button>
+                        />
                       )
                     ) : (
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-ghost"
+                      <IconAction
+                        name="refresh"
+                        label={fileText.checkPhoto}
+                        busy={checkingPhoto === file.id}
                         disabled={coverBusy || checkingPhoto !== null}
                         onClick={() => void checkPhoto(file.id)}
-                      >
-                        {checkingPhoto === file.id
-                          ? fileText.validating
-                          : fileText.checkPhoto}
-                      </button>
+                      />
                     )
                   ) : null}
                   {!archived && (canEdit || file.uploaded_by === employeeId) ? (
@@ -825,24 +851,43 @@ export function Workspace({
                         ) : null}
                       </div>
                     ) : (
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-ghost"
+                      <IconAction
+                        name="tag"
+                        label={fileText.changeCategory}
                         disabled={categoryBusy}
                         onClick={() => {
                           setEditingFileId(file.id);
                           setEditingCategoryId(file.category_id);
                           setCategoryError(null);
                         }}
-                      >
-                        {fileText.changeCategory}
-                      </button>
+                      />
                     )
                   ) : null}
                 </span>
               </li>
             ))}
           </ul>
+        ) : null}
+        {!busy && files.length > FILES_PER_PAGE ? (
+          <nav className="pager" aria-label={fileText.files}>
+            <IconAction
+              name="previous"
+              label={fileText.previousPage}
+              disabled={currentPage === 0}
+              onClick={() => setPage(currentPage - 1)}
+            />
+            <p className="pager-status" role="status">
+              {fileText.pagerStatus
+                .replace('{page}', String(currentPage + 1))
+                .replace('{pages}', String(pageCount))}
+            </p>
+            <IconAction
+              name="next"
+              label={fileText.nextPage}
+              disabled={currentPage >= pageCount - 1}
+              onClick={() => setPage(currentPage + 1)}
+            />
+          </nav>
         ) : null}
         <p className="field-hint">{fileText.availabilityNote}</p>
       </div>
