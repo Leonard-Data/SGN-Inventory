@@ -1251,7 +1251,6 @@ export function Detail({
                     locale={locale}
                     onSaved={changed}
                     onDenied={denyFiles}
-                    onInvalidate={recoverChildAfterInvalidation}
                   />
                 </DetailActionDialog>
                 <DetailActionDialog

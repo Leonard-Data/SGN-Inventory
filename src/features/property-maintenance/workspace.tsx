@@ -35,14 +35,12 @@ export function Maintenance({
   locale,
   onSaved,
   onDenied,
-  onInvalidate,
 }: {
   detail: PropertyDetail;
   employee: Employee;
   locale: Locale;
   onSaved: () => void | Promise<void>;
   onDenied: (status: number) => void;
-  onInvalidate?: () => void;
 }) {
   const text = maintenanceText(locale),
     property = detail.property,
@@ -223,7 +221,6 @@ export function Maintenance({
                 save={saveFacts}
                 onSaved={savedFacts}
                 onDenied={onDenied}
-                onInvalidate={onInvalidate}
                 explanation
               >
                 <RecordFields
@@ -333,7 +330,6 @@ export function Maintenance({
                     save={save}
                     onSaved={saved}
                     onDenied={onDenied}
-                    onInvalidate={onInvalidate}
                   >
                     <AddressFields
                       locale={locale}
@@ -438,7 +434,6 @@ export function Maintenance({
                       await onSaved();
                     }}
                     onDenied={onDenied}
-                    onInvalidate={onInvalidate}
                   >
                     <p>{text.wrongPerson}</p>
                     <RecordFields
@@ -486,7 +481,6 @@ export function Maintenance({
                     save={save}
                     onSaved={saved}
                     onDenied={onDenied}
-                    onInvalidate={onInvalidate}
                   >
                     {editor.target === 'contact' ? (
                       <>
