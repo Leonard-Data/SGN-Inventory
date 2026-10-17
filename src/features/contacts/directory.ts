@@ -85,23 +85,18 @@ function contactLink(value: unknown): ContactLink {
   };
 }
 
-// The single-contact read behind the inventory contact filter's applied label: one bounded
-// identity read of just that record, never a directory page. A malformed detail response is a
-// failed name, so the caller presents its own neutral label instead of a bare identifier.
+// The single-contact name read behind the inventory contact filter's applied label: a bounded
+// name-only identity read of just that record, never a directory page and never the guarded
+// affected-property detail. A malformed response is a failed name, so the caller presents its
+// own neutral label instead of a bare identifier.
 export function contactName(detail: unknown): string {
   const value: Record<string, unknown> =
     detail && typeof detail === 'object' && !Array.isArray(detail)
       ? (detail as Record<string, unknown>)
       : {};
-  const record =
-    value.contact &&
-    typeof value.contact === 'object' &&
-    !Array.isArray(value.contact)
-      ? (value.contact as Record<string, unknown>)
-      : {};
-  if (typeof record.display_name !== 'string' || record.display_name === '')
+  if (typeof value.displayName !== 'string' || value.displayName === '')
     throw new ContactDirectoryError('invalid-input');
-  return record.display_name;
+  return value.displayName;
 }
 
 // A recorded contact row arrives from the bounded RPC or a live RLS read; never trust its

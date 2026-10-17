@@ -213,19 +213,19 @@ test('an archived linked property is listed but never counted', () => {
   assert.equal(mixed.propertyCount, 1);
 });
 
-test('the applied contact name is read from one bounded identity read', () => {
+test('the applied contact name is read from one bounded name-only read', () => {
   assert.equal(
-    contactName({ contact: { display_name: 'Nguyễn Văn A' }, impact: {} }),
+    contactName({ id: contact, displayName: 'Nguyễn Văn A' }),
     'Nguyễn Văn A',
   );
-  // An unreadable or malformed detail response is a failed name, never a person named by id.
+  // An unreadable or malformed response is a failed name, never a person named by id.
   for (const broken of [
     null,
     {},
-    { contact: null },
-    { contact: { display_name: '' } },
-    { contact: { display_name: 7 } },
-    { contact: [] },
+    { id: contact },
+    { displayName: '' },
+    { displayName: 7 },
+    [],
   ])
     assert.throws(() => contactName(broken), ContactDirectoryError);
 });
