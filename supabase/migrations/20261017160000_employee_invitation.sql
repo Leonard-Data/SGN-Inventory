@@ -289,7 +289,9 @@ revoke all on function public.record_employee_invitation_result(uuid,integer,uui
 grant execute on function public.record_employee_invitation_result(uuid,integer,uuid,text,text,uuid,text) to service_role;
 
 -- 8. The recorded invitation participates in the existing private audit trail, which keeps the
---    acting Auth identity of every provider attempt and any owner-level removal.
+--    insert/update/removal itself with its row snapshots. The provider-result step and any
+--    owner-level removal carry no end-user JWT, so those audit rows record no acting Auth
+--    identity; the invitation row's own actor_id remains the recorded attribution.
 create trigger audit_employee_invitations after insert or update or delete on public.employee_invitations
   for each row execute function private.audit_change();
 commit;
