@@ -852,7 +852,9 @@ export function Discussion({
                             ))}
                           </ol>
                         ) : (
-                          <p className="field-hint">{text.commentHistoryEmpty}</p>
+                          <p className="field-hint">
+                            {text.commentHistoryEmpty}
+                          </p>
                         )}
                         {history[row.id]!.hasMore ? (
                           <p className="field-hint comment-history-more">
