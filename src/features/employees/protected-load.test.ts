@@ -40,24 +40,27 @@ test('property access misses invalidate while child misses stay local', () => {
 
   assert.equal(isPropertyAccessFailure(propertyMiss), true);
   assert.equal(isPropertyAccessFailure(childMiss), false);
-  assert.equal(isProtectedInvalidation(new RequestError(401, 'unauthenticated')), true);
-  assert.equal(isProtectedInvalidation(new RequestError(403, 'access-denied')), true);
+  assert.equal(
+    isProtectedInvalidation(new RequestError(401, 'unauthenticated')),
+    true,
+  );
+  assert.equal(
+    isProtectedInvalidation(new RequestError(403, 'access-denied')),
+    true,
+  );
   assert.equal(isProtectedInvalidation(propertyMiss), true);
   assert.equal(isProtectedInvalidation(childMiss), false);
-  assert.equal(isProtectedInvalidation(new RequestError(500, 'unavailable')), false);
+  assert.equal(
+    isProtectedInvalidation(new RequestError(500, 'unavailable')),
+    false,
+  );
 });
 
 test('rendered session comparison includes the access revision', () => {
   const current = { employee: manager, accessRevision: 2 };
 
-  assert.equal(
-    sessionDiffers(renderedSession(manager), 1, current),
-    true,
-  );
-  assert.equal(
-    sessionDiffers(renderedSession(manager), 2, current),
-    false,
-  );
+  assert.equal(sessionDiffers(renderedSession(manager), 1, current), true);
+  assert.equal(sessionDiffers(renderedSession(manager), 2, current), false);
 });
 
 test('same-identity reload keeps the rendered snapshot without concealing', async (t) => {

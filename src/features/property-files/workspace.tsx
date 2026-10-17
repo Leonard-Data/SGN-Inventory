@@ -146,7 +146,6 @@ export function Workspace({
     return () => abort.abort();
   }, [propertyId, employeeId, archived, onDenied, onInvalidate, revision]);
 
-
   async function changeCover(fileId: string | null) {
     const version = generation.current;
     const signal = controller.current?.signal;
@@ -664,12 +663,7 @@ export function Workspace({
             </ul>
           </section>
         ) : null}
-        <section
-          className="cover-section"
-          id="record-cover"
-          tabIndex={-1}
-          aria-label={fileText.cover}
-        >
+        <section className="cover-section" aria-label={fileText.cover}>
           <h3>{fileText.cover}</h3>
           <CoverImage
             propertyId={propertyId}
