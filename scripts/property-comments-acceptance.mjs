@@ -2807,8 +2807,8 @@ await settle(secondary);
     const unlinkedHistorySession = new ApplicationSession();
     assert.equal(
       (await unlinkedHistorySession.login('unlinked')).status,
-      200,
-      'Unlinked history route session login succeeded',
+      403,
+      'Unlinked login is refused as access-denied',
     );
     const deniedUnlinkedHistoryRoute = await unlinkedHistorySession.request(
       `/api/properties/${second.id}/comments/${id}/history`,
@@ -3048,11 +3048,22 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
     });
     assert.equal(deniedHistory.error?.code, '42501', `${name} history RPC is denied`);
     const routeSession = new ApplicationSession();
-    assert.equal(
-      (await routeSession.login(name === 'author' ? 'alpha' : name)).status,
-      200,
-      `${name} history route session login succeeded`,
-    );
+    const loginStatus = (
+      await routeSession.login(name === 'author' ? 'alpha' : name)
+    ).status;
+    if (name === 'inactive' || name === 'unlinked') {
+      assert.equal(
+        loginStatus,
+        403,
+        `${name} login is refused as access-denied`,
+      );
+    } else {
+      assert.equal(
+        loginStatus,
+        200,
+        `${name} history route session login succeeded`,
+      );
+    }
     const deniedRoute = await routeSession.request(
       `/api/properties/${second.id}/comments/${browserHistoryPosted.data.id}/history`,
     );
