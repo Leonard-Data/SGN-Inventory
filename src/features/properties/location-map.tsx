@@ -24,7 +24,8 @@ const pinIcon = divIcon({
 function ClickCatcher({ onPick }: { onPick: (point: MapPoint) => void }) {
   useMapEvents({
     click(event) {
-      onPick({ lat: event.latlng.lat, lng: event.latlng.lng });
+      const picked = event.target.wrapLatLng(event.latlng);
+      onPick({ lat: picked.lat, lng: picked.lng });
     },
   });
   return null;

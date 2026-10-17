@@ -255,7 +255,7 @@ export function Maintenance({
                       k !== 'longitude',
                   )}
                 />
-                {/* The recorded point is set by clicking the map, not by typing coordinates. */}
+                {/* The point is set by clicking the map; typed coordinates are the keyboard alternative. */}
                 <LocationEditor values={facts} locale={locale} />
                 {/* A mistaken price keeps its own revision; this note is optional. */}
                 <div className="field">
