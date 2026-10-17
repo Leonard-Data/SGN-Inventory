@@ -626,10 +626,18 @@ async function cleanupHistoryRows() {
 async function restoreAndExit(error) {
   try {
     await cleanupHistoryRows();
+  } catch {
+    console.error('FIXTURE RESTORE FAILED: history rows');
+  }
+  try {
     setBetaActive(true);
+  } catch {
+    console.error('FIXTURE RESTORE FAILED: reactivate ' + betaEmployee);
+  }
+  try {
     setReviewerRole(reviewerRole);
   } catch {
-    console.error('FIXTURE RESTORE FAILED: history rows or roles');
+    console.error('FIXTURE RESTORE FAILED: reviewer role ' + reviewerEmployee);
   }
   console.error(error);
   process.exit(1);
