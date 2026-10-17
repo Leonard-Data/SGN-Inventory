@@ -61,13 +61,15 @@ export function EmployeeInvitationForm({
   useEffect(() => {
     if (!submitted) return;
     const abort = new AbortController();
+    const superseded = () =>
+      abort.signal.aborted || targetRef.current !== submitted;
     api<InvitationRecord>(
       '/api/employees/invitations?email=' + encodeURIComponent(submitted),
       undefined,
       abort.signal,
     )
       .then((value) => {
-        if (targetRef.current !== submitted) return;
+        if (superseded()) return;
         setRecord(value);
         setLoadProblem(null);
         setProblem((current) =>
@@ -75,7 +77,7 @@ export function EmployeeInvitationForm({
         );
       })
       .catch((failure: unknown) => {
-        if (abort.signal.aborted) return;
+        if (superseded()) return;
         if (
           failure instanceof RequestError &&
           (failure.status === 401 || failure.status === 403)
