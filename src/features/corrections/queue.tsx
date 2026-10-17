@@ -53,8 +53,8 @@ function RequestActions({
     staff = ['staff', 'manager', 'admin'].includes(employee.role);
   // previewContact() and decide('apply') both route through the shared refusal decision.
   function failure(error: unknown) {
-    if (isPropertyAccessFailure(error)) {
-      onInvalidate?.();
+    if (isPropertyAccessFailure(error) && onInvalidate) {
+      onInvalidate();
       return;
     }
     if (

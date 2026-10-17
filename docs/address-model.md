@@ -47,7 +47,7 @@ Migration `20261014075435_vietnamese_admin_units_reference.sql` seeds the nation
 
 The catalog is a reference list, not a property-level verification. Selecting a province and commune from it does not establish a property's current address; a manager/admin still records evidence before `mapping_status = 'verified'`. The seed is idempotent and never rewrites a recorded address string.
 
-Not seeded by this package: any district-level catalog (the upstream two-tier release carries none, so the delivered legacy district picker stays empty — use the free-text `district_text` label for a historical district), any old→new crosswalk or blanket mapping, and any HCMC-specific transition. Crosswalks remain reviewed evidence under the verification workflow above.
+Not seeded by this package: any district-level catalog (the upstream two-tier release carries none, so the address form has no district picker and a historical district stays the free-text `district_text` label), any old→new crosswalk or blanket mapping, and any HCMC-specific transition. Crosswalks remain reviewed evidence under the verification workflow above.
 
 ## Analytics and search
 
