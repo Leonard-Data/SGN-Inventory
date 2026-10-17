@@ -320,11 +320,25 @@ export function ContactDirectory({
             <div className="panel-body">
               {data.contacts.length === 0 ? (
                 <div className="state-panel">
+                  <div className="state-mark">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <circle cx="9.5" cy="8" r="3.2" />
+                      <path d="M3.5 20a6 6 0 0 1 12 0" />
+                    </svg>
+                  </div>
                   <h3>{emptyMessage}</h3>
                 </div>
               ) : (
                 <div className="table-wrap">
-                  <table className="data-table stackable">
+                  <table className="data-table stackable contacts-table">
                     <thead>
                       <tr>
                         <th scope="col">{text.contactColumnName}</th>
@@ -362,11 +376,15 @@ export function ContactDirectory({
                                   ...new Set(
                                     record.links.map((link) => link.relation),
                                   ),
-                                ]
-                                  .map((relation) =>
-                                    optionLabel(locale, relation),
-                                  )
-                                  .join(' · ')
+                                ].map((relation) => (
+                                  <span
+                                    key={relation}
+                                    className="badge badge-plain"
+                                    data-tone="neutral"
+                                  >
+                                    {optionLabel(locale, relation)}
+                                  </span>
+                                ))
                               ) : (
                                 <span className="is-unknown">
                                   {text.unknown}
@@ -386,27 +404,31 @@ export function ContactDirectory({
                             </td>
                             <td data-label={text.contactColumnProperties}>
                               {record.links.length ? (
-                                record.links.map((link) => (
-                                  <span key={link.propertyId}>
-                                    <Link
-                                      className="link"
-                                      href={'/properties/' + link.propertyId}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      translate="no"
-                                      prefetch={false}
+                                <span className="contact-links">
+                                  {record.links.map((link) => (
+                                    <span
+                                      className="contact-link"
+                                      key={link.propertyId}
                                     >
-                                      {link.propertyCode}
-                                    </Link>{' '}
-                                    <small className="row-meta">
-                                      {optionLabel(locale, link.relation)}
-                                      {link.isPrimary
-                                        ? ' · ' + text.contactPrimaryLink
-                                        : ''}
-                                    </small>
-                                    <br />
-                                  </span>
-                                ))
+                                      <Link
+                                        className="link"
+                                        href={'/properties/' + link.propertyId}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        translate="no"
+                                        prefetch={false}
+                                      >
+                                        {link.propertyCode}
+                                      </Link>
+                                      <small className="row-meta">
+                                        {optionLabel(locale, link.relation)}
+                                        {link.isPrimary
+                                          ? ' · ' + text.contactPrimaryLink
+                                          : ''}
+                                      </small>
+                                    </span>
+                                  ))}
+                                </span>
                               ) : (
                                 <span className="is-unknown">
                                   {text.contactNoProperties}
