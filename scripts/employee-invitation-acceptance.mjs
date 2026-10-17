@@ -16,7 +16,7 @@
 //   SGN_ACCEPTANCE_OWNER=<private owner config> \
 //   SGN_ACCEPTANCE_WORKDIR=<private work directory> \
 //   SGN_ACCEPTANCE_INVITE_EMAIL=<an address the operator controls> \
-//   [SGN_ACCEPTANCE_PORT=<app port>] \
+//   [SGN_ACCEPTANCE_PORT=<fallback app port when the dev env sets no app URL>] \
 //   node scripts/employee-invitation-acceptance.mjs [--confirm] [--report <path>]
 //
 // The dev env supplies the publishable application settings; the owner config supplies the
@@ -41,12 +41,43 @@ const workdir = process.env.SGN_ACCEPTANCE_WORKDIR;
 const inviteEmail = (process.env.SGN_ACCEPTANCE_INVITE_EMAIL ?? '')
   .trim()
   .toLowerCase();
-const appPort = Number(process.env.SGN_ACCEPTANCE_PORT ?? 3117);
+const fallbackPort = Number(process.env.SGN_ACCEPTANCE_PORT ?? 3117);
 const confirm = process.argv.includes('--confirm');
 const reportIndex = process.argv.indexOf('--report');
 const reportPath = reportIndex >= 0 ? process.argv[reportIndex + 1] : null;
 const root = path.resolve(import.meta.dirname, '..');
-const appUrl = `http://127.0.0.1:${appPort}`;
+function parseEnv(text) {
+  const out = {};
+  for (const line of text.split(/\r?\n/)) {
+    const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)$/);
+    if (match) out[match[1]] = match[2].trim().replace(/^["']|["']$/g, '');
+  }
+  return out;
+}
+const devEnv = devEnvPath
+  ? parseEnv(await fs.readFile(devEnvPath, 'utf8'))
+  : {};
+function loopbackOrigin(value) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    assert.fail('NEXT_PUBLIC_APP_URL in the dev env must be an absolute URL');
+  }
+  assert.ok(
+    ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname),
+    'NEXT_PUBLIC_APP_URL in the dev env must be a loopback origin',
+  );
+  return url;
+}
+const appOrigin = loopbackOrigin(
+  (devEnv.NEXT_PUBLIC_APP_URL ?? '').trim() ||
+    `http://127.0.0.1:${fallbackPort}`,
+);
+const appUrl = appOrigin.origin;
+const appPort = Number(
+  appOrigin.port || (appOrigin.protocol === 'https:' ? 443 : 80),
+);
 
 const PLANNED_CHECKS = [
   'a live admin records one invitation for the operator-controlled address and the requested role',
@@ -57,8 +88,8 @@ const PLANNED_CHECKS = [
   'a same-actor/key retry and the application endpoint converge on the recorded invitation with exactly one employee and one invitation row, a second admin is refused `P0021` once it is recorded, and resuming a still-open invitation keeps the original actor',
   'an existing active or imported (unlinked) employee address is refused with its row untouched, and a role conflicting with the open invitation is refused',
   'a failed/ambiguous provider outcome stays visible and reconcilable on the same invitation',
-  'an anonymous caller, a salesperson and a manager are refused by the endpoint and the guarded RPC, while an unlinked or inactive identity is refused the app sign-in itself with its guarded-RPC denial asserted over a real Auth session',
-  'the synthetic rows and the synthetic Auth identity are removed and the pre-run baseline is restored',
+  'an anonymous caller, a salesperson, a staff member and a manager are refused by the endpoint and the guarded RPC, while an unlinked or inactive identity is refused the app sign-in itself with its guarded-RPC denial asserted over a real Auth session',
+  'the synthetic rows and the synthetic Auth identities are removed and the pre-run baseline is restored',
 ];
 if (!confirm) {
   console.log(
@@ -66,7 +97,7 @@ if (!confirm) {
   );
   for (const check of PLANNED_CHECKS) console.log('WOULD CHECK', check);
   console.log(
-    `WOULD SEND one real provider invitation to ${inviteEmail || '<SGN_ACCEPTANCE_INVITE_EMAIL unset>'} with redirectTo ${appUrl}/auth/invite`,
+    `WOULD SEND one real provider invitation to ${inviteEmail || '<SGN_ACCEPTANCE_INVITE_EMAIL unset>'} with redirectTo ${invitationDestination(appUrl)}`,
   );
   process.exit(0);
 }
@@ -79,15 +110,6 @@ assert.ok(
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteEmail),
   'SGN_ACCEPTANCE_INVITE_EMAIL must be the operator-controlled recipient address',
 );
-function parseEnv(text) {
-  const out = {};
-  for (const line of text.split(/\r?\n/)) {
-    const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)$/);
-    if (match) out[match[1]] = match[2].trim().replace(/^["']|["']$/g, '');
-  }
-  return out;
-}
-const devEnv = parseEnv(await fs.readFile(devEnvPath, 'utf8'));
 const owner = JSON.parse(await fs.readFile(ownerPath, 'utf8'));
 assert.equal(devEnv.SGN_ENV, 'dev', 'Acceptance must never target production');
 assert.equal(
@@ -414,7 +436,7 @@ try {
   assert.equal(
     sent.error,
     null,
-    'the real provider invitation request must be accepted',
+    `the real provider invitation request must be accepted (${sent.error ? `${sent.error.code ?? 'no-code'} ${sent.error.status ?? 'no-status'}: ${sent.error.message ?? ''}` : 'request accepted'})`,
   );
   assert.equal(
     sent.data.user.email,
