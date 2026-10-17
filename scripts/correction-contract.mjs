@@ -47,6 +47,14 @@ export async function correctionContract({
       assert.equal(original.requester_id, employees[1]);
       assert.equal(original.status, 'open');
       assert.deepEqual(original.proposed_values, {});
+      const live = (
+        await db.query(
+          'select entry_on::text as entry_on,entry_source from public.properties where id=$1',
+          [property],
+        )
+      ).rows[0];
+      assert.equal(original.observed_values.entry_on, live.entry_on);
+      assert.equal(original.observed_values.entry_source, live.entry_source);
       assert.deepEqual(await row(), before);
     },
   );
