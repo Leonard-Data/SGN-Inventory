@@ -419,6 +419,33 @@ const vi = {
   vendorNotFound: 'Không tìm thấy nhà cung cấp hoặc không có quyền đọc.',
   vendorBackToDirectory: 'Về danh sách nhà cung cấp',
   vendorRecordedAt: 'Ghi nhận lúc',
+  vendorPropertyNote:
+    'Nhà cung cấp được ghi nhận cho bất động sản này, tách biệt với chủ sở hữu và người môi giới. Liên kết nhà cung cấp không phải chủ sở hữu, không phải đặt chỗ và không phải trạng thái thuê.',
+  vendorPropertyEmpty: 'Chưa ghi nhận nhà cung cấp nào cho bất động sản này.',
+  vendorPropertyFailed: 'Không thể tải nhà cung cấp của bất động sản này.',
+  vendorLinkOpen: 'Liên kết nhà cung cấp đã ghi nhận',
+  vendorLinkChoose: 'Chọn nhà cung cấp',
+  vendorLinkNone:
+    'Không có nhà cung cấp phù hợp. Ghi nhận công ty trong danh sách nhà cung cấp trước.',
+  vendorLinkSubmit: 'Liên kết với bất động sản này',
+  vendorLinkStale:
+    'Thông tin bất động sản đã thay đổi. Đọc lại trang rồi liên kết lại; chưa có thay đổi nào được lưu.',
+  vendorLinkInvalid: 'Liên kết không hợp lệ. Chọn lại nhà cung cấp.',
+  vendorLinkMissing: 'Không tìm thấy nhà cung cấp hoặc liên kết hiện tại.',
+  vendorLinkFailed:
+    'Chưa xác nhận được kết quả. Đọc lại thông tin hiện tại trước khi thử lại; không tự gửi lại.',
+  vendorUnlink: 'Gỡ liên kết',
+  vendorUnlinkConfirm:
+    'Gỡ liên kết này? Chỉ mối liên hệ hiện tại bị gỡ; nhà cung cấp và các liên kết khác vẫn được giữ.',
+  vendorUnlinkYes: 'Xác nhận gỡ liên kết',
+  vendorLinkedProperties: 'Bất động sản đã liên kết',
+  vendorLinkedPropertiesNote:
+    'Chỉ các bất động sản bạn được phép đọc. Bất động sản đã lưu trữ không hiển thị ngoài quyền của bạn.',
+  vendorLinkedPropertiesEmpty:
+    'Nhà cung cấp này chưa được liên kết với bất động sản nào bạn được phép đọc.',
+  vendorLinkedPropertiesMore: 'Hiển thị 50 bất động sản đã liên kết đầu tiên.',
+  vendorLinkedAt: 'Liên kết lúc',
+  vendorLinkedArchived: 'Đã lưu trữ',
   // People → Contacts (#71): the shared-identity directory, its Owners view and the
   // expansion that corrects the shared contact through the one maintenance operation.
   contactsLink: 'Người liên hệ',
@@ -1004,6 +1031,33 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     vendorNotFound: 'The vendor was not found or you cannot read it.',
     vendorBackToDirectory: 'Back to the vendor directory',
     vendorRecordedAt: 'Recorded',
+    vendorPropertyNote:
+      'Supplier companies recorded on this property, separate from owners and brokers. A vendor link is not ownership, a reservation or rental occupancy.',
+    vendorPropertyEmpty: 'No vendor is recorded on this property yet.',
+    vendorPropertyFailed: "This property's vendors could not be loaded.",
+    vendorLinkOpen: 'Link a recorded vendor',
+    vendorLinkChoose: 'Choose a vendor',
+    vendorLinkNone:
+      'No vendor matches. Record the company in the vendor directory first.',
+    vendorLinkSubmit: 'Link to this property',
+    vendorLinkStale:
+      'The property changed. Reload the page and link again; nothing was saved.',
+    vendorLinkInvalid: 'That link was refused. Choose the vendor again.',
+    vendorLinkMissing: 'The vendor or the current link was not found.',
+    vendorLinkFailed:
+      'The outcome could not be confirmed. Read the current information before retrying; do not automatically resubmit.',
+    vendorUnlink: 'Unlink',
+    vendorUnlinkConfirm:
+      'Unlink this relationship? Only the current link is removed; the vendor and its other links remain.',
+    vendorUnlinkYes: 'Confirm unlink',
+    vendorLinkedProperties: 'Linked properties',
+    vendorLinkedPropertiesNote:
+      'Only properties you may read. An archived property stays hidden outside your role.',
+    vendorLinkedPropertiesEmpty:
+      'This vendor is not linked to any property you may read.',
+    vendorLinkedPropertiesMore: 'Showing the first 50 linked properties.',
+    vendorLinkedAt: 'Linked',
+    vendorLinkedArchived: 'Archived',
     // People → Contacts (#71): the shared-identity directory, its Owners view and the
     // expansion that corrects the shared contact through the one maintenance operation.
     contactsLink: 'Contacts',

@@ -1,9 +1,9 @@
 'use client';
 import Link from 'next/link';
-import { messages, type Locale } from '@/i18n/messages';
+import { messages, label, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { vietnamTimestamp } from '@/features/properties/format';
-import type { Vendor } from './types';
+import type { Vendor, VendorLinkedProperty } from './types';
 
 // One recorded company identity, read under the same active-employee RLS boundary as the
 // directory. An unknown optional detail reads as unknown (never a dash or an invented
@@ -43,6 +43,8 @@ export function VendorDetailView({
   const locale = initialLocale;
   const { data, error, busy, surface, logout, reload } = useProtectedData<{
     vendor: Vendor;
+    properties: VendorLinkedProperty[];
+    more: boolean;
   }>('/api/vendors/' + encodeURIComponent(id));
   const text = messages[locale];
   const vendor = data?.vendor ?? null;
@@ -150,6 +152,55 @@ export function VendorDetailView({
                   unknown={text.unknown}
                 />
               </dl>
+            </div>
+          </section>
+        ) : null}
+
+        {vendor ? (
+          <section
+            className="panel page-section"
+            aria-labelledby="vendor-properties"
+          >
+            <div className="panel-head">
+              <h2 id="vendor-properties">{text.vendorLinkedProperties}</h2>
+            </div>
+            <div className="panel-body">
+              {data?.properties.length ? (
+                data.properties.map((property) => (
+                  <div className="record" key={property.propertyId}>
+                    <div className="record-head">
+                      <Link
+                        className="record-title"
+                        href={'/properties/' + property.propertyId}
+                        prefetch={false}
+                      >
+                        {property.propertyCode}
+                      </Link>
+                      <span
+                        className="badge badge-plain"
+                        data-tone={property.archivedAt ? 'neutral' : 'accent'}
+                      >
+                        {label(locale, property.status)}
+                        {property.archivedAt
+                          ? ' · ' + text.vendorLinkedArchived
+                          : ''}
+                      </span>
+                    </div>
+                    <p className="record-meta">
+                      {text.vendorLinkedAt}{' '}
+                      <time dateTime={property.linkedAt}>
+                        {vietnamTimestamp(property.linkedAt, locale)}
+                      </time>
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p>{text.vendorLinkedPropertiesEmpty}</p>
+              )}
+              {data?.more ? (
+                <p className="field-hint">{text.vendorLinkedPropertiesMore}</p>
+              ) : null}
+              <p className="field-hint">{text.vendorLinkedPropertiesNote}</p>
             </div>
           </section>
         ) : null}

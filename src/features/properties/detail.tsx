@@ -40,6 +40,8 @@ import { Reservation } from './reservation';
 import { SaleCompletion } from '@/features/sales/completion';
 import { detailMessages } from './messages';
 import { contactRows } from './contact-rows';
+import { mayLinkPropertyVendors } from '@/features/vendors/directory';
+import { PropertyVendors } from '@/features/vendors/property-vendors';
 // The record screen groups its content the way the design package does: the record's own
 // facts, its documents and its discussion.
 const RECORD_TABS = ['overview', 'docs', 'comments'] as const;
@@ -438,6 +440,11 @@ export function Detail({
     (employee.id === property.created_by ||
       ['staff', 'manager', 'admin'].includes(employee.role));
   const coverFileId = property?.cover_file_id ?? null;
+  const canLinkVendor =
+    !!employee &&
+    !!property &&
+    !property.archived_at &&
+    mayLinkPropertyVendors(employee.role);
   const numberFormat = useMemo(
     () => new Intl.NumberFormat(locale === 'vi' ? 'vi-VN' : 'en-GB'),
     [locale],
@@ -1005,6 +1012,19 @@ export function Detail({
                       </div>
                     </div>
                   </div>
+
+                  {/* vendors: supplier companies, separate from owners and brokers */}
+                  <PropertyVendors
+                    key={
+                      'vendors' + property.id + property.revision + refreshTick
+                    }
+                    propertyId={property.id}
+                    propertyRevision={property.revision}
+                    canLink={canLinkVendor}
+                    locale={locale}
+                    onChanged={changed}
+                    onDenied={denyFiles}
+                  />
                 </section>
 
                 <section
