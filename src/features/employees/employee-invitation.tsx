@@ -273,13 +273,9 @@ export function EmployeeInvitationForm({
           </dl>
           {status === 'recorded' ? (
             <p className="field-hint">{text.employeeInviteDeliveryNote}</p>
-          ) : status === 'reconciliation' ? (
-            <p className="field-hint">
-              {text.employeeInviteReconciliationNote}
-            </p>
-          ) : status === 'pending' ? (
-            <p className="field-hint">{text.employeeInvitePendingNote}</p>
-          ) : null}
+          ) : status === 'none' ? null : (
+            <p className="field-hint">{text.employeeInviteUnconfirmedNote}</p>
+          )}
           {invitation?.providerDetail ? (
             <p className="field-hint" translate="no">
               {invitation.providerDetail}

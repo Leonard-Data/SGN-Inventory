@@ -190,7 +190,6 @@ export function directoryPage(
     deactivation?: Map<string, DirectoryDeactivation>;
     deletion?: Map<string, DirectoryDeactivation>;
   } = {},
-  invitations: Map<string, DirectoryInvitation> = new Map(),
 ): DirectoryPage {
   const page = rows.slice(0, DIRECTORY_PAGE_SIZE);
   const last = page[page.length - 1];
@@ -203,7 +202,7 @@ export function directoryPage(
       access: accessState(row),
       deactivation: operations.deactivation?.get(row.id) ?? null,
       deletion: operations.deletion?.get(row.id) ?? null,
-      invitation: invitations.get(row.id) ?? null,
+      invitation: null,
     })),
     nextCursor: rows.length > DIRECTORY_PAGE_SIZE && last ? last.id : null,
   };

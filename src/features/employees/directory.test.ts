@@ -233,7 +233,7 @@ test('the recorded deletion states are distinct in both languages', () => {
   }
 });
 
-test('the recorded invitation state is attached to its employee', () => {
+test('the recorded invitation projection reports the newest state per employee', () => {
   const rows = [row(1), row(2)];
   const invitations = directoryInvitations([
     {
@@ -255,15 +255,15 @@ test('the recorded invitation state is attached to its employee', () => {
       updated_at: '2026-10-15T09:00:00Z',
     },
   ]);
-  const page = directoryPage(rows, {}, invitations);
-  assert.deepEqual(page.employees[0]!.invitation, {
+  assert.deepEqual(invitations.get(rows[0]!.id), {
     state: 'provider_failed',
     revision: 2,
     updatedAt: '2026-10-15T10:00:00Z',
   });
   // A deactivation state is not an invitation state, and an employee without a recorded
   // invitation carries no marker at all.
-  assert.equal(page.employees[1]!.invitation, null);
+  assert.equal(invitations.get(rows[1]!.id), undefined);
+  assert.equal(directoryPage(rows).employees[0]!.invitation, null);
 });
 
 test('an employee with no recorded invitation is never presented as invited', () => {

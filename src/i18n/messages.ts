@@ -416,10 +416,8 @@ const vi = {
   employeeInviteRecordedLabel: 'Đã ghi nhận lời mời',
   employeeInviteDeliveryNote:
     'Nhà cung cấp đã nhận yêu cầu gửi lời mời. Điều này không xác nhận hộp thư đã nhận được thư và không bật quyền truy cập.',
-  employeeInvitePendingNote:
-    'Yêu cầu mời đã được ghi nhận và đang chờ nhà cung cấp xác nhận; chưa xác nhận việc gửi thư và chưa bật quyền truy cập nào.',
-  employeeInviteReconciliationNote:
-    'Bước gửi của nhà cung cấp chưa hoàn tất; hãy thử lại với cùng thao tác. Chưa xác nhận việc gửi thư và chưa bật quyền truy cập nào.',
+  employeeInviteUnconfirmedNote:
+    'Chưa xác nhận việc gửi thư và chưa bật quyền truy cập nào.',
   employeeInviteSuccess:
     'Đã ghi nhận lời mời; chưa có quyền truy cập nào được bật.',
   employeeInvitePending:
@@ -443,9 +441,9 @@ const vi = {
   employeeInviteOpen: 'Ghi nhận lời mời',
   // The fixed invitation destination (issue #68). The account-setup journey itself is a
   // separate ticket, so this surface claims no access and no delivery.
-  inviteTitle: 'Lời mời đã được ghi nhận',
+  inviteTitle: 'Điểm đến của liên kết lời mời',
   inviteLead:
-    'Đây là điểm đến cố định của liên kết lời mời. Bước tự thiết lập tài khoản cho người được mời chưa được mở trong phiên bản này; khi bước đó sẵn sàng, bạn có thể đăng nhập bằng địa chỉ email được mời. Trang này không xác nhận hộp thư đã nhận được thư và không bật quyền truy cập.',
+    'Đây là điểm đến cố định của một liên kết lời mời. Trang này không đọc thông tin về bất kỳ lời mời nào và không xác nhận lời mời của bạn. Bước tự thiết lập tài khoản cho người được mời chưa được mở trong phiên bản này; khi bước đó sẵn sàng, người được mời có thể đăng nhập bằng địa chỉ email được mời. Trang này không xác nhận hộp thư đã nhận được thư và không bật quyền truy cập.',
   // People → Vendors (#73): the company directory and its one bounded create.
   vendorsLink: 'Nhà cung cấp',
   vendorDirectory: 'Danh sách nhà cung cấp',
@@ -1092,10 +1090,8 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     employeeInviteRecordedLabel: 'Invitation recorded',
     employeeInviteDeliveryNote:
       'The provider accepted the invitation request. This does not confirm the mailbox received the message and enables no access.',
-    employeeInvitePendingNote:
-      'The invitation request is recorded and waiting for provider confirmation; no delivery is confirmed and no access is enabled.',
-    employeeInviteReconciliationNote:
-      'The provider step did not complete; retry with the same action. No delivery is confirmed and no access is enabled.',
+    employeeInviteUnconfirmedNote:
+      'No delivery is confirmed and no access is enabled.',
     employeeInviteSuccess:
       'The invitation is recorded; no access has been enabled.',
     employeeInvitePending:
@@ -1120,9 +1116,9 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     employeeInviteOpen: 'Record an invitation',
     // The fixed invitation destination (issue #68). The account-setup journey itself is a
     // separate ticket, so this surface claims no access and no delivery.
-    inviteTitle: 'Your invitation is recorded',
+    inviteTitle: 'Invitation link destination',
     inviteLead:
-      'This is the fixed destination of the invitation link. The account-setup step for an invited person is not open in this release; once it is, you can sign in with the invited email address. This page does not confirm the mailbox received the message and enables no access.',
+      'This is the fixed destination of an invitation link. This page reads nothing about any invitation and does not confirm your invitation. The account-setup step for an invited person is not open in this release; once it is, an invited person can sign in with the invited email address. This page does not confirm the mailbox received the message and enables no access.',
     // People → Vendors (#73): the company directory and its one bounded create.
     vendorsLink: 'Vendors',
     vendorDirectory: 'Vendor directory',

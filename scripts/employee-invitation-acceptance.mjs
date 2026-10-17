@@ -57,7 +57,7 @@ const PLANNED_CHECKS = [
   'a same-actor/key retry, a second admin resume and the application endpoint converge on the same invitation with exactly one employee and one invitation row',
   'an existing active or imported (unlinked) employee address is refused with its row untouched, and a role conflicting with the open invitation is refused',
   'a failed/ambiguous provider outcome stays visible and reconcilable on the same invitation',
-  'anonymous, unlinked, inactive, sales and manager callers are refused by the endpoint and the guarded RPC',
+  'an anonymous caller, a salesperson and a manager are refused by the endpoint and the guarded RPC, while an unlinked or inactive identity is refused the app sign-in itself with its guarded-RPC denial asserted over a real Auth session',
   'the synthetic rows and the synthetic Auth identity are removed and the pre-run baseline is restored',
 ];
 if (!confirm) {
