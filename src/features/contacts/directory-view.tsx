@@ -432,7 +432,11 @@ export function ContactDirectory({
                                     ? text.contactClose
                                     : text.contactOpen}
                                 </button>
-                              ) : null}
+                              ) : (
+                                <span className="row-meta">
+                                  {text.contactUnlinkedNote}
+                                </span>
+                              )}
                             </td>
                           </tr>
                           {openId === record.id ? (

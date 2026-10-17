@@ -424,7 +424,7 @@ const vi = {
   contactsLink: 'Người liên hệ',
   contactDirectory: 'Danh sách người liên hệ',
   contactDirectoryNote:
-    'Một người liên hệ dùng chung cho mọi bất động sản liên kết. Mục Chủ nhà chỉ gồm người có liên kết quan hệ chủ nhà trên bất động sản bạn được đọc; trường phân loại chung không quyết định. Mọi nhân viên đang hoạt động có thể đính chính thông tin đã ghi.',
+    'Một người liên hệ dùng chung cho mọi bất động sản liên kết. Mục Chủ nhà chỉ gồm người có liên kết quan hệ chủ nhà trên bất động sản bạn được đọc; trường phân loại chung không quyết định. Mọi nhân viên đang hoạt động có thể đính chính thông tin đã ghi của người liên hệ đã gắn với một bất động sản.',
   contactViews: 'Chế độ xem danh sách',
   contactViewAll: 'Tất cả người liên hệ',
   contactViewOwners: 'Chủ nhà',
@@ -446,6 +446,9 @@ const vi = {
   contactOwnersEmptyQuery: 'Không tìm thấy chủ nhà phù hợp.',
   contactDirectoryFailed: 'Không thể tải danh sách người liên hệ.',
   contactOpen: 'Xem và đính chính',
+  // Unlinked-identity correction from the directory stays deferred to #72.
+  contactUnlinkedNote:
+    'Chưa gắn bất động sản nào nên chưa thể đính chính từ danh sách này; mục này mở khi người liên hệ được gắn vào một bất động sản.',
   contactClose: 'Đóng chi tiết',
   contactLinkedProperties: 'Bất động sản liên quan',
   contactLinkedPropertiesNote:
@@ -1004,7 +1007,7 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     contactsLink: 'Contacts',
     contactDirectory: 'Contact directory',
     contactDirectoryNote:
-      'One recorded person is shared by every linked property. The Owners view lists only records linked as an owner on a property you can read; the general classification does not decide it. Every active employee can correct the recorded details.',
+      'One recorded person is shared by every linked property. The Owners view lists only records linked as an owner on a property you can read; the general classification does not decide it. Every active employee can correct the recorded details of a contact linked to a property.',
     contactViews: 'Directory view',
     contactViewAll: 'All contacts',
     contactViewOwners: 'Owners',
@@ -1026,6 +1029,9 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     contactOwnersEmptyQuery: 'No owner matches this search.',
     contactDirectoryFailed: 'The contact directory could not be loaded.',
     contactOpen: 'Open and correct',
+    // Unlinked-identity correction from the directory stays deferred to #72.
+    contactUnlinkedNote:
+      'Not linked to a property yet, so it cannot be corrected from this directory; this opens once the contact is linked to a property.',
     contactClose: 'Close details',
     contactLinkedProperties: 'Linked properties',
     contactLinkedPropertiesNote:
