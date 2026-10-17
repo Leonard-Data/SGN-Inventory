@@ -1126,7 +1126,7 @@ try {
   assert.equal(
     staffUnlinked.body.contacts[0]?.id,
     unlinkedPerson,
-    'the identity is listed while its correction stays narrowed',
+    'the unlinked identity is listed; only staff/manager/admin may correct it (issue #72)',
   );
   const unlinkedPreview = await appGet(
     staffCookies,
@@ -1141,8 +1141,11 @@ try {
       changes: { notes: 'directory save on an unlinked identity' },
     },
   );
-  assert.equal(unlinkedSave.status, 403, 'unlinked identity save withheld');
-  assert.equal(unlinkedSave.body.error, 'contact-refusal');
+  assert.equal(
+    unlinkedSave.status,
+    200,
+    'staff/manager/admin corrects an unlinked identity from the directory (issue #72)',
+  );
   const allPages = await readDirectoryPages(salesCookies, 'SGN71');
   assert.equal(allPages.pages > 1, true, 'the directory paged');
   const ownersPage = await appGet(

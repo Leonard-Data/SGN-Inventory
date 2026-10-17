@@ -573,6 +573,71 @@ export async function maintenanceContract({
       ]);
     },
   );
+  await check(
+    'a stale link revision refuses a wrong-person replacement instead of overwriting it',
+    async () => {
+      const staleSubject = (
+        await db.query('select public.create_contact($1) as id', [
+          { display_name: 'Stale subject person' },
+        ])
+      ).rows[0].id;
+      const staleReplacement = (
+        await db.query('select public.create_contact($1) as id', [
+          { display_name: 'Stale replacement person' },
+        ])
+      ).rows[0].id;
+      await db.query(mutate, [
+        created,
+        'link',
+        null,
+        await revision('properties', created),
+        { contact_id: staleSubject, relation: 'unknown' },
+      ]);
+      const linkRev = (
+        await db.query(
+          'select revision from public.property_contacts where property_id=$1 and contact_id=$2',
+          [created, staleSubject],
+        )
+      ).rows[0].revision;
+      // A real relation change bumps the link revision; `mutate` keeps the parent fresh.
+      await db.query(mutate, [
+        created,
+        'link',
+        staleSubject,
+        linkRev,
+        { relation: 'broker' },
+      ]);
+      await fails(
+        mutate,
+        [
+          created,
+          'link',
+          staleSubject,
+          linkRev,
+          { contact_id: staleReplacement },
+        ],
+        'PT409',
+      );
+      assert.deepEqual(
+        (
+          await db.query(
+            'select contact_id,relation from public.property_contacts where property_id=$1 and contact_id=$2',
+            [created, staleSubject],
+          )
+        ).rows,
+        [{ contact_id: staleSubject, relation: 'broker' }],
+      );
+      assert.equal(
+        (
+          await db.query(
+            'select contact_id from public.property_contacts where property_id=$1 and contact_id=$2',
+            [created, staleReplacement],
+          )
+        ).rows.length,
+        0,
+      );
+    },
+  );
   // Sales journey fixture: a shared contact linked to two of another employee's readable properties,
   // plus an unlinked identity that stays outside the settled linked-detail permission.
   await db.query(mutate, [

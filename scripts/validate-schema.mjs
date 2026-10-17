@@ -27,6 +27,7 @@ import { employeeAccountDeletionContract } from './employee-account-deletion-con
 import { auditRetentionContract } from './audit-retention-contract.mjs';
 import { employeeDeactivationConcurrency } from './employee-deactivation-concurrency.mjs';
 import { propertyVendorLinksConcurrency } from './property-vendor-links-concurrency.mjs';
+import { contactLinksConcurrency } from './contact-links-concurrency.mjs';
 import { employeeInvitationContract } from './employee-invitation-contract.mjs';
 import { employeeInvitationConcurrency } from './employee-invitation-concurrency.mjs';
 import { applyEmbeddedSchema } from './embedded-schema.mjs';
@@ -634,6 +635,7 @@ await employeeDeactivationContract({db,asUser,check,fails,employees});
 await employeeAccountDeletionContract({db,asUser,check,fails});
 await employeeDeactivationConcurrency({root,check});
 await propertyVendorLinksConcurrency({root,check});
+await contactLinksConcurrency({root,check});
 // Issue #68: the recorded role-bound employee invitation and its per-address guard.
 await employeeInvitationContract({db,asUser,check,fails});
 await employeeInvitationConcurrency({root,check});
@@ -647,7 +649,7 @@ await propertyVendorLinkContract({db,asUser,check,fails,employees,property,other
 await auditRetentionContract({db,asUser,check,fails,employees});
 // Ticket #71: the shared Contact directory read and its contact-scoped correction.
 await contactDirectoryContract({db,asUser,check,fails,employees});
-const report={checked_at:new Date().toISOString(),engine:'PGlite embedded PostgreSQL plus an embedded real PostgreSQL engine for the two-connection last-admin and property-vendor-link races; mocked auth/storage schemas',passed,
+const report={checked_at:new Date().toISOString(),engine:'PGlite embedded PostgreSQL plus an embedded real PostgreSQL engine for the two-connection last-admin, property-vendor-link and contact-link races; mocked auth/storage schemas',passed,
  limitations:['Not a live Supabase integration test','HTTP Auth, signed URLs, Vercel and browser flows not exercised','Hosted/staging independent-session contention at production load remains an acceptance gate']};
 await fs.writeFile(path.join(root,'docs/validation-results.json'),JSON.stringify(report,null,2)+'\n');
 console.log(`${passed} assertions passed`);await db.close();

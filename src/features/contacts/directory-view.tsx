@@ -77,8 +77,12 @@ export function ContactDirectory({
   if (view) parameters.set('view', view);
   const suffix = parameters.toString();
   const endpoint = '/api/contacts' + (suffix ? '?' + suffix : '');
-  const { data, error, busy, surface, logout, reload } =
+  const { data, error, busy, surface, logout, reload, employee } =
     useProtectedData<ContactPage>(endpoint);
+  // Unlinked-identity correction from the directory is staff/manager/admin authority
+  // (ticket #72); every other role still sees only the linked-identity editor.
+  const staff =
+    employee !== null && ['staff', 'manager', 'admin'].includes(employee.role);
   // The sgn-locale cookie is the rendered locale; the shell keeps it equal to the saved
   // preference.
   const locale = initialLocale;
@@ -445,7 +449,7 @@ export function ContactDirectory({
                               className="cell-actions"
                               data-label={text.contactColumnActions}
                             >
-                              {record.links.length ? (
+                              {record.links.length || staff ? (
                                 <button
                                   type="button"
                                   className="btn btn-secondary btn-sm"
