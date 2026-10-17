@@ -419,6 +419,45 @@ const vi = {
   vendorNotFound: 'Không tìm thấy nhà cung cấp hoặc không có quyền đọc.',
   vendorBackToDirectory: 'Về danh sách nhà cung cấp',
   vendorRecordedAt: 'Ghi nhận lúc',
+  // People → Contacts (#71): the shared-identity directory, its Owners view and the
+  // expansion that corrects the shared contact through the one maintenance operation.
+  contactsLink: 'Người liên hệ',
+  contactDirectory: 'Danh sách người liên hệ',
+  contactDirectoryNote:
+    'Một người liên hệ dùng chung cho mọi bất động sản liên kết. Mục Chủ nhà chỉ gồm người có liên kết quan hệ chủ nhà trên bất động sản bạn được đọc; trường phân loại chung không quyết định. Mọi nhân viên đang hoạt động có thể đính chính thông tin đã ghi của người liên hệ đã gắn với một bất động sản.',
+  contactViews: 'Chế độ xem danh sách',
+  contactViewAll: 'Tất cả người liên hệ',
+  contactViewOwners: 'Chủ nhà',
+  contactSearch: 'Tìm tên người liên hệ',
+  contactSearchHint:
+    'Tìm theo tên đã ghi; chỉ tên, không tìm số điện thoại. % và _ là ký tự thường. Tối đa 120 ký tự.',
+  contactColumnName: 'Người liên hệ',
+  contactColumnRelation: 'Quan hệ trên bất động sản',
+  contactColumnPhone: 'Số điện thoại đã ghi',
+  contactPrimaryLink: 'Liên hệ chính',
+  contactColumnProperties: 'Bất động sản liên quan',
+  contactColumnActions: 'Thao tác',
+  contactNoProperties: 'Chưa gắn bất động sản nào',
+  contactPageInfo: 'Trang này: {n} người liên hệ',
+  contactDirectoryEmpty: 'Chưa có người liên hệ nào được ghi nhận.',
+  contactDirectoryEmptyQuery: 'Không tìm thấy người liên hệ phù hợp.',
+  contactOwnersEmpty:
+    'Chưa có người liên hệ nào được ghi nhận là chủ nhà trên bất động sản bạn được đọc.',
+  contactOwnersEmptyQuery: 'Không tìm thấy chủ nhà phù hợp.',
+  contactDirectoryFailed: 'Không thể tải danh sách người liên hệ.',
+  contactOpen: 'Xem và đính chính',
+  // Unlinked-identity correction from the directory stays deferred to #72.
+  contactUnlinkedNote:
+    'Chưa gắn bất động sản nào nên chưa thể đính chính từ danh sách này; mục này mở khi người liên hệ được gắn vào một bất động sản.',
+  contactClose: 'Đóng chi tiết',
+  contactLinkedProperties: 'Bất động sản liên quan',
+  contactLinkedPropertiesNote:
+    'Quan hệ được ghi theo từng bất động sản: cùng một người có thể là chủ nhà ở nơi này và môi giới ở nơi khác. Mọi bất động sản nêu trên đều nhận thay đổi và hiển thị thông tin mới ở lần đọc kế tiếp; thay đổi người liên hệ dùng chung không ghi vào lịch sử bất động sản.',
+  contactClassifiedAs: 'Phân loại chung',
+  contactRawPhoneText: 'Văn bản điện thoại gốc',
+  contactEditorTitle: 'Đính chính người liên hệ dùng chung',
+  contactSharedIdentityNote:
+    'Đây là người liên hệ dùng chung: đính chính sẽ áp dụng cho mọi bất động sản đang gắn với người này.',
   saving: 'Đang lưu…',
   notes: 'Ghi chú',
   languageName: 'Ngôn ngữ / Language',
@@ -965,6 +1004,45 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     vendorNotFound: 'The vendor was not found or you cannot read it.',
     vendorBackToDirectory: 'Back to the vendor directory',
     vendorRecordedAt: 'Recorded',
+    // People → Contacts (#71): the shared-identity directory, its Owners view and the
+    // expansion that corrects the shared contact through the one maintenance operation.
+    contactsLink: 'Contacts',
+    contactDirectory: 'Contact directory',
+    contactDirectoryNote:
+      'One recorded person is shared by every linked property. The Owners view lists only records linked as an owner on a property you can read; the general classification does not decide it. Every active employee can correct the recorded details of a contact linked to a property.',
+    contactViews: 'Directory view',
+    contactViewAll: 'All contacts',
+    contactViewOwners: 'Owners',
+    contactSearch: 'Search contact name',
+    contactSearchHint:
+      'Matches the recorded name only, never a phone number. % and _ are ordinary characters. At most 120 characters.',
+    contactColumnName: 'Contact',
+    contactColumnRelation: 'Property relationship',
+    contactColumnPhone: 'Recorded phone',
+    contactPrimaryLink: 'Primary contact',
+    contactColumnProperties: 'Linked properties',
+    contactColumnActions: 'Actions',
+    contactNoProperties: 'No linked property',
+    contactPageInfo: 'This page: {n} contacts',
+    contactDirectoryEmpty: 'No contacts are recorded.',
+    contactDirectoryEmptyQuery: 'No contacts match this search.',
+    contactOwnersEmpty:
+      'No contact is recorded as an owner on a property you can read.',
+    contactOwnersEmptyQuery: 'No owner matches this search.',
+    contactDirectoryFailed: 'The contact directory could not be loaded.',
+    contactOpen: 'Open and correct',
+    // Unlinked-identity correction from the directory stays deferred to #72.
+    contactUnlinkedNote:
+      'Not linked to a property yet, so it cannot be corrected from this directory; this opens once the contact is linked to a property.',
+    contactClose: 'Close details',
+    contactLinkedProperties: 'Linked properties',
+    contactLinkedPropertiesNote:
+      'The relationship is recorded per property: the same person may be an owner on one and a broker on another. Every property listed above receives the change and shows the new details on its next read; a shared-contact correction is not recorded in property history.',
+    contactClassifiedAs: 'General classification',
+    contactRawPhoneText: 'Original phone text',
+    contactEditorTitle: 'Correct the shared contact',
+    contactSharedIdentityNote:
+      'This is the shared contact: a correction applies to every property linked to it.',
     saving: 'Saving…',
     notes: 'Notes',
     signInHelp:

@@ -18,9 +18,9 @@ export async function proxy(request: NextRequest) {
         const employee = await activeEmployee(context);
         // People is not one authority boundary. The employee list is admin-only in the
         // rail and the same rule guards its route, so a direct visit is refused before
-        // the shell renders. Vendors is readable by every active employee (already
-        // proved above); its mutations are checked in the route and the database, not by
-        // a page guard.
+        // the shell renders. Vendors and Contacts are readable by every active employee
+        // (already proved above); their mutations are checked in the route and the
+        // database, not by a page guard.
         if (
           path.startsWith('/people/employees') &&
           !mayReadDirectory(employee.role)

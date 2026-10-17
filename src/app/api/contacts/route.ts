@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ApiError, runRoute, objectBody } from '@/lib/supabase/route';
+import { runRoute, objectBody } from '@/lib/supabase/route';
 import { activeEmployee } from '@/features/employees/access';
-import {
-  createContact,
-  listContacts,
-} from '@/features/property-maintenance/data';
+import { createContact } from '@/features/property-maintenance/data';
+import { listContacts } from '@/features/contacts/data';
+
+// Reading the recorded shared-contact directory is the same settled scope as correcting a
+// linked shared contact: any live active employee, on a bounded page whose rows the
+// database's RLS and the invoker wrapper decide. Creating a shared contact stays a
+// staff/manager/admin operation (the guarded RPC refuses another role).
 export function GET(request: NextRequest) {
   return runRoute(request, async (context) => {
-    const employee = await activeEmployee(context);
-    if (!['staff', 'manager', 'admin'].includes(employee.role))
-      throw new ApiError(403, 'access-denied');
+    await activeEmployee(context);
     return NextResponse.json(
       await listContacts(context, request.nextUrl.searchParams),
     );

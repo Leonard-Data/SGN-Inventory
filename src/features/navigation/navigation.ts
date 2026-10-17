@@ -76,6 +76,16 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: 'people',
         roles: ALL_ROLES,
       },
+      {
+        id: 'contacts',
+        // The shared-contact directory has the same settled scope as correcting a linked
+        // shared identity: every active employee reads it and may correct recorded details.
+        // Creating a contact and changing local links stay staff/manager/admin operations.
+        label: 'contactsLink',
+        href: '/people/contacts',
+        icon: 'people',
+        roles: ALL_ROLES,
+      },
     ],
   },
   {

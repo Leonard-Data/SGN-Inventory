@@ -1833,6 +1833,14 @@ export type Database = {
         Args: { p_mode: string; p_facts: Json; p_address: Json };
         Returns: string;
       };
+      maintain_contact: {
+        Args: {
+          p_changes: Json;
+          p_contact_id: string;
+          p_expected_revision: string;
+        };
+        Returns: string;
+      };
       maintain_property: {
         Args: {
           p_property_id: string;
@@ -1981,6 +1989,23 @@ export type Database = {
           id: string;
           property_id: string;
           removed_at: string | null;
+          revision: string;
+        }[];
+      };
+      list_contacts: {
+        Args: {
+          p_after_id?: string;
+          p_limit?: number;
+          p_owners_only?: boolean;
+          p_query?: string;
+        };
+        Returns: {
+          contact_type: string;
+          display_name: string;
+          id: string;
+          links: Json;
+          phones: string[];
+          raw_phone_text: string | null;
           revision: string;
         }[];
       };
