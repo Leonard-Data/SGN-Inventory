@@ -416,6 +416,10 @@ const vi = {
   employeeInviteRecordedLabel: 'Đã ghi nhận lời mời',
   employeeInviteDeliveryNote:
     'Nhà cung cấp đã nhận yêu cầu gửi lời mời. Điều này không xác nhận hộp thư đã nhận được thư và không bật quyền truy cập.',
+  employeeInvitePendingNote:
+    'Yêu cầu mời đã được ghi nhận và đang chờ nhà cung cấp xác nhận; chưa xác nhận việc gửi thư và chưa bật quyền truy cập nào.',
+  employeeInviteReconciliationNote:
+    'Bước gửi của nhà cung cấp chưa hoàn tất; hãy thử lại với cùng thao tác. Chưa xác nhận việc gửi thư và chưa bật quyền truy cập nào.',
   employeeInviteSuccess:
     'Đã ghi nhận lời mời; chưa có quyền truy cập nào được bật.',
   employeeInvitePending:
@@ -1088,6 +1092,10 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     employeeInviteRecordedLabel: 'Invitation recorded',
     employeeInviteDeliveryNote:
       'The provider accepted the invitation request. This does not confirm the mailbox received the message and enables no access.',
+    employeeInvitePendingNote:
+      'The invitation request is recorded and waiting for provider confirmation; no delivery is confirmed and no access is enabled.',
+    employeeInviteReconciliationNote:
+      'The provider step did not complete; retry with the same action. No delivery is confirmed and no access is enabled.',
     employeeInviteSuccess:
       'The invitation is recorded; no access has been enabled.',
     employeeInvitePending:

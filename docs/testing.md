@@ -952,7 +952,7 @@ Scope: sending a role-bound employee invitation, [issue #68](https://github.com/
 
 | Gate | Required observation |
 | --- | --- |
-| Live authority | Only a live admin can record or reconcile an invitation; a manager, staff member, salesperson, anonymous caller, unlinked identity or deactivated identity is refused by the endpoint and the guarded RPC, including with an already-issued session |
+| Live authority | Only a live admin can record or reconcile an invitation. A manager, staff member, salesperson or anonymous caller is refused by the endpoint and the guarded RPC; an unlinked or deactivated identity is refused the app sign-in itself with `403/access-denied`, and the harness asserts its guarded-RPC refusal with a real Auth session, including an already-issued session |
 | Input and role | A malformed address and a role outside the four existing company roles are refused `400/invalid-input`; the recorded invitation keeps the normalized address and the requested role, and that role is re-read from the employee record, never from editable Auth metadata |
 | Not membership | Sending records a pending invitation and creates or retains an unlinked, inactive employee; the invitee cannot sign in or read protected data before the separate acceptance journey, and no employee is activated by an email match |
 | Real provider send | The server-only adapter sends a real provider invitation to the recorded address with the fixed application destination; the provider returns the exact intended identity and the recorded state becomes `recorded` only after that response is stored. No token, password, privileged key or raw provider payload appears in a public response or log |

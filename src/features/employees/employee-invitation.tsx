@@ -124,18 +124,16 @@ export function EmployeeInvitationForm({
     !busy &&
     (status === 'pending' || status === 'reconciliation');
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function send(address: string, targetRole: EmployeeRole) {
     if (busy || !actionKey) return;
-    const address = email.trim().toLowerCase();
-    if (!address) return;
     setBusy(true);
+    setLoadProblem(null);
     setProblem(null);
     setNotice(null);
     try {
       const next = await api<InvitationRecord>('/api/employees/invitations', {
-        email,
-        role,
+        email: address,
+        role: targetRole,
         key: actionKey,
       });
       setRecord(next);
@@ -173,6 +171,19 @@ export function EmployeeInvitationForm({
     } finally {
       setBusy(false);
     }
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const address = email.trim().toLowerCase();
+    if (!address) return;
+    await send(address, role);
+  }
+
+  async function retry(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!record?.employee || !invitation) return;
+    await send(record.employee.email, invitation.role);
   }
 
   return (
@@ -260,14 +271,22 @@ export function EmployeeInvitationForm({
               </dd>
             </div>
           </dl>
-          <p className="field-hint">{text.employeeInviteDeliveryNote}</p>
+          {status === 'recorded' ? (
+            <p className="field-hint">{text.employeeInviteDeliveryNote}</p>
+          ) : status === 'reconciliation' ? (
+            <p className="field-hint">
+              {text.employeeInviteReconciliationNote}
+            </p>
+          ) : status === 'pending' ? (
+            <p className="field-hint">{text.employeeInvitePendingNote}</p>
+          ) : null}
           {invitation?.providerDetail ? (
             <p className="field-hint" translate="no">
               {invitation.providerDetail}
             </p>
           ) : null}
           {retriable ? (
-            <form onSubmit={submit}>
+            <form onSubmit={retry}>
               <button className="btn btn-sm btn-ghost" type="submit">
                 {text.retry}
               </button>
