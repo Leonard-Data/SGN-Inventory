@@ -493,13 +493,16 @@ export function ContactDirectory({
                                       <span>
                                         {maintenanceError(locale, detailError)}
                                       </span>
-                                      <button
-                                        type="button"
-                                        className="btn btn-sm btn-ghost"
-                                        onClick={() => void open(record)}
-                                      >
-                                        {text.retry}
-                                      </button>
+                                      {detailError ===
+                                      'contact-refusal' ? null : (
+                                        <button
+                                          type="button"
+                                          className="btn btn-sm btn-ghost"
+                                          onClick={() => void open(record)}
+                                        >
+                                          {text.retry}
+                                        </button>
+                                      )}
                                     </div>
                                   ) : null}
                                   {editor && editor.id === record.id ? (

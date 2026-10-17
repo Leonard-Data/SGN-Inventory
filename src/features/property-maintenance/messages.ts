@@ -78,8 +78,8 @@ const copy = {
     'I checked: this is the same person; the change applies to every link shown above.',
   ],
   contactRefusal: [
-    'Không sửa được: người liên hệ chung này hiện không gắn với bất động sản nào, hoặc còn gắn với bất động sản đã lưu trữ mà bạn không được đọc. Nhờ quản lý hoặc quản trị viên; chưa có thay đổi nào được lưu.',
-    'Cannot edit: this shared contact is currently not linked to any property, or is also linked to an archived property you cannot read. Ask a manager or admin; nothing was saved.',
+    'Không sửa được: người liên hệ chung này có thể chưa gắn với bất động sản nào, hoặc đang gắn với bất động sản bạn không được đọc. Nhờ người duyệt (quản lý hoặc quản trị viên) nếu bạn cần sửa; chưa có thay đổi nào được lưu.',
+    'Cannot edit: this shared contact is either not linked to any property, or is linked to a property you cannot read. Ask a reviewer (manager or admin) if you need to correct it; nothing was saved.',
   ],
   wrongPerson: [
     'Nhầm người? Thay liên kết tại bất động sản này, không ghi đè người liên hệ chung.',
