@@ -54,7 +54,7 @@ const PLANNED_CHECKS = [
   'the real provider invitation is sent to that recorded address with the fixed application destination, and the recorded state becomes `recorded` only after the provider returns the exact intended identity',
   'the invited employee still has no sign-in link and no access after the accepted request',
   'the admin employee list shows the recorded invitation marker for the invited address',
-  'a same-actor/key retry, a second admin resume and the application endpoint converge on the same invitation with exactly one employee and one invitation row',
+  'a same-actor/key retry and the application endpoint converge on the recorded invitation with exactly one employee and one invitation row, a second admin is refused `P0021` once it is recorded, and resuming a still-open invitation keeps the original actor',
   'an existing active or imported (unlinked) employee address is refused with its row untouched, and a role conflicting with the open invitation is refused',
   'a failed/ambiguous provider outcome stays visible and reconcilable on the same invitation',
   'an anonymous caller, a salesperson and a manager are refused by the endpoint and the guarded RPC, while an unlinked or inactive identity is refused the app sign-in itself with its guarded-RPC denial asserted over a real Auth session',
@@ -476,14 +476,14 @@ try {
   const retried = await begin(adminA, inviteEmail, 'staff', key);
   assert.equal(retried.error, null);
   assert.equal(retried.data.id, begun.data.id, 'same-key retry converges');
-  const resumed = await begin(adminB, inviteEmail, 'staff', randomUUID());
-  assert.equal(resumed.error, null);
-  assert.equal(
-    resumed.data.id,
-    begun.data.id,
-    'another admin resumes the same invitation',
+  const refusedRecorded = await begin(
+    adminB,
+    inviteEmail,
+    'staff',
+    randomUUID(),
   );
-  assert.equal(resumed.data.actorId, manifest.identities.adminA.employeeId);
+  assert.equal(refusedRecorded.error?.code, 'P0021');
+  assert.equal(refusedRecorded.data, null);
   const endpoint = await appFetch(adminACookie, '/api/employees/invitations', {
     method: 'POST',
     body: JSON.stringify({
@@ -511,7 +511,7 @@ try {
   )[0];
   assert.deepEqual(rows, { employees: 1, invitations: 1 });
   observed(
-    'a retry, a second admin and the application endpoint converge on one invitation and one person',
+    'a retry and the application endpoint converge on one recorded invitation and one person',
     {
       invitationId: begun.data.id,
       endpointStatus: endpoint.status,
@@ -576,7 +576,13 @@ try {
     'sales',
     randomUUID(),
   );
+  assert.equal(resumedFailed.error, null);
   assert.equal(resumedFailed.data.id, openInvitation.data.id);
+  assert.equal(
+    resumedFailed.data.actorId,
+    manifest.identities.adminA.employeeId,
+    'resuming keeps the original actor',
+  );
   observed(
     'a conflicting role is refused and an ambiguous outcome reconciles',
     {
