@@ -253,7 +253,7 @@ test('post slice reports only rows the reconciliation drops', () => {
   );
 });
 
-test('re-appended rows clear cached history only on revision change', () => {
+test('re-appended rows clear cached history entries', () => {
   const older = comment('older', 'Older', '2026-10-12T09:00:00.000Z');
   const edited = {
     ...older,
@@ -262,22 +262,14 @@ test('re-appended rows clear cached history only on revision change', () => {
     editedAt: '2026-10-13T10:00:00.000Z',
   };
   const other = comment('other', 'Other', '2026-10-11T09:00:00.000Z');
+  const cachedPage = { events: [], hasMore: false };
+  assert.deepEqual(staleHistoryIds([edited, other], { older: cachedPage }), [
+    'older',
+  ]);
   assert.deepEqual(
-    staleHistoryIds([edited, other], {
-      older: 'older-revision',
-      other: 'other-revision',
-    }),
-    ['older'],
-  );
-  assert.deepEqual(
-    staleHistoryIds([other], { other: 'other-revision' }),
+    staleHistoryIds([other], {}),
     [],
-    'An unchanged re-appended row keeps its cached history',
-  );
-  assert.deepEqual(
-    staleHistoryIds([edited], {}),
-    [],
-    'A row with no fetched history entry is not reported',
+    'A row with no cached history entry is not reported',
   );
 });
 

@@ -2,6 +2,7 @@ import {
   COMMENT_PAGE_SIZE,
   type Comment,
   type CommentCursor,
+  type CommentHistoryPage,
 } from './types.ts';
 
 export const cursorOf = (row: Comment | undefined): CommentCursor | null =>
@@ -55,13 +56,10 @@ export function droppedCommentIds(
 
 export function staleHistoryIds(
   appended: Comment[],
-  fetchedFor: Record<string, string>,
+  cached: Record<string, CommentHistoryPage>,
 ): string[] {
   return appended
-    .filter((row) => {
-      const revision = fetchedFor[row.id];
-      return revision !== undefined && revision !== row.revision;
-    })
+    .filter((row) => cached[row.id] !== undefined)
     .map((row) => row.id);
 }
 

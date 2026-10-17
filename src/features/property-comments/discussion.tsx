@@ -94,7 +94,6 @@ export function Discussion({
   const generation = useRef(0);
   const historyRequestTokens = useRef<Record<string, number>>({});
   const historyAbortControllers = useRef<Record<string, AbortController>>({});
-  const historyFetchedFor = useRef<Record<string, string>>({});
   const nextHistoryRequestToken = useRef(0);
   const mounted = useRef(true);
   const abortHistory = useCallback((commentId?: string) => {
@@ -114,13 +113,11 @@ export function Discussion({
     (commentId?: string) => {
       abortHistory(commentId);
       if (commentId === undefined) {
-        historyFetchedFor.current = {};
         setHistory({});
         setHistoryBusy({});
         setHistoryError({});
         return;
       }
-      delete historyFetchedFor.current[commentId];
       setHistory((value) => {
         const next = { ...value };
         delete next[commentId];
@@ -250,6 +247,7 @@ export function Discussion({
     abortHistory();
   }, [abortHistory]);
   useEffect(() => {
+    mounted.current = true;
     return () => {
       mounted.current = false;
     };
@@ -278,10 +276,7 @@ export function Discussion({
       const appended = mergePage(comments, page.comments).filter(
         (row) => !seenBefore.has(row.id),
       );
-      for (const commentId of staleHistoryIds(
-        appended,
-        historyFetchedFor.current,
-      )) {
+      for (const commentId of staleHistoryIds(appended, history)) {
         invalidateHistory(commentId);
       }
       setComments((rows) => {
@@ -556,7 +551,6 @@ export function Discussion({
   const loadHistory = async (commentId: string) => {
     if (historyRequestTokens.current[commentId] !== undefined) return;
     if (history[commentId]) {
-      delete historyFetchedFor.current[commentId];
       setHistory((value) => {
         const next = { ...value };
         delete next[commentId];
@@ -569,7 +563,6 @@ export function Discussion({
       });
       return;
     }
-    const row = comments.find((entry) => entry.id === commentId);
     const requestToken = ++nextHistoryRequestToken.current;
     const abort = new AbortController();
     historyRequestTokens.current[commentId] = requestToken;
@@ -593,7 +586,6 @@ export function Discussion({
       )
         return;
       setHistory((value) => ({ ...value, [commentId]: result }));
-      historyFetchedFor.current[commentId] = row?.revision ?? '';
     } catch (error) {
       if (
         !mounted.current ||

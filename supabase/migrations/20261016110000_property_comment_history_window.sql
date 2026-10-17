@@ -1,7 +1,4 @@
 begin;
-drop function if exists public.list_property_comment_history(uuid, uuid);
-drop function if exists private.list_property_comment_history(uuid, uuid);
-
 create function private.list_property_comment_history(p_property_id uuid, p_comment_id uuid)
 returns table(
   event_kind text,

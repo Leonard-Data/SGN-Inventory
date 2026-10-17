@@ -265,7 +265,7 @@ Migration `20261013160948_edit_property_comment_revisions.sql` lets an author re
 
 ### Ticket #47 — Reviewer-only Property comment history
 
-Migration `20261016100000_property_comment_history.sql` introduces the reviewer-only read, and forward migration `20261016110000_property_comment_history_window.sql` carries its bounded response contract. The read composes the retained posting, edit and removal evidence; it does not create a second history store, alter current comments or expose general audit data.
+Migration `20261016110000_property_comment_history_window.sql` introduces the reviewer-only read with its bounded response contract. The read composes the retained posting, edit and removal evidence; it does not create a second history store, alter current comments or expose general audit data.
 
 - **Authority and scope**: `list_property_comment_history(p_property_id,p_comment_id)` is an invoker wrapper over a private invoker helper. The helper rechecks the live employee and manager/admin role, then the current Property/comment relationship under RLS. It works for reviewer-readable archived Properties and comments whose authors are inactive; the author's historical authority is not reused.
 - **Event truth**: the response returns `posting`, every saved `edit` version in order, and a `removal` where present. Removal events carry `removal_kind` (`author` or `moderation`) and a nullable `reason`; author withdrawals have no moderation reason, while moderated removals retain their required reason. Actor names and UTC instants are retained source attribution and the UI displays the instants in Vietnam time.
