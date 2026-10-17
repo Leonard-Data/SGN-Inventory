@@ -401,7 +401,6 @@ const vi = {
     'Máy chủ chưa có cấu hình xóa tài khoản đăng nhập. Quyền truy cập đã bị tắt; hãy thử lại sau khi cấu hình được khôi phục.',
   employeeDeleteLoadFailed: 'Không thể tải trạng thái xóa tài khoản đăng nhập.',
   // Employee invitation (issue #68).
-  employeeInvite: 'Mời nhân viên',
   employeeInviteNote:
     'Ghi nhận một lời mời cho đúng địa chỉ email và vai trò đã chọn. Người được mời chưa có quyền truy cập cho đến khi tự thiết lập tài khoản trong bước riêng.',
   employeeInviteEmailHint:
@@ -1075,7 +1074,6 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
       'The server has no account-deletion configuration. Access is disabled; retry after configuration is restored.',
     employeeDeleteLoadFailed: 'Deletion state did not load.',
     // Employee invitation (issue #68).
-    employeeInvite: 'Invite employee',
     employeeInviteNote:
       'Records one invitation for the chosen email address and role. The invitee has no access until they set up their own account in a separate step.',
     employeeInviteEmailHint:
