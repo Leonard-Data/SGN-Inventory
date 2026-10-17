@@ -133,6 +133,7 @@ const manifest = {
   invitedEmployeeId: null,
   invitedUserId: null,
   importedEmployeeId: null,
+  conflictEmployeeId: null,
 };
 async function persistManifest() {
   await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', {
@@ -198,6 +199,7 @@ async function cleanup() {
   const employeeIds = [
     manifest.invitedEmployeeId,
     manifest.importedEmployeeId,
+    manifest.conflictEmployeeId,
     ...Object.values(manifest.identities).map(
       (identity) => identity.employeeId,
     ),
@@ -549,7 +551,9 @@ try {
     randomUUID(),
   );
   assert.equal(openInvitation.error, null);
+  manifest.conflictEmployeeId = openInvitation.data.employeeId;
   manifest.invitations.push(openInvitation.data.id);
+  await persistManifest();
   const conflicting = await begin(adminB, conflictEmail, 'admin', randomUUID());
   assert.equal(conflicting.error?.code, 'P0022');
   const ambiguous = await record('ambiguous', openInvitation.data, {
