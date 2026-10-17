@@ -283,6 +283,33 @@ export function providerIdentityPage(
     : { outcome: 'continue' };
 }
 
+// The whole scan, with the page read injected so the end-of-list guard is executable away from
+// the provider: only a page that proved the list ended may answer `absent`, and an errored read,
+// an unreadable payload or a scan that ran out of pages stays `unknown`.
+export async function providerIdentityScan(
+  email: string,
+  pageSize: number,
+  pageLimit: number,
+  readPage: (page: number, pageSize: number) => Promise<unknown>,
+): Promise<ProviderIdentity> {
+  try {
+    for (let page = 1; page <= pageLimit; page += 1) {
+      const decision = providerIdentityPage(
+        await readPage(page, pageSize),
+        email,
+        pageSize,
+      );
+      if (decision.outcome !== 'continue') return decision;
+    }
+  } catch (failure) {
+    return { outcome: 'unknown', detail: providerDetail(failure) };
+  }
+  return {
+    outcome: 'unknown',
+    detail: 'the provider identity list was not exhausted',
+  };
+}
+
 // The fixed application destination for an invitation email. It is built from the configured
 // application origin and a constant path, so no request can redirect it; the separate
 // acceptance ticket serves this destination and owns what the invitee does there.

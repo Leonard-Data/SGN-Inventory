@@ -1,10 +1,9 @@
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/database';
-import { providerDetail } from './deactivation';
 import {
   invitationDestination,
-  providerIdentityPage,
+  providerIdentityScan,
   providerInviteResult,
   type InvitationSender,
   type ProviderIdentity,
@@ -49,31 +48,19 @@ export function supabaseInvitationSender(
     // identity is matched on exactly the recorded normalized address, and only an exhausted
     // list may answer `absent`.
     async identity(email): Promise<ProviderIdentity> {
-      try {
-        for (let page = 1; page <= IDENTITY_PAGE_LIMIT; page += 1) {
+      return providerIdentityScan(
+        email,
+        IDENTITY_PAGE_SIZE,
+        IDENTITY_PAGE_LIMIT,
+        async (page, pageSize) => {
           const { data, error } = await admin.auth.admin.listUsers({
             page,
-            perPage: IDENTITY_PAGE_SIZE,
+            perPage: pageSize,
           });
-          if (error)
-            return {
-              outcome: 'unknown',
-              detail: providerDetail(new Error(error.message)),
-            };
-          const decision = providerIdentityPage(
-            data?.users,
-            email,
-            IDENTITY_PAGE_SIZE,
-          );
-          if (decision.outcome !== 'continue') return decision;
-        }
-        return {
-          outcome: 'unknown',
-          detail: 'the provider identity list was not exhausted',
-        };
-      } catch (failure) {
-        return { outcome: 'unknown', detail: providerDetail(failure) };
-      }
+          if (error) throw new Error(error.message);
+          return data?.users;
+        },
+      );
     },
   };
 }

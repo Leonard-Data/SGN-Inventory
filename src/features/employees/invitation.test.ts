@@ -16,6 +16,7 @@ import {
   normalizeEmail,
   parseInvitation,
   providerIdentityPage,
+  providerIdentityScan,
   providerInviteResult,
   settleInvitationSend,
   type EmployeeInvitation,
@@ -541,6 +542,64 @@ test('only a short identity page may claim the address has no identity', () => {
       `a ${JSON.stringify(payload)} payload stays inconclusive`,
     );
   }
+});
+
+test('only a fully read identity list may answer absent', async () => {
+  const identities = (length: number, email = 'other@example.test') =>
+    Array.from({ length }, () => ({ id: providerUserId, email }));
+  const target = 'invitee@example.test';
+  const scan = (readPage: (page: number) => unknown, pageLimit = 20) =>
+    providerIdentityScan(target, 50, pageLimit, async (page) => readPage(page));
+
+  assert.deepEqual(await scan(() => identities(3)), { outcome: 'absent' });
+  assert.deepEqual(
+    await scan((page) => identities(page === 2 ? 1 : 50)),
+    { outcome: 'absent' },
+  );
+  assert.deepEqual(await scan(() => identities(1, target)), {
+    outcome: 'found',
+    providerUserId,
+  });
+
+  const read: number[] = [];
+  assert.deepEqual(
+    await scan((page) => {
+      read.push(page);
+      return identities(50);
+    }),
+    {
+      outcome: 'unknown',
+      detail: 'the provider identity list was not exhausted',
+    },
+  );
+  assert.deepEqual(read, Array.from({ length: 20 }, (_, index) => index + 1));
+
+  assert.deepEqual(
+    await scan((page) =>
+      page === 3 ? { users: identities(1) } : identities(50),
+    ),
+    {
+      outcome: 'unknown',
+      detail: 'the provider identity list is unreadable',
+    },
+  );
+  assert.deepEqual(
+    await scan((page) => {
+      if (page === 4) throw new Error('rate limited');
+      return identities(50);
+    }),
+    { outcome: 'unknown', detail: 'rate limited' },
+  );
+
+  const seen: number[] = [];
+  assert.deepEqual(
+    await scan((page) => {
+      seen.push(page);
+      return identities(50, page === 2 ? target : 'other@example.test');
+    }),
+    { outcome: 'found', providerUserId },
+  );
+  assert.deepEqual(seen, [1, 2]);
 });
 
 test('a refused retry is failed only when no identity exists for the address', async () => {
