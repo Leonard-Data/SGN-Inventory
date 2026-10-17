@@ -101,12 +101,13 @@ export async function commentHistory(
       occurredAt: value.occurred_at,
       removalKind: removalKind as CommentHistoryEvent['removalKind'],
       reason: reason as string | null,
-      hasMore: value.has_more,
     };
   });
   return {
-    events: events.map(({ hasMore: _hasMore, ...event }) => event),
-    hasMore: events.some(({ hasMore }) => hasMore),
+    events,
+    hasMore: data.some(
+      (row) => (row as Record<string, unknown>).has_more === true,
+    ),
   };
 }
 

@@ -253,11 +253,13 @@ export function Discussion({
     };
   }, []);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- whole-surface reload clears retained history before its fetch settles
     void load();
     return stop;
   }, [load, stop]);
   useEffect(() => {
     if (reviewer) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- demotion clears rendered history before it can show again
     invalidateHistory();
   }, [invalidateHistory, reviewer]);
   function refresh() {
@@ -818,11 +820,23 @@ export function Discussion({
                                           ? text.commentAuthorWithdrawal
                                           : text.commentModeratedRemoval}
                                   </strong>{' '}
-                                  — <span className="comment-history-body" translate="no">{event.body}</span>
+                                  —{' '}
+                                  <span
+                                    className="comment-history-body"
+                                    translate="no"
+                                  >
+                                    {event.body}
+                                  </span>
                                 </p>
                                 <p className="comment-meta" translate="no">
-                                  <span className="comment-history-actor">{event.actorName}</span> ·{' '}
-                                  <time className="comment-history-time" dateTime={event.occurredAt}>
+                                  <span className="comment-history-actor">
+                                    {event.actorName}
+                                  </span>{' '}
+                                  ·{' '}
+                                  <time
+                                    className="comment-history-time"
+                                    dateTime={event.occurredAt}
+                                  >
                                     {vietnamTimestamp(event.occurredAt, locale)}
                                   </time>{' '}
                                   ({text.vietnamTime})
@@ -848,7 +862,10 @@ export function Discussion({
                       </>
                     ) : null}
                     {reviewer && historyError[row.id] ? (
-                      <p role="alert" className="field-error comment-history-error">
+                      <p
+                        role="alert"
+                        className="field-error comment-history-error"
+                      >
                         {text.commentHistoryFailed}{' '}
                         <button
                           type="button"

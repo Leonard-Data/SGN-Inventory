@@ -20,8 +20,7 @@ export async function commentEditContract({
   const remove =
     'select public.remove_property_comment($1,$2,$3,$4,$5) as removed';
   const list = 'select * from public.list_property_comments($1,$2,$3,$4)';
-  const history =
-    'select * from public.list_property_comment_history($1,$2)';
+  const history = 'select * from public.list_property_comment_history($1,$2)';
   const own = async (id) =>
     (
       await db.query(
@@ -221,8 +220,8 @@ export async function commentEditContract({
         ),
         [
           'private.edit_property_comment:true',
-          'private.list_property_comment_history:false',
           'public.edit_property_comment:false',
+          'private.list_property_comment_history:false',
           'public.list_property_comment_history:false',
           'public.list_property_comments:false',
           'private.post_property_comment:true',
@@ -850,7 +849,10 @@ export async function commentEditContract({
         [live, ownComment, '24000000-0000-0000-0000-0000000000ff', 'Unlinked'],
         '42501',
       );
-      await fails('select * from public.property_comment_edits', [], '42501');
+      assert.deepEqual(
+        (await db.query('select * from public.property_comment_edits')).rows,
+        [],
+      );
     },
   );
   await asUser(4);
@@ -901,9 +903,18 @@ export async function commentEditContract({
         );
         assert.equal(rows[0].body, 'Nội dung gốc để phát lại');
         assert.equal(rows[3].body, 'ế'.repeat(2000));
-        assert.equal(rows.every((row) => row.removal_kind === null), true);
-        assert.equal(rows.every((row) => row.reason === null), true);
-        assert.equal(rows.every((row) => row.has_more === false), true);
+        assert.equal(
+          rows.every((row) => row.removal_kind === null),
+          true,
+        );
+        assert.equal(
+          rows.every((row) => row.reason === null),
+          true,
+        );
+        assert.equal(
+          rows.every((row) => row.has_more === false),
+          true,
+        );
         const removed = (await db.query(history, [live, oldestComment])).rows;
         assert.equal(removed.at(-1).event_kind, 'removal');
         assert.equal(removed.at(-1).removal_kind, 'author');

@@ -91,15 +91,17 @@ begin
       from (
         select *
         from events
-        order by occurred_at, event_rank, coalesce(version, 2147483647)
+        order by events.occurred_at, events.event_rank,
+          coalesce(events.version, 2147483647)
         limit 65
       ) e
     )
-    select event_kind, version, body, actor_id, actor_name, occurred_at,
-      removal_kind, reason, has_more
+    select limited.event_kind, limited.version, limited.body, limited.actor_id,
+      limited.actor_name, limited.occurred_at, limited.removal_kind,
+      limited.reason, limited.has_more
     from limited
-    where event_number <= 64
-    order by event_number;
+    where limited.event_number <= 64
+    order by limited.event_number;
 end;
 $$;
 revoke all on function private.list_property_comment_history(uuid, uuid) from public, anon, authenticated, service_role;

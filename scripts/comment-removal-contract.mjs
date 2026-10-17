@@ -14,8 +14,7 @@ export async function commentRemovalContract({
   const remove =
     'select public.remove_property_comment($1,$2,$3,$4,$5) as removed';
   const list = 'select * from public.list_property_comments($1,$2,$3,$4)';
-  const history =
-    'select * from public.list_property_comment_history($1,$2)';
+  const history = 'select * from public.list_property_comment_history($1,$2)';
   const post = 'select public.post_property_comment($1,$2,$3) as created';
   const own = async (id) =>
     (

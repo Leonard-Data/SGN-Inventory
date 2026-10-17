@@ -110,7 +110,9 @@ const observations = [];
 const applicationHead =
   process.env.SGN_ACCEPTANCE_APPLICATION_HEAD ??
   (() => {
-    const result = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' });
+    const result = spawnSync('git', ['rev-parse', 'HEAD'], {
+      encoding: 'utf8',
+    });
     return result.status === 0 ? result.stdout.trim() : null;
   })();
 
@@ -171,7 +173,9 @@ function operatorSqlAsync(statement) {
       try {
         resolve(JSON.parse(output).rows ?? []);
       } catch (error) {
-        reject(new Error('Operator SQL returned invalid JSON', { cause: error }));
+        reject(
+          new Error('Operator SQL returned invalid JSON', { cause: error }),
+        );
       }
     });
   });
@@ -478,7 +482,8 @@ class ApplicationSession {
     };
   }
   login(name) {
-    const fixture = name === 'unlinked' ? fixtures.unlinked : fixtures.identities[name];
+    const fixture =
+      name === 'unlinked' ? fixtures.unlinked : fixtures.identities[name];
     return this.request('/api/auth/login', {
       email: fixture.email,
       password: fixture.password,
@@ -494,7 +499,12 @@ function initializeBrowser(session) {
 }
 // The auth shell names its language buttons by aria-label, so the switch is selected by the
 // button's lang attribute and the active locale is read from the shell element.
-async function browserLogin(name, session, preferredLocale, expectedPath = null) {
+async function browserLogin(
+  name,
+  session,
+  preferredLocale,
+  expectedPath = null,
+) {
   browser(['open', origin + '/login'], session);
   if (preferredLocale) {
     evaluate(
@@ -511,7 +521,8 @@ async function browserLogin(name, session, preferredLocale, expectedPath = null)
       20,
     );
   }
-  const fixture = name === 'unlinked' ? fixtures.unlinked : fixtures.identities[name];
+  const fixture =
+    name === 'unlinked' ? fixtures.unlinked : fixtures.identities[name];
   fill('Email', fixture.email, session);
   const locale = evaluate(
     `() => document.querySelector('.sgn-auth')?.lang ?? document.documentElement.lang`,
@@ -565,9 +576,7 @@ function setReviewerRole(role) {
 async function cleanupHistoryRows() {
   try {
     if (!historyCleanupCommentIds.size) return;
-    const ids = [...historyCleanupCommentIds]
-      .map((id) => `'${id}'`)
-      .join(',');
+    const ids = [...historyCleanupCommentIds].map((id) => `'${id}'`).join(',');
     await operatorSqlAsync(
       `do $$
        begin
@@ -595,9 +604,21 @@ async function cleanupHistoryRows() {
          (select count(*)::int from public.property_comment_edits where comment_id in (${ids})) as edits,
          (select count(*)::int from public.property_comments where id in (${ids})) as comments`,
     );
-    assert.equal(Number(rows[0]?.removals ?? 0), 0, 'History removal fixtures are cleaned');
-    assert.equal(Number(rows[0]?.edits ?? 0), 0, 'History edit fixtures are cleaned');
-    assert.equal(Number(rows[0]?.comments ?? 0), 0, 'History comment fixtures are cleaned');
+    assert.equal(
+      Number(rows[0]?.removals ?? 0),
+      0,
+      'History removal fixtures are cleaned',
+    );
+    assert.equal(
+      Number(rows[0]?.edits ?? 0),
+      0,
+      'History edit fixtures are cleaned',
+    );
+    assert.equal(
+      Number(rows[0]?.comments ?? 0),
+      0,
+      'History comment fixtures are cleaned',
+    );
   } finally {
     await resetRaceProperty(race.id);
   }
@@ -2748,7 +2769,11 @@ await settle(secondary);
       'list_property_comment_history',
       { p_property_id: second.id, p_comment_id: id },
     );
-    assert.equal(reviewerHistory.error, null, 'A reviewer reads comment history');
+    assert.equal(
+      reviewerHistory.error,
+      null,
+      'A reviewer reads comment history',
+    );
     assert.deepEqual(
       reviewerHistory.data.map((event) => [
         event.event_kind,
@@ -2780,16 +2805,26 @@ await settle(secondary);
         `${name} cannot read retained history`,
       );
     }
-    const anonymousHistory = await anonymous.rpc('list_property_comment_history', {
-      p_property_id: second.id,
-      p_comment_id: id,
-    });
+    const anonymousHistory = await anonymous.rpc(
+      'list_property_comment_history',
+      {
+        p_property_id: second.id,
+        p_comment_id: id,
+      },
+    );
     assert.ok(anonymousHistory.error, 'Anonymous history is denied');
-    const unlinkedHistory = await unlinked.rpc('list_property_comment_history', {
-      p_property_id: second.id,
-      p_comment_id: id,
-    });
-    assert.equal(unlinkedHistory.error?.code, '42501', 'Unlinked history is denied');
+    const unlinkedHistory = await unlinked.rpc(
+      'list_property_comment_history',
+      {
+        p_property_id: second.id,
+        p_comment_id: id,
+      },
+    );
+    assert.equal(
+      unlinkedHistory.error?.code,
+      '42501',
+      'Unlinked history is denied',
+    );
     const ordinaryHistorySession = new ApplicationSession();
     assert.equal(
       (await ordinaryHistorySession.login('alpha')).status,
@@ -2900,119 +2935,182 @@ await settle(secondary);
 if (historyFixture) {
   // --------------------------------------------------------- reviewer history journey
   const authorHistoryEvidence = await reviewer
-  .from('property_comment_removals')
-  .select('comment_id,body,removal_kind,removal_reason,removed_by,removed_actor_name')
-  .eq('property_id', discussion.id)
-  .eq('body', viBody.trim())
-  .eq('removal_kind', 'author')
-  .single();
-assert.equal(authorHistoryEvidence.error, null, 'Author withdrawal evidence is available');
-const authorHistoryExpected = await reviewer.rpc('list_property_comment_history', {
-  p_property_id: discussion.id,
-  p_comment_id: authorHistoryEvidence.data.comment_id,
-});
-assert.equal(authorHistoryExpected.error, null, 'Author withdrawal history is readable');
-assert.deepEqual(
-  authorHistoryExpected.data.map((event) => [event.event_kind, event.removal_kind, event.reason]),
-  [
-    ['posting', null, null],
-    ['removal', 'author', null],
-  ],
-  'Author withdrawal history has no moderation reason',
-);
-const moderationHistoryEvidence = await reviewer
-  .from('property_comment_removals')
-  .select('comment_id,body,removal_kind,removal_reason,removed_by,removed_actor_name')
-  .eq('property_id', second.id)
-  .eq('body', 'Nội dung cần gỡ để kiểm duyệt')
-  .eq('removal_kind', 'moderation')
-  .single();
-assert.equal(moderationHistoryEvidence.error, null, 'Moderation evidence is available');
-const moderationHistoryExpected = await reviewer.rpc('list_property_comment_history', {
-  p_property_id: second.id,
-  p_comment_id: moderationHistoryEvidence.data.comment_id,
-});
-assert.equal(moderationHistoryExpected.error, null, 'Moderation history is readable');
-const browserHistoryOriginal = 'Lịch sử trình duyệt nguyên bản';
-const browserHistoryBodies = [browserHistoryOriginal];
-const browserHistoryPosted = await alpha.rpc('post_property_comment', {
-  p_property_id: second.id,
-  p_body: browserHistoryOriginal,
-  p_key: randomUUID(),
-});
-assert.equal(browserHistoryPosted.error, null, 'Browser history fixture posts');
-historyCleanupCommentIds.add(browserHistoryPosted.data.id);
-let browserHistoryRevision = browserHistoryPosted.data.revision;
-for (let version = 1; version <= 3; version++) {
-  const body = `Lịch sử trình duyệt phiên ${version}`;
-  const edited = await alpha.rpc('edit_property_comment', {
+    .from('property_comment_removals')
+    .select(
+      'comment_id,body,removal_kind,removal_reason,removed_by,removed_actor_name',
+    )
+    .eq('property_id', discussion.id)
+    .eq('body', viBody.trim())
+    .eq('removal_kind', 'author')
+    .single();
+  assert.equal(
+    authorHistoryEvidence.error,
+    null,
+    'Author withdrawal evidence is available',
+  );
+  const authorHistoryExpected = await reviewer.rpc(
+    'list_property_comment_history',
+    {
+      p_property_id: discussion.id,
+      p_comment_id: authorHistoryEvidence.data.comment_id,
+    },
+  );
+  assert.equal(
+    authorHistoryExpected.error,
+    null,
+    'Author withdrawal history is readable',
+  );
+  assert.deepEqual(
+    authorHistoryExpected.data.map((event) => [
+      event.event_kind,
+      event.removal_kind,
+      event.reason,
+    ]),
+    [
+      ['posting', null, null],
+      ['removal', 'author', null],
+    ],
+    'Author withdrawal history has no moderation reason',
+  );
+  const moderationHistoryEvidence = await reviewer
+    .from('property_comment_removals')
+    .select(
+      'comment_id,body,removal_kind,removal_reason,removed_by,removed_actor_name',
+    )
+    .eq('property_id', second.id)
+    .eq('body', 'Nội dung cần gỡ để kiểm duyệt')
+    .eq('removal_kind', 'moderation')
+    .single();
+  assert.equal(
+    moderationHistoryEvidence.error,
+    null,
+    'Moderation evidence is available',
+  );
+  const moderationHistoryExpected = await reviewer.rpc(
+    'list_property_comment_history',
+    {
+      p_property_id: second.id,
+      p_comment_id: moderationHistoryEvidence.data.comment_id,
+    },
+  );
+  assert.equal(
+    moderationHistoryExpected.error,
+    null,
+    'Moderation history is readable',
+  );
+  const browserHistoryOriginal = 'Lịch sử trình duyệt nguyên bản';
+  const browserHistoryBodies = [browserHistoryOriginal];
+  const browserHistoryPosted = await alpha.rpc('post_property_comment', {
     p_property_id: second.id,
-    p_comment_id: browserHistoryPosted.data.id,
-    p_revision: browserHistoryRevision,
-    p_body: body,
+    p_body: browserHistoryOriginal,
     p_key: randomUUID(),
   });
-  assert.equal(edited.error, null, `Browser history edit ${version} commits`);
-  browserHistoryRevision = edited.data.revision;
-  browserHistoryBodies.push(body);
-}
-const scopedHistoryOriginal = 'Lịch sử phạm vi nguyên bản';
-const scopedHistoryPosted = await reviewer.rpc('post_property_comment', {
-  p_property_id: second.id,
-  p_body: scopedHistoryOriginal,
-  p_key: randomUUID(),
-});
-assert.equal(scopedHistoryPosted.error, null, 'Scoped history fixture posts');
-historyCleanupCommentIds.add(scopedHistoryPosted.data.id);
-const browserHistoryExpected = await reviewer.rpc('list_property_comment_history', {
-  p_property_id: second.id,
-  p_comment_id: browserHistoryPosted.data.id,
-});
-assert.equal(browserHistoryExpected.error, null, 'Edited browser history is readable');
-assert.deepEqual(
-  browserHistoryExpected.data.map((event) => event.body),
-  browserHistoryBodies,
-  'Browser history retains the original and every saved edit',
-);
-const boundedHistoryOriginal = 'Lịch sử giới hạn nguyên bản';
-const boundedHistoryPosted = await alpha.rpc('post_property_comment', {
-  p_property_id: second.id,
-  p_body: boundedHistoryOriginal,
-  p_key: randomUUID(),
-});
-assert.equal(boundedHistoryPosted.error, null, 'Bounded history fixture posts');
-historyCleanupCommentIds.add(boundedHistoryPosted.data.id);
-let boundedHistoryRevision = boundedHistoryPosted.data.revision;
-for (let version = 1; version <= 64; version++) {
-  const edited = await alpha.rpc('edit_property_comment', {
+  assert.equal(
+    browserHistoryPosted.error,
+    null,
+    'Browser history fixture posts',
+  );
+  historyCleanupCommentIds.add(browserHistoryPosted.data.id);
+  let browserHistoryRevision = browserHistoryPosted.data.revision;
+  for (let version = 1; version <= 3; version++) {
+    const body = `Lịch sử trình duyệt phiên ${version}`;
+    const edited = await alpha.rpc('edit_property_comment', {
+      p_property_id: second.id,
+      p_comment_id: browserHistoryPosted.data.id,
+      p_revision: browserHistoryRevision,
+      p_body: body,
+      p_key: randomUUID(),
+    });
+    assert.equal(edited.error, null, `Browser history edit ${version} commits`);
+    browserHistoryRevision = edited.data.revision;
+    browserHistoryBodies.push(body);
+  }
+  const scopedHistoryOriginal = 'Lịch sử phạm vi nguyên bản';
+  const scopedHistoryPosted = await reviewer.rpc('post_property_comment', {
     p_property_id: second.id,
-    p_comment_id: boundedHistoryPosted.data.id,
-    p_revision: boundedHistoryRevision,
-    p_body: `Lịch sử giới hạn phiên ${version}`,
+    p_body: scopedHistoryOriginal,
     p_key: randomUUID(),
   });
-  assert.equal(edited.error, null, `Bounded history edit ${version} commits`);
-  boundedHistoryRevision = edited.data.revision;
-}
-const boundedHistoryExpected = await reviewer.rpc('list_property_comment_history', {
-  p_property_id: second.id,
-  p_comment_id: boundedHistoryPosted.data.id,
-});
-assert.equal(boundedHistoryExpected.error, null, 'Bounded history is readable');
-assert.equal(boundedHistoryExpected.data.length, 64, 'Bounded history returns 64 events');
-assert.equal(boundedHistoryExpected.data.at(-1).body, 'Lịch sử giới hạn phiên 63');
-assert.equal(boundedHistoryExpected.data.at(-1).has_more, true);
-const archivedInactiveHistoryId = randomUUID();
-const archivedInactiveHistoryBody = 'Lịch sử của tác giả đã ngừng hoạt động';
-await operatorSqlAsync(
-  `insert into public.property_comments(id,property_id,author_id,author_name,body,revision,idempotency_key) values('${archivedInactiveHistoryId}','${archived.id}','${inactiveEmployee}','${names.inactive.replace(/'/g, "''")}','${archivedInactiveHistoryBody}','${randomUUID()}','${randomUUID()}')`,
-);
-historyCleanupCommentIds.add(archivedInactiveHistoryId);
-const archivedInactiveHistoryExpected = await reviewer.rpc(
-  'list_property_comment_history',
-  { p_property_id: archived.id, p_comment_id: archivedInactiveHistoryId },
-);
-assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-author history is readable');
+  assert.equal(scopedHistoryPosted.error, null, 'Scoped history fixture posts');
+  historyCleanupCommentIds.add(scopedHistoryPosted.data.id);
+  const browserHistoryExpected = await reviewer.rpc(
+    'list_property_comment_history',
+    {
+      p_property_id: second.id,
+      p_comment_id: browserHistoryPosted.data.id,
+    },
+  );
+  assert.equal(
+    browserHistoryExpected.error,
+    null,
+    'Edited browser history is readable',
+  );
+  assert.deepEqual(
+    browserHistoryExpected.data.map((event) => event.body),
+    browserHistoryBodies,
+    'Browser history retains the original and every saved edit',
+  );
+  const boundedHistoryOriginal = 'Lịch sử giới hạn nguyên bản';
+  const boundedHistoryPosted = await alpha.rpc('post_property_comment', {
+    p_property_id: second.id,
+    p_body: boundedHistoryOriginal,
+    p_key: randomUUID(),
+  });
+  assert.equal(
+    boundedHistoryPosted.error,
+    null,
+    'Bounded history fixture posts',
+  );
+  historyCleanupCommentIds.add(boundedHistoryPosted.data.id);
+  let boundedHistoryRevision = boundedHistoryPosted.data.revision;
+  for (let version = 1; version <= 64; version++) {
+    const edited = await alpha.rpc('edit_property_comment', {
+      p_property_id: second.id,
+      p_comment_id: boundedHistoryPosted.data.id,
+      p_revision: boundedHistoryRevision,
+      p_body: `Lịch sử giới hạn phiên ${version}`,
+      p_key: randomUUID(),
+    });
+    assert.equal(edited.error, null, `Bounded history edit ${version} commits`);
+    boundedHistoryRevision = edited.data.revision;
+  }
+  const boundedHistoryExpected = await reviewer.rpc(
+    'list_property_comment_history',
+    {
+      p_property_id: second.id,
+      p_comment_id: boundedHistoryPosted.data.id,
+    },
+  );
+  assert.equal(
+    boundedHistoryExpected.error,
+    null,
+    'Bounded history is readable',
+  );
+  assert.equal(
+    boundedHistoryExpected.data.length,
+    64,
+    'Bounded history returns 64 events',
+  );
+  assert.equal(
+    boundedHistoryExpected.data.at(-1).body,
+    'Lịch sử giới hạn phiên 63',
+  );
+  assert.equal(boundedHistoryExpected.data.at(-1).has_more, true);
+  const archivedInactiveHistoryId = randomUUID();
+  const archivedInactiveHistoryBody = 'Lịch sử của tác giả đã ngừng hoạt động';
+  await operatorSqlAsync(
+    `insert into public.property_comments(id,property_id,author_id,author_name,body,revision,idempotency_key) values('${archivedInactiveHistoryId}','${archived.id}','${inactiveEmployee}','${names.inactive.replace(/'/g, "''")}','${archivedInactiveHistoryBody}','${randomUUID()}','${randomUUID()}')`,
+  );
+  historyCleanupCommentIds.add(archivedInactiveHistoryId);
+  const archivedInactiveHistoryExpected = await reviewer.rpc(
+    'list_property_comment_history',
+    { p_property_id: archived.id, p_comment_id: archivedInactiveHistoryId },
+  );
+  assert.equal(
+    archivedInactiveHistoryExpected.error,
+    null,
+    'Archived inactive-author history is readable',
+  );
   const historyInactive = await userClient('inactive');
   const historyUnlinked = await userClient('unlinked');
   const historyAnonymous = createClient(
@@ -3046,7 +3144,11 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
       p_property_id: second.id,
       p_comment_id: browserHistoryPosted.data.id,
     });
-    assert.equal(deniedHistory.error?.code, '42501', `${name} history RPC is denied`);
+    assert.equal(
+      deniedHistory.error?.code,
+      '42501',
+      `${name} history RPC is denied`,
+    );
     const routeSession = new ApplicationSession();
     const loginStatus = (
       await routeSession.login(name === 'author' ? 'alpha' : name)
@@ -3085,10 +3187,13 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
     anonymousRemovalRows.error || anonymousRemovalRows.data.length === 0,
     'Anonymous cannot read retained removal history',
   );
-  const anonymousHistory = await historyAnonymous.rpc('list_property_comment_history', {
-    p_property_id: second.id,
-    p_comment_id: browserHistoryPosted.data.id,
-  });
+  const anonymousHistory = await historyAnonymous.rpc(
+    'list_property_comment_history',
+    {
+      p_property_id: second.id,
+      p_comment_id: browserHistoryPosted.data.id,
+    },
+  );
   assert.ok(anonymousHistory.error, 'Anonymous history RPC is denied');
   const anonymousRoute = await new ApplicationSession().request(
     `/api/properties/${second.id}/comments/${browserHistoryPosted.data.id}/history`,
@@ -3099,29 +3204,69 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
   browser(['open', detail(second)], secondary);
   await settle(secondary);
   let deniedHistoryUi = screen(secondary);
-  assert.equal(deniedHistoryUi.historyButtons, 0, 'Ordinary author has no history control');
-  assert.equal(deniedHistoryUi.historyDetails.length, 0, 'Ordinary author has no history payload');
+  assert.equal(
+    deniedHistoryUi.historyButtons,
+    0,
+    'Ordinary author has no history control',
+  );
+  assert.equal(
+    deniedHistoryUi.historyDetails.length,
+    0,
+    'Ordinary author has no history payload',
+  );
   signOut(secondary);
   await browserLogin('staff', secondary, 'vi');
   browser(['open', detail(second)], secondary);
   await settle(secondary);
   deniedHistoryUi = screen(secondary);
-  assert.equal(deniedHistoryUi.historyButtons, 0, 'Staff has no history control');
-  assert.equal(deniedHistoryUi.historyDetails.length, 0, 'Staff has no history payload');
+  assert.equal(
+    deniedHistoryUi.historyButtons,
+    0,
+    'Staff has no history control',
+  );
+  assert.equal(
+    deniedHistoryUi.historyDetails.length,
+    0,
+    'Staff has no history payload',
+  );
   signOut(secondary);
   browser(['open', detail(second)], secondary);
   await waitUntil(`() => location.pathname === '/login'`, secondary);
   deniedHistoryUi = screen(secondary);
-  assert.equal(deniedHistoryUi.historyButtons, 0, 'Anonymous has no history control');
-  assert.equal(deniedHistoryUi.historyDetails.length, 0, 'Anonymous has no history payload');
+  assert.equal(
+    deniedHistoryUi.historyButtons,
+    0,
+    'Anonymous has no history control',
+  );
+  assert.equal(
+    deniedHistoryUi.historyDetails.length,
+    0,
+    'Anonymous has no history payload',
+  );
   await browserLogin('inactive', secondary, 'vi', '/access-denied');
   deniedHistoryUi = screen(secondary);
-  assert.equal(deniedHistoryUi.historyButtons, 0, 'Inactive has no history control');
-  assert.equal(deniedHistoryUi.historyDetails.length, 0, 'Inactive has no history payload');
+  assert.equal(
+    deniedHistoryUi.historyButtons,
+    0,
+    'Inactive has no history control',
+  );
+  assert.equal(
+    deniedHistoryUi.historyDetails.length,
+    0,
+    'Inactive has no history payload',
+  );
   await browserLogin('unlinked', secondary, 'vi', '/access-denied');
   deniedHistoryUi = screen(secondary);
-  assert.equal(deniedHistoryUi.historyButtons, 0, 'Unlinked has no history control');
-  assert.equal(deniedHistoryUi.historyDetails.length, 0, 'Unlinked has no history payload');
+  assert.equal(
+    deniedHistoryUi.historyButtons,
+    0,
+    'Unlinked has no history control',
+  );
+  assert.equal(
+    deniedHistoryUi.historyDetails.length,
+    0,
+    'Unlinked has no history payload',
+  );
   signOut(secondary);
   await new Promise((resolve) => setTimeout(resolve, 1000));
   await browserLogin('reviewer', secondary, 'vi');
@@ -3136,21 +3281,37 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
   );
   const authorHistory = screen(secondary);
   assert.deepEqual(
-    authorHistory.historyDetails.map(({ body, actor, time, reason }) => [body, actor, time, reason]),
-    authorHistoryExpected.data.map((event) => [event.body, event.actor_name, event.occurred_at, event.reason]),
+    authorHistory.historyDetails.map(({ body, actor, time, reason }) => [
+      body,
+      actor,
+      time,
+      reason,
+    ]),
+    authorHistoryExpected.data.map((event) => [
+      event.body,
+      event.actor_name,
+      event.occurred_at,
+      event.reason,
+    ]),
     'Author history shows the original text, withdrawal, actor and Vietnam times',
   );
   assert.deepEqual(
     authorHistory.historyDetails.map(({ displayedTime }) => displayedTime),
-    authorHistoryExpected.data.map((event) => vietnamHistoryTime(event.occurred_at, 'vi')),
+    authorHistoryExpected.data.map((event) =>
+      vietnamHistoryTime(event.occurred_at, 'vi'),
+    ),
     'VI renders the retained posting and withdrawal times in Vietnam time',
   );
   assert.ok(
-    authorHistory.historyDetails.every(({ timeLabel }) => timeLabel.includes('giờ Việt Nam')),
+    authorHistory.historyDetails.every(({ timeLabel }) =>
+      timeLabel.includes('giờ Việt Nam'),
+    ),
     'VI marks history times as Vietnam time',
   );
   assert.ok(
-    authorHistory.historyEvents.some((event) => /Tác giả đã tự gỡ bình luận/.test(event)),
+    authorHistory.historyEvents.some((event) =>
+      /Tác giả đã tự gỡ bình luận/.test(event),
+    ),
     'Author withdrawal has a distinct history label',
   );
   assert.equal(
@@ -3166,21 +3327,35 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
   await settle(secondary);
   const authorHistoryEn = screen(secondary);
   assert.ok(
-    authorHistoryEn.historyEvents.some((event) => /Author withdrew the comment/.test(event)),
+    authorHistoryEn.historyEvents.some((event) =>
+      /Author withdrew the comment/.test(event),
+    ),
     'Author withdrawal label is localized in English',
   );
   assert.deepEqual(
-    authorHistoryEn.historyDetails.map(({ body, actor, time }) => [body, actor, time]),
-    authorHistoryExpected.data.map((event) => [event.body, event.actor_name, event.occurred_at]),
+    authorHistoryEn.historyDetails.map(({ body, actor, time }) => [
+      body,
+      actor,
+      time,
+    ]),
+    authorHistoryExpected.data.map((event) => [
+      event.body,
+      event.actor_name,
+      event.occurred_at,
+    ]),
     'English history keeps source text, actors and instants',
   );
   assert.deepEqual(
     authorHistoryEn.historyDetails.map(({ displayedTime }) => displayedTime),
-    authorHistoryExpected.data.map((event) => vietnamHistoryTime(event.occurred_at, 'en')),
+    authorHistoryExpected.data.map((event) =>
+      vietnamHistoryTime(event.occurred_at, 'en'),
+    ),
     'EN renders the retained posting and withdrawal times in Vietnam time',
   );
   assert.ok(
-    authorHistoryEn.historyDetails.every(({ timeLabel }) => timeLabel.includes('Vietnam time')),
+    authorHistoryEn.historyDetails.every(({ timeLabel }) =>
+      timeLabel.includes('Vietnam time'),
+    ),
     'EN marks history times as Vietnam time',
   );
   click('Hide history', secondary);
@@ -3213,18 +3388,37 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
     secondary,
   );
   const failedHistory = screen(secondary);
-  assert.ok(failedHistory.historyError, 'History failure is visible and retryable');
-  assert.equal(failedHistory.historyDetails.length, 0, 'Failed history is not rendered as empty success');
+  assert.ok(
+    failedHistory.historyError,
+    'History failure is visible and retryable',
+  );
+  assert.equal(
+    failedHistory.historyDetails.length,
+    0,
+    'Failed history is not rendered as empty success',
+  );
   click('Retry', secondary);
   await waitUntil(
     `() => document.querySelectorAll('.comment-history li').length === ${authorHistoryExpected.data.length}`,
     secondary,
   );
   const retriedHistory = screen(secondary);
-  assert.equal(retriedHistory.historyError, null, 'History retry clears the failure');
+  assert.equal(
+    retriedHistory.historyError,
+    null,
+    'History retry clears the failure',
+  );
   assert.deepEqual(
-    retriedHistory.historyDetails.map(({ body, actor, time }) => [body, actor, time]),
-    authorHistoryExpected.data.map((event) => [event.body, event.actor_name, event.occurred_at]),
+    retriedHistory.historyDetails.map(({ body, actor, time }) => [
+      body,
+      actor,
+      time,
+    ]),
+    authorHistoryExpected.data.map((event) => [
+      event.body,
+      event.actor_name,
+      event.occurred_at,
+    ]),
     'History retry restores the retained events',
   );
   click('Hide history', secondary);
@@ -3243,17 +3437,31 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
   );
   const editedHistory = screen(secondary);
   assert.deepEqual(
-    editedHistory.historyDetails.map(({ body, actor, time, reason }) => [body, actor, time, reason]),
-    browserHistoryExpected.data.map((event) => [event.body, event.actor_name, event.occurred_at, event.reason]),
+    editedHistory.historyDetails.map(({ body, actor, time, reason }) => [
+      body,
+      actor,
+      time,
+      reason,
+    ]),
+    browserHistoryExpected.data.map((event) => [
+      event.body,
+      event.actor_name,
+      event.occurred_at,
+      event.reason,
+    ]),
     'Every saved edit, actor and Vietnam edit time is rendered',
   );
   assert.deepEqual(
     editedHistory.historyDetails.map(({ displayedTime }) => displayedTime),
-    browserHistoryExpected.data.map((event) => vietnamHistoryTime(event.occurred_at, 'vi')),
+    browserHistoryExpected.data.map((event) =>
+      vietnamHistoryTime(event.occurred_at, 'vi'),
+    ),
     'VI renders every saved edit time in Vietnam time',
   );
   assert.ok(
-    editedHistory.historyDetails.every(({ timeLabel }) => timeLabel.includes('giờ Việt Nam')),
+    editedHistory.historyDetails.every(({ timeLabel }) =>
+      timeLabel.includes('giờ Việt Nam'),
+    ),
     'VI marks every edit time as Vietnam time',
   );
   assert.deepEqual(
@@ -3276,7 +3484,11 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
     }`,
     secondary,
   );
-  assert.equal(beforeScopedMutation.scopedEvents, 1, 'Scoped mutation starts with one history event');
+  assert.equal(
+    beforeScopedMutation.scopedEvents,
+    1,
+    'Scoped mutation starts with one history event',
+  );
   assert.equal(
     beforeScopedMutation.browserEvents,
     browserHistoryExpected.data.length,
@@ -3293,7 +3505,11 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
     }`,
     secondary,
   );
-  assert.equal(editOpened, true, 'Reviewer-authored scoped comment can be edited');
+  assert.equal(
+    editOpened,
+    true,
+    'Reviewer-authored scoped comment can be edited',
+  );
   await waitUntil(
     `() => Boolean(document.querySelector('[data-comment-id="${scopedHistoryPosted.data.id}"] .comment-edit textarea'))`,
     secondary,
@@ -3318,8 +3534,16 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
     })`,
     secondary,
   );
-  assert.equal(afterScopedMutation.scopedHistoryVisible, false, 'Changed comment history is invalidated');
-  assert.equal(afterScopedMutation.browserHistoryVisible, true, 'Unrelated comment history remains visible');
+  assert.equal(
+    afterScopedMutation.scopedHistoryVisible,
+    false,
+    'Changed comment history is invalidated',
+  );
+  assert.equal(
+    afterScopedMutation.browserHistoryVisible,
+    true,
+    'Unrelated comment history remains visible',
+  );
   openHistory(scopedHistoryPosted.data.id, secondary);
   await waitUntil(
     `() => document.querySelector('[data-comment-id="${scopedHistoryPosted.data.id}"] .comment-history')?.querySelectorAll('li').length === 2`,
@@ -3339,28 +3563,49 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
     `() => !document.querySelector('.comment-history')`,
     secondary,
   );
-  assert.equal(screen(secondary).historyDetails.length, 0, 'Refresh invalidates loaded history');
+  assert.equal(
+    screen(secondary).historyDetails.length,
+    0,
+    'Refresh invalidates loaded history',
+  );
   openHistory(boundedHistoryPosted.data.id, secondary);
   await waitUntil(
     `() => document.querySelectorAll('.comment-history li').length === 64`,
     secondary,
   );
   const boundedHistory = screen(secondary);
-  assert.equal(boundedHistory.historyMore, true, 'The 64-event history window reports more history');
+  assert.equal(
+    boundedHistory.historyMore,
+    true,
+    'The 64-event history window reports more history',
+  );
   assert.equal(
     boundedHistory.historyMoreText,
     'Cửa sổ này giữ 64 sự kiện cũ nhất; các sự kiện mới hơn chưa hiển thị.',
     'VI identifies the retained oldest window and omitted newer events',
   );
   assert.deepEqual(
-    boundedHistory.historyDetails.map(({ body, actor, time }) => [body, actor, time]),
-    boundedHistoryExpected.data.map((event) => [event.body, event.actor_name, event.occurred_at]),
+    boundedHistory.historyDetails.map(({ body, actor, time }) => [
+      body,
+      actor,
+      time,
+    ]),
+    boundedHistoryExpected.data.map((event) => [
+      event.body,
+      event.actor_name,
+      event.occurred_at,
+    ]),
     'The bounded window keeps the oldest events and their actors and times',
   );
   assert.equal(boundedHistory.historyDetails[0].body, boundedHistoryOriginal);
-  assert.equal(boundedHistory.historyDetails.at(-1).body, 'Lịch sử giới hạn phiên 63');
   assert.equal(
-    boundedHistory.historyDetails.some(({ body }) => body === 'Lịch sử giới hạn phiên 64'),
+    boundedHistory.historyDetails.at(-1).body,
+    'Lịch sử giới hạn phiên 63',
+  );
+  assert.equal(
+    boundedHistory.historyDetails.some(
+      ({ body }) => body === 'Lịch sử giới hạn phiên 64',
+    ),
     false,
     'The omitted newer event is not rendered as if complete',
   );
@@ -3375,7 +3620,11 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
   );
   await settle(secondary);
   const boundedHistoryEn = screen(secondary);
-  assert.equal(boundedHistoryEn.historyMore, true, 'The bounded notice is localized in English');
+  assert.equal(
+    boundedHistoryEn.historyMore,
+    true,
+    'The bounded notice is localized in English',
+  );
   assert.equal(
     boundedHistoryEn.historyMoreText,
     'This window keeps the 64 oldest events; newer events are not shown here.',
@@ -3383,11 +3632,15 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
   );
   assert.deepEqual(
     boundedHistoryEn.historyDetails.map(({ displayedTime }) => displayedTime),
-    boundedHistoryExpected.data.map((event) => vietnamHistoryTime(event.occurred_at, 'en')),
+    boundedHistoryExpected.data.map((event) =>
+      vietnamHistoryTime(event.occurred_at, 'en'),
+    ),
     'EN renders bounded history times in Vietnam time',
   );
   assert.ok(
-    boundedHistoryEn.historyDetails.every(({ timeLabel }) => timeLabel.includes('Vietnam time')),
+    boundedHistoryEn.historyDetails.every(({ timeLabel }) =>
+      timeLabel.includes('Vietnam time'),
+    ),
     'EN marks bounded history times as Vietnam time',
   );
   assert.ok(
@@ -3415,25 +3668,43 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
   );
   const moderationHistory = screen(secondary);
   assert.deepEqual(
-    moderationHistory.historyDetails.map(({ body, actor, time, reason }) => [body, actor, time, reason]),
-    moderationHistoryExpected.data.map((event) => [event.body, event.actor_name, event.occurred_at, event.reason]),
+    moderationHistory.historyDetails.map(({ body, actor, time, reason }) => [
+      body,
+      actor,
+      time,
+      reason,
+    ]),
+    moderationHistoryExpected.data.map((event) => [
+      event.body,
+      event.actor_name,
+      event.occurred_at,
+      event.reason,
+    ]),
     'Moderated history shows the acting and moderating identities, reason and times',
   );
   assert.ok(
-    moderationHistory.historyEvents.some((event) => /Đã gỡ do kiểm duyệt/.test(event)),
+    moderationHistory.historyEvents.some((event) =>
+      /Đã gỡ do kiểm duyệt/.test(event),
+    ),
     'Moderated removal has a distinct Vietnamese history label',
   );
   assert.ok(
-    moderationHistory.historyEvents.some((event) => /Lý do kiểm duyệt/.test(event)),
+    moderationHistory.historyEvents.some((event) =>
+      /Lý do kiểm duyệt/.test(event),
+    ),
     'Moderation reason is visible to the reviewer',
   );
   assert.deepEqual(
     moderationHistory.historyDetails.map(({ displayedTime }) => displayedTime),
-    moderationHistoryExpected.data.map((event) => vietnamHistoryTime(event.occurred_at, 'vi')),
+    moderationHistoryExpected.data.map((event) =>
+      vietnamHistoryTime(event.occurred_at, 'vi'),
+    ),
     'VI renders moderation and posting times in Vietnam time',
   );
   assert.ok(
-    moderationHistory.historyDetails.every(({ timeLabel }) => timeLabel.includes('giờ Việt Nam')),
+    moderationHistory.historyDetails.every(({ timeLabel }) =>
+      timeLabel.includes('giờ Việt Nam'),
+    ),
     'VI marks moderation times as Vietnam time',
   );
   switchLocale('en', secondary);
@@ -3444,20 +3715,30 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
   await settle(secondary);
   const moderationHistoryEn = screen(secondary);
   assert.ok(
-    moderationHistoryEn.historyEvents.some((event) => /Removed by moderation/.test(event)),
+    moderationHistoryEn.historyEvents.some((event) =>
+      /Removed by moderation/.test(event),
+    ),
     'Moderated removal has a distinct English history label',
   );
   assert.ok(
-    moderationHistoryEn.historyEvents.some((event) => /Moderation reason/.test(event)),
+    moderationHistoryEn.historyEvents.some((event) =>
+      /Moderation reason/.test(event),
+    ),
     'English moderation reason is visible to the reviewer',
   );
   assert.deepEqual(
-    moderationHistoryEn.historyDetails.map(({ displayedTime }) => displayedTime),
-    moderationHistoryExpected.data.map((event) => vietnamHistoryTime(event.occurred_at, 'en')),
+    moderationHistoryEn.historyDetails.map(
+      ({ displayedTime }) => displayedTime,
+    ),
+    moderationHistoryExpected.data.map((event) =>
+      vietnamHistoryTime(event.occurred_at, 'en'),
+    ),
     'EN renders moderation and posting times in Vietnam time',
   );
   assert.ok(
-    moderationHistoryEn.historyDetails.every(({ timeLabel }) => timeLabel.includes('Vietnam time')),
+    moderationHistoryEn.historyDetails.every(({ timeLabel }) =>
+      timeLabel.includes('Vietnam time'),
+    ),
     'EN marks moderation times as Vietnam time',
   );
   switchLocale('vi', secondary);
@@ -3470,7 +3751,9 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
   await settle(secondary);
   const archivedPage = screen(secondary);
   assert.equal(
-    archivedPage.comments.find((comment) => comment.id === archivedInactiveHistoryId)?.author,
+    archivedPage.comments.find(
+      (comment) => comment.id === archivedInactiveHistoryId,
+    )?.author,
     names.inactive,
     'Reviewer sees retained attribution from an inactive author on an archived Property',
   );
@@ -3481,8 +3764,16 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
   );
   const archivedInactiveHistory = screen(secondary);
   assert.deepEqual(
-    archivedInactiveHistory.historyDetails.map(({ body, actor, time }) => [body, actor, time]),
-    archivedInactiveHistoryExpected.data.map((event) => [event.body, event.actor_name, event.occurred_at]),
+    archivedInactiveHistory.historyDetails.map(({ body, actor, time }) => [
+      body,
+      actor,
+      time,
+    ]),
+    archivedInactiveHistoryExpected.data.map((event) => [
+      event.body,
+      event.actor_name,
+      event.occurred_at,
+    ]),
     'Archived history keeps inactive-author text, attribution and Vietnam posting time',
   );
   const demotionRouteSession = new ApplicationSession();
@@ -3496,12 +3787,23 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
     p_property_id: second.id,
     p_comment_id: browserHistoryPosted.data.id,
   });
-  assert.equal(demotedHistory.error?.code, '42501', 'Demoted reviewer history RPC is denied');
+  assert.equal(
+    demotedHistory.error?.code,
+    '42501',
+    'Demoted reviewer history RPC is denied',
+  );
   const demotedHistoryRoute = await demotionRouteSession.request(
     `/api/properties/${second.id}/comments/${browserHistoryPosted.data.id}/history`,
   );
-  assert.equal(demotedHistoryRoute.status, 403, 'Demoted reviewer history route is denied');
-  evaluate(`() => { window.dispatchEvent(new Event('focus')); return true; }`, secondary);
+  assert.equal(
+    demotedHistoryRoute.status,
+    403,
+    'Demoted reviewer history route is denied',
+  );
+  evaluate(
+    `() => { window.dispatchEvent(new Event('focus')); return true; }`,
+    secondary,
+  );
   await waitUntil(
     `() => location.pathname === '/access-denied'`,
     secondary,
@@ -3509,15 +3811,26 @@ assert.equal(archivedInactiveHistoryExpected.error, null, 'Archived inactive-aut
   );
   const denied = screen(secondary);
   assert.equal(denied.historyEvents.length, 0, 'Role loss clears history');
-  assert.equal(denied.historyDetails.length, 0, 'Role loss clears structured history');
-  assert.equal(denied.hasDiscussionText, false, 'Role loss leaves no cached discussion');
+  assert.equal(
+    denied.historyDetails.length,
+    0,
+    'Role loss clears structured history',
+  );
+  assert.equal(
+    denied.hasDiscussionText,
+    false,
+    'Role loss leaves no cached discussion',
+  );
   setReviewerRole(reviewerRole);
-  observed('reviewer history covers bilingual events, bounded windows, retry, archived attribution and role loss', {
-    editedEvents: editedHistory.historyDetails.length,
-    boundedEvents: boundedHistory.historyDetails.length,
-    boundedHasMore: boundedHistory.historyMore,
-    roleChangePath: denied.path,
-  });
+  observed(
+    'reviewer history covers bilingual events, bounded windows, retry, archived attribution and role loss',
+    {
+      editedEvents: editedHistory.historyDetails.length,
+      boundedEvents: boundedHistory.historyDetails.length,
+      boundedHasMore: boundedHistory.historyMore,
+      roleChangePath: denied.path,
+    },
+  );
 }
 
 // --------------------------------------------------------- post and archive race
@@ -3623,7 +3936,8 @@ async function attempt(propertyId, key, body) {
     p_body: body,
     p_key: key,
   });
-  if (!result.error && result.data?.id) historyCleanupCommentIds.add(result.data.id);
+  if (!result.error && result.data?.id)
+    historyCleanupCommentIds.add(result.data.id);
   return result;
 }
 async function markerCount(markerKey) {
@@ -4040,8 +4354,16 @@ let lastEditRemovalRaceHistory = null;
         p_property_id: race.id,
         p_comment_id: posted.data.id,
       });
-      assert.equal(raceHistory.error, null, 'Race history remains readable to the reviewer');
-      assert.equal(raceHistory.data.length, 2, 'Race history has posting and one committed transition');
+      assert.equal(
+        raceHistory.error,
+        null,
+        'Race history remains readable to the reviewer',
+      );
+      assert.equal(
+        raceHistory.data.length,
+        2,
+        'Race history has posting and one committed transition',
+      );
       assert.deepEqual(
         raceHistory.data.map((event) => event.event_kind),
         ['posting', editResult.error ? 'removal' : 'edit'],
@@ -4067,14 +4389,27 @@ if (historyFixture) {
   );
   const raceHistoryPage = screen(secondary);
   assert.deepEqual(
-    raceHistoryPage.historyDetails.map(({ body, actor, time, reason }) => [body, actor, time, reason]),
-    lastEditRemovalRaceHistory.map((event) => [event.body, event.actor_name, event.occurred_at, event.reason]),
+    raceHistoryPage.historyDetails.map(({ body, actor, time, reason }) => [
+      body,
+      actor,
+      time,
+      reason,
+    ]),
+    lastEditRemovalRaceHistory.map((event) => [
+      event.body,
+      event.actor_name,
+      event.occurred_at,
+      event.reason,
+    ]),
     'Browser history matches the edit/removal race outcome',
   );
-  observed('browser history reflects the serialized edit/removal race outcome', {
-    events: raceHistoryPage.historyDetails.length,
-    commentId: lastEditRemovalRaceCommentId,
-  });
+  observed(
+    'browser history reflects the serialized edit/removal race outcome',
+    {
+      events: raceHistoryPage.historyDetails.length,
+      commentId: lastEditRemovalRaceCommentId,
+    },
+  );
 }
 
 await cleanupHistoryRows();

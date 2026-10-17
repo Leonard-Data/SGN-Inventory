@@ -274,7 +274,11 @@ test('re-appended rows clear cached history entries', () => {
 });
 
 test('post reconciliation identifies only changed existing rows', () => {
-  const unchanged = comment('unchanged', 'Unchanged', '2026-10-13T09:00:00.000Z');
+  const unchanged = comment(
+    'unchanged',
+    'Unchanged',
+    '2026-10-13T09:00:00.000Z',
+  );
   const edited = comment('edited', 'Before', '2026-10-12T09:00:00.000Z');
   const refreshed = {
     ...edited,

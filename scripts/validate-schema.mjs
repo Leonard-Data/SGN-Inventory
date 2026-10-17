@@ -39,8 +39,9 @@ for(let i=0;i<users.length;i++) {
     [employees[i],users[i],`fixture${i}@example.test`,`Fixture ${i}`,['sales','sales','manager','admin','sales','staff'][i],i!==4]);
 }
 await db.query('insert into auth.users values ($1)', [unlinkedUser]);
+// employees_check requires an unlinked employee row (auth_user_id null) to be inactive.
 await db.query(
-  "insert into public.employees(id,auth_user_id,email,display_name,role,is_active) values ($1,null,'unlinked@example.test','Unlinked fixture','sales',true)",
+  "insert into public.employees(id,auth_user_id,email,display_name,role,is_active) values ($1,null,'unlinked@example.test','Unlinked fixture','sales',false)",
   [unlinkedEmployee],
 );
 const property = '20000000-0000-4000-8000-000000000001';
