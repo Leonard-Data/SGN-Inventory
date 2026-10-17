@@ -394,8 +394,7 @@ export function CorrectionQueue({
                         </section>
                       </div>
                       {amendments[0] ? (
-                        <details className="maintenance">
-                          <summary>{text.amendments}</summary>
+                        <>
                           <p>
                             {text.actor}:{' '}
                             <span translate="no">
@@ -413,7 +412,7 @@ export function CorrectionQueue({
                           </p>
                           <p translate="no">{amendments[0].explanation}</p>
                           <Amendments requestId={request.id} locale={locale} />
-                        </details>
+                        </>
                       ) : null}
                       {request.outcome_at ? (
                         <p>
