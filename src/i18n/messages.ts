@@ -1093,7 +1093,7 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     employeeInvitePending:
       'The invitation request is recorded; the provider has not confirmed it yet.',
     employeeInviteFailed:
-      'The action did not complete. The recorded state is unchanged.',
+      'The invitation request succeeded, but the provider step did not complete. The recorded invitation below shows the reconciliation state and the provider detail; retry under the same action.',
     employeeInviteEmailRecorded:
       'This email already belongs to a recorded employee, not a new person; handle it through the returning-person policy.',
     employeeInviteAlreadyRecorded:
