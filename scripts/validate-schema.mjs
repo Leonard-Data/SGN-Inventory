@@ -28,6 +28,7 @@ import { auditRetentionContract } from './audit-retention-contract.mjs';
 import { employeeDeactivationConcurrency } from './employee-deactivation-concurrency.mjs';
 import { propertyVendorLinksConcurrency } from './property-vendor-links-concurrency.mjs';
 import { applyEmbeddedSchema } from './embedded-schema.mjs';
+import { provinceActivityContract } from './province-activity-contract.mjs';
 const root = process.env.SGN_PROJECT_ROOT || process.cwd();
 const db = new PGlite({extensions:{unaccent,pg_trgm,pgcrypto}});
 await applyEmbeddedSchema({root,exec:(sql)=>db.exec(sql)});
@@ -604,6 +605,8 @@ await inventoryAgeContract({db,asUser,check,fails,employees});
 await inventoryFilterContract({db,asUser,check,fails,employees});
 // Seeded Vietnamese province/city and ward/commune reference catalogue.
 await referenceCatalogContract({db,asUser,check,fails,employees,root});
+// Ticket #35: reviewer-only province activity grouped by latest verified primary province.
+await provinceActivityContract({db,asUser,check,fails,employees});
 // Issue #38: one reviewed logical sale completion and the completed-sale ranking.
 await saleCompletionContract({db,asUser,check,fails,employees});
 // Issue #66: guarded employee administration, last-active-admin protection and provider
