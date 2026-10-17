@@ -42,6 +42,9 @@ export async function browseProperties(
   // absent from the catalog, or naming the wrong level, is refused instead of matching a
   // different inventory.
   await assertAreaUnits(context, filters.filters);
+  // The contact parameter names a recorded Contact the caller may read; an unknown or unreadable
+  // identifier is refused rather than applied as a contact with no linked property.
+  await assertContact(context, filters.filters);
   // The chronological views are a distinct bounded read over eligible inventory; the ordinary
   // UUID-ordered browse keeps serving the full unarchived inventory.
   if (sort)
@@ -171,6 +174,24 @@ async function assertAreaUnits(
   if (error) throw new ApiError(503, 'unavailable');
   if (!catalogUnitsMatch(data ?? [], filters))
     throw new ApiError(400, 'invalid-input');
+}
+
+// A contact the address states must be a readable recorded identity. The `contacts` read is the
+// caller's own RLS (`member_read`), so an identifier that names no readable contact is refused
+// exactly as the area check refuses an absent catalog unit, instead of silently matching an
+// empty inventory.
+async function assertContact(
+  context: RouteContext,
+  filters: InventoryFilters,
+): Promise<void> {
+  if (filters.contact === null) return;
+  const { data, error } = await context.client
+    .from('contacts')
+    .select('id')
+    .eq('id', filters.contact)
+    .maybeSingle();
+  if (error) throw new ApiError(503, 'unavailable');
+  if (!data) throw new ApiError(400, 'invalid-input');
 }
 
 async function addressSummaries(

@@ -5,6 +5,7 @@ import {
   CONTACT_QUERY_MAX_LENGTH,
   ContactDirectoryError,
   contactDirectoryQuery,
+  contactName,
   contactPage,
   contactSummary,
 } from './directory.ts';
@@ -32,6 +33,7 @@ function link(patch: Record<string, unknown> = {}) {
     property_code: 'SGN-00000001',
     relation: 'owner',
     is_primary: false,
+    archived: false,
     ...patch,
   };
 }
@@ -126,6 +128,7 @@ test('recorded values, unknown details and per-property relationships survive', 
     rawPhoneText: null,
     revision,
     links: [],
+    propertyCount: 0,
   });
   assert.deepEqual(
     contactSummary(
@@ -157,16 +160,74 @@ test('recorded values, unknown details and per-property relationships survive', 
           propertyCode: 'SGN-00000001',
           relation: 'owner',
           isPrimary: true,
+          archived: false,
         },
         {
           propertyId: other,
           propertyCode: 'SGN-00000002',
           relation: 'broker',
           isPrimary: false,
+          archived: false,
         },
       ],
+      propertyCount: 2,
     },
   );
+});
+
+test('the property count is derived from the readable links', () => {
+  // The count and the listed property codes come from the same projected links, so they cannot
+  // drift; a contact with no readable link counts zero and keeps the unlinked reading in the UI.
+  const one = contactSummary(row(20, { links: [link()] }));
+  assert.equal(one.propertyCount, 1);
+  assert.equal(one.propertyCount, one.links.length);
+  const none = contactSummary(row(21));
+  assert.equal(none.propertyCount, 0);
+  assert.equal(none.propertyCount, none.links.length);
+});
+
+test('an archived linked property is listed but never counted', () => {
+  // The same unarchived boundary the inventory contact filter applies: a contact whose only
+  // linked property is archived states no count and the filter matches nothing for it.
+  const archivedOnly = contactSummary(
+    row(22, {
+      links: [link({ property_code: 'SGN-ARCHIVED-01', archived: true })],
+    }),
+  );
+  assert.equal(archivedOnly.links.length, 1);
+  assert.equal(archivedOnly.links[0]!.archived, true);
+  assert.equal(archivedOnly.propertyCount, 0);
+  const mixed = contactSummary(
+    row(23, {
+      links: [
+        link({ archived: true }),
+        link({
+          property_id: other,
+          property_code: 'SGN-00000002',
+          archived: false,
+        }),
+      ],
+    }),
+  );
+  assert.equal(mixed.links.length, 2);
+  assert.equal(mixed.propertyCount, 1);
+});
+
+test('the applied contact name is read from one bounded name-only read', () => {
+  assert.equal(
+    contactName({ id: contact, displayName: 'Nguyễn Văn A' }),
+    'Nguyễn Văn A',
+  );
+  // An unreadable or malformed response is a failed name, never a person named by id.
+  for (const broken of [
+    null,
+    {},
+    { id: contact },
+    { displayName: '' },
+    { displayName: 7 },
+    [],
+  ])
+    assert.throws(() => contactName(broken), ContactDirectoryError);
 });
 
 test('a malformed row or relationship is a failed read, not a partial person', () => {
@@ -185,6 +246,7 @@ test('a malformed row or relationship is a failed read, not a partial person', (
     row(12, { links: [link({ property_id: 'not-a-uuid' })] }),
     row(13, { links: [link({ property_code: null })] }),
     row(14, { links: [link({ is_primary: 'true' })] }),
+    row(15, { links: [link({ archived: null })] }),
   ])
     assert.throws(() => contactSummary(broken), ContactDirectoryError);
 });
