@@ -1,5 +1,6 @@
 import 'server-only';
 import { ApiError, uuid, type RouteContext } from '@/lib/supabase/route';
+import { requireReadableProperty } from '@/features/properties/property-access';
 import { cursorPair, timestamp } from '@/lib/supabase/query';
 import {
   COMMENT_MAX_LENGTH,
@@ -66,6 +67,7 @@ export async function commentPage(
     cursor === 'invalid'
   )
     throw new ApiError(400, 'invalid-input');
+  await requireReadableProperty(context, id);
   const { data, error } = await context.client.rpc('list_property_comments', {
     p_property_id: id,
     // The exposed discussion page is at most 30 entries; one extra row is the follow-page probe.
@@ -124,6 +126,7 @@ export async function exactComment(
   commentId: string,
 ): Promise<Comment> {
   if (!uuid(id) || !uuid(commentId)) throw new ApiError(400, 'invalid-input');
+  await requireReadableProperty(context, id);
   const { data, error } = await context.client
     .from('property_comments')
     .select(
