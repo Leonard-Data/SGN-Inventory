@@ -4,7 +4,15 @@ export type Changes = Record<string, Json>;
 type Field = {
   vi: string;
   en: string;
-  kind?: 'money' | 'decimal' | 'count' | 'boolean' | 'phones' | 'uuid' | 'date';
+  kind?:
+    | 'money'
+    | 'decimal'
+    | 'count'
+    | 'boolean'
+    | 'phones'
+    | 'uuid'
+    | 'date'
+    | 'coordinate';
   options?: readonly string[];
   required?: boolean;
 };
@@ -96,6 +104,8 @@ export const fields: Record<string, Field> = {
   },
   area_raw: { vi: 'Diện tích theo nguồn', en: 'Source area text' },
   notes: { vi: 'Ghi chú', en: 'Notes' },
+  latitude: { vi: 'Vĩ độ', en: 'Latitude', kind: 'coordinate' },
+  longitude: { vi: 'Kinh độ', en: 'Longitude', kind: 'coordinate' },
   format: {
     vi: 'Dạng địa chỉ',
     en: 'Address format',
@@ -198,6 +208,8 @@ export const targetFields: Record<Target, readonly string[]> = {
     'construction_text',
     'area_raw',
     'notes',
+    'latitude',
+    'longitude',
   ],
   address: [
     'format',
@@ -301,6 +313,12 @@ export function validateChanges(target: Target, input: unknown): Changes {
           /^0(?:\.0{1,2})?$/.test(value) ||
           (['frontage_m', 'depth_m'].includes(key) &&
             BigInt(value.split('.')[0]!) >= 1000000n))
+      )
+        throw new InputError();
+      if (
+        field.kind === 'coordinate' &&
+        (!/^-?[0-9]{1,3}(\.[0-9]{1,7})?$/.test(value) ||
+          Math.abs(Number(value)) > (key === 'latitude' ? 90 : 180))
       )
         throw new InputError();
     }

@@ -194,6 +194,18 @@ const copy = {
     'Maintenance saves immediately; only asking-price changes are recorded in the history. Reservations still require independent approval.',
   ],
   primary: ['Địa chỉ / liên kết chính', 'Primary address / link'],
+  location: ['Vị trí trên bản đồ', 'Location on map'],
+  locationHint: [
+    'Nhấn vào bản đồ để đặt hoặc di chuyển điểm; lưu cùng với các thông tin khác.',
+    'Click the map to place or move the point; it saves with the other facts.',
+  ],
+  locationClear: ['Xoá vị trí', 'Clear location'],
+  locationRecorded: ['Vị trí đã ghi', 'Recorded location'],
+  locationNoPoint: ['Chưa đặt vị trí.', 'No point placed.'],
+  mapUnavailable: [
+    'Không tải được nền bản đồ.',
+    'The map background could not load.',
+  ],
 } as const;
 export type CopyKey = keyof typeof copy;
 export function maintenanceText(locale: Locale) {
