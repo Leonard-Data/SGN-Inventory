@@ -5,6 +5,11 @@ import { useRouter } from 'next/navigation';
 import type { Locale } from '@/i18n/messages';
 import { label, messages } from '@/i18n/messages';
 import { formatDecimal, formatVnd } from './format';
+import { api, RequestError } from '@/features/employees/api';
+import {
+  unitOptionLabels,
+  type UnitOption,
+} from '@/features/property-maintenance/units';
 import {
   filterParams,
   INVENTORY_FILTER_KEYS,
@@ -18,6 +23,10 @@ import {
   type InventoryFilters,
 } from './filters';
 
+// The official catalog rows the province/ward pickers read. Names are source data and are never
+// translated, so a language switch keeps the same unit name.
+type AdminUnit = UnitOption & { id: string };
+
 // The search island: the same inventory filters in a compact panel opened from the list. It is
 // an addition to the free-text search box, not a replacement, and it applies filters by
 // navigating to the filtered address, so the address stays the single source of truth and the
@@ -29,6 +38,7 @@ export function SearchIsland({
   filters,
   open,
   onOpen,
+  onDenied,
 }: {
   locale: Locale;
   query: string;
@@ -36,10 +46,13 @@ export function SearchIsland({
   filters: InventoryFilters;
   open: boolean;
   onOpen: (open: boolean) => void;
+  onDenied: (status: number) => void;
 }) {
   const router = useRouter();
   const text = messages[locale];
   const appliedMode = filters.mode ?? '';
+  const appliedProvince = filters.province ?? '';
+  const appliedWard = filters.ward ?? '';
   const appliedStateKey = JSON.stringify([
     query,
     sort,
@@ -47,11 +60,20 @@ export function SearchIsland({
   ]);
   const [invalid, setInvalid] = useState(false);
   const [mode, setMode] = useState(appliedMode);
+  // The dialog's live province selection drives the dependent ward list; applying or dismissing
+  // returns both to the filter set the address currently states.
+  const [province, setProvince] = useState(appliedProvince);
+  const [ward, setWard] = useState(appliedWard);
+  const [provinces, setProvinces] = useState<AdminUnit[]>([]);
+  const [wards, setWards] = useState<AdminUnit[]>([]);
+  const [catalogFailed, setCatalogFailed] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
   function dismiss() {
     onOpen(false);
     setInvalid(false);
     setMode(appliedMode);
+    setProvince(appliedProvince);
+    setWard(appliedWard);
   }
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -66,7 +88,60 @@ export function SearchIsland({
   useEffect(() => {
     setMode(appliedMode);
     setInvalid(false);
-  }, [appliedMode, appliedStateKey]);
+    setProvince(appliedProvince);
+    setWard(appliedWard);
+  }, [appliedMode, appliedProvince, appliedWard, appliedStateKey]);
+  // The catalog is the same official list the address form reads. A denial clears the protected
+  // surface through the handler the inventory list already uses.
+  useEffect(() => {
+    const abort = new AbortController();
+    void api<{ units: AdminUnit[] }>(
+      '/api/admin-units?' + new URLSearchParams({ level: 'province' }),
+      undefined,
+      abort.signal,
+    )
+      .then((result) => {
+        if (abort.signal.aborted) return;
+        setProvinces(result.units);
+        setCatalogFailed(false);
+      })
+      .catch((failure) => {
+        if (abort.signal.aborted) return;
+        if (
+          failure instanceof RequestError &&
+          (failure.status === 401 || failure.status === 403)
+        )
+          onDenied(failure.status);
+        else setCatalogFailed(true);
+      });
+    return () => abort.abort();
+  }, [onDenied]);
+  useEffect(() => {
+    setWards([]);
+    if (!province) return;
+    const abort = new AbortController();
+    void api<{ units: AdminUnit[] }>(
+      '/api/admin-units?' +
+        new URLSearchParams({ level: 'commune', parent: province }),
+      undefined,
+      abort.signal,
+    )
+      .then((result) => {
+        if (abort.signal.aborted) return;
+        setWards(result.units);
+        setCatalogFailed(false);
+      })
+      .catch((failure) => {
+        if (abort.signal.aborted) return;
+        if (
+          failure instanceof RequestError &&
+          (failure.status === 401 || failure.status === 403)
+        )
+          onDenied(failure.status);
+        else setCatalogFailed(true);
+      });
+    return () => abort.abort();
+  }, [province, onDenied]);
   // Applying starts a new page-one journey with the stated filters, so a paging cursor from the
   // previous filter set can never be replayed against this one.
   function apply(event: FormEvent<HTMLFormElement>) {
@@ -124,6 +199,18 @@ export function SearchIsland({
       key: 'type',
       label: `${text.propertyType}: ${label(locale, filters.type)}`,
     });
+  const unitName = (units: readonly AdminUnit[], id: string) =>
+    units.find((unit) => unit.id === id)?.name_vi ?? id;
+  if (filters.province)
+    applied.push({
+      key: 'province',
+      label: `${text.province}: ${unitName(provinces, filters.province)}`,
+    });
+  if (filters.ward)
+    applied.push({
+      key: 'ward',
+      label: `${text.ward}: ${unitName(wards, filters.ward)}`,
+    });
   if (filters.priceMin)
     applied.push({
       key: 'priceMin',
@@ -145,17 +232,24 @@ export function SearchIsland({
       label: `${text.areaRangeTo}: ${m2(filters.areaMax)}`,
     });
   function remove(key: InventoryFilterKey) {
+    // The ward narrows its province, so removing the province removes the dependent ward too.
+    const next =
+      key === 'province'
+        ? { ...filters, province: null, ward: null }
+        : { ...filters, [key]: null };
     router.push(
       '/properties?' +
         new URLSearchParams({
           query,
           ...(sort ? { sort } : {}),
-          ...filterParams({ ...filters, [key]: null }),
+          ...filterParams(next),
         }),
     );
   }
   const clearHref =
     '/properties?' + new URLSearchParams({ query, ...(sort ? { sort } : {}) });
+  const provinceLabels = unitOptionLabels(provinces);
+  const wardLabels = unitOptionLabels(wards);
   const select = (
     name: keyof InventoryFilters,
     heading: string,
@@ -280,6 +374,66 @@ export function SearchIsland({
                 {select('mode', text.listingMode, INVENTORY_LISTING_MODES)}
                 {select('type', text.propertyType, INVENTORY_PROPERTY_TYPES)}
               </div>
+            </div>
+            <div className="form-section">
+              <div className="form-grid">
+                <div className="field">
+                  <label className="field-label" htmlFor="filter-province">
+                    {text.province}
+                  </label>
+                  <select
+                    id="filter-province"
+                    className="select"
+                    name="province"
+                    value={province}
+                    onChange={(event) => {
+                      setProvince(event.currentTarget.value);
+                      setWard('');
+                    }}
+                  >
+                    <option value="">{text.filtersAny}</option>
+                    {province &&
+                    !provinces.some((unit) => unit.id === province) ? (
+                      <option value={province}>{province}</option>
+                    ) : null}
+                    {provinces.map((unit, index) => (
+                      <option key={unit.id} value={unit.id}>
+                        {provinceLabels[index]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {province ? (
+                  <div className="field">
+                    <label className="field-label" htmlFor="filter-ward">
+                      {text.ward}
+                    </label>
+                    <select
+                      id="filter-ward"
+                      className="select"
+                      name="ward"
+                      value={ward}
+                      onChange={(event) => setWard(event.currentTarget.value)}
+                    >
+                      <option value="">{text.filtersAny}</option>
+                      {ward && !wards.some((unit) => unit.id === ward) ? (
+                        <option value={ward}>{ward}</option>
+                      ) : null}
+                      {wards.map((unit, index) => (
+                        <option key={unit.id} value={unit.id}>
+                          {wardLabels[index]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
+              </div>
+              <p className="field-hint">{text.areaAdminHint}</p>
+              {catalogFailed ? (
+                <p className="field-error" role="alert">
+                  {text.areaFilterUnavailable}
+                </p>
+              ) : null}
             </div>
             <div className="form-section">
               <div className="filter-range">

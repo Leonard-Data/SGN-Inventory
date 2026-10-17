@@ -35,7 +35,7 @@ select ok(exists(select 1 from pg_indexes where schemaname='public' and indexnam
   and exists(select 1 from pg_indexes where schemaname='public' and indexname='properties_floor_area_idx'),'inventory filter range indexes exist');
 select ok(has_function_privilege('authenticated','public.search_properties(text,text,text,text,uuid,uuid,integer,numeric,numeric,numeric,numeric)','EXECUTE')
   and not has_function_privilege('anon','public.search_properties(text,text,text,text,uuid,uuid,integer,numeric,numeric,numeric,numeric)','EXECUTE')
-  and has_function_privilege('authenticated','public.list_inventory_by_age(text,text,date,uuid,boolean,integer,text,text,text,numeric,numeric,numeric,numeric)','EXECUTE')
-  and not has_function_privilege('anon','public.list_inventory_by_age(text,text,date,uuid,boolean,integer,text,text,text,numeric,numeric,numeric,numeric)','EXECUTE'),'filtered inventory reads stay authenticated-only');
+  and has_function_privilege('authenticated','public.list_inventory_by_age(text,text,date,uuid,boolean,integer,text,text,text,numeric,numeric,numeric,numeric,uuid)','EXECUTE')
+  and not has_function_privilege('anon','public.list_inventory_by_age(text,text,date,uuid,boolean,integer,text,text,text,numeric,numeric,numeric,numeric,uuid)','EXECUTE'),'filtered inventory reads stay authenticated-only');
 select * from finish();
 rollback;

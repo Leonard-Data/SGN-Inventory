@@ -2,6 +2,7 @@ import 'server-only';
 import { ApiError, uuid, type RouteContext } from '@/lib/supabase/route';
 import type { AddressSummary, PropertyPage, PropertySummary } from './types';
 import {
+  catalogUnitsMatch,
   filterRpcArgs,
   INVENTORY_FILTER_KEYS,
   parseInventoryFilters,
@@ -37,6 +38,10 @@ export async function browseProperties(
   ];
   if ([...params.keys()].some((key) => !allowed.includes(key)))
     throw new ApiError(400, 'invalid-input');
+  // The area filter names official units from the same catalog the address form uses; a value
+  // absent from the catalog, or naming the wrong level, is refused instead of matching a
+  // different inventory.
+  await assertAreaUnits(context, filters.filters);
   // The chronological views are a distinct bounded read over eligible inventory; the ordinary
   // UUID-ordered browse keeps serving the full unarchived inventory.
   if (sort)
@@ -145,6 +150,26 @@ function accessError(code: string | undefined): ApiError {
   return code === '42501'
     ? new ApiError(403, 'access-denied')
     : new ApiError(503, 'unavailable');
+}
+
+// The province must be a province-level catalog unit and the ward a commune-level one, so an
+// address that swaps them is refused rather than applied to a different unit.
+async function assertAreaUnits(
+  context: RouteContext,
+  filters: InventoryFilters,
+): Promise<void> {
+  const { province, ward } = filters;
+  if (province === null && ward === null) return;
+  const { data, error } = await context.client
+    .from('admin_unit_versions')
+    .select('id,unit_level')
+    .in(
+      'id',
+      [province, ward].filter((id): id is string => id !== null),
+    );
+  if (error) throw new ApiError(503, 'unavailable');
+  if (!catalogUnitsMatch(data ?? [], filters))
+    throw new ApiError(400, 'invalid-input');
 }
 
 async function addressSummaries(
