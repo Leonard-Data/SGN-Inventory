@@ -41,6 +41,7 @@ import {
   planAttachmentImport,
   planStaffAccounts,
   provisionSilentAdmin,
+  recordedInvitations,
   sendInvitations,
   staffRoleFor,
   verifyImport,
@@ -1901,7 +1902,18 @@ export function renderReport(report) {
       `| Recorded invitations the project holds | ${write.verification.counts.invitations_recorded} |`,
       '',
       `- Staff addresses planned: ${write.staff.addresses}; silent admin: \`${write.staff.silent_admin ?? '(none)'}\`.`,
-      `- Invitations stated ${write.staff.invitations.stated}, refused ${write.staff.invitations.refused}, recorded ${write.staff.invitations.recorded}.`,
+      `- Invitations stated ${write.staff.invitations.stated}, refused ${write.staff.invitations.refused}, recorded ${write.staff.invitations.recorded}; ${write.staff.invitations.failures.length} did not reach recorded.`,
+      ...(write.staff.invitations.failures.length
+        ? [
+            '',
+            '| Invitation that did not reach recorded | Provider outcome | Detail |',
+            '| --- | --- | --- |',
+            ...write.staff.invitations.failures.map(
+              (entry) =>
+                `| ${entry.email} | ${entry.outcome} | ${entry.detail ?? ''} |`,
+            ),
+          ]
+        : []),
       `- Attachments planned ${write.attachments.planned}, dropped ${write.attachments.dropped.reduce((total, entry) => total + entry.count, 0)}; outcomes: ${write.attachments.outcomes.map((entry) => `${entry.outcome} ${entry.count}`).join(', ') || '(none)'}.`,
       `- Rows counted as converted by the dry run but written with the legacy address only, because the project has no admin unit for the target: **${skippedSummary.rows}**, missing ${
         skippedSummary.codes
@@ -3007,7 +3019,7 @@ async function writeProject({
         invitations: {
           stated: invitations.filter((entry) => entry.stated).length,
           refused: invitations.filter((entry) => !entry.stated).length,
-          recorded: sends.filter((entry) => entry.recorded).length,
+          recorded: recordedInvitations(sends),
           outcomes: outcomesBy(sends),
           refusals: invitations
             .filter((entry) => !entry.stated)

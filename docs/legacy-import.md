@@ -114,7 +114,11 @@ development project only, and production is a separate, later step.
   database. Every other address that is not already an employee receives a real invitation
   through the application flow (`begin_employee_invitation`, the provider call, then
   `record_employee_invitation_result`), with the captain's account as the actor. The provider
-  allows 30 messages an hour, so the send loop waits and retries instead of failing.
+  allows 30 messages an hour, so the send loop waits and retries instead of failing. An invitation
+  counts as recorded by the run only when the provider accepted the address and the outcome write
+  was accepted; a refused or ambiguous provider attempt is reported as `provider_failed` and
+  listed in the report, never counted as recorded. A project-wide recorded-invitation total is
+  labelled as project-wide, so a resumed run cannot present earlier invitations as its own.
 
 ## Write runs are resumable and idempotent
 

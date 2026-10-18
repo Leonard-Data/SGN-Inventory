@@ -1152,6 +1152,14 @@ export async function sendInvitations({
   return outcomes;
 }
 
+/**
+ * The invitations this run recorded: the outcome write was accepted and the provider accepted the
+ * address. A recorded failure is not a recorded invitation.
+ */
+export const recordedInvitations = (sends) =>
+  sends.filter((entry) => entry.recorded && entry.outcome === 'accepted')
+    .length;
+
 // ---------------------------------------------------------------- attachments
 
 function r2Client({ accountId, bucket, accessKeyId, secretAccessKey }) {

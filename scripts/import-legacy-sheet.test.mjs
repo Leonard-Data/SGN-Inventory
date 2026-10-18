@@ -31,6 +31,7 @@ import {
 import {
   assertWriteTarget,
   convertedSkipped,
+  recordedInvitations,
   importableBucket,
   planAttachmentImport,
   planStaffAccounts,
@@ -998,6 +999,19 @@ test('attachments are planned only for the properties the run would create', () 
   assert.deepEqual(result.dropped, [
     { reason: 'property_not_imported', count: 1 },
   ]);
+});
+
+test('only an accepted provider outcome counts as a recorded invitation', () => {
+  const sends = [
+    { email: 'a@example.com', outcome: 'accepted', recorded: true },
+    // The RPC accepted a failed outcome, so the invitation sits in provider_failed, not recorded.
+    { email: 'b@example.com', outcome: 'failed', recorded: true },
+    { email: 'c@example.com', outcome: 'ambiguous', recorded: true },
+    // The provider accepted, but the outcome write was refused: the state is not recorded.
+    { email: 'd@example.com', outcome: 'accepted', recorded: false },
+  ];
+  assert.equal(recordedInvitations(sends), 1);
+  assert.equal(recordedInvitations([]), 0);
 });
 
 test('the report claims only what the run actually did', () => {
