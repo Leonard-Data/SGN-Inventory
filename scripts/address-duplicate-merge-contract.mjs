@@ -256,6 +256,9 @@ export async function addressDuplicateMergeContract({
   await check(
     'a pending request blocks the merge and names the record and the requester',
     async () => {
+      // Snapshot under the same authority that performs the merge: a reviewer sees the archived
+      // records a salesperson cannot, so a baseline taken as another employee counts other rows.
+      const unchanged = await snapshot();
       let blocked;
       try {
         await db.query(
@@ -269,7 +272,7 @@ export async function addressDuplicateMergeContract({
       assert.deepEqual(JSON.parse(blocked.detail), [
         { propertyCode: 'SGN147-B', requester: 'Fixture 0' },
       ]);
-      assert.deepEqual(await snapshot(), before);
+      assert.deepEqual(await snapshot(), unchanged);
     },
   );
   await asUser(0);
