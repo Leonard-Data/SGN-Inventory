@@ -162,31 +162,35 @@ end;
 $$;
 
 -- A refused completion releases its class slot at once, but the row is not `failed` until the
--- server confirms its object is gone; the sweeper retries every `cleanup_pending` row.
+-- server confirms its object is gone; the sweeper retries every `cleanup_pending` row. The
+-- release reports whether it moved the pending row, so a release that matched nothing (the row
+-- became ready meanwhile) can never be followed by deleting that file's bytes.
 create function private.fail_property_upload(p_file_id uuid)
-returns void language plpgsql security definer set search_path = '' as $$
+returns boolean language plpgsql security definer set search_path = '' as $$
 declare
   me uuid := private.employee_id();
+  released integer;
 begin
   if me is null then raise exception 'active employee required' using errcode = '42501'; end if;
   update public.property_files set upload_status = 'cleanup_pending'
     where id = p_file_id and uploaded_by = me and upload_status = 'pending';
+  get diagnostics released = row_count;
+  return released = 1;
 end;
 $$;
 
 create function public.fail_property_upload(p_file_id uuid)
-returns void language sql security invoker set search_path = '' as $$
+returns boolean language sql security invoker set search_path = '' as $$
   select private.fail_property_upload(p_file_id);
 $$;
 
+-- The only claim that an object's bytes are gone is made by the trusted server after a
+-- confirmed DeleteObject, so this transition is not executable by any client session.
 create function private.mark_upload_cleaned(p_file_id uuid)
 returns void language plpgsql security definer set search_path = '' as $$
-declare
-  me uuid := private.employee_id();
 begin
-  if me is null then raise exception 'active employee required' using errcode = '42501'; end if;
   update public.property_files set upload_status = 'failed'
-    where id = p_file_id and uploaded_by = me and upload_status = 'cleanup_pending';
+    where id = p_file_id and upload_status = 'cleanup_pending';
 end;
 $$;
 
@@ -196,6 +200,7 @@ returns void language sql security invoker set search_path = '' as $$
 $$;
 
 revoke all on function private.fail_property_upload(uuid),public.fail_property_upload(uuid),private.mark_upload_cleaned(uuid),public.mark_upload_cleaned(uuid) from public,anon,authenticated;
-grant execute on function private.fail_property_upload(uuid),public.fail_property_upload(uuid),private.mark_upload_cleaned(uuid),public.mark_upload_cleaned(uuid) to authenticated;
+grant execute on function private.fail_property_upload(uuid),public.fail_property_upload(uuid) to authenticated;
+grant execute on function private.mark_upload_cleaned(uuid),public.mark_upload_cleaned(uuid) to service_role;
 
 commit;

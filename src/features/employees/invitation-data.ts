@@ -12,7 +12,7 @@ import {
   type InvitationGateway,
   type InvitationRecord,
 } from './invitation';
-import { createEmployeeAdminClient } from './provider-ban';
+import { createServiceRoleClient } from '@/lib/supabase/service';
 import { supabaseInvitationSender } from './provider-invite';
 
 // Issue #68: the session-scoped read and the guarded invitation call. The recorded state and
@@ -140,7 +140,7 @@ export async function administerEmployeeInvitation(
   actor: Employee,
   input: { email: string; role: EmployeeRole; key: string },
 ): Promise<InvitationRecord> {
-  const admin = createEmployeeAdminClient(context.environment);
+  const admin = createServiceRoleClient(context.environment);
   const gateway = databaseGateway(context, admin);
   if (!admin) {
     const invitation = await gateway.begin(input.email, input.role, input.key);

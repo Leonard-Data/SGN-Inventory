@@ -62,6 +62,7 @@ await db.query("insert into public.admin_unit_versions(id,official_code,name_vi,
 let passed = 0;
 async function check(name,fn){ await fn(); passed++; console.log('PASS',name); }
 async function asUser(index){await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[index==='unlinked'?unlinkedUser:index===null?'':users[index]]);await db.exec(`set role ${index===null?'anon':'authenticated'}`);}
+async function asService(){await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");await db.exec('set role service_role');}
 async function fails(sql,params=[],code){let error;try{await db.query(sql,params);}catch(e){error=e;}assert.ok(error,'expected query to be rejected');if(code)assert.equal(error.code,code);}
 await check('all app tables have RLS',async()=>{
  const r=await db.query("select relname from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('public','private') and c.relkind='r' and not c.relrowsecurity");assert.equal(r.rows.length,0);
@@ -586,33 +587,63 @@ await check('an abandoned or refused upload stops reserving its class slot',asyn
   const slotDocument=(n)=>`44000000-0000-4000-8000-00000000001${n}`;
   for(let n=1;n<=5;n++) await db.query(registerSql,[slotDocument(n),slotProperty,`slot-${n}.pdf`,'application/pdf',1024,testSha256,'document',otherCatId]);
   await fails(registerSql,[slotDocument(6),slotProperty,'slot-6.pdf','application/pdf',1024,testSha256,'document',otherCatId],'P0020');
-  await db.query('select public.fail_property_upload($1)',[slotDocument(5)]);
+  // The release reports whether it moved the pending row, so a rival completion that already
+  // made the file ready can never be followed by deleting that file's bytes.
+  assert.equal((await db.query('select public.fail_property_upload($1) as released',[slotDocument(5)])).rows[0].released,true);
+  assert.equal((await db.query('select public.fail_property_upload($1) as released',[slotDocument(5)])).rows[0].released,false);
   assert.equal((await db.query('select upload_status from public.property_files where id=$1',[slotDocument(5)])).rows[0].upload_status,'cleanup_pending');
   // The slot is free while the bytes may still exist, and a released row takes no new upload.
   await fails(registerSql,[slotDocument(5),slotProperty,'slot-5.pdf','application/pdf',1024,testSha256,'document',otherCatId],'23514');
   await db.query(registerSql,[slotDocument(6),slotProperty,'slot-6.pdf','application/pdf',1024,testSha256,'document',otherCatId]);
+  // No client session may assert that bytes are gone; the trusted server records it.
+  await fails('select public.mark_upload_cleaned($1)',[slotDocument(5)],'42501');
+  await asService();
   await db.query('select public.mark_upload_cleaned($1)',[slotDocument(5)]);
   assert.equal((await db.query('select upload_status from public.property_files where id=$1',[slotDocument(5)])).rows[0].upload_status,'failed');
+  await asUser(0);
   // Only the two-step path reaches failed: a settled row is neither re-uploadable nor re-run.
   await fails(registerSql,[slotDocument(5),slotProperty,'slot-5.pdf','application/pdf',1024,testSha256,'document',otherCatId],'23514');
-  await db.query('select public.mark_upload_cleaned($1)',[slotDocument(5)]);
 });
 await check('failing an upload never touches a ready row or another employee row',async()=>{
   await asUser(0);
-  await db.query('select public.fail_property_upload($1)',[limitDocument(1)]);
+  assert.equal((await db.query('select public.fail_property_upload($1) as released',[limitDocument(1)])).rows[0].released,false);
   assert.equal((await db.query('select upload_status from public.property_files where id=$1',[limitDocument(1)])).rows[0].upload_status,'ready');
   const colleagueRow='44000000-0000-4000-8000-000000000201';
   await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
   await db.query("insert into public.property_files(id,property_id,document_type,object_path,original_filename,mime_type,size_bytes,sha256,purpose,uploaded_by) values($1,'20000000-0000-4000-8000-00000000000f','other',$2,'colleague.pdf','application/pdf',1024,$3,'document',$4)",[colleagueRow,`20000000-0000-4000-8000-00000000000f/${colleagueRow}/content`,testSha256,employees[0]]);
   await asUser(1);
-  await db.query('select public.fail_property_upload($1)',[colleagueRow]);
+  assert.equal((await db.query('select public.fail_property_upload($1) as released',[colleagueRow])).rows[0].released,false);
   await asUser(null);
   await fails('select public.fail_property_upload($1)',[colleagueRow],'42501');
   await fails('select public.mark_upload_cleaned($1)',[colleagueRow],'42501');
-  await asUser(1);
+  // Even the trusted server cannot jump a pending upload straight to failed.
+  await asService();
   await db.query('select public.mark_upload_cleaned($1)',[colleagueRow]);
-  await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
   assert.equal((await db.query('select upload_status from public.property_files where id=$1',[colleagueRow])).rows[0].upload_status,'pending');
+  await asUser(0);
+});
+await check('a released upload on an archived property stays reachable for the server sweep',async()=>{
+  const sweepProperty='20000000-0000-4000-8000-000000000011';
+  const sweepFile='45000000-0000-4000-8000-000000000001';
+  await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
+  await db.query("insert into public.properties(id,property_code,listing_mode,status,created_by) values($1,'SGN-SWEEP','sale','available',$2)",[sweepProperty,employees[0]]);
+  await asUser(1);
+  await db.query(registerSql,[sweepFile,sweepProperty,'sweep.pdf','application/pdf',1024,testSha256,'document',otherCatId]);
+  assert.equal((await db.query('select public.fail_property_upload($1) as released',[sweepFile])).rows[0].released,true);
+  await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
+  await db.query('update public.properties set archived_at=now() where id=$1',[sweepProperty]);
+  // No employee session reaches the row once its property is archived, and no session may
+  // record the deletion either.
+  await asUser(0);
+  assert.equal((await db.query('select id from public.property_files where id=$1',[sweepFile])).rows.length,0);
+  await asUser(1);
+  assert.equal((await db.query('select id from public.property_files where id=$1',[sweepFile])).rows.length,0);
+  await fails('select public.mark_upload_cleaned($1)',[sweepFile],'42501');
+  // The trusted server sweep still finds it, whoever uploaded it and wherever it lives.
+  await asService();
+  assert.equal((await db.query("select count(*)::int as n from public.property_files where upload_status='cleanup_pending' and id=$1",[sweepFile])).rows[0].n,1);
+  await db.query('select public.mark_upload_cleaned($1)',[sweepFile]);
+  assert.equal((await db.query('select upload_status from public.property_files where id=$1',[sweepFile])).rows[0].upload_status,'failed');
   await asUser(0);
 });
 const maintainedProperty=await maintenanceContract({db,asUser,check,fails,employees,property,other});

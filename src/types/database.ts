@@ -2064,7 +2064,7 @@ export type Database = {
         Args: { p_action: string; p_payment_id: string; p_reason: string };
         Returns: undefined;
       };
-      fail_property_upload: { Args: { p_file_id: string }; Returns: undefined };
+      fail_property_upload: { Args: { p_file_id: string }; Returns: boolean };
       mark_upload_cleaned: { Args: { p_file_id: string }; Returns: undefined };
       employee_owner_contact_ranking: {
         Args: { p_from: string; p_to: string };

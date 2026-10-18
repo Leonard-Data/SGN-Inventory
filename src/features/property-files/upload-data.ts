@@ -1,6 +1,7 @@
 import 'server-only';
 import { createHash, createHmac } from 'node:crypto';
 import { ApiError, uuid, type RouteContext } from '@/lib/supabase/route';
+import { createServiceRoleClient } from '@/lib/supabase/service';
 import {
   deleteObject,
   objectIdentity,
@@ -10,6 +11,7 @@ import {
 } from '@/lib/r2';
 import { contentMime, fileMimeTypes } from './content';
 import { fileClass, fileLimits, maximumFileBytes, sizeRefusal } from './limits';
+import { drainFileCleanup } from './cleanup-pass';
 import { discardRefusedCompletion } from './upload-cleanup';
 import type { DocumentCategoryList, FileRegistrationResult } from './types';
 import type { Employee } from '@/features/employees/types';
@@ -153,19 +155,27 @@ export async function validateAndCompleteFile(
             : null;
         },
         releaseSlot: async () => {
-          const { error } = await context.client.rpc('fail_property_upload', {
-            p_file_id: fileId,
-          });
+          const { data, error } = await context.client.rpc(
+            'fail_property_upload',
+            { p_file_id: fileId },
+          );
           if (error) throw error;
+          return data === true;
         },
         confirmCleaned: async () => {
-          const { error } = await context.client.rpc('mark_upload_cleaned', {
+          const admin = createServiceRoleClient(context.environment);
+          if (!admin)
+            throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured');
+          const { error } = await admin.rpc('mark_upload_cleaned', {
             p_file_id: fileId,
           });
           if (error) throw error;
         },
       });
     throw error;
+  } finally {
+    // Ordinary completion traffic drains the released-upload backlog without an operator call.
+    await drainFileCleanup(context.environment);
   }
 }
 
