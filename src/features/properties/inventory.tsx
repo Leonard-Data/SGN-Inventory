@@ -1,5 +1,5 @@
 'use client';
-import { useState, useCallback, type FormEvent } from 'react';
+import { useState, useCallback, useMemo, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { Locale } from '@/i18n/messages';
@@ -14,24 +14,26 @@ import {
   type InventoryFilters,
 } from './filters';
 import {
+  INVENTORY_PAGE_SIZE,
+  inventoryPageCount,
   isInventoryOrder,
+  pageNumbers,
   reversedOrder,
-  validTrailToken,
   type InventoryOrder,
-} from './age-cursor';
+} from './paging';
 
 export function Inventory({
   initialLocale,
   initialQuery,
-  after,
-  trail,
+  page,
+  pageSize,
   sort,
   filters,
 }: {
   initialLocale: Locale;
   initialQuery: string;
-  after: string | null;
-  trail: string;
+  page: string | null;
+  pageSize: string | null;
   sort: string | null;
   filters: InventoryFilters;
 }) {
@@ -45,7 +47,8 @@ export function Inventory({
     new URLSearchParams({
       query: initialQuery,
       ...(sort ? { sort } : {}),
-      ...(after ? { after } : {}),
+      ...(page ? { page } : {}),
+      ...(pageSize ? { pageSize } : {}),
       ...activeFilters,
     });
   const { employee, data, error, busy, surface, logout, clear, reload } =
@@ -55,6 +58,7 @@ export function Inventory({
   const locale = initialLocale;
   const text = messages[locale];
   const [searchError, setSearchError] = useState(false);
+  const [jump, setJump] = useState('');
   // The toolbar owns the filter panel's trigger, so the island below only renders the dialog.
   const [filtersOpen, setFiltersOpen] = useState(false);
   const denyFiles = useCallback(
@@ -64,10 +68,17 @@ export function Inventory({
     },
     [clear],
   );
-  const cursors = trail
-    ? trail.split(',').filter((cursor) => validTrailToken(activeOrder, cursor))
-    : [];
-  const previous = cursors[cursors.length - 1];
+  // The read states the matching total and the page it served, so the count and the pager
+  // describe that same result set rather than counting the rows this page happens to hold.
+  const total = data?.total ?? 0;
+  const servedPage = data?.page ?? 1;
+  const servedSize = data?.pageSize ?? INVENTORY_PAGE_SIZE;
+  const pages = inventoryPageCount(total, servedSize);
+  const numbers = pageNumbers(servedPage, pages);
+  const numberFormat = useMemo(
+    () => new Intl.NumberFormat(locale === 'vi' ? 'vi-VN' : 'en-GB'),
+    [locale],
+  );
   function search(event: FormEvent<HTMLFormElement>) {
     const query = new FormData(event.currentTarget).get('query');
     if (typeof query !== 'string' || [...query].length > 120) {
@@ -77,20 +88,24 @@ export function Inventory({
       setSearchError(false);
     }
   }
-  function href(cursor: string | null, cursorTrail: string[]) {
+  // Every pager link carries the same search, filters, ordering and page size, so moving between
+  // pages never changes which result set is being paged; an absent page is page one.
+  function href(target: number) {
     return (
       '/properties?' +
       new URLSearchParams({
         query: initialQuery,
         ...(sort ? { sort } : {}),
         ...activeFilters,
-        ...(cursor && cursor !== '~' ? { after: cursor } : {}),
-        ...(cursorTrail.length ? { trail: cursorTrail.join(',') } : {}),
+        ...(target > 1 ? { page: String(target) } : {}),
+        ...(servedSize !== INVENTORY_PAGE_SIZE
+          ? { pageSize: String(servedSize) }
+          : {}),
       })
     );
   }
-  // Switching order starts a new page-one journey; the ordering never rewrites the search or
-  // the filters.
+  // Switching order starts at page one; the ordering never rewrites the search, the filters or
+  // the page size.
   function orderHref(next: InventoryOrder | null) {
     return (
       '/properties?' +
@@ -98,10 +113,34 @@ export function Inventory({
         query: initialQuery,
         ...(next ? { sort: next } : {}),
         ...activeFilters,
+        ...(servedSize !== INVENTORY_PAGE_SIZE
+          ? { pageSize: String(servedSize) }
+          : {}),
       })
     );
   }
-  const resultLocation = href(after, cursors);
+  // A jump the caller types is corrected onto the result set instead of asking for a page that
+  // does not exist.
+  function jumpTo(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const target = Number.parseInt(jump, 10);
+    if (!Number.isFinite(target)) return;
+    router.push(href(Math.min(Math.max(target, 1), pages)));
+  }
+  const resultLocation = href(servedPage);
+  // A pager step is a real link where its page exists and a disabled control at the boundary, so
+  // an edge of the result set is stated instead of silently doing nothing.
+  function step(label: string, target: number, disabled: boolean) {
+    return disabled ? (
+      <button className="pager-btn" type="button" disabled>
+        {label}
+      </button>
+    ) : (
+      <a className="pager-btn" href={href(target)}>
+        {label}
+      </a>
+    );
+  }
   const orders: { value: InventoryOrder | null; label: string }[] = [
     { value: null, label: text.sortDefault },
     { value: 'oldest', label: text.sortOldest },
@@ -360,7 +399,10 @@ export function Inventory({
               <div className="row-between">
                 <p className="result-line">
                   <b>
-                    {data.properties.length} {text.inventory}
+                    {text.inventoryMatchCount.replace(
+                      '{total}',
+                      numberFormat.format(data.total),
+                    )}
                   </b>
                 </p>
               </div>
@@ -406,29 +448,54 @@ export function Inventory({
 
               <nav className="pagination" aria-label={text.inventory}>
                 <span className="page-info">
-                  {after ? text.previous : text.first}
+                  {text.pageOf
+                    .replace('{page}', numberFormat.format(servedPage))
+                    .replace('{pages}', numberFormat.format(pages))}
                 </span>
                 <span className="page-buttons">
-                  {previous ? (
-                    <a
-                      className="pager-btn"
-                      href={href(previous, cursors.slice(0, -1))}
-                    >
-                      {text.previous}
-                    </a>
-                  ) : after ? (
-                    <a className="pager-btn" href={href(null, [])}>
-                      {text.first}
-                    </a>
-                  ) : null}
-                  {data.nextCursor ? (
-                    <a
-                      className="pager-btn"
-                      href={href(data.nextCursor, [...cursors, after ?? '~'])}
-                    >
-                      {text.next}
-                    </a>
-                  ) : null}
+                  {step(text.first, 1, servedPage === 1)}
+                  {step(text.previous, servedPage - 1, servedPage === 1)}
+                  {numbers.map((number) =>
+                    number === servedPage ? (
+                      <span
+                        key={number}
+                        className="pager-btn"
+                        aria-current="page"
+                      >
+                        {numberFormat.format(number)}
+                      </span>
+                    ) : (
+                      <a
+                        key={number}
+                        className="pager-btn"
+                        href={href(number)}
+                        aria-label={`${text.jumpToPage} ${numberFormat.format(number)}`}
+                      >
+                        {numberFormat.format(number)}
+                      </a>
+                    ),
+                  )}
+                  {step(text.next, servedPage + 1, servedPage === pages)}
+                  {step(text.last, pages, servedPage === pages)}
+                  <form className="pager-jump" onSubmit={jumpTo}>
+                    <label className="sr" htmlFor="page-jump">
+                      {text.jumpToPage}
+                    </label>
+                    <input
+                      className="input input-sm"
+                      id="page-jump"
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      max={pages}
+                      value={jump}
+                      onChange={(event) => setJump(event.currentTarget.value)}
+                      placeholder={text.jumpToPage}
+                    />
+                    <button className="pager-btn" type="submit">
+                      {text.jump}
+                    </button>
+                  </form>
                 </span>
               </nav>
             </>

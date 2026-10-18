@@ -618,10 +618,12 @@ button.sgn-nav-item { width: 100%; background: transparent; border: 0; text-alig
   color: var(--fg-2); font-size: var(--text-sm); font-weight: 500;
   transition: border-color var(--motion-fast) var(--ease-standard), background var(--motion-fast) var(--ease-standard);
 }
-.pager-btn:hover:not([disabled]) { border-color: var(--fg-2); background: var(--surface); color: var(--fg); }
-.pager-btn[aria-current="page"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.pager-btn:hover:not([disabled]):not([aria-current="page"]) { border-color: var(--fg-2); background: var(--surface); color: var(--fg); }
+.pager-btn[aria-current="page"] { border-color: var(--accent); color: var(--accent); font-weight: 600; cursor: default; }
 .pager-btn[disabled] { opacity: .5; cursor: default; }
 .pager-btn svg { width: 18px; height: 18px; }
+.pagination .pager-jump { display: flex; align-items: center; gap: var(--space-2); }
+.pagination .pager-jump .input { width: 6rem; }
 
 /* ── loading, empty, error ──────────────────────────────────────────────── */
 .busy-head { display: grid; gap: var(--space-4); }

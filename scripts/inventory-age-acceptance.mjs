@@ -1045,15 +1045,13 @@ try {
   // Direct Data API boundary: the read RPC and every direct rewrite stay subject to the
   // session and the delivered guards.
   const anonApi = anonymousClient();
-  const anonRpc = await anonApi.rpc('list_inventory_by_age', {
-    p_direction: 'oldest',
-  });
+  const anonRpc = await anonApi.rpc('page_inventory', { p_order: 'oldest' });
   assert.equal(anonRpc.error?.code, '42501', 'anonymous RPC denial');
   const salesApi = await signIn(fixtures.sales.email, fixtures.sales.password);
   const rpc = await retryResult('direct age RPC', () =>
-    salesApi.rpc('list_inventory_by_age', {
-      p_direction: 'oldest',
-      p_limit: 31,
+    salesApi.rpc('page_inventory', {
+      p_order: 'oldest',
+      p_page_size: 31,
     }),
   );
   assert.equal(rpc.error, null, 'employee age RPC');
@@ -1263,7 +1261,7 @@ try {
   );
   assert.equal(deactivatedApi.body?.error, 'access-denied');
   const deactivatedRpc = await retryResult('deactivated direct age RPC', () =>
-    salesApi.rpc('list_inventory_by_age', { p_direction: 'oldest' }),
+    salesApi.rpc('page_inventory', { p_order: 'oldest' }),
   );
   assert.equal(deactivatedRpc.error?.code, '42501', 'deactivated RPC denial');
   evaluate(

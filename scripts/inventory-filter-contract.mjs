@@ -133,37 +133,23 @@ export async function inventoryFilterContract({
   // of the other contracts can neither satisfy nor break a filtered expectation.
   const scoped = (rows) =>
     rows.map((row) => row.id).filter((value) => mine.has(value));
-  const search = (filters = {}) =>
+  // One filtered read answers both orderings, so the helper names the ordering instead of a
+  // function: an absent direction is the ordinary unarchived browse.
+  const page = (
+    filters = {},
+    direction = null,
+    pageNumber = 1,
+    pageSize = 50,
+  ) =>
     db
       .query(
-        `select id from public.search_properties($1::text,$2::text,$3::text,$4::text,$5::uuid,null::uuid,50,
-          $6::numeric,$7::numeric,$8::numeric,$9::numeric,$10::uuid)`,
-        [
-          filters.query ?? '',
-          filters.status ?? null,
-          filters.mode ?? null,
-          filters.type ?? null,
-          filters.areaId ?? null,
-          filters.priceMin ?? null,
-          filters.priceMax ?? null,
-          filters.areaMin ?? null,
-          filters.areaMax ?? null,
-          filters.contact ?? null,
-        ],
-      )
-      .then((result) => scoped(result.rows));
-  const age = (filters = {}, direction = 'oldest', cursor = {}, limit = 50) =>
-    db
-      .query(
-        `select id from public.list_inventory_by_age($1::text,$2::text,$3::date,$4::uuid,$5::boolean,$6::integer,
-          $7::text,$8::text,$9::text,$10::numeric,$11::numeric,$12::numeric,$13::numeric,$14::uuid,$15::uuid)`,
+        `select * from public.page_inventory($1::text,$2::text,$3::integer,$4::integer,$5::text,$6::text,$7::text,
+          $8::numeric,$9::numeric,$10::numeric,$11::numeric,$12::uuid,$13::uuid)`,
         [
           direction,
-          '',
-          cursor.on ?? null,
-          cursor.id ?? null,
-          cursor.unknown ?? false,
-          limit,
+          filters.query ?? '',
+          pageNumber,
+          pageSize,
           filters.status ?? null,
           filters.mode ?? null,
           filters.type ?? null,
@@ -175,7 +161,18 @@ export async function inventoryFilterContract({
           filters.contact ?? null,
         ],
       )
-      .then((result) => scoped(result.rows));
+      .then((result) => ({
+        ids: scoped(result.rows),
+        total: result.rows.length ? Number(result.rows[0].total_count) : 0,
+        page: result.rows.length ? Number(result.rows[0].page_number) : 1,
+      }));
+  const search = (filters = {}) => page(filters).then((read) => read.ids);
+  const age = (
+    filters = {},
+    direction = 'oldest',
+    pageNumber = 1,
+    pageSize = 50,
+  ) => page(filters, direction, pageNumber, pageSize).then((read) => read.ids);
 
   await check('an inventory status filter keeps only that status', async () => {
     assert.deepEqual(await search({ status: 'available' }), [
@@ -306,29 +303,16 @@ export async function inventoryFilterContract({
         priceMin: 4700000001,
         priceMax: 4700000003,
       };
-      const first = await age(filters, 'oldest', {}, 1);
-      assert.deepEqual(first, [saleHouse]);
-      const second = await age(
-        filters,
-        'oldest',
-        { unknown: true, id: first[0] },
-        1,
-      );
-      assert.deepEqual(second, [bothFlat]);
-      const third = await age(
-        filters,
-        'oldest',
-        { unknown: true, id: second[0] },
-        1,
-      );
-      assert.deepEqual(third, [negotiatingLand]);
-      const end = await age(
-        filters,
-        'oldest',
-        { unknown: true, id: third[0] },
-        1,
-      );
-      assert.deepEqual(end, []);
+      const first = await page(filters, 'oldest', 1, 1);
+      assert.deepEqual(first.ids, [saleHouse]);
+      // The count belongs to the same filtered read as this page.
+      assert.equal(first.total, 3);
+      assert.deepEqual(await age(filters, 'oldest', 2, 1), [bothFlat]);
+      assert.deepEqual(await age(filters, 'oldest', 3, 1), [negotiatingLand]);
+      // A page past the end is corrected onto the last page of that same read.
+      const beyond = await page(filters, 'oldest', 9, 1);
+      assert.equal(beyond.page, 3);
+      assert.deepEqual(beyond.ids, [negotiatingLand]);
       // The same filtered set walked newest-first visits the same rows in the other direction.
       assert.deepEqual(await age(filters, 'newest'), [
         negotiatingLand,
@@ -382,24 +366,12 @@ export async function inventoryFilterContract({
         rentHouse,
         saleHouse,
       ]);
-      const first = await age({ areaId: provinceOne }, 'oldest', {}, 1);
-      assert.deepEqual(first, [saleHouse]);
-      const second = await age(
-        { areaId: provinceOne },
-        'oldest',
-        { unknown: true, id: first[0] },
-        1,
-      );
-      assert.deepEqual(second, [rentHouse]);
-      assert.deepEqual(
-        await age(
-          { areaId: provinceOne },
-          'oldest',
-          { unknown: true, id: second[0] },
-          1,
-        ),
-        [],
-      );
+      const first = await page({ areaId: provinceOne }, 'oldest', 1, 1);
+      assert.deepEqual(first.ids, [saleHouse]);
+      assert.equal(first.total, 2);
+      assert.deepEqual(await age({ areaId: provinceOne }, 'oldest', 2, 1), [
+        rentHouse,
+      ]);
     },
   );
   await check(
@@ -437,24 +409,12 @@ export async function inventoryFilterContract({
         rentHouse,
         saleHouse,
       ]);
-      const first = await age({ contact: contactOne }, 'oldest', {}, 1);
-      assert.deepEqual(first, [saleHouse]);
-      const second = await age(
-        { contact: contactOne },
-        'oldest',
-        { unknown: true, id: first[0] },
-        1,
-      );
-      assert.deepEqual(second, [rentHouse]);
-      assert.deepEqual(
-        await age(
-          { contact: contactOne },
-          'oldest',
-          { unknown: true, id: second[0] },
-          1,
-        ),
-        [],
-      );
+      const first = await page({ contact: contactOne }, 'oldest', 1, 1);
+      assert.deepEqual(first.ids, [saleHouse]);
+      assert.equal(first.total, 2);
+      assert.deepEqual(await age({ contact: contactOne }, 'oldest', 2, 1), [
+        rentHouse,
+      ]);
     },
   );
   await check(
@@ -474,88 +434,68 @@ export async function inventoryFilterContract({
         { areaMin: 100.5, areaMax: 100.4 },
       ];
       for (const filters of rejected) {
-        await fails(
-          `select * from public.search_properties($1::text,$2::text,$3::text,$4::text,null::uuid,null::uuid,50,
-            $5::numeric,$6::numeric,$7::numeric,$8::numeric)`,
-          [
-            '',
-            filters.status ?? null,
-            filters.mode ?? null,
-            filters.type ?? null,
-            filters.priceMin ?? null,
-            filters.priceMax ?? null,
-            filters.areaMin ?? null,
-            filters.areaMax ?? null,
-          ],
-          '22023',
-        );
-        await fails(
-          `select * from public.list_inventory_by_age('oldest','',null,null,false,50,$1::text,$2::text,$3::text,
-            $4::numeric,$5::numeric,$6::numeric,$7::numeric)`,
-          [
-            filters.status ?? null,
-            filters.mode ?? null,
-            filters.type ?? null,
-            filters.priceMin ?? null,
-            filters.priceMax ?? null,
-            filters.areaMin ?? null,
-            filters.areaMax ?? null,
-          ],
-          '22023',
-        );
+        for (const direction of [null, 'oldest']) {
+          await fails(
+            `select * from public.page_inventory($1::text,'',$2::integer,$3::integer,$4::text,$5::text,$6::text,
+              $7::numeric,$8::numeric,$9::numeric,$10::numeric)`,
+            [
+              direction,
+              1,
+              50,
+              filters.status ?? null,
+              filters.mode ?? null,
+              filters.type ?? null,
+              filters.priceMin ?? null,
+              filters.priceMax ?? null,
+              filters.areaMin ?? null,
+              filters.areaMax ?? null,
+            ],
+            '22023',
+          );
+        }
       }
     },
   );
   await check(
-    'both filtered reads stay stable invoker functions with a fixed search path',
+    'the paged inventory read stays a stable invoker function with a fixed search path',
     async () => {
+      const signature =
+        'public.page_inventory(text,text,integer,integer,text,text,text,numeric,numeric,numeric,numeric,uuid,uuid)';
       const shapes = await db.query(
         `select p.oid::regprocedure::text as signature, p.prosecdef, p.provolatile,
           coalesce(array_to_string(p.proconfig,','),'') as config
-        from pg_proc p
-        where p.oid in (
-          'public.search_properties(text,text,text,text,uuid,uuid,integer,numeric,numeric,numeric,numeric,uuid)'::regprocedure,
-          'public.list_inventory_by_age(text,text,date,uuid,boolean,integer,text,text,text,numeric,numeric,numeric,numeric,uuid,uuid)'::regprocedure)
-        order by signature`,
+        from pg_proc p where p.oid = $1::regprocedure`,
+        [signature],
       );
-      assert.equal(shapes.rows.length, 2);
-      for (const shape of shapes.rows) {
-        assert.equal(
-          shape.prosecdef,
-          false,
-          `${shape.signature} must be invoker`,
-        );
-        assert.equal(
-          shape.provolatile,
-          's',
-          `${shape.signature} must be stable`,
-        );
-        assert.match(shape.config, /search_path=/);
-      }
+      assert.equal(shapes.rows.length, 1);
+      assert.equal(shapes.rows[0].prosecdef, false, 'must be invoker');
+      assert.equal(shapes.rows[0].provolatile, 's', 'must be stable');
+      assert.match(shapes.rows[0].config, /search_path=/);
       const granted = await db.query(
-        `select has_function_privilege('authenticated',
-            'public.search_properties(text,text,text,text,uuid,uuid,integer,numeric,numeric,numeric,numeric,uuid)', 'execute')
-          and has_function_privilege('authenticated',
-            'public.list_inventory_by_age(text,text,date,uuid,boolean,integer,text,text,text,numeric,numeric,numeric,numeric,uuid,uuid)', 'execute')
-          and not has_function_privilege('anon',
-            'public.search_properties(text,text,text,text,uuid,uuid,integer,numeric,numeric,numeric,numeric,uuid)', 'execute')
-          and not has_function_privilege('anon',
-            'public.list_inventory_by_age(text,text,date,uuid,boolean,integer,text,text,text,numeric,numeric,numeric,numeric,uuid,uuid)', 'execute') as allowed`,
+        `select has_function_privilege('authenticated', $1, 'execute')
+          and not has_function_privilege('anon', $1, 'execute') as allowed`,
+        [signature],
       );
       assert.equal(granted.rows[0].allowed, true);
+      // The replaced cursor reads are gone, so no second predicate can answer the same list.
+      const replaced = await db.query(
+        `select count(*)::int as found from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public' and p.proname in ('search_properties','list_inventory_by_age')`,
+      );
+      assert.equal(replaced.rows[0].found, 0);
     },
   );
   await asUser(null);
   await check('anonymous filtered inventory reads are denied', () =>
-    fails(
-      "select * from public.search_properties('',null,null,null,null,null,50,'1',null,null,null)",
-      [],
-      '42501',
-    ),
+    fails('select * from public.page_inventory(p_page => 1)', [], '42501'),
   );
   await asUser(4);
   await check('an inactive employee reads no filtered inventory', () =>
-    fails("select * from public.list_inventory_by_age('oldest')", [], '42501'),
+    fails(
+      "select * from public.page_inventory(p_order => 'oldest')",
+      [],
+      '42501',
+    ),
   );
   await asUser(0);
 }

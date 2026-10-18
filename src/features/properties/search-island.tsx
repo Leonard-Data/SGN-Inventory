@@ -192,8 +192,8 @@ export function SearchIsland({
       });
     return () => abort.abort();
   }, [appliedContact, onDenied]);
-  // Applying starts a new page-one journey with the stated filters, so a paging cursor from the
-  // previous filter set can never be replayed against this one.
+  // Applying starts a new page-one journey with the stated filters, so a page number from the
+  // previous result set can never be replayed against this one.
   function apply(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const submitted = new URLSearchParams();

@@ -94,9 +94,10 @@ export async function maintenanceContract({
       assert.equal(event.actor_id, employees[0]);
       assert.deepEqual(
         (
-          await db.query('select id from public.search_properties($1)', [
-            'nguon 50%_',
-          ])
+          await db.query(
+            'select id from public.page_inventory(p_query => $1)',
+            ['nguon 50%_'],
+          )
         ).rows,
         [{ id: created }],
       );
@@ -353,7 +354,7 @@ export async function maintenanceContract({
       assert.deepEqual(
         (
           await db.query(
-            "select id from public.search_properties('ly thuong kiet') where id=$1",
+            "select id from public.page_inventory(p_query => 'ly thuong kiet') where id=$1",
             [created],
           )
         ).rows,
@@ -362,7 +363,7 @@ export async function maintenanceContract({
       assert.deepEqual(
         (
           await db.query(
-            "select id from public.search_properties('nguyen trai') where id=$1",
+            "select id from public.page_inventory(p_query => 'nguyen trai') where id=$1",
             [created],
           )
         ).rows,
