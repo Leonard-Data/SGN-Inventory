@@ -10,6 +10,10 @@ The schema migrations and preparation tool are executable. Rental/localization e
 2. Add the approved package to the repository. Pin Next.js/React/SSR dependencies and generate the app in the planned structure. Use the Node runtime supported by current Supabase libraries (22+).
 3. Create isolated staging and production projects. Validate a fresh database locally first. Set only `public` as exposed schema, private legal/photos bucket, Auth allowed URLs and invite-only access.
 4. Bootstrap at least two reviewers and one admin using reviewed identities. Don't import workbook passwords. Test role/deactivation paths with fixture users.
+   The first admin (`phunghungbinh.work@gmail.com`) is bootstrapped by the one-time migration
+   `20261018120000_bootstrap_first_admin.sql`, which promotes that already-created Auth account
+   and changes nothing where the account is absent. Every later employee joins through the
+   invitation flow, never SQL.
 
 Acceptance: schema and RLS verified on real staging Supabase; no staging preview connects to production.
 

@@ -13,7 +13,7 @@ test('personal today activity enforces own scope, Vietnam day, retry identity an
     // Match the embedded runner's Supabase schema stubs; this is not hosted acceptance.
     await db.exec(`
       create role anon; create role authenticated; create role service_role bypassrls;
-      create schema auth; create table auth.users(id uuid primary key);
+      create schema auth; create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb);
       create function auth.uid() returns uuid language sql stable as $$
         select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid;
       $$;
