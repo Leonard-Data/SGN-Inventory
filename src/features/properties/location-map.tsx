@@ -46,6 +46,8 @@ export function LocationMap({
   const pin = useRef<LeafletMarker | null>(null);
   const callbacks = useRef({ onPick, onTileError });
   const start = useRef({ center, zoom });
+  const centerLat = center[0];
+  const centerLng = center[1];
   const lat = marker ? marker[0] : null;
   const lng = marker ? marker[1] : null;
 
@@ -79,6 +81,10 @@ export function LocationMap({
       pin.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    view.current?.setView([centerLat, centerLng], zoom, { animate: false });
+  }, [centerLat, centerLng, zoom]);
 
   useEffect(() => {
     const map = view.current;

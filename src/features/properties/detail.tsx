@@ -888,6 +888,12 @@ export function Detail({
                     </div>
                     <div className="panel-body">
                       <PropertyLocation
+                        key={
+                          'location' +
+                          property.id +
+                          property.revision +
+                          refreshTick
+                        }
                         latitude={property.latitude}
                         longitude={property.longitude}
                         locale={locale}
