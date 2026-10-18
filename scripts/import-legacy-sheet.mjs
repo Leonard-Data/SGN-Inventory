@@ -34,9 +34,12 @@ import {
   connect,
   currentAddressText,
   convertedSkipped,
+  declaredStage,
   importAttachments,
   importProperties,
   importableBucket,
+  invitationOrigin,
+  invitationRecipients,
   openBatch,
   planAttachmentImport,
   planStaffAccounts,
@@ -575,8 +578,10 @@ export function createVietMapResolver({
  * Matching is always on city **and** district **and** ward: the workbook's own ward list
  * is keyed by district, the official three-tier tree is searched by district and ward
  * together, and the conversion is requested by the legacy ward's official code. A ward
- * name alone never selects a unit. Anything split, unlisted or absent from the project
- * catalogue is refused rather than guessed.
+ * name alone never selects a unit through the official reference; a ward label that already
+ * equals exactly one current commune is matched against the project catalogue, which needs no
+ * reference. Anything split, unlisted or absent from the project catalogue is refused rather
+ * than guessed.
  */
 export async function resolveAddress(source, context) {
   const {
@@ -584,6 +589,7 @@ export async function resolveAddress(source, context) {
     reference,
     legacyReference,
     legacyTree,
+    legacyTreeFailure,
     convertLegacyWard,
   } = context;
   const city = text(source.city);
@@ -592,15 +598,11 @@ export async function resolveAddress(source, context) {
   if (!city) return { status: 'missing_city' };
   if (!district) return { status: 'missing_district' };
   if (!ward) return { status: 'missing_ward' };
-  // An unreachable official reference leaves no fallback: the legacy address stands and the row is
-  // counted under its own reason instead of being matched by name or guessed.
-  if (legacyReference === false)
-    return { status: 'official_reference_unavailable' };
 
   const cityKey = adminNameKey(city);
-  const tree = legacyTree(cityKey);
-  if (!tree) return { status: 'unknown_city', city };
   const pairKey = `${adminNameKey(district)}|${adminNameKey(ward)}`;
+  // A triple the workbook's own ward list does not name needs no official reference: the project
+  // catalogue alone decides whether the ward label is one current commune.
   if (!reference.wardPairs.has(pairKey)) {
     const current = currentCommuneByName(catalogue, cityKey, ward);
     if (current.length === 1) {
@@ -618,7 +620,15 @@ export async function resolveAddress(source, context) {
       };
     return { status: 'unlisted_legacy_pair', district, ward };
   }
-
+  // Everything below needs the official reference: the legacy ward code that maps it to the
+  // current hierarchy. An unreachable reference leaves no fallback, so the legacy address stands
+  // and the row is counted under its own reason instead of being matched by name or guessed.
+  const tree = legacyTree(cityKey);
+  if (!tree) {
+    if (!legacyReference || legacyTreeFailure?.(cityKey))
+      return { status: 'official_reference_unavailable' };
+    return { status: 'unknown_city', city };
+  }
   const legacyDistrict = tree.districts.find(
     (entry) => adminNameKey(entry.name) === adminNameKey(district),
   );
@@ -638,6 +648,7 @@ export async function resolveAddress(source, context) {
   }
 
   const converted = await convertLegacyWard(legacyWards[0].code);
+  if (!converted) return { status: 'official_reference_unavailable' };
   const unique = [
     ...new Map(converted.map((entry) => [entry.code, entry])).values(),
   ];
@@ -1515,6 +1526,14 @@ export function renderReport(report) {
   const push = (...values) => lines.push(...values);
   const price = report.prices;
   const outcome = writeOutcome(report);
+  const referenceDown =
+    [
+      report.addresses.legacy_reference_unavailable,
+      ...(report.addresses.legacy_reference_failures ?? []),
+    ]
+      .filter(Boolean)
+      .join('; ') || null;
+  const stage = report.stage === 'prod' ? 'production' : 'development';
   const sampleRows = (bucket) =>
     (report.samples[bucket] ?? []).map(
       (row) =>
@@ -1530,7 +1549,7 @@ export function renderReport(report) {
     `Write: ${outcome.state}${outcome.reason ? ` — ${outcome.reason}` : ''}`,
     '',
     outcome.state === 'completed'
-      ? `**This run wrote to the development project.** The project now holds ${report.write.verification.counts.properties} properties and ${report.write.verification.counts.files} ready files for this batch's source rows, and this run recorded ${report.write.staff.invitations.recorded} invitations (the project holds ${report.write.verification.counts.invitations_recorded} recorded invitations in total); the sheet and Drive were only read. The report is written`
+      ? `**This run wrote to the ${stage} project.** The project now holds ${report.write.verification.counts.properties} properties and ${report.write.verification.counts.files} ready files for this batch's source rows, and this run recorded ${report.write.staff.invitations.recorded} invitations (the project holds ${report.write.verification.counts.invitations_recorded} recorded invitations in total); the sheet and Drive were only read. The report is written`
       : outcome.state === 'refused'
         ? `**No writes were made.** The write was refused: ${outcome.reason}. The sheet and Drive were only read. The report is written`
         : outcome.state === 'failed'
@@ -1672,13 +1691,14 @@ export function renderReport(report) {
     'response is never stored). Where it returns no boundary, the fallback is the published official',
     'three-tier → two-tier mapping, matched by city **and** district **and** ward together and then by',
     'the legacy ward’s official code; the project catalogue supplies the target unit identity.',
-    'A ward name alone never selects a commune.',
+    'A ward label that matches exactly one current commune in the same province is a catalogue-only',
+    'conversion the run is entitled to make and needs no official reference; a ward name alone never',
+    'selects among several communes.',
     '',
-    ...(report.addresses.legacy_reference_unavailable
+    ...(referenceDown
       ? [
-          `**Limitation: the official three-tier reference was unreachable for this run** (${report.addresses.legacy_reference_unavailable}).`,
-          `It is the fallback that would have matched a legacy ward code to its current commune, so ${report.addresses.legacy_reference_rows} row(s) keep their legacy address only, counted below as \`official_reference_unavailable\`; no unit was matched by name or guessed in its place, and no row was given a current province or commune it cannot be verified for.`,
-          'In the development run that reference converted 5 rows (4 through the published legacy mapping, 1 through a ward label that already matched one current commune), so at most that many addresses convert here that did there, and every one of them keeps its untouched legacy address and needs review.',
+          `**Limitation: the official three-tier reference was not available for this run** (${referenceDown}).`,
+          `It is the fallback that maps a legacy ward code to its current commune, so ${report.addresses.legacy_reference_rows} row(s) keep their legacy address only, counted below as \`official_reference_unavailable\`; no row was given a current province or commune it cannot be verified for. A ward label that already equals exactly one current commune still converts from the project catalogue, which needs no reference.`,
           '',
         ]
       : []),
@@ -1700,10 +1720,10 @@ export function renderReport(report) {
       (row) => `| ${row.status} | ${row.rows} | ${row.triples} |`,
     ),
     '',
-    ...(report.addresses.legacy_reference_unavailable
+    ...(referenceDown
       ? [
           'That table counts rows by the fallback status of their legacy unit, so',
-          `\`official_reference_unavailable\` covers every row whose unit would have used the official fallback; the rows VietMap also could not place (${report.addresses.legacy_reference_rows}) are the ones that keep a legacy address only.`,
+          `\`official_reference_unavailable\` covers every row whose unit would have used the official fallback this run could not consult; of those, ${report.addresses.legacy_reference_rows} are the rows VietMap also could not place, and those keep a legacy address only. Other fallback outcomes that keep a legacy address only (an unknown district or ward, no current ward, an unlisted legacy pair) are outside this count.`,
           '',
         ]
       : []),
@@ -1713,11 +1733,11 @@ export function renderReport(report) {
     report.addresses.crosswalk_note,
     '',
   );
-  if (report.addresses.legacy_reference_unavailable) {
+  if (referenceDown && !report.addresses.disagreements.length) {
     push(
       '### Sources that disagree',
       '',
-      'Not computed for this run: comparing VietMap against the official mapping needs that reference, which was unreachable. Every imported property keeps review pending, and no source was preferred over another silently.',
+      'No disagreement found for the addresses that could be compared: VietMap was checked against the official mapping wherever that reference was available, and no compared address disagreed. Addresses this run could not compare keep review pending, and no source was preferred over another silently.',
       '',
     );
   }
@@ -1818,6 +1838,12 @@ export function renderReport(report) {
     '| --- | ---: |',
     ...report.staff_plan.by_role.map(
       (entry) => `| ${entry.role} | ${entry.count} |`,
+    ),
+    '',
+    '| Address | Role |',
+    '| --- | --- |',
+    ...report.staff_plan.accounts.map(
+      (entry) => `| ${entry.email} | ${entry.role} |`,
     ),
     '',
     `- The silent admin is \`${report.staff_plan.silent_admin ?? '(none)'}\`: an Auth user created through the admin API, an active admin employee, and no invitation email. Its password goes only to the captain's private file.`,
@@ -1935,19 +1961,18 @@ export function renderReport(report) {
       `| Files stored | ${write.verification.counts.files} |`,
       '',
       `- Staff addresses planned: ${write.staff.addresses}; silent admin: \`${write.staff.silent_admin ?? '(none)'}\`.`,
-      `- Invitations this run stated ${write.staff.invitations.stated}, ${write.staff.invitations.refused} refused, and recorded ${write.staff.invitations.recorded} (accepted provider outcome plus accepted outcome write); ${write.staff.invitations.failures.length} did not reach recorded.`,
+      `- Invitations: ${write.staff.invitations.stated} stated and ${write.staff.invitations.refused} refused, and the stated ones account for themselves — ${write.staff.invitations.already_recorded} were already recorded before this run, this run recorded ${write.staff.invitations.recorded} (accepted provider outcome plus accepted outcome write), and ${write.staff.invitations.failures.length} did not reach recorded.`,
+      `- That adds up: ${write.staff.invitations.stated} = ${write.staff.invitations.already_recorded} + ${write.staff.invitations.recorded} + ${write.staff.invitations.failures.length}.`,
+      `- Every invitation link pointed at \`${write.staff.invitations.origin}/auth/invite\` (the run's \`NEXT_PUBLIC_APP_URL\`).`,
       `- Recorded invitations the project as a whole holds, not scoped to this batch: ${write.verification.counts.invitations_recorded}.`,
-      ...(write.staff.invitations.failures.length
-        ? [
-            '',
-            '| Invitation that did not reach recorded | Provider outcome | Detail |',
-            '| --- | --- | --- |',
-            ...write.staff.invitations.failures.map(
-              (entry) =>
-                `| ${entry.email} | ${entry.outcome} | ${entry.detail ?? ''} |`,
-            ),
-          ]
-        : []),
+      '',
+      '| Invitation | Role | Outcome | Recorded | Detail |',
+      '| --- | --- | --- | --- | --- |',
+      ...write.staff.invitations.recipients.map(
+        (entry) =>
+          `| ${entry.email} | ${entry.role ?? ''} | ${entry.outcome} | ${entry.recorded ? 'yes' : 'no'} | ${entry.detail ?? ''} |`,
+      ),
+      '',
       `- Attachments planned ${write.attachments.planned}, dropped ${write.attachments.dropped.reduce((total, entry) => total + entry.count, 0)}; outcomes: ${write.attachments.outcomes.map((entry) => `${entry.outcome} ${entry.count}`).join(', ') || '(none)'}.`,
       `- Rows counted as converted by the dry run but written with the legacy address only, because the project has no admin unit for the target: **${skippedSummary.rows}**, missing ${
         skippedSummary.codes
@@ -1979,7 +2004,13 @@ export function renderReport(report) {
     '- Property, address and contact rows are written over the administrative (owner) database connection,',
     '  which is not subject to RLS, because the import preserves each legacy author; attachments go through',
     '  the application RPCs as the importing admin and are subject to the shipped limits.',
-    '- This run is authorised for the development project only. Production is a separate, later step.',
+    ...(report.stage
+      ? [
+          report.stage_proven
+            ? `- This run is authorised for the ${stage} project only.`
+            : `- The run declared stage "${report.stage}" and the stage proof refused it, so it wrote nothing.`,
+        ]
+      : ['- This run wrote nothing, so no project is authorised for it.']),
     '',
   );
   return lines.join('\n');
@@ -2082,78 +2113,111 @@ export async function run(argv, dependencies = {}) {
   );
 
   const legacyTrees = new Map();
+  const legacyTreeFailures = new Map();
+  const legacyWardFailures = new Map();
   const conversionCache = new Map();
 
   // The official three-tier tree is loaded only for cities the workbook actually uses. It is the
   // fallback for addresses VietMap cannot place, so an unreachable reference is recorded and the
-  // run continues on VietMap alone: an address whose fallback cannot be consulted keeps its legacy
-  // address with its own counted reason rather than being given a unit this run cannot verify.
+  // run continues on VietMap and the project catalogue: an address whose fallback cannot be
+  // consulted keeps its legacy address with its own counted reason rather than being given a unit
+  // this run cannot verify, and a failure for one province or one ward never discards what loaded.
+  const failureOf = (error) =>
+    error instanceof Error ? error.message : String(error);
   let legacyReferenceError = null;
+  const usedCities = new Set();
+  const cityLabels = new Map();
+  for (const row of master.slice(1)) {
+    const city = text(row?.[index['Thành phố']]);
+    if (!city) continue;
+    const cityKey = adminNameKey(city);
+    usedCities.add(cityKey);
+    if (!cityLabels.has(cityKey)) cityLabels.set(cityKey, city);
+  }
+  let legacyProvinceList = null;
   try {
-    const legacyProvinceList = await fetchImpl(`${OPEN_API}/api/v1/?depth=1`, {
+    const response = await fetchImpl(`${OPEN_API}/api/v1/?depth=1`, {
       signal: AbortSignal.timeout(30000),
-    }).then((response) => {
-      if (!response.ok)
-        throw new Error(
-          `provinces.open-api.vn returned ${response.status} for the legacy province list`,
-        );
-      return response.json();
     });
-    const usedCities = new Set();
-    for (const row of master.slice(1)) {
-      const city = text(row?.[index['Thành phố']]);
-      if (city) usedCities.add(adminNameKey(city));
-    }
+    if (!response.ok)
+      throw new Error(
+        `provinces.open-api.vn returned ${response.status} for the legacy province list`,
+      );
+    const body = await response.json();
+    if (!Array.isArray(body))
+      throw new Error('the legacy province list is not a list');
+    legacyProvinceList = body;
+  } catch (error) {
+    legacyReferenceError = failureOf(error);
+  }
+  if (legacyProvinceList)
     for (const cityKey of usedCities) {
       const province = legacyProvinceList.find(
         (entry) => adminNameKey(entry.name) === cityKey,
       );
       if (!province) continue;
-      const response = await fetchImpl(
-        `${OPEN_API}/api/v1/p/${province.code}?depth=3`,
-        { signal: AbortSignal.timeout(60000) },
-      );
-      if (!response.ok)
-        throw new Error(
-          `provinces.open-api.vn returned ${response.status} for legacy province ${province.code}`,
+      try {
+        const response = await fetchImpl(
+          `${OPEN_API}/api/v1/p/${province.code}?depth=3`,
+          { signal: AbortSignal.timeout(60000) },
         );
-      legacyTrees.set(cityKey, await response.json());
+        if (!response.ok)
+          throw new Error(
+            `provinces.open-api.vn returned ${response.status} for legacy province ${province.code}`,
+          );
+        legacyTrees.set(cityKey, await response.json());
+      } catch (error) {
+        legacyTreeFailures.set(cityKey, failureOf(error));
+      }
     }
-  } catch (error) {
-    legacyTrees.clear();
-    legacyReferenceError =
-      error instanceof Error ? error.message : String(error);
+  if (legacyReferenceError || legacyTreeFailures.size)
     console.error(
-      `official address reference unavailable, continuing on VietMap alone: ${legacyReferenceError}`,
+      `official address reference unavailable, continuing on VietMap and the project catalogue: ${[
+        legacyReferenceError,
+        ...[...legacyTreeFailures].map(
+          ([city, reason]) => `${cityLabels.get(city) ?? city}: ${reason}`,
+        ),
+      ]
+        .filter(Boolean)
+        .join('; ')}`,
     );
-  }
 
   const resolveContext = {
     catalogue,
     reference,
     legacyReference: legacyReferenceError === null,
     legacyTree: (cityKey) => legacyTrees.get(cityKey) ?? null,
+    legacyTreeFailure: (cityKey) => legacyTreeFailures.get(cityKey) ?? null,
     convertLegacyWard: async (code) => {
       if (!conversionCache.has(code)) {
-        const response = await fetchImpl(
-          `${OPEN_API}/api/v2/w/from-legacy/?legacy_code=${code}`,
-          {
-            signal: AbortSignal.timeout(30000),
-          },
-        );
-        if (!response.ok)
-          throw new Error(
-            `provinces.open-api.vn returned ${response.status} for legacy ward ${code}`,
+        try {
+          const response = await fetchImpl(
+            `${OPEN_API}/api/v2/w/from-legacy/?legacy_code=${code}`,
+            {
+              signal: AbortSignal.timeout(30000),
+            },
           );
-        const body = await response.json();
-        conversionCache.set(
-          code,
-          body.map((entry) => ({
-            code: String(entry.ward.code),
-            name: entry.ward.name,
-            province: String(entry.ward.province_code).padStart(2, '0'),
-          })),
-        );
+          if (!response.ok)
+            throw new Error(
+              `provinces.open-api.vn returned ${response.status} for legacy ward ${code}`,
+            );
+          const body = await response.json();
+          conversionCache.set(
+            code,
+            body.map((entry) => ({
+              code: String(entry.ward.code),
+              name: entry.ward.name,
+              province: String(entry.ward.province_code).padStart(2, '0'),
+            })),
+          );
+        } catch (error) {
+          const reason = failureOf(error);
+          conversionCache.set(code, null);
+          legacyWardFailures.set(code, reason);
+          console.error(
+            `official address reference unavailable for legacy ward ${code}, keeping its legacy address: ${reason}`,
+          );
+        }
       }
       return conversionCache.get(code);
     },
@@ -2541,6 +2605,10 @@ export async function run(argv, dependencies = {}) {
       role,
       count: staffPlan.filter((entry) => entry.role === role).length,
     })),
+    accounts: staffPlan.map((entry) => ({
+      email: entry.email,
+      role: entry.role,
+    })),
     silent_admin: staffPlan.find((entry) => entry.silent)?.email ?? null,
     roster_positions: [
       ...new Set(employeeRows.map((row) => row.position).filter(Boolean)),
@@ -2624,6 +2692,15 @@ export async function run(argv, dependencies = {}) {
       legacy_reference_rows: records.filter(
         (record) => record.address_status === 'official_reference_unavailable',
       ).length,
+      legacy_reference_failures: [
+        ...[...legacyTreeFailures].map(
+          ([city, reason]) =>
+            `legacy province tree for ${cityLabels.get(city) ?? city}: ${reason}`,
+        ),
+        ...[...legacyWardFailures].map(
+          ([code, reason]) => `legacy ward ${code}: ${reason}`,
+        ),
+      ],
       sources: [...sources.entries()]
         .sort((a, b) => b[1] - a[1])
         .map(([source, rows]) => ({ source, rows })),
@@ -2701,10 +2778,12 @@ export async function run(argv, dependencies = {}) {
     );
 
   try {
+    report.stage = declaredStage(process.env);
     assertWriteTarget(databaseUrl, process.env);
   } catch (error) {
     return refuse(error instanceof Error ? error.message : String(error));
   }
+  report.stage_proven = true;
 
   let run;
   try {
@@ -3075,6 +3154,10 @@ async function writeProject({
           stated: invitations.filter((entry) => entry.stated).length,
           refused: invitations.filter((entry) => !entry.stated).length,
           recorded: recordedInvitations(sends),
+          already_recorded: invitations.filter(
+            (entry) => entry.stated && entry.state === 'recorded',
+          ).length,
+          origin: invitationOrigin(process.env.NEXT_PUBLIC_APP_URL),
           outcomes: outcomesBy(sends),
           refusals: invitations
             .filter((entry) => !entry.stated)
@@ -3086,6 +3169,7 @@ async function writeProject({
               outcome: entry.outcome,
               detail: entry.detail,
             })),
+          recipients: invitationRecipients(invitations, sends),
         },
       },
       properties,
@@ -3281,7 +3365,7 @@ function printSummary(report) {
   console.log(
     `addresses converted=${report.addresses.converted_rows} refused=${report.addresses.refused_rows}`,
   );
-  if (report.addresses.legacy_reference_unavailable) {
+  if (report.addresses.legacy_reference_rows) {
     console.log(
       `official address reference unavailable: ${report.addresses.legacy_reference_rows} row(s) kept legacy-only and counted as official_reference_unavailable`,
     );

@@ -15,7 +15,8 @@
 // importing admin, so the shipped per-file and per-property limits decide what may be stored.
 //
 // Nothing here reads the Nhân viên password columns, the Login tab, or writes to the sheet or
-// Drive. It refuses to run against a project that is not the development project.
+// Drive. It refuses to run against a project, bucket, account or application that is not the one
+// the stage it declares resolves to.
 import { createHash, createHmac } from 'node:crypto';
 import {
   PutObjectCommand,
@@ -394,6 +395,12 @@ async function findAuthUser({ supabaseUrl, serviceRoleKey }, email) {
 
 // The provider's own invitation request, with the fixed application destination the admin
 // form uses and no company data in editable metadata.
+/** The origin an invitation link points at: the application URL without a trailing slash. */
+export const invitationOrigin = (appUrl) =>
+  String(appUrl ?? '')
+    .trim()
+    .replace(/\/$/, '');
+
 async function inviteByEmail({ supabaseUrl, serviceRoleKey, appUrl }, email) {
   const response = await fetch(`${supabaseUrl}/auth/v1/invite`, {
     method: 'POST',
@@ -405,7 +412,7 @@ async function inviteByEmail({ supabaseUrl, serviceRoleKey, appUrl }, email) {
     body: JSON.stringify({
       email,
       data: {},
-      redirect_to: `${appUrl.replace(/\/$/, '')}/auth/invite`,
+      redirect_to: `${invitationOrigin(appUrl)}/auth/invite`,
     }),
   });
   return { status: response.status, body: await readJson(response) };
@@ -448,11 +455,24 @@ export function isRateLimitResponse({ status }) {
 const DEV_STAGES = new Set(['dev', 'development', 'local']);
 const PRODUCTION_STAGES = new Set(['prod', 'production']);
 
+/** The stage a run declares, normalised; null when it declares none this path supports. */
+export function declaredStage(values = process.env) {
+  const stage = (values.SGN_ENV ?? '').trim().toLowerCase();
+  if (PRODUCTION_STAGES.has(stage)) return 'prod';
+  if (DEV_STAGES.has(stage)) return 'dev';
+  return null;
+}
+
 /**
- * The one production project a production-labelled run may write. It is pinned here rather than
- * read from the environment, so no environment file can relabel another project as production.
+ * Every target a production-labelled run may write: the project, the private bucket, the
+ * Cloudflare account holding it and the application invitations point at. They are pinned here
+ * rather than read from the environment, so no environment file can relabel another project,
+ * another account's storage or another deployment as production.
  */
 export const PRODUCTION_PROJECT_REF = 'zckhbxpatjmdqpnqphgy';
+export const PRODUCTION_R2_BUCKET = 'sgn';
+export const PRODUCTION_R2_ACCOUNT_ID = '88a4769b865b803f85c3f687187b7246';
+export const PRODUCTION_APP_URL = 'https://sgnewhouse.online';
 
 /** The buckets whose rows the write path imports. */
 export const importableBucket = (bucket) =>
@@ -507,15 +527,17 @@ export function projectRefFromSupabaseUrl(supabaseUrl) {
 
 /**
  * The declared stage is a claim every write target has to prove: the run is refused unless the
- * database, the Supabase API that creates Auth users and invitations, and the file bucket all
- * belong to the stage the run declares, before anything is written. A development label on a
- * production target and a production label on any other project are both refused, so the label
- * and the projects it points at are checked against each other rather than trusted.
+ * database, the Supabase API that creates Auth users and invitations, the file bucket, its
+ * account and the application the invitations redirect to all belong to the stage the run
+ * declares, before anything is written. A development label on a production target and a
+ * production label on any other target are both refused, so the label and the targets it points
+ * at are checked against each other rather than trusted.
  */
 export function assertWriteTarget(databaseUrl, values = process.env) {
   const stage = (values.SGN_ENV ?? '').trim().toLowerCase();
-  const production = PRODUCTION_STAGES.has(stage);
-  if (!production && !DEV_STAGES.has(stage))
+  const declared = declaredStage(values);
+  const production = declared === 'prod';
+  if (!declared)
     throw new Error(
       `a write run needs SGN_ENV=dev or prod; it is "${stage || '(unset)'}"`,
     );
@@ -549,12 +571,33 @@ export function assertWriteTarget(databaseUrl, values = process.env) {
     throw new Error(
       `the ${target} R2 bucket is not configured (EXPECTED_R2_BUCKET)`,
     );
+  if (production && expectedBucket !== PRODUCTION_R2_BUCKET)
+    throw new Error(
+      `EXPECTED_R2_BUCKET names ${expectedBucket}, not the production R2 bucket ${PRODUCTION_R2_BUCKET}`,
+    );
   const account = (values.R2_ACCOUNT_ID ?? '').trim();
   const expectedAccount = (values.EXPECTED_R2_ACCOUNT_ID ?? '').trim();
   if (!expectedAccount)
     throw new Error(
       `the ${target} R2 account is not configured (EXPECTED_R2_ACCOUNT_ID)`,
     );
+  if (production && expectedAccount !== PRODUCTION_R2_ACCOUNT_ID)
+    throw new Error(
+      `EXPECTED_R2_ACCOUNT_ID names ${expectedAccount}, not the production R2 account ${PRODUCTION_R2_ACCOUNT_ID}`,
+    );
+  if (production) {
+    const appUrl = (values.NEXT_PUBLIC_APP_URL ?? '').trim();
+    let origin = null;
+    try {
+      origin = new URL(appUrl).origin;
+    } catch {
+      origin = null;
+    }
+    if (origin !== PRODUCTION_APP_URL)
+      throw new Error(
+        `NEXT_PUBLIC_APP_URL names ${appUrl || '(nothing)'}, not the production application ${PRODUCTION_APP_URL} for stage "${stage}"`,
+      );
+  }
   const targets = [
     [
       'IMPORT_DATABASE_URL',
@@ -580,7 +623,7 @@ export function assertWriteTarget(databaseUrl, values = process.env) {
       );
   }
   return {
-    stage: production ? 'prod' : 'dev',
+    stage: declared,
     projectRef: expectedRef,
     bucket,
     account,
@@ -1190,6 +1233,32 @@ export async function sendInvitations({
 export const recordedInvitations = (sends) =>
   sends.filter((entry) => entry.recorded && entry.outcome === 'accepted')
     .length;
+
+/**
+ * Every invitation with the role it was begun for and what became of it: the provider outcome
+ * when it was emailed, `already_recorded` for one settled before the run, `refused` for one the
+ * invitation RPC refused, and `not_sent` for one that was never emailed. `recorded` is the same
+ * predicate as `recordedInvitations`.
+ */
+export const invitationRecipients = (invitations, sends) =>
+  invitations.map((entry) => {
+    const send = sends.find((candidate) => candidate.email === entry.email);
+    return {
+      email: entry.email,
+      role: entry.role,
+      outcome: !entry.stated
+        ? 'refused'
+        : (send?.outcome ??
+          (entry.state === 'recorded' ? 'already_recorded' : 'not_sent')),
+      recorded: Boolean(
+        entry.stated &&
+        (send
+          ? send.recorded && send.outcome === 'accepted'
+          : entry.state === 'recorded'),
+      ),
+      detail: entry.stated ? (send?.detail ?? null) : entry.detail,
+    };
+  });
 
 // ---------------------------------------------------------------- attachments
 

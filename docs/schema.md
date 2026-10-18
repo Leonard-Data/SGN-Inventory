@@ -97,7 +97,7 @@ The seeded province/commune catalog is a reference list, not a property-level ve
 | `private.staging_rows` | Source sheet/physical row, original sanitized payload, issues and disposition; composite key supports reruns |
 | `private.property_source_map` | Reviewed source key → canonical property UUID; ambiguous keys require row-specific keys |
 | `private.import_entity_map` | Source row → destination entity UUID for properties/contacts/files/activity; prevents rerun duplication |
-| `private.file_validation_keys` | Owner-installed per-stage singleton HMAC secret; no client, anonymous or service-role table access |
+| `private.file_validation_keys` | Owner-installed singleton HMAC secret checked by file completion; each stage has its own table, the same key is installed in both today, and no client, anonymous or service-role role can read it |
 
 Rental agreements, monthly dues and manual receipt/refund tracking are included. There is no commission-rate, commission-payout, general accounting ledger or payment-gateway integration. `attribution_reference` is a nonfinancial business reference; the claimant comes from `requested_by`.
 

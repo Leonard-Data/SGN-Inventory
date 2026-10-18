@@ -45,12 +45,17 @@ project of that stage, and `R2_BUCKET` and `R2_ACCOUNT_ID` must be the bucket an
 account its `EXPECTED_R2_BUCKET` and `EXPECTED_R2_ACCOUNT_ID` name, so a same-named bucket in
 another account is refused. `dev`, `development` and `local` mean the development project
 (`DEV_SUPABASE_PROJECT_REF` or `EXPECTED_SUPABASE_PROJECT_REF`); `prod` and `production` mean the
-production project, whose reference is pinned in `scripts/legacy-import-write.mjs`
-(`PRODUCTION_PROJECT_REF`) rather than read from the environment, so no environment file can
-relabel another project as production. The label alone is a claim, so a missing reference, a
-target that names no project, a development label on the production project and a production
-label on any other project all stop the run with a message naming both references, before any
-row, file, invitation or account is written.
+production project, whose project reference, private bucket, Cloudflare account and application
+URL are pinned in `scripts/legacy-import-write.mjs` (`PRODUCTION_PROJECT_REF`,
+`PRODUCTION_R2_BUCKET`, `PRODUCTION_R2_ACCOUNT_ID`, `PRODUCTION_APP_URL`) rather than read from the
+environment, so no environment file can relabel another project, another account's storage or
+another deployment as production; the `EXPECTED_R2_*` declarations must equal the pinned bucket and
+account. Both stages currently write the same private bucket in the same account, so the
+production pin names that shared storage; giving production its own bucket is a code and data
+change, not an environment one. The label alone is a claim, so a missing reference, a target that
+names no project, a development label on the production project and a production label on any
+other target all stop the run with a message naming both values, before any row, file, invitation
+or account is written.
 
 ## The settled rules
 
@@ -67,12 +72,15 @@ row, file, invitation or account is written.
   returns no boundary, the fallback is the published official three-tier → two-tier mapping,
   matched by city **and** district **and** ward together and then by the legacy ward's official
   code; `public.admin_unit_versions` supplies the target unit identity. A ward name alone never
-  selects a commune. Each property keeps its untouched legacy address; a converted current
-  address is added only where a bound was resolved. An unresolved address keeps the legacy row and
-  no current province or commune, and the property needs review. When that official reference
-  cannot be reached at all, the run continues on VietMap alone and reports the limitation: every
-  address VietMap cannot place keeps its legacy row, counted as `official_reference_unavailable`,
-  and nothing is matched by ward name or guessed in its place.
+  selects a commune through that reference. Each property keeps its untouched legacy address; a
+  converted current address is added only where a bound was resolved. An unresolved address keeps
+  the legacy row and no current province or commune, and the property needs review. The official
+  reference is optional: when it cannot be reached, for the province list, one province tree or one
+  ward conversion, the run degrades instead of stopping, records the failure and continues on
+  VietMap and the project's own catalogue. An address whose fallback could not be consulted keeps
+  its legacy row, counted as `official_reference_unavailable`, and nothing is guessed in its place;
+  a ward label that already equals exactly one current commune still converts, because that match
+  reads only the project catalogue. The limitation and every counted row are reported.
 - **Review.** Every imported property starts with `record_review_status = pending`; nothing is
   approved, verified or given a final status by the import. The listing mode comes from the row's
   own sale and rent prices, with the `Loại Hình` label as the fallback. The status comes from the
