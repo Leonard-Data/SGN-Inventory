@@ -112,18 +112,20 @@ begin
 end;
 $$;
 
--- Deliberate merge: manager/admin only, both records named by the caller, same normalised
--- address, the most complete record surviving, and only file rows whose bytes the server has
--- already copied to their new key and attested. Everything happens in one transaction.
+-- Deliberate merge: manager/admin only, both records named by the caller, one connected set of
+-- normalised primary addresses, the most complete record surviving, no open reservation request
+-- stranded, and only file rows whose bytes the server has already copied to their new key and
+-- attested. Everything happens in one transaction.
 create function private.merge_address_properties(p_keep_property_id uuid, p_merge_property_ids uuid[], p_moved_object_ids uuid[], p_move_signature text)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare
   me uuid := private.employee_id();
   target public.properties;
-  keys text[];
   survivor uuid;
   adopted_cover uuid;
   merged jsonb;
+  pending_blockers jsonb;
+  reached integer;
   move_files public.property_files[];
   move_count integer;
   payload text;
@@ -172,15 +174,21 @@ begin
     raise exception 'merge keeps the most complete record' using errcode = 'P0008';
   end if;
 
-  select array_agg(distinct private.address_match_key(a.address_text)) into keys
-    from public.property_addresses a where a.property_id = p_keep_property_id and a.is_primary;
-  if keys is null then
-    raise exception 'merge needs a primary address' using errcode = '23514';
-  end if;
-  if exists (select 1 from unnest(p_merge_property_ids) x
-             where not exists (select 1 from public.property_addresses a
-                               where a.property_id = x and a.is_primary
-                                 and private.address_match_key(a.address_text) = any(keys))) then
+  -- A group the comparison publishes is one connected set over the named records' primary
+  -- addresses, so a survivor whose own address keys are narrower still accepts it. A record
+  -- that reaches no other named record is refused.
+  with recursive named as (
+    select a.property_id as id, private.address_match_key(a.address_text) as key
+    from public.property_addresses a
+    where a.property_id = any(array[p_keep_property_id] || p_merge_property_ids) and a.is_primary
+  ), reach as (
+    select p_keep_property_id as id
+    union
+    select n.id from named n join reach r on true
+    where exists (select 1 from named k where k.id = r.id and k.key = n.key)
+  )
+  select count(*) into reached from reach;
+  if reached <> array_length(p_merge_property_ids,1) + 1 then
     raise exception 'properties do not share an address' using errcode = 'P0009';
   end if;
 
@@ -188,6 +196,22 @@ begin
   if exists (select 1 from public.property_locks
              where property_id = any(p_merge_property_ids) and status = 'approved' and expires_at > now()) then
     raise exception 'reserved property cannot be merged away' using errcode = 'P0014';
+  end if;
+  -- A pending request is somebody's open question: the merge never decides it on their behalf
+  -- and never archives the record it belongs to, which would strand it.
+  if exists (select 1 from public.property_locks
+             where property_id = any(p_merge_property_ids) and status = 'pending') then
+    select jsonb_agg(jsonb_build_object(
+        'propertyCode', p.property_code,
+        'requester', coalesce(e.display_name, ''))
+      order by p.property_code, e.display_name)
+      into pending_blockers
+      from public.property_locks l
+      join public.properties p on p.id = l.property_id
+      left join public.employees e on e.id = l.requested_by
+      where l.property_id = any(p_merge_property_ids) and l.status = 'pending';
+    raise exception 'pending reservation request blocks merge' using
+      errcode = 'P0019', detail = coalesce(pending_blockers::text, '[]');
   end if;
   if exists (select 1 from public.rental_agreements
              where property_id = any(p_merge_property_ids) and status = 'active') then
@@ -229,9 +253,9 @@ begin
     where p.id = any(p_merge_property_ids) and f.upload_status = 'ready'
     order by p.created_at, f.id limit 1;
 
-  -- Owner links move; a pair the survivor already records converges on that single link, one moved
-  -- link per contact keeps the (property_id, contact_id) key, and at most one moved link becomes
-  -- the survivor's primary contact.
+  -- Contact links move; a pair the survivor already records converges on that single link, one
+  -- moved link per contact keeps the (property_id, contact_id) key, and at most one moved link
+  -- becomes the survivor's primary contact.
   select count(*) into links_shared from public.property_contacts l
     where l.property_id = any(p_merge_property_ids)
       and exists (select 1 from public.property_contacts k
@@ -282,7 +306,7 @@ begin
     'keep', jsonb_build_object('id', target.id, 'propertyCode', target.property_code),
     'merged', merged,
     'moved', jsonb_build_object(
-      'files', files_moved, 'ownerLinks', links_moved,
+      'files', files_moved, 'contactLinks', links_moved,
       'alreadyLinked', links_shared, 'history', history_moved));
 end;
 $$;

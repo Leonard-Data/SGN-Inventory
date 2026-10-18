@@ -86,7 +86,7 @@ export type MergeReport = {
   merged: { id: string; propertyCode: string }[];
   moved: {
     files: number;
-    ownerLinks: number;
+    contactLinks: number;
     alreadyLinked: number;
     history: number;
   };

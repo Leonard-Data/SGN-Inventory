@@ -28,6 +28,7 @@ export async function addressDuplicateMergeContract({
   const duplicateFile = 'a2000000-0000-4000-8000-000000000002';
   const keepContact = 'a3000000-0000-4000-8000-000000000001';
   const duplicateContact = 'a3000000-0000-4000-8000-000000000002';
+  const brokerContact = 'a3000000-0000-4000-8000-000000000003';
 
   // Fixture and inspection writes: drop both the role and the request claim, so the employee
   // guard and the immutable-record guards see an owner connection.
@@ -84,13 +85,14 @@ export async function addressDuplicateMergeContract({
   await db.query(
     `insert into public.contacts(id,display_name,phones,contact_type) values
        ($1,'Owner on the kept record','{0901111111}','owner'),
-       ($2,'Owner on the folded record','{0902222222}','owner')`,
-    [keepContact, duplicateContact],
+       ($2,'Owner on the folded record','{0902222222}','owner'),
+       ($3,'Broker on the folded record','{0903333333}','broker')`,
+    [keepContact, duplicateContact, brokerContact],
   );
   await db.query(
     `insert into public.property_contacts(property_id,contact_id,relation,is_primary) values
-       ($1,$2,'owner',true),($3,$4,'owner',true),($5,$4,'owner',true)`,
-    [keep, keepContact, duplicate, duplicateContact, second],
+       ($1,$2,'owner',true),($3,$4,'owner',true),($5,$4,'owner',true),($5,$6,'broker',false)`,
+    [keep, keepContact, duplicate, duplicateContact, second, brokerContact],
   );
   const fileRow = `insert into public.property_files(
       id,property_id,document_type,bucket_id,object_path,original_filename,mime_type,
@@ -243,6 +245,39 @@ export async function addressDuplicateMergeContract({
       '42501',
     ),
   );
+  await asUser(0);
+  const pendingLock = (
+    await db.query('select public.request_property_lock($1,$2) as id', [
+      duplicate,
+      'Customer asked to visit before the records are folded',
+    ])
+  ).rows[0].id;
+  await asUser(2);
+  await check(
+    'a pending request blocks the merge and names the record and the requester',
+    async () => {
+      let blocked;
+      try {
+        await db.query(
+          'select public.merge_address_properties($1,array[$2,$3]::uuid[],array[]::uuid[])',
+          [keep, duplicate, second],
+        );
+      } catch (error) {
+        blocked = error;
+      }
+      assert.equal(blocked?.code, 'P0019');
+      assert.deepEqual(JSON.parse(blocked.detail), [
+        { propertyCode: 'SGN147-B', requester: 'Fixture 0' },
+      ]);
+      assert.deepEqual(await snapshot(), before);
+    },
+  );
+  await asUser(0);
+  await db.query('select public.release_property_lock($1,$2)', [
+    pendingLock,
+    'Requester withdrew before the records were folded',
+  ]);
+  await asUser(2);
 
   const signature = createHmac('sha256', Buffer.from(validationKey, 'hex'))
     .update(
@@ -272,7 +307,7 @@ export async function addressDuplicateMergeContract({
       );
       assert.deepEqual(report.moved, {
         files: 1,
-        ownerLinks: 1,
+        contactLinks: 2,
         alreadyLinked: 0,
         history: 1,
       });
@@ -300,6 +335,16 @@ export async function addressDuplicateMergeContract({
       assert.deepEqual(link, [
         { property_id: keep, is_primary: false },
         { property_id: second, is_primary: true },
+      ]);
+      // A link of any relation moves: the broker link on a folded record is counted and moved.
+      const broker = (
+        await db.query(
+          'select property_id,relation,is_primary from public.property_contacts where contact_id=$1',
+          [brokerContact],
+        )
+      ).rows;
+      assert.deepEqual(broker, [
+        { property_id: keep, relation: 'broker', is_primary: false },
       ]);
       const history = (
         await db.query(
@@ -359,6 +404,74 @@ export async function addressDuplicateMergeContract({
       [keep, duplicate],
       'P0017',
     ),
+  );
+
+  // A record with one primary legacy and one primary current address joins two address keys, so
+  // viewing it publishes a group whose most complete member covers only one of them.
+  const bridgeShared =
+    '5 Hồ Xuân Hương, Phường 6, Quận 3, Thành phố Hồ Chí Minh';
+  const bridgeOther =
+    '5 ho xuan huong, phuong 6, quan 3, thanh pho ho chi minh';
+  const twoAddresses = 'a1000000-0000-4000-8000-000000000005';
+  const bridgeKeep = 'a1000000-0000-4000-8000-000000000006';
+  const farSide = 'a1000000-0000-4000-8000-000000000007';
+  await asOwner();
+  await db.query(
+    `insert into public.properties(id,property_code,listing_mode,property_type,status,
+       sale_price_vnd,land_area_m2,floor_area_m2,notes,ownership_type,created_by)
+     values ($1,'SGN147-E','sale','house','available',6000000000,null,null,null,null,$4),
+            ($2,'SGN147-F','sale','house','available',8000000000,80,160,'Bridge group keeper','individual',$4),
+            ($3,'SGN147-G','sale','house','available',5000000000,null,null,null,null,$4)`,
+    [twoAddresses, bridgeKeep, farSide, employees[0]],
+  );
+  await db.query(
+    `insert into public.property_addresses(property_id,format,address_text,is_primary) values
+       ($1,'legacy',$4,true),($1,'current',$5,true),($2,'legacy',$4,true),($3,'current',$5,true)`,
+    [twoAddresses, bridgeKeep, farSide, bridgeShared, bridgeOther],
+  );
+  await asUser(0);
+  await check(
+    'the comparison publishes a group spanning one record with two addresses',
+    async () => {
+      const bridged = await group(twoAddresses);
+      assert.deepEqual(
+        bridged.members.map((member) => member.propertyCode).sort(),
+        ['SGN147-E', 'SGN147-F', 'SGN147-G'],
+      );
+      assert.equal(bridged.keepId, bridgeKeep);
+    },
+  );
+  await asUser(2);
+  const bridgeReport = (
+    await db.query(
+      'select public.merge_address_properties($1,array[$2,$3]::uuid[],array[]::uuid[]) as report',
+      [bridgeKeep, twoAddresses, farSide],
+    )
+  ).rows[0].report;
+  await check(
+    'the survivor accepts a record that shares the other member’s address',
+    async () => {
+      assert.deepEqual(
+        bridgeReport.merged.map((row) => row.propertyCode),
+        ['SGN147-E', 'SGN147-G'],
+      );
+      assert.deepEqual(bridgeReport.moved, {
+        files: 0,
+        contactLinks: 0,
+        alreadyLinked: 0,
+        history: 0,
+      });
+    },
+  );
+  await check(
+    'the bridged records leave the group after the merge',
+    async () => {
+      assert.equal((await group(bridgeKeep)).members.length, 1);
+      assert.deepEqual(await group(twoAddresses), {
+        keepId: null,
+        members: [],
+      });
+    },
   );
   await asOwner();
 }

@@ -25,9 +25,33 @@ function denied(error: { code?: string }): never {
     : new ApiError(503, 'unavailable');
 }
 
+type PendingBlocker = { propertyCode: string; requester: string };
+
+// Only the records and requesters the merge itself named are forwarded to the browser, never
+// the raw database detail.
+function namedBlockers(details: string | undefined): PendingBlocker[] {
+  if (!details) return [];
+  try {
+    const parsed: unknown = JSON.parse(details);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (row): row is PendingBlocker =>
+        typeof row === 'object' &&
+        row !== null &&
+        typeof (row as PendingBlocker).propertyCode === 'string' &&
+        typeof (row as PendingBlocker).requester === 'string',
+    );
+  } catch {
+    return [];
+  }
+}
+
 // Every refusal the merge can name, so the browser reports the cause instead of a generic
 // failure. An unrecognized failure (a lost response, an outage) stays a 503.
-function mergeRefusal(error: { code?: string }): ApiError | null {
+function mergeRefusal(error: {
+  code?: string;
+  details?: string;
+}): ApiError | null {
   if (error.code === '42501') return new ApiError(403, 'access-denied');
   if (error.code === 'P0002') return new ApiError(404, 'not-found');
   if (error.code === 'P0008') return new ApiError(409, 'merge-target');
@@ -37,6 +61,12 @@ function mergeRefusal(error: { code?: string }): ApiError | null {
   if (error.code === 'P0016' || error.code === 'P0018')
     return new ApiError(409, 'file-move-incomplete');
   if (error.code === 'P0017') return new ApiError(409, 'merge-archived');
+  if (error.code === 'P0019')
+    return new ApiError(
+      409,
+      'pending-reservation',
+      namedBlockers(error.details),
+    );
   if (error.code === '23505') return new ApiError(409, 'merge-conflict');
   if (error.code === '23514') return new ApiError(400, 'invalid-input');
   return null;

@@ -14,13 +14,39 @@ function decimal(value: string | null, locale: Locale): string | null {
 }
 
 // The comparison lists the fields two records can disagree on, in the form the record itself
-// shows them; dimensions pair the frontage and depth with the land area they were taken from.
+// shows them; each recorded frontage and depth is rendered, paired when both exist.
 function dimensions(member: AddressGroupMember, locale: Locale): string | null {
+  const text = messages[locale];
   const frontage = decimal(member.frontageM, locale);
   const depth = decimal(member.depthM, locale);
   const land = decimal(member.landAreaM2, locale);
-  const size = frontage && depth ? `${frontage} × ${depth} m` : null;
+  const size =
+    frontage && depth
+      ? `${frontage} × ${depth} m`
+      : frontage
+        ? `${text.frontage} ${frontage} m`
+        : depth
+          ? `${text.depth} ${depth} m`
+          : null;
   return [size, land ? `${land} m²` : null].filter(Boolean).join(' · ') || null;
+}
+
+type PendingBlocker = { propertyCode: string; requester: string };
+
+// The refusal names the records and requesters the server reported, so a manager can resolve
+// those requests first.
+function blockedBy(details: unknown): string {
+  if (!Array.isArray(details)) return '';
+  return details
+    .filter(
+      (row): row is PendingBlocker =>
+        typeof row === 'object' &&
+        row !== null &&
+        typeof (row as PendingBlocker).propertyCode === 'string' &&
+        typeof (row as PendingBlocker).requester === 'string',
+    )
+    .map((row) => `${row.propertyCode} (${row.requester})`)
+    .join(', ');
 }
 
 // The guarded merge names why it refused, so the browser can say it instead of "unavailable".
@@ -29,6 +55,7 @@ function mergeFailure(
   locale: Locale,
   text: (typeof messages)[Locale],
   groupSize: number,
+  details?: unknown,
 ): string {
   const dt = detailMessages[locale];
   if (code === 'merge-target') return dt.mergeTarget;
@@ -38,6 +65,8 @@ function mergeFailure(
   if (code === 'rental-active') return dt.rentalActive;
   if (code === 'merge-archived') return dt.mergeArchived;
   if (code === 'merge-conflict') return dt.mergeConflict;
+  if (code === 'pending-reservation')
+    return dt.mergePending.replace('{blockers}', blockedBy(details));
   if (code === 'merge-too-large')
     return dt.mergeTooLarge
       .replace('{count}', formatInteger(groupSize, locale))
@@ -141,6 +170,7 @@ export function SharedAddress({
           locale,
           text,
           others.length,
+          problem instanceof RequestError ? problem.details : undefined,
         ),
       );
     } finally {
@@ -214,7 +244,7 @@ export function SharedAddress({
                 .replace('{files}', formatInteger(report.moved.files, locale))
                 .replace(
                   '{links}',
-                  formatInteger(report.moved.ownerLinks, locale),
+                  formatInteger(report.moved.contactLinks, locale),
                 )
                 .replace(
                   '{history}',

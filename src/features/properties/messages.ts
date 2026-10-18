@@ -34,18 +34,20 @@ const vi = {
   mergeStart: 'Gộp hồ sơ',
   mergeConfirm: 'Gộp {merged} vào {keep}?',
   mergeWarning:
-    'Ảnh, tài liệu, lịch sử giá và liên hệ chủ nhà của các hồ sơ được gộp chuyển sang hồ sơ giữ lại. Các hồ sơ còn lại được lưu trữ và không còn hiện là trùng địa chỉ. Ứng dụng không hoàn tác được thao tác này.',
+    'Ảnh, tài liệu, lịch sử giá và liên kết liên hệ của các hồ sơ được gộp chuyển sang hồ sơ giữ lại. Các hồ sơ còn lại được lưu trữ và không còn hiện là trùng địa chỉ. Ứng dụng không hoàn tác được thao tác này.',
   mergeConfirmAction: 'Xác nhận gộp',
   mergeDone: 'Đã gộp {merged} vào {keep}.',
   mergeMoved:
-    'Đã chuyển {files} tệp, {links} liên hệ chủ nhà và {history} mục lịch sử.',
-  mergeShared: 'Liên hệ đã có trên hồ sơ giữ lại: {n}.',
+    'Đã chuyển {files} tệp, {links} liên kết liên hệ và {history} mục lịch sử.',
+  mergeShared: 'Liên kết liên hệ đã có trên hồ sơ giữ lại: {n}.',
   mergeRetired: 'Đã lưu trữ {merged}.',
   mergeTooLarge:
     'Địa chỉ này có {count} hồ sơ khác. Mỗi lần gộp tối đa {limit} hồ sơ.',
   mergeArchived: 'Một hồ sơ đã được gộp trước đó. Mở lại so sánh để cập nhật.',
   mergeConflict:
-    'Không chuyển được hết liên hệ chủ nhà. Chưa có thay đổi nào được lưu.',
+    'Không chuyển được hết liên kết liên hệ. Chưa có thay đổi nào được lưu.',
+  mergePending:
+    'Các hồ sơ đang có yêu cầu đặt chỗ chờ xử lý: {blockers}. Hãy từ chối hoặc duyệt các yêu cầu này trước khi gộp.',
   mergeDenied: 'Chỉ quản lý hoặc quản trị được gộp hồ sơ cùng địa chỉ.',
   mergeTarget:
     'Hồ sơ giữ lại phải là hồ sơ đầy đủ nhất trong nhóm. Mở lại so sánh để cập nhật.',
@@ -97,18 +99,20 @@ const en: Record<keyof typeof vi, string> = {
   mergeStart: 'Merge records',
   mergeConfirm: 'Merge {merged} into {keep}?',
   mergeWarning:
-    'The merged records’ photos, documents, price history and owner links move to the record kept. The merged-away records are archived and stop reporting as duplicates. The app cannot undo this.',
+    'The merged records’ photos, documents, price history and contact links move to the record kept. The merged-away records are archived and stop reporting as duplicates. The app cannot undo this.',
   mergeConfirmAction: 'Confirm merge',
   mergeDone: 'Merged {merged} into {keep}.',
   mergeMoved:
-    'Moved {files} files, {links} owner links and {history} history entries.',
-  mergeShared: 'Owner links already on the kept record: {n}.',
+    'Moved {files} files, {links} contact links and {history} history entries.',
+  mergeShared: 'Contact links already on the kept record: {n}.',
   mergeRetired: 'Archived {merged}.',
   mergeTooLarge:
     'This address holds {count} other records. One merge handles at most {limit}.',
   mergeArchived:
     'One of these records was already merged away. Reopen the comparison.',
-  mergeConflict: 'The owner links could not all be moved. Nothing was saved.',
+  mergeConflict: 'The contact links could not all be moved. Nothing was saved.',
+  mergePending:
+    'These records have pending reservation requests: {blockers}. Reject or approve them before merging.',
   mergeDenied: 'Only a manager or admin can merge records at a shared address.',
   mergeTarget:
     'The record kept must be the most complete one in the group. Reopen the comparison.',
