@@ -442,6 +442,13 @@ export function isRateLimitResponse({ status }) {
 // ---------------------------------------------------------------- database steps
 
 const DEV_STAGES = new Set(['dev', 'development', 'local']);
+const PRODUCTION_STAGES = new Set(['prod', 'production']);
+
+/**
+ * The one production project a production-labelled run may write. It is pinned here rather than
+ * read from the environment, so no environment file can relabel another project as production.
+ */
+export const PRODUCTION_PROJECT_REF = 'zckhbxpatjmdqpnqphgy';
 
 /** The buckets whose rows the write path imports. */
 export const importableBucket = (bucket) =>
@@ -497,13 +504,16 @@ export function projectRefFromSupabaseUrl(supabaseUrl) {
 /**
  * The declared stage is a claim every write target has to prove: the run is refused unless the
  * database, the Supabase API that creates Auth users and invitations, and the file bucket all
- * belong to the development stage, before anything is written.
+ * belong to the stage the run declares, before anything is written. A development label on a
+ * production target and a production label on any other project are both refused, so the label
+ * and the projects it points at are checked against each other rather than trusted.
  */
 export function assertWriteTarget(databaseUrl, values = process.env) {
   const stage = (values.SGN_ENV ?? '').trim().toLowerCase();
-  if (!DEV_STAGES.has(stage))
+  const production = PRODUCTION_STAGES.has(stage);
+  if (!production && !DEV_STAGES.has(stage))
     throw new Error(
-      `this task writes to the development project only; SGN_ENV is "${stage || '(unset)'}"`,
+      `a write run needs SGN_ENV=dev or prod; it is "${stage || '(unset)'}"`,
     );
   const dev = (
     values.DEV_SUPABASE_PROJECT_REF ??
@@ -512,33 +522,45 @@ export function assertWriteTarget(databaseUrl, values = process.env) {
   )
     .trim()
     .toLowerCase();
-  const prod = (values.PROD_SUPABASE_PROJECT_REF ?? '').trim().toLowerCase();
-  if (!/^[a-z]{20}$/.test(dev))
+  if (!production && !/^[a-z]{20}$/.test(dev))
     throw new Error(
       'the development project reference is not configured (DEV_SUPABASE_PROJECT_REF or EXPECTED_SUPABASE_PROJECT_REF)',
     );
-  if (prod && prod === dev)
+  if (!production && dev === PRODUCTION_PROJECT_REF)
     throw new Error(
-      `DEV_SUPABASE_PROJECT_REF and PROD_SUPABASE_PROJECT_REF are both ${dev}`,
+      `the run is labelled "${stage}" and its expected project is the production project ${PRODUCTION_PROJECT_REF}; both references name ${dev}`,
     );
+  const configuredProd = (values.PROD_SUPABASE_PROJECT_REF ?? '')
+    .trim()
+    .toLowerCase();
+  if (configuredProd && configuredProd !== PRODUCTION_PROJECT_REF)
+    throw new Error(
+      `PROD_SUPABASE_PROJECT_REF names ${configuredProd}, not the production project ${PRODUCTION_PROJECT_REF}`,
+    );
+  const expectedRef = production ? PRODUCTION_PROJECT_REF : dev;
+  const target = production ? 'production' : 'development';
   const bucket = (values.R2_BUCKET ?? '').trim();
   const expectedBucket = (values.EXPECTED_R2_BUCKET ?? '').trim();
   if (!expectedBucket)
     throw new Error(
-      'the development R2 bucket is not configured (EXPECTED_R2_BUCKET)',
+      `the ${target} R2 bucket is not configured (EXPECTED_R2_BUCKET)`,
     );
   const account = (values.R2_ACCOUNT_ID ?? '').trim();
   const expectedAccount = (values.EXPECTED_R2_ACCOUNT_ID ?? '').trim();
   if (!expectedAccount)
     throw new Error(
-      'the development R2 account is not configured (EXPECTED_R2_ACCOUNT_ID)',
+      `the ${target} R2 account is not configured (EXPECTED_R2_ACCOUNT_ID)`,
     );
   const targets = [
-    ['IMPORT_DATABASE_URL', projectRefFromDatabaseUrl(databaseUrl), dev],
+    [
+      'IMPORT_DATABASE_URL',
+      projectRefFromDatabaseUrl(databaseUrl),
+      expectedRef,
+    ],
     [
       'NEXT_PUBLIC_SUPABASE_URL',
       projectRefFromSupabaseUrl(values.NEXT_PUBLIC_SUPABASE_URL),
-      dev,
+      expectedRef,
     ],
     ['R2_BUCKET', bucket || null, expectedBucket],
     ['R2_ACCOUNT_ID', account || null, expectedAccount],
@@ -546,14 +568,19 @@ export function assertWriteTarget(databaseUrl, values = process.env) {
   for (const [name, resolved, expected] of targets) {
     if (!resolved)
       throw new Error(
-        `${name} names no target to check; the development target is ${expected}`,
+        `${name} names no target to check; the ${target} target is ${expected}`,
       );
     if (resolved !== expected)
       throw new Error(
-        `${name} names ${resolved}${resolved === prod ? ' (the production project)' : ''}, not the development target ${expected} for stage "${stage}"`,
+        `${name} names ${resolved}${resolved === dev ? ' (the development project)' : ''}, not the ${target} target ${expected} for stage "${stage}"`,
       );
   }
-  return { stage: 'dev', projectRef: dev, bucket, account };
+  return {
+    stage: production ? 'prod' : 'dev',
+    projectRef: expectedRef,
+    bucket,
+    account,
+  };
 }
 
 export async function connect(databaseUrl) {

@@ -85,7 +85,9 @@ const SECOND_TIER =
 // The captain's own account: the one admin, created silently, and the actor every invitation is
 // recorded against. Nobody else is offered the admin role by the import.
 export const SILENT_ADMIN_EMAIL = 'manager.sgnewhouse@gmail.com';
+// Overridable so a run can keep the captain's credentials with the task that created them.
 export const MANAGER_ACCOUNT_FILE =
+  process.env.SGN_MANAGER_ACCOUNT_FILE?.trim() ||
   '/home/sam/agent-orchestrator/config/sgn-manager-account.env';
 
 // ---------------------------------------------------------------- text and numbers
@@ -1988,8 +1990,10 @@ const USAGE = `Legacy workbook importer.
   --folder           override the Drive folder id
 
 A dry run reads only. A write run needs IMPORT_DATABASE_URL, the server-only Supabase and R2
-variables in the environment, and SGN_ENV=dev: this import is authorised for the development
-project only. The key is read from GOOGLE_APPLICATION_CREDENTIALS or ${DEFAULT_KEY_PATH}.`;
+variables in the environment, and SGN_ENV naming the stage it writes: dev (or development, local)
+for the development project, prod (or production) for the production project. Every write target
+has to prove that stage, and a production run may only write the pinned production project. The
+key is read from GOOGLE_APPLICATION_CREDENTIALS or ${DEFAULT_KEY_PATH}.`;
 
 export async function run(argv, dependencies = {}) {
   const options = parseArgs(argv);

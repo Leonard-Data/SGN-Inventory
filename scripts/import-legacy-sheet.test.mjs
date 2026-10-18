@@ -35,6 +35,7 @@ import {
   importableBucket,
   planAttachmentImport,
   planStaffAccounts,
+  PRODUCTION_PROJECT_REF,
   staffRoleFor,
 } from './legacy-import-write.mjs';
 
@@ -523,7 +524,7 @@ test('an unreadable rent cell is quarantined and counted, never thrown', () => {
 
 test('a development run is refused unless every write target is the development one', () => {
   const dev = 'a'.repeat(20);
-  const prod = 'b'.repeat(20);
+  const prod = PRODUCTION_PROJECT_REF;
   const values = {
     SGN_ENV: 'dev',
     DEV_SUPABASE_PROJECT_REF: dev,
@@ -551,9 +552,7 @@ test('a development run is refused unless every write target is the development 
   // A production target behind a development label is refused before any connection is opened,
   // and the message names both references.
   const named = (error) =>
-    error.message.includes(prod) &&
-    error.message.includes(dev) &&
-    error.message.includes('production project');
+    error.message.includes(prod) && error.message.includes(dev);
   assert.throws(
     () =>
       assertWriteTarget(
@@ -561,6 +560,18 @@ test('a development run is refused unless every write target is the development 
         values,
       ),
     named,
+  );
+  // The same production project named as the development one is a label that disagrees with
+  // itself, so it is refused rather than compared.
+  assert.throws(
+    () =>
+      assertWriteTarget(direct, {
+        ...values,
+        DEV_SUPABASE_PROJECT_REF: prod,
+      }),
+    (error) =>
+      error.message.includes('production project') &&
+      error.message.includes(prod),
   );
   assert.throws(
     () =>
@@ -627,8 +638,8 @@ test('a development run is refused unless every write target is the development 
     /not configured \(EXPECTED_R2_ACCOUNT_ID\)/,
   );
   assert.throws(
-    () => assertWriteTarget(direct, { ...values, SGN_ENV: 'prod' }),
-    /development project only/,
+    () => assertWriteTarget(direct, { ...values, SGN_ENV: 'staging' }),
+    /SGN_ENV=dev or prod/,
   );
   assert.throws(
     () =>
@@ -646,9 +657,69 @@ test('a development run is refused unless every write target is the development 
     () =>
       assertWriteTarget(direct, {
         ...values,
-        PROD_SUPABASE_PROJECT_REF: dev,
+        PROD_SUPABASE_PROJECT_REF: 'b'.repeat(20),
       }),
-    /are both/,
+    /not the production project/,
+  );
+});
+
+test('a production run writes only the pinned production project', () => {
+  const dev = 'a'.repeat(20);
+  const pooled = `postgresql://postgres.${PRODUCTION_PROJECT_REF}:secret@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres`;
+  const values = {
+    SGN_ENV: 'prod',
+    DEV_SUPABASE_PROJECT_REF: dev,
+    NEXT_PUBLIC_SUPABASE_URL: `https://${PRODUCTION_PROJECT_REF}.supabase.co`,
+    R2_BUCKET: 'sgn',
+    EXPECTED_R2_BUCKET: 'sgn',
+    R2_ACCOUNT_ID: 'shared-account',
+    EXPECTED_R2_ACCOUNT_ID: 'shared-account',
+  };
+  // The production reference is the one this importer pins, whatever the environment says.
+  assert.deepEqual(assertWriteTarget(pooled, values), {
+    stage: 'prod',
+    projectRef: PRODUCTION_PROJECT_REF,
+    bucket: 'sgn',
+    account: 'shared-account',
+  });
+  assert.deepEqual(
+    assertWriteTarget(pooled, { ...values, SGN_ENV: 'production' }),
+    {
+      stage: 'prod',
+      projectRef: PRODUCTION_PROJECT_REF,
+      bucket: 'sgn',
+      account: 'shared-account',
+    },
+  );
+  const namesProduction = (error) =>
+    error.message.includes(PRODUCTION_PROJECT_REF) &&
+    error.message.includes(dev);
+  // A production label on any other project is refused, before anything is written.
+  assert.throws(
+    () =>
+      assertWriteTarget(
+        `postgresql://postgres:secret@db.${dev}.supabase.co:5432/postgres`,
+        values,
+      ),
+    namesProduction,
+  );
+  assert.throws(
+    () =>
+      assertWriteTarget(pooled, {
+        ...values,
+        NEXT_PUBLIC_SUPABASE_URL: `https://${dev}.supabase.co`,
+      }),
+    namesProduction,
+  );
+  // The bucket the files go to is proved against its own expectation in both stages.
+  assert.throws(
+    () => assertWriteTarget(pooled, { ...values, R2_BUCKET: 'someone-elses' }),
+    (error) =>
+      error.message.includes('someone-elses') && error.message.includes('sgn'),
+  );
+  assert.throws(
+    () => assertWriteTarget(pooled, { ...values, EXPECTED_R2_BUCKET: '' }),
+    /production R2 bucket is not configured/,
   );
 });
 

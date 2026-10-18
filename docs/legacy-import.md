@@ -29,7 +29,7 @@ contains names, phone numbers and addresses.
 | Official address reference | `https://provinces.open-api.vn`, read only |
 | Database (write run) | `IMPORT_DATABASE_URL`, an administrative connection to the target project |
 | Server-side Supabase (write run) | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_APP_URL` |
-| Private bucket (write run) | `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, plus `EXPECTED_R2_BUCKET` and `EXPECTED_R2_ACCOUNT_ID` naming the development bucket and account |
+| Private bucket (write run) | `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, plus `EXPECTED_R2_BUCKET` and `EXPECTED_R2_ACCOUNT_ID` naming the bucket and account of the stage the run declares |
 
 Google requests carry `spreadsheets.readonly` and `drive.readonly` and nothing else. The key, the
 service-role key, the VietMap token and URLs containing them are never printed, logged or included
@@ -39,15 +39,18 @@ columns are identified from it, and the data request covers only the remaining c
 no cell of a password column leaves Google. The Nhân viên password columns are never read, in
 either mode.
 
-A write run also refuses to start unless `SGN_ENV` is `dev`, `development` or `local` **and** every
-write target proves the same stage: `IMPORT_DATABASE_URL` and `NEXT_PUBLIC_SUPABASE_URL` must name
-the development project (`DEV_SUPABASE_PROJECT_REF` or `EXPECTED_SUPABASE_PROJECT_REF`), and
-`R2_BUCKET` and `R2_ACCOUNT_ID` must be the development bucket and its Cloudflare account
-(`EXPECTED_R2_BUCKET`, `EXPECTED_R2_ACCOUNT_ID`), so a same-named bucket in another account is
-refused. The label alone is a claim, so a missing reference, a target that names no project, or a
-target that names the production project stops the run with a message naming both references,
-before any row, file, invitation or account is written. This import is authorised for the
-development project only, and production is a separate, later step.
+A write run also refuses to start unless `SGN_ENV` names the stage it writes and every write
+target proves that stage: `IMPORT_DATABASE_URL` and `NEXT_PUBLIC_SUPABASE_URL` must name the
+project of that stage, and `R2_BUCKET` and `R2_ACCOUNT_ID` must be the bucket and Cloudflare
+account its `EXPECTED_R2_BUCKET` and `EXPECTED_R2_ACCOUNT_ID` name, so a same-named bucket in
+another account is refused. `dev`, `development` and `local` mean the development project
+(`DEV_SUPABASE_PROJECT_REF` or `EXPECTED_SUPABASE_PROJECT_REF`); `prod` and `production` mean the
+production project, whose reference is pinned in `scripts/legacy-import-write.mjs`
+(`PRODUCTION_PROJECT_REF`) rather than read from the environment, so no environment file can
+relabel another project as production. The label alone is a claim, so a missing reference, a
+target that names no project, a development label on the production project and a production
+label on any other project all stop the run with a message naming both references, before any
+row, file, invitation or account is written.
 
 ## The settled rules
 
@@ -110,8 +113,8 @@ development project only, and production is a separate, later step.
   name, is sales. The captain's address (`manager.sgnewhouse@gmail.com`) becomes an admin with no
   invitation email: its Auth user is created through the admin API and its generated password is
   written only to a private file for the captain (`/home/sam/agent-orchestrator/config/
-  sgn-manager-account.env`, mode 0600) — never printed, never logged, never stored in the
-  database. Every other address that is not already an employee receives a real invitation
+  sgn-manager-account.env`, or `SGN_MANAGER_ACCOUNT_FILE` when the run keeps it with its own task;
+  mode 0600) — never printed, never logged, never stored in the database. Every other address that is not already an employee receives a real invitation
   through the application flow (`begin_employee_invitation`, the provider call, then
   `record_employee_invitation_result`), with the captain's account as the actor. The provider
   allows 30 messages an hour, so the send loop waits and retries instead of failing. An invitation
