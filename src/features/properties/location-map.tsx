@@ -67,11 +67,15 @@ export function LocationMap({
     view.current = map;
     const tiles = tileLayer(TILE_URL, { attribution: TILE_ATTRIBUTION });
     let loaded = false;
+    let failed = false;
     tiles.on('tileload', () => {
       loaded = true;
     });
     tiles.on('tileerror', () => {
-      if (!loaded) callbacks.current.onTileError?.();
+      failed = true;
+    });
+    tiles.on('load', () => {
+      if (!loaded && failed) callbacks.current.onTileError?.();
     });
     tiles.addTo(map);
     map.on('click', (event) => {

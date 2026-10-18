@@ -78,28 +78,25 @@ export function PropertyLocation({
           </a>
         </div>
       ) : null}
-      {tilesFailed ? (
-        <p className="field-hint">{dt.mapUnavailable}</p>
-      ) : (
-        <div
-          className="sgn-map-frame"
-          role="img"
-          aria-label={
-            dt.locationRecorded +
-            ': ' +
-            coordinateLabel(point.lat) +
-            ', ' +
-            coordinateLabel(point.lng)
-          }
-        >
-          <LocationMap
-            center={[point.lat, point.lng]}
-            marker={[point.lat, point.lng]}
-            zoom={16}
-            onTileError={() => setTilesFailed(true)}
-          />
-        </div>
-      )}
+      <div
+        className="sgn-map-frame"
+        role="img"
+        aria-label={
+          dt.locationRecorded +
+          ': ' +
+          coordinateLabel(point.lat) +
+          ', ' +
+          coordinateLabel(point.lng)
+        }
+      >
+        <LocationMap
+          center={[point.lat, point.lng]}
+          marker={[point.lat, point.lng]}
+          zoom={16}
+          onTileError={() => setTilesFailed(true)}
+        />
+      </div>
+      {tilesFailed ? <p className="field-hint">{dt.mapUnavailable}</p> : null}
     </div>
   );
 }

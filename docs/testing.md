@@ -325,7 +325,7 @@ Add embedded database regressions only for consumer-visible invariants and run `
 
 ## Property map location acceptance
 
-Scope: the property detail and edit location surfaces. Tiles are OpenStreetMap raster tiles only (`https://tile.openstreetmap.org`), loaded client-side with no API key, no second tile stack and no geocoding service; addresses are never resolved from or written to a map service. OpenStreetMap's tile usage policy allows rate limiting, so a shared office IP or an offline/blocked tile host can produce `tileerror` events mid-session.
+Scope: the property detail and edit location surfaces. Tiles are OpenStreetMap raster tiles only (`https://tile.openstreetmap.org`), loaded client-side with no API key, no second tile stack and no geocoding service; addresses are never resolved from or written to a map service. The originally referenced component (`tonghohin/shadcn-map`) pairs Leaflet with React Leaflet; this repository drives Leaflet directly through a local wrapper instead, because `react-leaflet` and its `@react-leaflet/core` companion are Hippocratic-2.1 (Ethical Source) rather than permissive, and it keeps the single OpenStreetMap raster stack with no API key. OpenStreetMap's tile usage policy allows rate limiting, so a shared office IP or an offline/blocked tile host can produce `tileerror` events mid-session.
 
 | Scenario | Required observation |
 | --- | --- |
@@ -334,7 +334,7 @@ Scope: the property detail and edit location surfaces. Tiles are OpenStreetMap r
 | Place, move and clear a point in the editor | Clicking the map places/moves the marker, a typed latitude and longitude can be applied instead of clicking, clearing removes both coordinates, and the save writes both or neither through the maintenance RPC; range and precision are rejected exactly as the save path rejects them |
 | Location versus correction requests | The location editor is the only place coordinates are set or cleared: the correction report/request draft and its amend path never offer latitude or longitude, so a single coordinate or a half-cleared pair can never be requested; the editor keeps the pair together with the 7-decimal range guidance |
 | Tiles fail to load in the editor | The map stays mounted and the capture surface stays usable: the localized notice says the background could not load, and both clicking the blank map and typing coordinates still set the point; no page reload is needed |
-| Tiles fail to load on the detail page | A single failed tile does not remove a map whose other tiles loaded; a total failure shows the localized notice and keeps the open-in-map link as the usable path |
+| Tiles fail to load on the detail page | A tile error never unmounts the map: the recorded location stays on the map, and the localized notice appears alongside it only when no tile ever loaded and at least one errored; the open-in-map link stays visible either way |
 | Keyboard and screen reader | The interactive map is a labelled group that says what it is for, never a static image; the typed latitude/longitude inputs and their apply action are reachable and operable by keyboard alone, with localized VI/EN labels, hint and invalid-coordinate message |
 | VI/EN switching | Labels, hints, the tile-failure notice and the no-location state are equivalent in both languages and no coordinate value is rewritten |
 
