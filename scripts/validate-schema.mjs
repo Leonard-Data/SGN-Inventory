@@ -576,11 +576,29 @@ await check('completion defensively refuses a pending file that would exceed its
   await fails(completionSql,[racedId,racedId.replace('43000000','83000000'),'image/png',1024,testSha256,createHmac('sha256',Buffer.from(validationKey,'hex')).update(['v1',racedId,limitProperty,employees[0],`${limitProperty}/${racedId}/content`,racedId.replace('43000000','83000000'),'image/png','1024',testSha256].join('|')).digest('hex')],'P0021');
   assert.equal((await db.query('select upload_status from public.property_files where id=$1',[racedId])).rows[0].upload_status,'pending');
 });
+await check('an unvalidated ready image is still confirmed on a property over its class cap',async()=>{
+  const legacyProperty='20000000-0000-4000-8000-000000000012';
+  const legacyFile='46000000-0000-4000-8000-000000000001';
+  const objectId='86000000-0000-4000-8000-000000000001';
+  await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
+  await db.query("insert into public.properties(id,property_code,listing_mode,status,created_by) values($1,'SGN-LEGACY','sale','available',$2)",[legacyProperty,employees[0]]);
+  // Eleven ready images from before the class caps existed: the rows are the authority, so they
+  // all keep their slot and the one without technical confirmation must still be confirmable.
+  await db.query("insert into public.property_files(id,property_id,document_type,object_path,original_filename,mime_type,size_bytes,sha256,purpose,uploaded_by,upload_status,validated_at,validated_object_id) select s.fid,$1::uuid,'other',$2::text||'/'||s.fid::text||'/content','legacy-'||s.n||'.png','image/png',1024,$3,'document',$4,'ready',case when s.n=1 then null else now() end,case when s.n=1 then null else s.fid end from (select ('46000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid as fid,n from generate_series(1,11) n) s",[legacyProperty,legacyProperty,testSha256,employees[0]]);
+  await asUser(0);
+  const signature=createHmac('sha256',Buffer.from(validationKey,'hex')).update(['v1',legacyFile,legacyProperty,employees[0],`${legacyProperty}/${legacyFile}/content`,objectId,'image/png','1024',testSha256].join('|')).digest('hex');
+  await db.query(completionSql,[legacyFile,objectId,'image/png',1024,testSha256,signature]);
+  const confirmed=(await db.query('select upload_status,validated_at,validated_object_id from public.property_files where id=$1',[legacyFile])).rows[0];
+  assert.equal(confirmed.upload_status,'ready');
+  assert.equal(confirmed.validated_object_id,objectId);
+  assert.notEqual(confirmed.validated_at,null);
+  assert.equal((await db.query("select count(*)::int as n from public.property_files where property_id=$1 and upload_status='ready'",[legacyProperty])).rows[0].n,11);
+});
 await check('an abandoned or refused upload stops reserving its class slot',async()=>{
   const slotProperty='20000000-0000-4000-8000-00000000000f';
   await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
   await db.query("insert into public.properties(id,property_code,listing_mode,status,created_by) values($1,'SGN-SLOTS','sale','available',$2)",[slotProperty,employees[0]]);
-  // Four registrations abandoned long ago: their signed upload policy lived 60 seconds, so they
+  // Four registrations abandoned long ago: their signed upload URL lived 60 seconds, so they
   // can no longer receive bytes and must not keep holding slots.
   await db.query("insert into public.property_files(id,property_id,document_type,object_path,original_filename,mime_type,size_bytes,sha256,purpose,uploaded_by,created_at) select s.fid,$1::uuid,'other',$2::text||'/'||s.fid::text||'/content','stale-'||s.n||'.pdf','application/pdf',1024,$3,'document',$4,now()-interval '20 minutes' from (select ('44000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid as fid,n from generate_series(1,4) n) s",[slotProperty,slotProperty,testSha256,employees[0]]);
   await asUser(0);

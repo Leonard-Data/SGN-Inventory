@@ -57,7 +57,7 @@ begin
   if not found then raise exception 'unarchived property required' using errcode = '42501'; end if;
   select id into cat_id from public.document_categories where id = p_category_id;
   if cat_id is null then raise exception 'invalid category' using errcode = '23514'; end if;
-  -- Only a registration still awaiting bytes may receive an upload policy: bytes uploaded under
+  -- Only a registration still awaiting bytes may receive an upload signature: bytes uploaded under
   -- a released or finished row would be stranded outside every cleanup path. The row lock taken
   -- here is what makes that check hold for the rest of the transaction.
   select * into f from public.property_files where id = p_file_id for update;
@@ -67,7 +67,7 @@ begin
   -- The parent row lock above serializes registrations for one property, and pending rows
   -- reserve their slot, so concurrent uploads cannot overshoot the class limit. Rows with no
   -- content type (unvalidated legacy data) belong to neither class and hold no slot. A signed
-  -- upload policy lives 60 seconds, so a registration still pending after 15 minutes cannot
+  -- upload URL lives 60 seconds, so a registration still pending after 15 minutes cannot
   -- receive bytes any more: it stays recorded but stops reserving its slot.
   select count(*) into used from public.property_files
     where property_id = p_property_id and id <> p_file_id
@@ -144,18 +144,21 @@ begin
     raise exception 'immutable object changed' using errcode = '23514';
   end if;
   if f.validated_at is not null then return; end if;
-  -- Defensive re-check of the class limit at the moment a pending file becomes readable,
-  -- with the same 15-minute reservation window as registration.
-  select count(*) into used from public.property_files
-    where property_id = f.property_id and id <> f.id
-      and ((mime_type = 'application/pdf') = (file_kind = 'document'))
-      and (upload_status = 'ready'
-        or (upload_status = 'pending' and created_at > now() - interval '15 minutes'));
-  if file_kind = 'document' and used >= 5 then
-    raise exception 'document limit reached' using errcode = 'P0020';
-  end if;
-  if file_kind = 'image' and used >= 10 then
-    raise exception 'image limit reached' using errcode = 'P0021';
+  -- Defensive re-check of the class limit at the moment a pending file becomes readable, with
+  -- the same 15-minute reservation window as registration. Only that transition consumes a
+  -- slot: a ready legacy row being validated already holds its own, whatever the property caps.
+  if f.upload_status = 'pending' then
+    select count(*) into used from public.property_files
+      where property_id = f.property_id and id <> f.id
+        and ((mime_type = 'application/pdf') = (file_kind = 'document'))
+        and (upload_status = 'ready'
+          or (upload_status = 'pending' and created_at > now() - interval '15 minutes'));
+    if file_kind = 'document' and used >= 5 then
+      raise exception 'document limit reached' using errcode = 'P0020';
+    end if;
+    if file_kind = 'image' and used >= 10 then
+      raise exception 'image limit reached' using errcode = 'P0021';
+    end if;
   end if;
   update public.property_files set upload_status = 'ready',validated_at = now(),validated_object_id = p_object_id where id = f.id;
 end;
