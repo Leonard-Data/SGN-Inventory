@@ -4,6 +4,7 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { messages, type Locale } from '@/i18n/messages';
 import { api, RequestError } from '@/features/employees/api';
 import { useProtectedData } from '@/features/employees/use-protected-data';
+import { LoadingSkeleton } from '@/features/skeleton';
 import type { ContactDetail } from '@/features/property-maintenance/data';
 import {
   targetFields,
@@ -311,9 +312,13 @@ export function ContactDirectory({
       ) : null}
 
       {busy ? (
-        <p className="panel-note" role="status">
-          {text.loading}
-        </p>
+        <LoadingSkeleton
+          label={text.loading}
+          className="panel page-section"
+          shape="table"
+          rows={6}
+          columns={5}
+        />
       ) : null}
 
       <div ref={surface} hidden={!data || busy}>
@@ -485,9 +490,12 @@ export function ContactDirectory({
                               <td colSpan={5}>
                                 <div className="row-editor">
                                   {detailBusy ? (
-                                    <p className="panel-note" role="status">
-                                      {text.loading}
-                                    </p>
+                                    <LoadingSkeleton
+                                      label={text.loading}
+                                      shape="table"
+                                      rows={3}
+                                      columns={2}
+                                    />
                                   ) : null}
                                   {detailError ? (
                                     <div

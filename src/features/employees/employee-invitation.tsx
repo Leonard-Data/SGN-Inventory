@@ -8,6 +8,7 @@ import {
 } from 'react';
 import { messages, label, type Locale } from '@/i18n/messages';
 import { api, RequestError } from './api';
+import { Skeleton } from '@/features/skeleton';
 import {
   EMPLOYEE_ROLES,
   invitationFailure,
@@ -277,7 +278,7 @@ export function EmployeeInvitationForm({
               <dt>{text.employeeInviteState}</dt>
               <dd>
                 {loading ? (
-                  text.loading
+                  <Skeleton h={26} w={132} />
                 ) : (
                   <span className="badge" data-tone={statusTone}>
                     {statusLabel}

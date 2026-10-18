@@ -4,6 +4,7 @@ import type { Json } from '@/types/database';
 import type { Locale } from '@/i18n/messages';
 import { label, messages } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
+import { LoadingSkeleton } from '@/features/skeleton';
 import {
   formatVnd,
   formatDecimal,
@@ -109,7 +110,9 @@ export function History({
         <h2>{text.history}</h2>
       </div>
       <div className="panel-body">
-        {busy ? <p role="status">{text.loading}</p> : null}
+        {busy ? (
+          <LoadingSkeleton label={text.loading} shape="rows" rows={4} />
+        ) : null}
         {error ? (
           <div className="alert" data-tone="danger" role="alert">
             <span>

@@ -5,6 +5,7 @@ import { fileMessages } from './messages';
 import { fileClass, sizeRefusal } from './limits';
 import { IconAction } from '@/features/icon-action';
 import { api, RequestError } from '@/features/employees/api';
+import { LoadingSkeleton } from '@/features/skeleton';
 import { CoverImage } from './cover-image';
 import type {
   PropertyFileList,
@@ -712,7 +713,9 @@ export function Workspace({
             </p>
           ) : null}
         </section>
-        {busy ? <p role="status">{text.loading}</p> : null}
+        {busy ? (
+          <LoadingSkeleton label={text.loading} shape="rows" rows={3} />
+        ) : null}
         {error ? (
           <p role="alert">
             {fileText.errors[error] ?? text.unavailable}{' '}

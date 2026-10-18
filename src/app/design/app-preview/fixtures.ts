@@ -24,6 +24,7 @@ export const summaryFixtures: PropertySummary[] = [
     entryOn: '2023-02-03',
     entrySource: 'legacy',
     ageDays: 1348,
+    createdBy: 'Nguyễn Thu Hà',
     addresses: [
       {
         id: '21111111-1111-4111-8111-111111111111',
@@ -51,6 +52,7 @@ export const summaryFixtures: PropertySummary[] = [
     entryOn: null,
     entrySource: 'unknown',
     ageDays: null,
+    createdBy: null,
     addresses: [
       {
         id: '22222222-2222-4222-8222-222222222222',
@@ -74,6 +76,8 @@ export const summaryFixtures: PropertySummary[] = [
     floors: null,
     direction: null,
     accessType: null,
+    // No resolvable creator: the card shows nothing rather than a placeholder.
+    createdBy: null,
     addresses: [],
   },
 ];

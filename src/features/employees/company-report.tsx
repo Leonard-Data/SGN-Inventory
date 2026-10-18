@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import Link from 'next/link';
 import { messages, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
+import { LoadingSkeleton } from '@/features/skeleton';
 import { vietnamDate } from '@/features/properties/format';
 import type { CompanyActivityReport } from './company-report-data';
 import { activityGroups } from './company-report-groups';
@@ -135,9 +136,13 @@ export function CompanyReport({
       ) : null}
 
       {busy ? (
-        <p className="panel-note" role="status">
-          {text.loading}
-        </p>
+        <LoadingSkeleton
+          label={text.loading}
+          className="panel page-section"
+          shape="table"
+          rows={8}
+          columns={4}
+        />
       ) : null}
 
       <div ref={surface} hidden={!data || busy}>

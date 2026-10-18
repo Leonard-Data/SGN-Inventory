@@ -1,5 +1,6 @@
 import type { Locale } from '@/i18n/messages';
 import { label } from '@/i18n/messages';
+import { memo } from 'react';
 import type { PropertySummary } from './types';
 import { CoverImage } from '@/features/property-files/cover-image';
 import { Plate } from './plate';
@@ -19,7 +20,11 @@ function statusTone(status: string): string {
   return 'neutral';
 }
 
-export function PropertyCard({
+// One card draws a site plate, so the grid is the one place where a parent re-render for an
+// unrelated reason (opening the filter island, changing sort) would redraw every plate.
+// The props are the record, two strings, a boolean and the caller's stable callback, so the
+// shallow comparison skips exactly those re-renders and nothing else.
+export const PropertyCard = memo(function PropertyCard({
   record,
   locale,
   resultLocation,
@@ -110,6 +115,12 @@ export function PropertyCard({
             )}
           </p>
         ) : null}
+        {record.createdBy ? (
+          <p className="card-entry">
+            {label(locale, 'createdBy')}:{' '}
+            <span translate="no">{record.createdBy}</span>
+          </p>
+        ) : null}
         <div className="card-foot">
           <span className="badge" data-tone={statusTone(record.status)}>
             {label(locale, record.status)}
@@ -119,4 +130,4 @@ export function PropertyCard({
       </div>
     </article>
   );
-}
+});

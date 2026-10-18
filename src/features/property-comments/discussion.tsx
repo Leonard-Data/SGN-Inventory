@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { messages, type Locale } from '@/i18n/messages';
 import { api, RequestError } from '@/features/employees/api';
+import { LoadingSkeleton } from '@/features/skeleton';
 import { vietnamTimestamp } from '@/features/properties/format';
 import { COMMENT_MAX_LENGTH, COMMENT_REASON_MAX_LENGTH } from './types';
 import { IconAction } from '@/features/icon-action';
@@ -628,7 +629,9 @@ export function Discussion({
           body has, which left the cards flush against the panel edge. The wrapper gives
           them the same card padding at both widths. */}
       <div className="panel-body">
-        {busy ? <p role="status">{text.loading}</p> : null}
+        {busy ? (
+          <LoadingSkeleton label={text.loading} shape="rows" rows={3} />
+        ) : null}
         {error ? (
           <p role="alert">
             {error === 'not-found'

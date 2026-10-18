@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { label, messages, type Locale } from '@/i18n/messages';
 import { api, RequestError } from '@/features/employees/api';
+import { LoadingSkeleton } from '@/features/skeleton';
 import { vietnamDate, vietnamTimestamp } from '@/features/properties/format';
 import { SALE_REFERENCE_MAX } from './rules';
 import type { SaleCompletionState } from './types';
@@ -170,7 +171,14 @@ export function SaleCompletion({
       data-loaded={state ? 'yes' : 'no'}
       aria-label={text.completedSaleTitle}
     >
-      {loading && !state ? <p role="status">{text.loading}</p> : null}
+      {loading && !state ? (
+        <LoadingSkeleton
+          label={text.loading}
+          className="skeleton-inset"
+          shape="rows"
+          rows={3}
+        />
+      ) : null}
       {loadFailed ? (
         <p role="alert">
           {text.completedSaleLoadFailed}{' '}

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { messages, type Locale } from '@/i18n/messages';
 import { api, RequestError } from '@/features/employees/api';
 import { useProtectedData } from '@/features/employees/use-protected-data';
+import { LoadingSkeleton } from '@/features/skeleton';
 import type { Vendor, VendorLink, VendorPage } from './types';
 
 // The choice line keeps the company name first and adds only recorded details, so two
@@ -118,7 +119,9 @@ export function PropertyVendors({
         <h2>{text.vendorsLink}</h2>
       </div>
       <div className="panel-body">
-        {busy && !data ? <p role="status">{text.loading}</p> : null}
+        {busy && !data ? (
+          <LoadingSkeleton label={text.loading} shape="rows" rows={3} />
+        ) : null}
         {error ? (
           <div className="alert" data-tone="danger" role="alert">
             <span>

@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { messages, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
+import { LoadingSkeleton } from '@/features/skeleton';
 import { mayMaintainVendors } from './directory';
 import { VendorCreateForm } from './create-form';
 import type { VendorCursor, VendorPage } from './types';
@@ -163,9 +164,13 @@ export function VendorDirectory({
       ) : null}
 
       {busy ? (
-        <p className="panel-note" role="status">
-          {text.loading}
-        </p>
+        <LoadingSkeleton
+          label={text.loading}
+          className="panel page-section"
+          shape="table"
+          rows={6}
+          columns={4}
+        />
       ) : null}
 
       <div ref={surface} hidden={!data || busy}>

@@ -1,6 +1,7 @@
 import 'server-only';
 import { ApiError, type RouteContext } from '@/lib/supabase/route';
 import type { AddressSummary, PropertyPage } from './types';
+import { propertyCreators } from './creator';
 import {
   catalogUnitsMatch,
   filterRpcArgs,
@@ -69,11 +70,13 @@ export async function browseProperties(
   const page = rows?.length ? rows[0]!.page_number : 1;
   const summary = { total, page, order };
   if (!rows?.length) return { ...summary, properties: [] };
-  const addresses = await addressSummaries(
-    context,
-    rows.map((row) => row.id),
-    query,
-  );
+  const ids = rows.map((row) => row.id);
+  // Both reads depend only on the page of rows, so they run together: the addresses the cards
+  // draw, and the display name of each record's creator.
+  const [addresses, creators] = await Promise.all([
+    addressSummaries(context, ids, query),
+    creatorNames(context, ids),
+  ]);
   return {
     ...summary,
     properties: rows.map((row) => ({
@@ -94,8 +97,39 @@ export async function browseProperties(
       entrySource: row.entry_source,
       ageDays: row.age_days ?? null,
       addresses: addresses.get(row.id) ?? [],
+      createdBy: creators.get(row.id) ?? null,
     })),
   };
+}
+
+// The creator's display name rides on the same page of records rather than on a second
+// source: the page ids address properties the caller may already read, and the employee's
+// display name is the attribution every active employee can read. Nothing here widens who
+// can see what, and a creator that does not resolve simply contributes no entry.
+async function creatorNames(
+  context: RouteContext,
+  ids: string[],
+): Promise<Map<string, string>> {
+  const { data: records, error } = await context.client
+    .from('properties')
+    .select('id,created_by')
+    .in('id', ids);
+  if (error) throw accessError(error.code);
+  // One pass over the page: the creator ids, de-duplicated, without a second traversal.
+  const creatorIds = [
+    ...new Set(
+      (records ?? []).flatMap((record) =>
+        record.created_by ? [record.created_by] : [],
+      ),
+    ),
+  ];
+  if (!creatorIds.length) return new Map();
+  const { data: employees, error: employeeError } = await context.client
+    .from('employees')
+    .select('id,display_name')
+    .in('id', creatorIds);
+  if (employeeError) throw accessError(employeeError.code);
+  return propertyCreators(records ?? [], employees ?? []);
 }
 
 function accessError(code: string | undefined): ApiError {

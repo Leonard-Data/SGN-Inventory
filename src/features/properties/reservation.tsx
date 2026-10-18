@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { messages, type Locale } from '@/i18n/messages';
 import { api, RequestError } from '@/features/employees/api';
+import { LoadingSkeleton } from '@/features/skeleton';
 import {
   RESERVATION_DAYS_DEFAULT,
   RESERVATION_DAYS_MAX,
@@ -386,7 +387,14 @@ export function Reservation({
       data-loaded={state ? 'yes' : 'no'}
       aria-label={text.reservations}
     >
-      {loading && !state ? <p role="status">{text.loading}</p> : null}
+      {loading && !state ? (
+        <LoadingSkeleton
+          label={text.loading}
+          className="skeleton-inset"
+          shape="rows"
+          rows={3}
+        />
+      ) : null}
       {loadFailed ? (
         <p role="alert">
           {text.reservationLoadFailed}{' '}
