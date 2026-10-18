@@ -1,8 +1,18 @@
 import 'server-only';
 import { ApiError, uuid } from '@/lib/supabase/route';
 import type { RouteContext } from '@/lib/supabase/route';
-import { storedObject } from '@/lib/r2';
+import { deleteObject, storedObject } from '@/lib/r2';
+import {
+  discardExpiredRegistration,
+  expiredPendingRegistration,
+  type CleanupStore,
+} from './upload-cleanup';
 import type { FileRecoveryList, RecoverableFile } from './types';
+
+const cleanup: CleanupStore = {
+  remove: deleteObject,
+  log: (message) => console.error(message),
+};
 
 export async function recoverFiles(
   context: RouteContext,
@@ -36,6 +46,7 @@ export async function recoverFiles(
   if (error) throw new ApiError(503, 'unavailable');
   if (fileId && !files?.length) throw new ApiError(404, 'not-found');
   const uploads: RecoverableFile[] = [];
+  const now = Date.now();
   for (const file of files ?? []) {
     if (
       file.upload_status === 'failed' ||
@@ -48,6 +59,20 @@ export async function recoverFiles(
         objectState: 'unusable',
         error: 'replacement-required',
       });
+      continue;
+    }
+    // The list is the only enumeration of this employee's unfinished uploads, so it is where
+    // an expired registration's bytes are discarded; its row stays for matching reselection.
+    if (fileId === null && expiredPendingRegistration(file, now)) {
+      const discarded = await discardExpiredRegistration(
+        cleanup,
+        file.object_path,
+      );
+      uploads.push(
+        discarded === 'absent'
+          ? { file, objectState: 'absent' }
+          : { file, objectState: 'unknown', error: 'unknown-object-state' },
+      );
       continue;
     }
     // An unreachable or unconfigured store stays 'unknown', never 'absent': bytes must not

@@ -325,18 +325,18 @@ export function Workspace({
         if (generation.current !== version || signal?.aborted) return false;
         update('uploading');
         try {
-          // Direct to private R2 under the short-lived signed PUT; no app-server bytes.
+          // Direct to private R2 under the short-lived signed POST policy, which bounds the
+          // body to this file's class cap; no app-server bytes.
+          const body = new FormData();
+          for (const [name, value] of Object.entries(registration.uploadFields))
+            body.append(name, value);
+          body.append('file', file!);
           await fetch(registration.uploadUrl, {
-            method: 'PUT',
+            method: 'POST',
             cache: 'no-store',
             referrerPolicy: 'no-referrer',
             signal,
-            headers: {
-              'Content-Type': recovery?.file.mime_type ?? file!.type,
-              // Matches the conditional write signed into the URL: an existing object is never replaced.
-              'If-None-Match': '*',
-            },
-            body: file,
+            body,
           });
         } catch (failure) {
           if (signal?.aborted) throw failure;

@@ -35,7 +35,8 @@ function required(name) {
 }
 
 // Pure planning step: existing matching objects are left alone, missing ones are copied, and
-// an object of a different size is reported rather than overwritten.
+// an object of a different size is reported rather than overwritten. A legacy row with no
+// recorded size has nothing to compare, so an existing object counts as present.
 export function planCopy(rows, stored) {
   const copies = [];
   const kept = [];
@@ -43,7 +44,7 @@ export function planCopy(rows, stored) {
   for (const row of rows) {
     const size = stored.get(row.object_path);
     if (size === undefined) copies.push(row);
-    else if (size === row.size_bytes) kept.push(row);
+    else if (row.size_bytes === null || size === row.size_bytes) kept.push(row);
     else conflicts.push({ ...row, storedSize: size });
   }
   const registered = new Set(rows.map((row) => row.object_path));
@@ -127,7 +128,7 @@ async function download(row) {
 
 async function copy(row, { client, bucket }) {
   const bytes = await download(row);
-  if (bytes.length !== row.size_bytes)
+  if (row.size_bytes !== null && bytes.length !== row.size_bytes)
     throw new Error(
       `${row.object_path} changed size in Supabase; re-run later`,
     );
@@ -148,6 +149,13 @@ async function copy(row, { client, bucket }) {
 function report(plan) {
   console.log(`objects already present and matching: ${plan.kept.length}`);
   console.log(`objects to copy: ${plan.copies.length}`);
+  const unmeasured = [...plan.kept, ...plan.copies].filter(
+    (row) => row.size_bytes === null,
+  ).length;
+  if (unmeasured)
+    console.log(
+      `objects with no recorded size: ${unmeasured} (presence only, size not verified)`,
+    );
   console.log(`objects with a size conflict: ${plan.conflicts.length}`);
   for (const row of plan.conflicts)
     console.log(

@@ -1,12 +1,13 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
-  PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { presignedUploadPolicy, type UploadPolicy } from './r2-upload';
 
 // Bearer links stay as short as the previous Storage signed URLs.
 export const signedUrlSeconds = 60;
@@ -68,19 +69,23 @@ export function objectIdentity(etag: string): string {
 export async function presignUpload(
   objectPath: string,
   contentType: string,
-): Promise<string> {
+  maximumBytes: number,
+): Promise<UploadPolicy> {
   const { bucket, client } = storage();
-  return getSignedUrl(
-    client,
-    new PutObjectCommand({
-      Bucket: bucket,
-      Key: objectPath,
-      ContentType: contentType,
-      // Only absent bytes may be uploaded, so a repeated PUT within the URL's lifetime
-      // cannot replace validated content.
-      IfNoneMatch: '*',
-    }),
-    { expiresIn: signedUrlSeconds },
+  return presignedUploadPolicy(client, {
+    bucket,
+    objectPath,
+    contentType,
+    maximumBytes,
+    expiresIn: signedUrlSeconds,
+  });
+}
+
+// Only a pending registration's bytes are ever removed; the row itself is retained.
+export async function deleteObject(objectPath: string): Promise<void> {
+  const { bucket, client } = storage();
+  await client.send(
+    new DeleteObjectCommand({ Bucket: bucket, Key: objectPath }),
   );
 }
 

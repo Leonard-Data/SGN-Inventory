@@ -420,18 +420,20 @@ Prepare sanitized fixtures through authorized administration:
 
 ### R2 storage cutover (not yet executed)
 
-Property file bytes now live in a private Cloudflare R2 bucket reached only through short-lived presigned URLs. None of the following has been run: the embedded schema harness proves the database caps and the unit tests prove the class/limit and read-path ordering, but no live bucket, presigned URL, browser upload or hosted copy has been exercised.
+Property file bytes now live in a private Cloudflare R2 bucket reached only through short-lived presigned URLs. None of the following has been run: the embedded schema harness proves the database caps and the unit tests prove the class/limit, read-path ordering, signed upload policy bounds and upload-cleanup behaviour, but no live bucket, presigned URL, browser upload or hosted copy has been exercised.
 
 | Scenario | Required observation |
 | --- | --- |
-| Register and upload through the browser | Bytes appear in the private R2 bucket under `<property_uuid>/<file_uuid>/content`; the application server answers no request carrying file bytes; the presigned `PUT` and `GET` links stop working after about 60 seconds |
+| Register and upload through the browser | Bytes appear in the private R2 bucket under `<property_uuid>/<file_uuid>/content`; the application server answers no request carrying file bytes; the presigned `POST` form and `GET` links stop working after about 60 seconds |
 | Architected read boundary on an archived property | A non-reviewer receives `404` from the signed endpoint and no URL exists; a reviewer obtains a working 60-second URL after the same RLS-checked record read |
-| Missing or partial `R2_*` configuration | Register, completion, recovery and signed-open fail closed with `503`/`unavailable`; the server log names the missing variables; nothing falls back to Supabase Storage |
-| Bucket CORS rule missing | Browser upload fails with an opaque CORS error rather than a replaced object; adding the app origin, `GET`/`PUT` and the `content-type`/`if-none-match` headers makes the same upload succeed |
-| Repeated `PUT` to a signed upload URL | The second write is refused (`412`) and the object keeps the bytes that completion validated; the record and object stay unchanged |
+| Missing or partial `R2_*` configuration | Register, completion and signed-open fail closed with `503`/`unavailable`, while recovery answers `200` with `unknown` states; the server log names the missing variables; nothing falls back to Supabase Storage |
+| Bucket CORS rule missing | Browser upload fails with an opaque CORS error; adding the app origin, `GET`/`POST` and the `content-type` header makes the same upload succeed |
+| Oversized body against a signed upload form | R2 rejects a document form body over 20 MiB and an image form body over 5 MiB with no object stored, before completion is reached; a body inside the cap uploads normally |
+| Refused completion | The stored object is gone afterwards (the next attempt re-uploads), the row stays `failed`, the class slot is free for a new registration, and a refused completion never deletes a ready file's bytes |
+| Expired pending registration | The workspace recovery list reports it `absent` and its bytes are gone from the bucket, while its `property_files` row stays and reselecting the same content reuses its UUID/path |
 | Per-property caps | A sixth document and an eleventh image are refused with the localized limit message and leave no row or object; the cover photo counts inside the 10 images; 20 MiB documents and 5 MiB images accept, one byte more refuses |
-| Retention | Clearing the cover, recategorizing a file and retrying completion never delete the R2 object or the row: the attachment stays readable |
-| Copy script against the development project | Dry run lists what it would copy and copies nothing; `--apply` copies every registered key, then the verification pass reports the whole registered set present with matching sizes; the Supabase bucket still holds every object afterwards |
+| Retention | Clearing the cover, recategorizing a file and retrying completion never delete a ready file's R2 object or the row: the attachment stays readable |
+| Copy script against the development project | Dry run lists what it would copy and copies nothing; `--apply` copies every registered key, then the verification pass reports the whole registered set present with matching sizes, treats a legacy row with no recorded size as present, and copies nothing less; the Supabase bucket still holds every object afterwards |
 
 Add embedded database regressions only for consumer-visible invariants and run `npm run test:schema` for schema/workflow changes. Browser, real Data API/Storage/RLS and separate-session contention remain distinct proof. Record sanitized observations without tokens, signed URLs, private source payloads or customer records. Never run destructive probes on legacy or real objects or infer cleanup authority.
 

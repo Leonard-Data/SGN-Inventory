@@ -2,13 +2,15 @@ import 'server-only';
 import { createHash, createHmac } from 'node:crypto';
 import { ApiError, uuid, type RouteContext } from '@/lib/supabase/route';
 import {
+  deleteObject,
   objectIdentity,
   presignUpload,
   storedBytes,
   storedObject,
 } from '@/lib/r2';
 import { contentMime, fileMimeTypes, maximumFileBytes } from './content';
-import { fileClass, sizeRefusal } from './limits';
+import { fileClass, fileLimits, sizeRefusal } from './limits';
+import { discardRefusedCompletion } from './upload-cleanup';
 import type { DocumentCategoryList, FileRegistrationResult } from './types';
 import type { Employee } from '@/features/employees/types';
 
@@ -108,11 +110,18 @@ export async function registerFile(
   )
     throw new ApiError(503, 'unavailable');
   // The registration (and its property-scoped class limit) committed before any URL exists.
-  // The browser then uploads the bytes straight to private R2; the server never sees them.
+  // The browser then uploads the bytes straight to private R2 under a policy that bounds the
+  // body to this file's class cap; the server never sees them.
+  const policy = await presignUpload(
+    data.objectPath,
+    body.mimeType,
+    fileLimits[kind].maximumBytes,
+  );
   return {
     fileId: data.fileId,
     objectPath: data.objectPath,
-    uploadUrl: await presignUpload(data.objectPath, body.mimeType),
+    uploadUrl: policy.url,
+    uploadFields: policy.fields,
   };
 }
 
@@ -125,10 +134,30 @@ export async function validateAndCompleteFile(
   try {
     return await completeFile(context, propertyId, fileId, employee);
   } catch (error) {
-    // A refused completion is terminal for these bytes, so the registration stops
-    // reserving its class slot. Transient failures stay pending for a retry.
+    // A refused completion is terminal for these bytes, so the stored object is discarded and
+    // the registration stops reserving its class slot. Transient failures stay pending.
     if (error instanceof ApiError && error.status === 400)
-      await context.client.rpc('fail_property_upload', { p_file_id: fileId });
+      await discardRefusedCompletion({
+        remove: deleteObject,
+        log: (message) => console.error(message),
+        pendingOwnerPath: async () => {
+          const { data } = await context.client
+            .from('property_files')
+            .select('object_path,upload_status,uploaded_by')
+            .eq('id', fileId)
+            .eq('property_id', propertyId)
+            .maybeSingle();
+          return data?.upload_status === 'pending' &&
+            data.uploaded_by === employee.id
+            ? data.object_path
+            : null;
+        },
+        fail: async () => {
+          await context.client.rpc('fail_property_upload', {
+            p_file_id: fileId,
+          });
+        },
+      });
     throw error;
   }
 }

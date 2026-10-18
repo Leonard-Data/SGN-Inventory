@@ -49,7 +49,7 @@ src/
   features/employees/          # Membership guard, auth screens/shell/controls, protected state
   features/properties/         # Bounded queries, details, page views and formatting
   features/property-files/     # Private file read workspace, types, per-property limits, presigned R2 links
-  lib/r2.ts                     # Server-only private bucket client: presigned PUT/GET, object metadata/bytes
+  lib/r2.ts                     # Server-only private bucket client: presigned POST policy/GET, deletion, metadata/bytes
   features/property-maintenance/ # Create/edit maintenance, address/contact forms, history
   features/corrections/        # Correction submission, queue and amendment rendering
   features/property-comments/  # Shared Property discussion, submission-key recovery, paging and comment removal

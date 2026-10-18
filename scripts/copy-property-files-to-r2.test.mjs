@@ -53,3 +53,21 @@ test('the verification pass compares key sets, not only sizes', () => {
   assert.deepEqual(plan.unregistered, ['property-a/orphan/content']);
   assert.equal(plan.kept.length, 1);
 });
+
+test('a legacy row with no recorded size is copied, and never blocks the run', () => {
+  const rows = [row('property-a/file-1/content', null)];
+  const missing = planCopy(rows, new Map());
+  assert.deepEqual(
+    missing.copies.map((entry) => entry.object_path),
+    ['property-a/file-1/content'],
+  );
+  assert.deepEqual(missing.conflicts, []);
+
+  const present = planCopy(
+    rows,
+    new Map([['property-a/file-1/content', 4096]]),
+  );
+  assert.deepEqual(present.copies, []);
+  assert.deepEqual(present.conflicts, []);
+  assert.equal(present.kept.length, 1);
+});
