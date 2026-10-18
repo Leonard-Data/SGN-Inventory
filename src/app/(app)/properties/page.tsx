@@ -6,8 +6,7 @@ export default async function Properties({
 }: {
   searchParams: Promise<{
     query?: string;
-    after?: string;
-    trail?: string;
+    page?: string;
     sort?: string;
     status?: string;
     mode?: string;
@@ -27,16 +26,16 @@ export default async function Properties({
   const values: [string, string][] = [];
   for (const [key, value] of Object.entries(params))
     if (typeof value === 'string') values.push([key, value]);
+  const search = new URLSearchParams(values);
   return (
     <Inventory
       initialLocale={locale}
       initialQuery={params.query ?? ''}
-      after={params.after ?? null}
-      trail={params.trail ?? ''}
-      // The supplied ordering and filters pass through unchanged so the read rejects an
-      // unknown value instead of silently browsing different inventory.
+      // The supplied ordering, page and filters pass through unchanged so the read rejects an
+      // unknown or non-numeric value instead of silently browsing a different page of inventory.
       sort={params.sort ?? null}
-      filters={inventoryFilters(new URLSearchParams(values))}
+      page={params.page ?? null}
+      filters={inventoryFilters(search)}
     />
   );
 }

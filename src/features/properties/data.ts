@@ -1,6 +1,6 @@
 import 'server-only';
-import { ApiError, uuid, type RouteContext } from '@/lib/supabase/route';
-import type { AddressSummary, PropertyPage, PropertySummary } from './types';
+import { ApiError, type RouteContext } from '@/lib/supabase/route';
+import type { AddressSummary, PropertyPage } from './types';
 import {
   catalogUnitsMatch,
   filterRpcArgs,
@@ -9,21 +9,17 @@ import {
   type InventoryFilters,
 } from './filters';
 import {
-  ageCursorArgs,
-  decodeAgeCursor,
-  encodeAgeCursor,
-  inventoryPage,
   INVENTORY_PAGE_SIZE,
   isInventoryOrder,
+  parseInventoryPaging,
   type InventoryOrder,
-} from './age-cursor';
+} from './paging';
 
 export async function browseProperties(
   context: RouteContext,
   params: URLSearchParams,
 ): Promise<PropertyPage> {
   const query = params.get('query') ?? '';
-  const after = params.get('after');
   const sort = params.get('sort');
   if ([...query].length > 120) throw new ApiError(400, 'query-too-long');
   if (sort !== null && !isInventoryOrder(sort))
@@ -32,8 +28,14 @@ export async function browseProperties(
   // different inventory than the one the address describes.
   const filters = parseInventoryFilters(params);
   if (!filters.ok) throw new ApiError(400, 'invalid-input');
+  // The page number is read the same way: a mangled, zero or unsupported value is refused rather
+  // than quietly served as a different page than the address states.
+  const paging = parseInventoryPaging(params);
+  if (!paging.ok) throw new ApiError(400, 'invalid-input');
   const allowed = [
-    ...(sort === null ? ['query', 'after'] : ['query', 'after', 'sort']),
+    'query',
+    'page',
+    ...(sort === null ? [] : ['sort']),
     ...INVENTORY_FILTER_KEYS,
   ];
   if ([...params.keys()].some((key) => !allowed.includes(key)))
@@ -45,29 +47,35 @@ export async function browseProperties(
   // The contact parameter names a recorded Contact the caller may read; an unknown or unreadable
   // identifier is refused rather than applied as a contact with no linked property.
   await assertContact(context, filters.filters);
-  // The chronological views are a distinct bounded read over eligible inventory; the ordinary
-  // UUID-ordered browse keeps serving the full unarchived inventory.
-  if (sort)
-    return listInventoryByAge(context, sort, query, after, filters.filters);
-  if (after !== null && !uuid(after)) throw new ApiError(400, 'invalid-input');
+  const order: InventoryOrder | null = sort;
+  // One filtered read returns the matching total beside this page of rows. The ordering is the
+  // argument, so the ordinary browse and the eligible chronology share one predicate: a count
+  // that could include a row this page would not show is not expressible here.
   const { data: rows, error } = await context.client
-    .rpc('search_properties', {
+    .rpc('page_inventory', {
+      p_order: order,
       p_query: query,
-      p_limit: 30,
+      p_page: paging.paging.page,
+      p_page_size: INVENTORY_PAGE_SIZE,
       ...filterRpcArgs(filters.filters),
-      ...(after ? { p_after: after } : {}),
     })
     .select(
-      'id,property_code,listing_mode,status,cover_file_id,frontage_m::text,depth_m::text,land_area_m2::text,floor_area_m2::text,floors,direction,access_type',
+      'total_count,page_number,id,property_code,listing_mode,status,cover_file_id,frontage_m,depth_m,land_area_m2,floor_area_m2,floors,direction,access_type,entry_on,entry_source,age_days',
     );
   if (error) throw accessError(error.code);
-  if (!rows?.length) return { properties: [], nextCursor: null };
+  // The read answers every page of a non-empty result set, so no rows means the filtered set is
+  // empty: the total is zero and the pager states page one of one.
+  const total = rows?.length ? rows[0]!.total_count : 0;
+  const page = rows?.length ? rows[0]!.page_number : 1;
+  const summary = { total, page, order };
+  if (!rows?.length) return { ...summary, properties: [] };
   const addresses = await addressSummaries(
     context,
     rows.map((row) => row.id),
     query,
   );
   return {
+    ...summary,
     properties: rows.map((row) => ({
       id: row.id,
       propertyCode: row.property_code,
@@ -82,70 +90,11 @@ export async function browseProperties(
       floors: row.floors ?? null,
       direction: row.direction ?? null,
       accessType: row.access_type ?? null,
+      entryOn: row.entry_on ?? null,
+      entrySource: row.entry_source,
+      ageDays: row.age_days ?? null,
       addresses: addresses.get(row.id) ?? [],
     })),
-    nextCursor: rows.length === 30 ? rows[rows.length - 1]!.id : null,
-  };
-}
-
-// The eligible oldest-first/newest-first inventory read. The database orders and ages the rows
-// in Vietnam time and returns the date+identity key; the browser only carries that key.
-async function listInventoryByAge(
-  context: RouteContext,
-  order: InventoryOrder,
-  query: string,
-  after: string | null,
-  filters: InventoryFilters,
-): Promise<PropertyPage> {
-  const decoded = decodeAgeCursor(after);
-  if (!decoded.ok) throw new ApiError(400, 'invalid-input');
-  const { data: rows, error } = await context.client.rpc(
-    'list_inventory_by_age',
-    {
-      p_direction: order,
-      p_query: query,
-      // One lookahead row beyond the exposed page decides whether a next page exists.
-      p_limit: INVENTORY_PAGE_SIZE + 1,
-      ...filterRpcArgs(filters),
-      ...ageCursorArgs(decoded.cursor),
-    },
-  );
-  if (error) throw accessError(error.code);
-  const { page, hasMore } = inventoryPage(rows ?? []);
-  if (!page.length) return { order, properties: [], nextCursor: null };
-  const addresses = await addressSummaries(
-    context,
-    page.map((row) => row.id),
-    query,
-  );
-  const properties: PropertySummary[] = page.map((row) => ({
-    id: row.id,
-    propertyCode: row.property_code,
-    listingMode: row.listing_mode,
-    status: row.status,
-    coverFileId: row.cover_file_id ?? null,
-    frontageM: row.frontage_m ?? null,
-    depthM: row.depth_m ?? null,
-    landAreaM2: row.land_area_m2 ?? null,
-    floorAreaM2: row.floor_area_m2 ?? null,
-    floors: row.floors ?? null,
-    direction: row.direction ?? null,
-    accessType: row.access_type ?? null,
-    entryOn: row.entry_on ?? null,
-    entrySource: row.entry_source,
-    ageDays: row.age_days ?? null,
-    addresses: addresses.get(row.id) ?? [],
-  }));
-  const last = properties[properties.length - 1]!;
-  return {
-    order,
-    properties,
-    // A lookahead row beyond this page means a following page exists; the cursor is opaque to
-    // the browser and carries the ordering section, so an unknown-date page continues from its
-    // own identity.
-    nextCursor: hasMore
-      ? encodeAgeCursor({ entryOn: last.entryOn ?? null, id: last.id })
-      : null,
   };
 }
 

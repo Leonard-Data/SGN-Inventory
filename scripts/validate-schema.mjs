@@ -17,6 +17,7 @@ import { rankingContract } from './ranking-contract.mjs';
 import { priceHistoryContract } from './price-history-contract.mjs';
 import { inventoryAgeContract } from './inventory-age-contract.mjs';
 import { inventoryFilterContract } from './inventory-filter-contract.mjs';
+import { inventoryPagingContract } from './inventory-paging-contract.mjs';
 import { vendorContract } from './vendor-contract.mjs';
 import { contactDirectoryContract } from './contact-directory-contract.mjs';
 import { propertyVendorLinkContract } from './property-vendor-links-contract.mjs';
@@ -77,7 +78,7 @@ await check('inactive employee directory read denied',async()=>assert.equal((awa
 await check('inactive RPC denied',()=>fails('select public.request_property_lock($1,$2)',[property,'Deal agreed with customer'],'42501'));
 await asUser(0);
 await check('active salesperson can read inventory',async()=>assert.equal((await db.query('select * from public.properties')).rows.length,2));
-await check('accent insensitive legacy address search',async()=>assert.equal((await db.query("select * from public.search_properties('ly thuong kiet')")).rows.length,1));
+await check('accent insensitive legacy address search',async()=>assert.equal((await db.query("select * from public.page_inventory(p_query => 'ly thuong kiet')")).rows.length,1));
 await check('salesperson cannot bypass revision RPC for another creator property',()=>fails("update public.properties set notes='change' where id=$1 returning id",[other],'42501'));
 await check('salesperson cannot mark property sold',()=>fails("update public.properties set status='sold' where id=$1",[property],'42501'));
 await check('salesperson cannot grant admin role',async()=>assert.equal((await db.query("update public.employees set role='admin' where id=$1 returning id",[employees[0]])).rows.length,0));
@@ -134,7 +135,7 @@ await db.query(maintainSql,[other,'mapping',verifiedId,verifiedRev,verifiedChang
 await check('analytics uses canonical verified unit name',async()=>assert.ok((await db.query('select * from public.v_admin_inventory_by_area')).rows.some(r=>r.current_commune_label==='Fixture Commune')));
 // The form keeps the official selection alone, so search must reach that address through the
 // official unit name even though no written source label was recorded for it.
-await check('address search reaches an official unit name with no source label',async()=>assert.equal((await db.query("select * from public.search_properties('Fixture Commune')")).rows.length,1));
+await check('address search reaches an official unit name with no source label',async()=>assert.equal((await db.query("select * from public.page_inventory(p_query => 'Fixture Commune')")).rows.length,1));
 await asUser(0);
 await check('salesperson admin analytics return no rows',async()=>assert.equal((await db.query('select * from public.v_admin_inventory_by_area')).rows.length,0));
 await asUser(1);
@@ -427,12 +428,12 @@ await db.query("insert into public.properties(id,property_code,listing_mode,stat
 await db.query("insert into public.property_addresses(property_id,format,address_text) values($1,'legacy',$3),($2,'legacy',$4)",[literalProperty,wildcardControl,'Nhà 50%_ Nguyễn Trãi \\ '+ '%'.repeat(120),'Nhà 500X Nguyễn Trãi X control']);
 await asUser(0);
 await check('search treats percent and underscore as literal with excluded controls',async()=>{
-  for(const query of ['50%','%_','%_CODE']) assert.deepEqual((await db.query('select id from public.search_properties($1)',[query])).rows.map(row=>row.id),[literalProperty]);
+  for(const query of ['50%','%_','%_CODE']) assert.deepEqual((await db.query('select id from public.page_inventory(p_query => $1)',[query])).rows.map(row=>row.id),[literalProperty]);
 });
-await check('literal backslash is not an escape supplied by caller',async()=>assert.deepEqual((await db.query('select id from public.search_properties($1)',['\\'])).rows.map(row=>row.id),[literalProperty]));
-await check('120 literal characters remain permitted after SQL escaping',async()=>assert.deepEqual((await db.query('select id from public.search_properties($1)',['%'.repeat(120)])).rows.map(row=>row.id),[literalProperty]));
-await check('oversized raw query remains rejected by search',async()=>assert.deepEqual((await db.query('select id from public.search_properties($1)',['%'.repeat(121)])).rows,[]));
-await check('address search is contiguous, not reordered tokens',async()=>assert.deepEqual((await db.query('select id from public.search_properties($1)',['trai nguyen'])).rows,[]));
+await check('literal backslash is not an escape supplied by caller',async()=>assert.deepEqual((await db.query('select id from public.page_inventory(p_query => $1)',['\\'])).rows.map(row=>row.id),[literalProperty]));
+await check('120 literal characters remain permitted after SQL escaping',async()=>assert.deepEqual((await db.query('select id from public.page_inventory(p_query => $1)',['%'.repeat(120)])).rows.map(row=>row.id),[literalProperty]));
+await check('oversized raw query is refused, never read as empty inventory',()=>fails('select id from public.page_inventory(p_query => $1)',['%'.repeat(121)],'22023'));
+await check('address search is contiguous, not reordered tokens',async()=>assert.deepEqual((await db.query('select id from public.page_inventory(p_query => $1)',['trai nguyen'])).rows,[]));
 await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
 const archivedProperty='20000000-0000-4000-8000-000000000006';
 const archivedViewKey='80000000-0000-4000-8000-000000000001';
@@ -758,6 +759,8 @@ await rankingContract({db,asUser,check,fails,employees});
 await inventoryAgeContract({db,asUser,check,fails,employees});
 // Advance Filter and Search Island: the advanced status/mode/type/price/area inventory filters.
 await inventoryFilterContract({db,asUser,check,fails,employees});
+// Ticket #140: the counted, offset-paged inventory read that replaced the cursor walks.
+await inventoryPagingContract({db,asUser,check,fails,employees});
 // Seeded Vietnamese province/city and ward/commune reference catalogue.
 await referenceCatalogContract({db,asUser,check,fails,employees,root});
 // Ticket #35: reviewer-only province activity grouped by latest verified primary province.

@@ -108,7 +108,7 @@ The confirmed journey is: an invited, active employee signs in → searches a le
 ### Search and read-only details
 
 - Use accent-insensitive contiguous-substring legacy-address search. Treat `%` and `_` literally; do not offer fuzzy or reordered-token matching. Show the matching address format and verification state without inventing a current ward mapping.
-- Retain the contracted 30-row default page, UUID cursor and 120-character query validation. Bound address-summary queries to the current page.
+- Retain the contracted fixed 30-row page with the stated matching total, page-number paging and 120-character query validation. Bound address-summary queries to the current page.
 - Show property code, listing mode, physical type, access type, inventory/review/legal statuses, prices, dimensions, original legacy address and current address when present, with verification labels. Missing data remains visibly unknown.
 - Show all linked owner/broker contacts, their relationship, primary marker and names. Do not present owner phone numbers automatically in the detail's contact rows; owner-contact disclosure follows the deliberate disclosure flow owned by issue #29. Do not fabricate missing contact relationships.
 - Detail opens record idempotent page views through the documented activity RPC, never physical visits. UI retries or language switches must not create duplicate opens. A deliberate owner-contact disclosure commits one `owner_contact_access` event and reports one property per employee/Vietnam day; the Call link and language switching never add credit.

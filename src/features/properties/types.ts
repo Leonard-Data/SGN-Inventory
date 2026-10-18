@@ -5,7 +5,7 @@ export type AddressSummary = {
   mappingStatus: string;
   isPrimary: boolean;
 };
-import type { InventoryOrder } from './age-cursor';
+import type { InventoryOrder } from './paging';
 
 export type PropertySummary = {
   id: string;
@@ -14,14 +14,15 @@ export type PropertySummary = {
   status: string;
   addresses: AddressSummary[];
   coverFileId: string | null;
-  // Present only in the chronological inventory views. An absent field means the ordering does
-  // not apply here; null entryOn with entrySource 'unknown' is the explicit unknown date.
+  // The recorded original entry date and the database-computed age, returned by the paged read
+  // for both orderings but shown only in the chronological views. null entryOn with entrySource
+  // 'unknown' is the explicit unknown date.
   entryOn?: string | null;
   entrySource?: string | null;
   ageDays?: number | null;
   // Plot and floor fields the site plate draws from, kept exactly as the
-  // database returns them. search_properties returns setof public.properties, so
-  // these need no schema change.
+  // database returns them. The paged read casts them to text, so no schema change
+  // is needed to carry them.
   frontageM: string | null;
   depthM: string | null;
   landAreaM2: string | null;
@@ -32,8 +33,11 @@ export type PropertySummary = {
 };
 export type PropertyPage = {
   properties: PropertySummary[];
-  nextCursor: string | null;
-  order?: InventoryOrder;
+  // The matching total and the page it belongs to arrive from the same filtered read, so the
+  // count, the rows and the pager links cannot describe different result sets.
+  total: number;
+  page: number;
+  order: InventoryOrder | null;
 };
 // A pending request never reserves the property; only an approved, unexpired reservation is
 // effective and it carries the claimant and the expiry the browser displays.
