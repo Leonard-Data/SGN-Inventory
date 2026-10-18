@@ -19,8 +19,19 @@ export async function propertyDetail(context: RouteContext, id: string) {
   if (!property) throw new ApiError(404, 'not-found');
   // The record already carries the employee who created it, so its display name is one read
   // of that employee row inside the same parallel batch: no second source of attribution and
-  // no wider visibility than the property read itself.
-  const [addressResult, contactResult, employeeResult] = await Promise.all([
+  // no wider visibility than the property read itself. The cheap null check runs first, so a
+  // record with no creator costs no request, and an unreadable creator resolves to no name.
+  const creatorRead: PromiseLike<string | null> = property.created_by
+    ? context.client
+        .from('employees')
+        .select('display_name')
+        .eq('id', property.created_by)
+        .maybeSingle()
+        .then(({ data, error }) =>
+          error ? null : (data?.display_name ?? null),
+        )
+    : Promise.resolve(null);
+  const [addressResult, contactResult, creatorDisplayName] = await Promise.all([
     context.client
       .from('property_addresses')
       .select(
@@ -37,13 +48,7 @@ export async function propertyDetail(context: RouteContext, id: string) {
       .eq('property_id', id)
       .order('is_primary', { ascending: false })
       .order('contact_id'),
-    property.created_by
-      ? context.client
-          .from('employees')
-          .select('id,display_name')
-          .eq('id', property.created_by)
-          .maybeSingle()
-      : null,
+    creatorRead,
   ]);
   if (addressResult.error || contactResult.error)
     throw new ApiError(503, 'unavailable');
@@ -53,9 +58,7 @@ export async function propertyDetail(context: RouteContext, id: string) {
     contacts: contactResult.data ?? [],
     // A creator that is missing or was not readable leaves the fact out of the page rather
     // than showing a placeholder or an identifier.
-    creatorName: employeeResult?.error
-      ? null
-      : creatorName(employeeResult?.data?.display_name),
+    creatorName: creatorName(creatorDisplayName),
   };
 }
 export type PropertyDetail = Awaited<ReturnType<typeof propertyDetail>>;

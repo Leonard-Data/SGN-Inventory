@@ -115,11 +115,12 @@ async function creatorNames(
     .select('id,created_by')
     .in('id', ids);
   if (error) throw accessError(error.code);
+  // One pass over the page: the creator ids, de-duplicated, without a second traversal.
   const creatorIds = [
     ...new Set(
-      (records ?? [])
-        .map((record) => record.created_by)
-        .filter((id): id is string => !!id),
+      (records ?? []).flatMap((record) =>
+        record.created_by ? [record.created_by] : [],
+      ),
     ),
   ];
   if (!creatorIds.length) return new Map();

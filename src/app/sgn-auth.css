@@ -92,8 +92,10 @@
   font-family: var(--font-body);
   font-weight: 600;
   font-size: var(--text-h1);
-  line-height: 1.2;
-  letter-spacing: var(--tracking-heading);
+  /* Light text on the deep rail: one step more leading and no negative tracking, the
+     compensation the dark surface needs from a single sans. */
+  line-height: 1.25;
+  letter-spacing: 0;
   color: var(--rail-ink);
 }
 

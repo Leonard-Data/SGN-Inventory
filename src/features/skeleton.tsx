@@ -76,6 +76,9 @@ export function LoadingSkeleton({
   children?: ReactNode;
 }) {
   const [shown, setShown] = useState(false);
+  // A timer, not a transition: the future content arrives from a fetch the parent owns, so
+  // there is no pending transition to read. The guard is the point - a read that lands inside
+  // it paints nothing at all, which is what keeps fast data from flashing a grey frame.
   useEffect(() => {
     const timer = setTimeout(() => setShown(true), SKELETON_FLASH_GUARD_MS);
     return () => clearTimeout(timer);
