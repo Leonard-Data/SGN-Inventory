@@ -7,11 +7,9 @@ import {
   acceptancePassword,
   acceptanceSessionBody,
   classifyAuthFailure,
-  parseAcceptedEmployee,
 } from './invitation-acceptance.ts';
 
 const invitationId = '30000000-0000-4000-8000-000000000001';
-const employeeId = '10000000-0000-4000-8000-000000000001';
 
 test('the required name is trimmed, bounded and preserves its spelling', () => {
   assert.equal(acceptanceName('  Nguyễn Văn Ẩn  '), 'Nguyễn Văn Ẩn');
@@ -181,43 +179,4 @@ test('the landing read accepts a cookie session or the two bounded fragments', (
     null,
   ] as unknown as Record<string, unknown>[])
     assert.equal(acceptanceSessionBody(body), null, JSON.stringify(body));
-});
-
-test('the RPC projection is revalidated at the boundary', () => {
-  assert.deepEqual(
-    parseAcceptedEmployee({
-      id: employeeId,
-      displayName: '  Nguyễn Văn Ẩn  ',
-      email: 'invitee@example.test',
-      role: 'manager',
-      locale: 'vi',
-    }),
-    {
-      id: employeeId,
-      displayName: 'Nguyễn Văn Ẩn',
-      email: 'invitee@example.test',
-      role: 'manager',
-      locale: 'vi',
-    },
-  );
-  assert.equal(
-    parseAcceptedEmployee({
-      id: employeeId,
-      displayName: 'Nguyễn Văn Ẩn',
-      email: 'invitee@example.test',
-      role: 'manager',
-      locale: 'fr',
-    })?.locale,
-    'vi',
-  );
-  for (const value of [
-    null,
-    [],
-    'accepted',
-    { id: 'not-a-uuid', displayName: 'x', email: 'a@b.test', role: 'sales' },
-    { id: employeeId, displayName: '   ', email: 'a@b.test', role: 'sales' },
-    { id: employeeId, displayName: 'x', email: 'not-an-email', role: 'sales' },
-    { id: employeeId, displayName: 'x', email: 'a@b.test', role: 'owner' },
-  ])
-    assert.equal(parseAcceptedEmployee(value), null, JSON.stringify(value));
 });

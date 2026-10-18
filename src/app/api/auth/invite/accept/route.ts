@@ -10,7 +10,6 @@ import { acceptInvitation } from '@/features/employees/invitation-acceptance-dat
 export function POST(request: NextRequest) {
   return runRoute(request, async (context) => {
     const body = await objectBody(request, context);
-    await acceptInvitation(context, body);
-    return NextResponse.json({ status: 'accepted' });
+    return NextResponse.json(await acceptInvitation(context, body));
   });
 }

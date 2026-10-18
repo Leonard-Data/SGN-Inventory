@@ -6,7 +6,6 @@ import {
   acceptanceBody,
   acceptanceSessionBody,
   classifyAuthFailure,
-  parseAcceptedEmployee,
   type AcceptanceInput,
 } from './invitation-acceptance';
 
@@ -136,7 +135,7 @@ export async function invitationSessionStatus(
 export async function acceptInvitation(
   context: RouteContext,
   body: Record<string, unknown>,
-): Promise<void> {
+): Promise<{ status: 'accepted' }> {
   const input: AcceptanceInput | null = acceptanceBody(body);
   if (!input) throw new ApiError(400, 'invalid-input');
   await invitationSessionStatus(context);
@@ -156,6 +155,7 @@ export async function acceptInvitation(
     },
   );
   if (error) throw workflowError(error);
-  if (!parseAcceptedEmployee(data)) throw new ApiError(503, 'unavailable');
+  if (!data) throw new ApiError(503, 'unavailable');
   context.setLocale(input.locale);
+  return { status: 'accepted' };
 }

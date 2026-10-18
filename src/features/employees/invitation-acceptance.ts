@@ -4,22 +4,9 @@
 // retained employee. This module is pure so the guarded routes and the tests share exactly one
 // interface, and nothing here claims a delivery, an acceptance or an access outcome.
 
-import {
-  isEmployeeRole,
-  isUuid,
-  normalizeEmail,
-  type EmployeeRole,
-} from './invitation.ts';
+import { isUuid } from './invitation.ts';
 
 export const EMPLOYEE_NAME_MAX_LENGTH = 200;
-
-export type AcceptedEmployee = {
-  id: string;
-  displayName: string;
-  email: string;
-  role: EmployeeRole;
-  locale: 'vi' | 'en';
-};
 
 export type AcceptanceInput = {
   invitationId: string;
@@ -139,25 +126,5 @@ export function acceptanceSessionBody(
     kind: 'tokens',
     accessToken: body.accessToken,
     refreshToken: body.refreshToken,
-  };
-}
-
-// The RPC projection is revalidated at the boundary: a malformed result is never rendered as
-// an accepted employee or as a safe access outcome.
-export function parseAcceptedEmployee(value: unknown): AcceptedEmployee | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const row = value as Record<string, unknown>;
-  if (!isUuid(row.id)) return null;
-  const displayName = acceptanceName(row.displayName);
-  if (!displayName) return null;
-  const email = normalizeEmail(row.email);
-  if (!email || !isEmployeeRole(row.role)) return null;
-  const locale = row.locale === 'en' ? 'en' : 'vi';
-  return {
-    id: row.id,
-    displayName,
-    email,
-    role: row.role,
-    locale,
   };
 }
