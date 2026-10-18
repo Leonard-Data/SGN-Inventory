@@ -94,6 +94,14 @@ test('location coordinates accept exact decimal strings within range and reject 
       longitude: null,
     },
   );
+  // A change must name both axes, even when the recorded pair stays complete.
+  for (const changes of [
+    { latitude: '10.5' },
+    { longitude: '106.5' },
+    { latitude: null },
+    { longitude: null },
+  ])
+    assert.throws(() => validateChanges('property', changes));
   for (const changes of [
     { latitude: '91' },
     { latitude: '-90.0000001' },

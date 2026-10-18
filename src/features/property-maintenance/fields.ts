@@ -286,6 +286,8 @@ export function validateChanges(target: Target, input: unknown): Changes {
     !targetFields[target]
   )
     throw new InputError();
+  if (target === 'property' && 'latitude' in input !== 'longitude' in input)
+    throw new InputError();
   for (const [key, value] of Object.entries(input)) {
     if (!targetFields[target].includes(key)) throw new InputError();
     const field = fields[key];

@@ -33,18 +33,20 @@ export function LocationMap({
   marker,
   onPick,
   onTileError,
+  onTileLoad,
   zoom = 16,
 }: {
   center: [number, number];
   marker: [number, number] | null;
   onPick?: (point: MapPoint) => void;
   onTileError?: () => void;
+  onTileLoad?: () => void;
   zoom?: number;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const view = useRef<LeafletMap | null>(null);
   const pin = useRef<LeafletMarker | null>(null);
-  const callbacks = useRef({ onPick, onTileError });
+  const callbacks = useRef({ onPick, onTileError, onTileLoad });
   const start = useRef({ center, zoom });
   const centerLat = center[0];
   const centerLng = center[1];
@@ -52,7 +54,7 @@ export function LocationMap({
   const lng = marker ? marker[1] : null;
 
   useEffect(() => {
-    callbacks.current = { onPick, onTileError };
+    callbacks.current = { onPick, onTileError, onTileLoad };
   });
 
   useEffect(() => {
@@ -69,7 +71,9 @@ export function LocationMap({
     let loaded = false;
     let failed = false;
     tiles.on('tileload', () => {
+      if (loaded) return;
       loaded = true;
+      callbacks.current.onTileLoad?.();
     });
     tiles.on('tileerror', () => {
       failed = true;

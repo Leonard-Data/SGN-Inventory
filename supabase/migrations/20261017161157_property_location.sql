@@ -2,11 +2,11 @@
 -- both-or-neither constraint (20261010013004_inventory_core.sql), but nothing wrote or
 -- read them. This migration admits `latitude`/`longitude` through the revision-checked
 -- property maintenance path so staff can set or clear the recorded point. Range and
--- both-or-neither stay enforced by the column CHECK constraints on the merged row; a
--- half-set or out-of-range save is rejected with the same 23514 the application maps to
--- `invalid-input`. The coordinates are also business values, so a change flags the record
--- for review exactly like any other property-fact edit (and, like the other facts, does not
--- itself append a history row).
+-- both-or-neither stay enforced by the column CHECK constraints on the merged row, and a
+-- change set must name both axes together; a half-set or out-of-range save is rejected
+-- with the same 23514 the application maps to `invalid-input`. The coordinates are also
+-- business values, so a change flags the record for review exactly like any other
+-- property-fact edit (and, like the other facts, does not itself append a history row).
 begin;
 
 create or replace function private.validate_maintenance(p_target text,p_changes jsonb) returns void
@@ -20,6 +20,7 @@ begin
     when 'contact' then array['display_name','phones','raw_phone_text','contact_type','notes']
     when 'link' then array['contact_id','relation','is_primary','remove'] else null end;
   if allowed is null or jsonb_typeof(p_changes) is distinct from 'object' or octet_length(p_changes::text)>262144 then raise exception 'invalid changes' using errcode='23514'; end if;
+  if p_target='property' and (p_changes ? 'latitude') <> (p_changes ? 'longitude') then raise exception 'coordinates must change together' using errcode='23514'; end if;
   for k,v in select key,value from jsonb_each(p_changes) loop
     if not k=any(allowed) then raise exception 'invalid field' using errcode='23514'; end if;
     if v='null'::jsonb then continue; end if;

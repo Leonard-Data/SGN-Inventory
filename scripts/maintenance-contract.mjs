@@ -124,16 +124,44 @@ export async function maintenanceContract({
         lat: '10.7626220',
         lng: '106.6601720',
       });
-      // Out-of-range coordinates are rejected by the column checks, mapped to 23514.
+      // A change must name both axes; a lone axis cannot mix a new value with the stored one.
       rev = await revision('properties', created);
       await fails(
         mutate,
-        [created, 'property', created, rev, { latitude: '91' }],
+        [created, 'property', created, rev, { latitude: '10.8000000' }],
         '23514',
       );
       await fails(
         mutate,
-        [created, 'property', created, rev, { longitude: '-180.0000001' }],
+        [created, 'property', created, rev, { longitude: '106.7000000' }],
+        '23514',
+      );
+      assert.deepEqual(await coordinates(), {
+        lat: '10.7626220',
+        lng: '106.6601720',
+      });
+      // Out-of-range coordinates are rejected by the column checks, mapped to 23514.
+      rev = await revision('properties', created);
+      await fails(
+        mutate,
+        [
+          created,
+          'property',
+          created,
+          rev,
+          { latitude: '91', longitude: '106.5' },
+        ],
+        '23514',
+      );
+      await fails(
+        mutate,
+        [
+          created,
+          'property',
+          created,
+          rev,
+          { latitude: '10.5', longitude: '-180.0000001' },
+        ],
         '23514',
       );
       // Clearing sets both back to null together.
@@ -146,7 +174,7 @@ export async function maintenanceContract({
         { latitude: null, longitude: null },
       ]);
       assert.deepEqual(await coordinates(), { lat: null, lng: null });
-      // A half-set point violates the both-or-neither constraint.
+      // A lone coordinate cannot restore a cleared point.
       rev = await revision('properties', created);
       await fails(
         mutate,

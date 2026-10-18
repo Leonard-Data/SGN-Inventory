@@ -196,8 +196,8 @@ const copy = {
   primary: ['Địa chỉ / liên kết chính', 'Primary address / link'],
   location: ['Vị trí trên bản đồ', 'Location on map'],
   locationHint: [
-    'Nhấn vào bản đồ hoặc nhập toạ độ để đặt hoặc di chuyển điểm; lưu cùng với các thông tin khác.',
-    'Click the map or type coordinates to place or move the point; it saves with the other facts.',
+    'Nhấn vào bản đồ để đặt hoặc di chuyển điểm, hoặc nhập toạ độ và nhấn "Áp dụng toạ độ"; điểm chỉ được lưu cùng các thông tin khác sau khi áp dụng.',
+    'Click the map to place or move the point, or type coordinates and press "Apply coordinates"; the point saves with the other facts only after you apply it.',
   ],
   locationMapLabel: [
     'Bản đồ chọn vị trí: nhấn để đặt điểm',

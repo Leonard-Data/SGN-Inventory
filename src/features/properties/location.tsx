@@ -94,6 +94,7 @@ export function PropertyLocation({
           marker={[point.lat, point.lng]}
           zoom={16}
           onTileError={() => setTilesFailed(true)}
+          onTileLoad={() => setTilesFailed(false)}
         />
       </div>
       {tilesFailed ? <p className="field-hint">{dt.mapUnavailable}</p> : null}
@@ -170,6 +171,7 @@ export function LocationEditor({
             })
           }
           onTileError={() => setTilesFailed(true)}
+          onTileLoad={() => setTilesFailed(false)}
         />
       </div>
       {tilesFailed ? (
@@ -203,11 +205,8 @@ export function LocationEditor({
             <input
               id={latId}
               className="input"
-              type="number"
+              type="text"
               inputMode="decimal"
-              min={-90}
-              max={90}
-              step="any"
               value={typedLat}
               onChange={(event) => setTypedLat(event.target.value)}
             />
@@ -219,11 +218,8 @@ export function LocationEditor({
             <input
               id={lngId}
               className="input"
-              type="number"
+              type="text"
               inputMode="decimal"
-              min={-180}
-              max={180}
-              step="any"
               value={typedLng}
               onChange={(event) => setTypedLng(event.target.value)}
             />
