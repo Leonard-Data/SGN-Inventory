@@ -65,6 +65,8 @@ src/
 scripts/
   check-environment.mjs         # Operator-facing configuration check (including R2 readiness)
   copy-property-files-to-r2.mjs # One-off Supabase→R2 object copy: dry run, --apply, --verify
+  import-legacy-sheet.mjs       # Legacy workbook import: dry run by default, --write with a confirmed digest
+  legacy-import-write.mjs       # Its write path: properties, addresses, contacts, files and staff
   release-guard.mjs             # Branch/project isolation, pending migrations and release smoke
   release-guard.test.mjs        # Cross-stage regression risks
   validate-schema.mjs           # Existing embedded SQL assertions

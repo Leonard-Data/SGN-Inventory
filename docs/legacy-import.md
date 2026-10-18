@@ -145,10 +145,10 @@ no policy is disabled or weakened to make a write succeed.
 
 ## Columns with no destination
 
-Every master column is either mapped or named in the report. `Tên người tạo`, `Note` and `Temp
-Value` have no destination (provenance or unclear semantics), `Ngày Chỉnh Sửa gần nhất` keeps the
-application's own update time, and `Approved` is not a reservation approval. `Email Người Tạo` and
-`Người chỉnh sửa` are reported as blocked unless the run completed a write, in which case they are
+Every master column is either mapped or named in the report; the source columns and their
+destinations are owned by [workbook mapping](workbook-mapping.md#property-column-transformations).
+`Email Người Tạo` and `Người chỉnh sửa` are reported as blocked unless the run completed a write,
+in which case they are
 resolved against `public.employees` and written to `created_by` and `updated_by`. The report records
 the run's outcome — `dry_run`, `refused` with its reason, `failed` with its reason, or `completed` —
 and every claim in it, including that column state and the closing summary, is keyed on the outcome

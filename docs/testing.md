@@ -90,12 +90,12 @@ and wrote nothing to the sheet, Drive or the database. The report is in
 `imports/legacy-dry-run/` (ignored by Git because it contains personal data); the method and the
 one-command entry point are in [legacy-import.md](legacy-import.md).
 
-- Every master column was mapped or named: 21 mapped, 4 without a destination (provenance or
-  unclear semantics) and 2 blocked on the employee map. No column was dropped silently. The
-  per-column destinations and their current states are owned by
+- Every master column was mapped or named; no column was dropped silently. The per-column
+  destinations and their current states are owned by
   [workbook mapping](workbook-mapping.md#property-column-transformations), which reflects the
-  later rules: `Ngày Chỉnh Sửa gần nhất` has no destination, and the two employee-map columns are
-  resolved against `public.employees` by a completed write run.
+  later rules: `Tên người tạo`, `Ngày Chỉnh Sửa gần nhất`, `Note`, `Temp Value` and `Approved`
+  have no destination, and the two employee-map columns are resolved against `public.employees`
+  by a completed write run.
 - Sale price rules: 292 rows above the 200 billion ceiling, 160 with an empty sale price and no
   rent, 6 unreadable price strings — all quarantined and listed with row numbers; 131 rows with a
   price of exactly 0 imported as `negotiating` with no numeric price; 2 rental-only rows excluded
@@ -124,10 +124,8 @@ one-command entry point are in [legacy-import.md](legacy-import.md).
 - `Login` was never requested; `Password` and `Monitor` were stripped from the Nhân viên tab as
   soon as it was read. (That run's reader fetched the whole tab and discarded those cells; the
   reader now requests the header row first and never fetches a credential column at all.)
-- `scripts/import-legacy-sheet.test.mjs` covers the pure rules (money and measure parsing, phone
-  preservation, date reading, ward-name keys, reference labels, price rules, the exact-key child
-  join, placeholder owners, staff roles, the attachment plan, the confirmation gate, the credential
-  column exclusion in the sheet requests, column inventory).
+- `scripts/import-legacy-sheet.test.mjs` covers the pure rules; its coverage list is owned by
+  [legacy import](legacy-import.md#tests).
 
 Not executed in that pass: any write.
 
