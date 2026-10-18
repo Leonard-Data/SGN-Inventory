@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
-select plan(27);
+select plan(29);
 select ok(not has_table_privilege('anon','public.properties','SELECT'),'anonymous inventory select revoked');
 select ok(not has_table_privilege('authenticated','public.property_locks','UPDATE'),'direct lock mutation revoked');
 select ok(not has_table_privilege('authenticated','public.activity_events','INSERT'),'direct activity insertion revoked');
@@ -30,5 +30,12 @@ select ok(not has_table_privilege('anon','public.property_comment_edits','SELECT
 select ok(not has_table_privilege('authenticated','public.property_comment_edits','INSERT') and not has_table_privilege('authenticated','public.property_comment_edits','UPDATE') and not has_table_privilege('authenticated','public.property_comment_edits','DELETE'),'direct retained-edit mutation revoked');
 select ok(exists(select 1 from pg_indexes where schemaname='public' and indexname='property_comment_edits_comment_id_version_key'),'one retained row per comment edit version exists');
 select ok(exists(select 1 from information_schema.columns where table_schema='public' and table_name='property_comments' and column_name='edited_at'),'comment edited marker column exists');
+select ok(exists(select 1 from pg_indexes where schemaname='public' and indexname='properties_monthly_rent_idx')
+  and exists(select 1 from pg_indexes where schemaname='public' and indexname='properties_land_area_idx')
+  and exists(select 1 from pg_indexes where schemaname='public' and indexname='properties_floor_area_idx'),'inventory filter range indexes exist');
+select ok(has_function_privilege('authenticated','public.search_properties(text,text,text,text,uuid,uuid,integer,numeric,numeric,numeric,numeric,uuid)','EXECUTE')
+  and not has_function_privilege('anon','public.search_properties(text,text,text,text,uuid,uuid,integer,numeric,numeric,numeric,numeric,uuid)','EXECUTE')
+  and has_function_privilege('authenticated','public.list_inventory_by_age(text,text,date,uuid,boolean,integer,text,text,text,numeric,numeric,numeric,numeric,uuid,uuid)','EXECUTE')
+  and not has_function_privilege('anon','public.list_inventory_by_age(text,text,date,uuid,boolean,integer,text,text,text,numeric,numeric,numeric,numeric,uuid,uuid)','EXECUTE'),'filtered inventory reads stay authenticated-only');
 select * from finish();
 rollback;

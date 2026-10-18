@@ -46,10 +46,13 @@ const vi = {
   replacementNote:
     'Nếu nội dung đã lưu không hợp lệ hoặc bạn muốn dùng nội dung khác, chọn tập tin ở phần tải lên để tạo một tập tin mới. Đăng ký cũ được giữ nguyên.',
   uploadNote:
-    'PDF, JPEG, PNG hoặc WebP; lớn hơn 0 và tối đa 20 MiB mỗi tập tin. Không ghi đè tập tin đã có.',
+    'PDF, JPEG, PNG hoặc WebP. Mỗi bất động sản: tối đa 5 tài liệu PDF (20 MiB mỗi tệp) và 10 ảnh (5 MiB mỗi ảnh, gồm cả ảnh bìa). Không ghi đè tệp đã có.',
   availabilityNote:
     'Tập tin đã kiểm tra kỹ thuật được chia sẻ nội bộ mà không cần duyệt tài liệu. Đây không phải xác minh tính xác thực, quyền sở hữu pháp lý hay quét mã độc.',
   cover: 'Ảnh bìa',
+  addCover: 'Thêm ảnh bìa',
+  addCoverHint:
+    'Chọn ảnh bất động sản để tải lên; sau khi kiểm tra kỹ thuật, ảnh đó có thể được chọn làm ảnh bìa và hiển thị trên thẻ bất động sản.',
   setCover: 'Chọn làm ảnh bìa',
   replaceCover: 'Thay ảnh bìa',
   clearCover: 'Bỏ chọn ảnh bìa',
@@ -64,6 +67,9 @@ const vi = {
   cancel: 'Hủy',
   changeCategory: 'Đổi danh mục',
   savingCategory: 'Đang lưu…',
+  previousPage: 'Trang trước',
+  nextPage: 'Trang sau',
+  pagerStatus: 'Trang {page}/{pages}',
 };
 
 const en: Record<keyof typeof vi, string> = {
@@ -110,10 +116,13 @@ const en: Record<keyof typeof vi, string> = {
   replacementNote:
     'For invalid stored bytes or different content, select a file in the upload section to create a new attachment. The original registration is retained.',
   uploadNote:
-    'PDF, JPEG, PNG or WebP; greater than zero and up to 20 MiB per file. Existing files are never overwritten.',
+    'PDF, JPEG, PNG or WebP. Per property: up to 5 PDF documents (20 MiB each) and 10 images (5 MiB each, the cover photo included). Existing files are never overwritten.',
   availabilityNote:
     'Technically validated files are shared privately without document approval. This is not authenticity or legal ownership verification, or malware scanning.',
   cover: 'Cover photo',
+  addCover: 'Add cover photo',
+  addCoverHint:
+    'Choose a Property photo to upload; once technically validated it can be set as the cover and shown on the inventory card.',
   setCover: 'Set as cover',
   replaceCover: 'Replace cover',
   clearCover: 'Clear cover',
@@ -129,6 +138,9 @@ const en: Record<keyof typeof vi, string> = {
   cancel: 'Cancel',
   changeCategory: 'Change category',
   savingCategory: 'Saving…',
+  previousPage: 'Previous page',
+  nextPage: 'Next page',
+  pagerStatus: 'Page {page} of {pages}',
 };
 
 const errorsVi: Record<string, string> = {
@@ -136,6 +148,11 @@ const errorsVi: Record<string, string> = {
     'Định dạng không hỗ trợ. Chọn PDF, JPEG, PNG hoặc WebP.',
   'empty-file': 'Tập tin rỗng.',
   'file-too-large': 'Tập tin vượt quá 20 MiB.',
+  'image-too-large': 'Ảnh vượt quá 5 MiB mỗi ảnh.',
+  'document-limit':
+    'Bất động sản này đã đủ 5 tài liệu. Không thể thêm tài liệu PDF.',
+  'image-limit':
+    'Bất động sản này đã đủ 10 ảnh (bao gồm ảnh bìa). Không thể thêm ảnh.',
   'unsafe-filename':
     'Tên tập tin không an toàn. Không dùng ký tự đường dẫn hoặc ký tự điều khiển.',
   'invalid-input': 'Kiểm tra tên, định dạng và mục đích tập tin.',
@@ -162,6 +179,11 @@ const errorsEn: Record<keyof typeof errorsVi, string> = {
   'unsupported-format': 'Unsupported format. Choose PDF, JPEG, PNG or WebP.',
   'empty-file': 'The file is empty.',
   'file-too-large': 'The file exceeds 20 MiB.',
+  'image-too-large': 'The image exceeds 5 MiB.',
+  'document-limit':
+    'This property already has 5 documents. No further PDF document can be attached.',
+  'image-limit':
+    'This property already has 10 images, the cover included. No further image can be attached.',
   'unsafe-filename':
     'Unsafe filename. Do not use path separators or control characters.',
   'invalid-input': 'Check the filename, format and file purpose.',

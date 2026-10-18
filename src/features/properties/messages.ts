@@ -9,7 +9,7 @@ const vi = {
   addresses: 'Địa chỉ',
   contacts: 'Liên hệ chủ nhà / môi giới',
   addrNote:
-    'Địa chỉ gốc được giữ nguyên; đính chính tạo bản kế tiếp và ghi vào lịch sử.',
+    'Địa chỉ gốc được giữ nguyên; đính chính tạo bản kế tiếp. Chỉ thay đổi giá chào được ghi vào lịch sử.',
   contactPrimary: 'Liên hệ chính',
   contactConsent: 'Đồng ý nhận liên hệ từ Saigon New House',
   contactSource: 'Nguồn giới thiệu hồ sơ',
@@ -21,6 +21,11 @@ const vi = {
   primary: 'Liên hệ chính',
   recordActions: 'Thao tác hồ sơ',
   myRequests: 'Yêu cầu của tôi',
+  location: 'Vị trí',
+  locationRecorded: 'Vị trí đã ghi',
+  noLocation: 'Chưa ghi nhận vị trí trên bản đồ.',
+  openInMap: 'Mở trong bản đồ',
+  mapUnavailable: 'Không tải được nền bản đồ. Dùng liên kết mở bản đồ.',
 };
 
 const en: Record<keyof typeof vi, string> = {
@@ -32,7 +37,7 @@ const en: Record<keyof typeof vi, string> = {
   addresses: 'Addresses',
   contacts: 'Owner / agent contacts',
   addrNote:
-    'Original addresses are retained; corrections create a successor and are recorded in history.',
+    'Original addresses are retained; corrections create a successor. Only asking-price changes are recorded in history.',
   contactPrimary: 'Primary contact',
   contactConsent: 'Consented to contact by Saigon New House',
   contactSource: 'Referral source for this record',
@@ -44,6 +49,12 @@ const en: Record<keyof typeof vi, string> = {
   primary: 'Primary contact',
   recordActions: 'Record actions',
   myRequests: 'My requests',
+  location: 'Location',
+  locationRecorded: 'Recorded location',
+  noLocation: 'No location recorded on the map.',
+  openInMap: 'Open in map',
+  mapUnavailable:
+    'The map background could not load. Use the open-in-map link.',
 };
 
 export const detailMessages: Record<Locale, Record<keyof typeof vi, string>> = {

@@ -14,6 +14,7 @@ export async function commentRemovalContract({
   const remove =
     'select public.remove_property_comment($1,$2,$3,$4,$5) as removed';
   const list = 'select * from public.list_property_comments($1,$2,$3,$4)';
+  const history = 'select * from public.list_property_comment_history($1,$2)';
   const post = 'select public.post_property_comment($1,$2,$3) as created';
   const own = async (id) =>
     (
@@ -378,6 +379,41 @@ export async function commentRemovalContract({
     },
   );
   await check(
+    'history distinguishes author withdrawal from moderated removal and keeps absent reasons absent',
+    async () => {
+      for (const actor of [0, 1, 4, 5, 'unlinked']) {
+        await asUser(actor);
+        assert.deepEqual(
+          (
+            await db.query(
+              'select body,removal_reason from public.property_comment_removals',
+            )
+          ).rows,
+          [],
+          `${actor} cannot read removed text or moderation reasons`,
+        );
+        await fails(history, [first, ownComment], '42501');
+        await fails(history, [second, moderationComment], '42501');
+      }
+      for (const actor of [2, 3]) {
+        await asUser(actor);
+        const authorRows = (await db.query(history, [first, ownComment])).rows;
+        assert.equal(authorRows.at(-1).event_kind, 'removal');
+        assert.equal(authorRows.at(-1).removal_kind, 'author');
+        assert.equal(authorRows.at(-1).reason, null);
+        const moderationRows = (
+          await db.query(history, [second, moderationComment])
+        ).rows;
+        assert.equal(moderationRows.at(-1).event_kind, 'removal');
+        assert.equal(moderationRows.at(-1).removal_kind, 'moderation');
+        assert.equal(
+          moderationRows.at(-1).reason,
+          'Nội dung nhạy cảm — gỡ theo yêu cầu',
+        );
+      }
+    },
+  );
+  await check(
     'archiving blocks author removal for every role while reasoned moderation still works',
     async () => {
       await asAdmin();
@@ -682,6 +718,17 @@ export async function commentRemovalContract({
       await db.query('update public.employees set is_active=true where id=$1', [
         employees[2],
       ]);
+      await asUser('unlinked');
+      assert.deepEqual(
+        (await db.query('select * from public.property_comment_removals')).rows,
+        [],
+      );
+      await fails(
+        remove,
+        [first, colleagueComment, revision, 'moderation', 'Lý do'],
+        '42501',
+      );
+      await asAdmin();
       await db.query(
         "update public.employees set display_name='Tên đã đổi' where id=$1",
         [employees[1]],

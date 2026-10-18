@@ -11,10 +11,14 @@ import { messages, type Locale } from '@/i18n/messages';
 import { api, RequestError } from '@/features/employees/api';
 import { vietnamTimestamp } from '@/features/properties/format';
 import { COMMENT_MAX_LENGTH, COMMENT_REASON_MAX_LENGTH } from './types';
+import { IconAction } from '@/features/icon-action';
 import {
+  changedCommentIds,
+  droppedCommentIds,
   mergePage,
   mergeStaleEditState,
   retainEditTarget,
+  staleHistoryIds,
   withPost,
 } from './discussion-state';
 import type {
@@ -22,6 +26,7 @@ import type {
   CommentCursor,
   CommentPage,
   CommentRemovalKind,
+  CommentHistoryPage,
 } from './types';
 
 type EditSession = {
@@ -54,6 +59,11 @@ export function Discussion({
     reasonId = useId(),
     reasonHintId = useId();
   const [comments, setComments] = useState<Comment[]>([]);
+  const [history, setHistory] = useState<Record<string, CommentHistoryPage>>(
+    {},
+  );
+  const [historyBusy, setHistoryBusy] = useState<Record<string, true>>({});
+  const [historyError, setHistoryError] = useState<Record<string, true>>({});
   const [next, setNext] = useState<CommentCursor | null>(null);
   const [busy, setBusy] = useState(true);
   const [more, setMore] = useState(false);
@@ -82,6 +92,50 @@ export function Discussion({
   const [editNotice, setEditNotice] = useState<string | null>(null);
   const inFlight = useRef<AbortController | null>(null);
   const generation = useRef(0);
+  const historyRequestTokens = useRef<Record<string, number>>({});
+  const historyAbortControllers = useRef<Record<string, AbortController>>({});
+  const nextHistoryRequestToken = useRef(0);
+  const mounted = useRef(true);
+  const abortHistory = useCallback((commentId?: string) => {
+    if (commentId !== undefined) {
+      historyAbortControllers.current[commentId]?.abort();
+      delete historyAbortControllers.current[commentId];
+      delete historyRequestTokens.current[commentId];
+      return;
+    }
+    Object.values(historyAbortControllers.current).forEach((controller) =>
+      controller.abort(),
+    );
+    historyRequestTokens.current = {};
+    historyAbortControllers.current = {};
+  }, []);
+  const invalidateHistory = useCallback(
+    (commentId?: string) => {
+      abortHistory(commentId);
+      if (commentId === undefined) {
+        setHistory({});
+        setHistoryBusy({});
+        setHistoryError({});
+        return;
+      }
+      setHistory((value) => {
+        const next = { ...value };
+        delete next[commentId];
+        return next;
+      });
+      setHistoryBusy((value) => {
+        const next = { ...value };
+        delete next[commentId];
+        return next;
+      });
+      setHistoryError((value) => {
+        const next = { ...value };
+        delete next[commentId];
+        return next;
+      });
+    },
+    [abortHistory],
+  );
   const editTarget = useRef<string | null>(null);
   // The open editor's identity; a save response only closes the editor it was sent from.
   const editSession = useRef<EditSession | null>(null);
@@ -129,6 +183,7 @@ export function Discussion({
   );
   // Every state update happens after an await, so mounting or refreshing never cascades a render.
   const load = useCallback(async () => {
+    invalidateHistory();
     const version = ++generation.current;
     const target = editTarget.current;
     try {
@@ -185,15 +240,28 @@ export function Discussion({
       // Released unconditionally: a superseding request owns the list, not the spinner.
       setBusy(false);
     }
-  }, [failure, fetchComment, fetchPage]);
+  }, [failure, fetchComment, fetchPage, invalidateHistory]);
   const stop = useCallback(() => {
     generation.current++;
     inFlight.current?.abort();
+    abortHistory();
+  }, [abortHistory]);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
   }, []);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- whole-surface reload clears retained history before its fetch settles
     void load();
     return stop;
   }, [load, stop]);
+  useEffect(() => {
+    if (reviewer) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- demotion clears rendered history before it can show again
+    invalidateHistory();
+  }, [invalidateHistory, reviewer]);
   function refresh() {
     setBusy(true);
     void load();
@@ -206,6 +274,13 @@ export function Discussion({
     try {
       const page = await fetchPage(next);
       if (version !== generation.current) return;
+      const seenBefore = new Set(comments.map((row) => row.id));
+      const appended = mergePage(comments, page.comments).filter(
+        (row) => !seenBefore.has(row.id),
+      );
+      for (const commentId of staleHistoryIds(appended, history)) {
+        invalidateHistory(commentId);
+      }
       setComments((rows) => {
         const seen = new Set(rows.map((row) => row.id));
         return [
@@ -269,6 +344,7 @@ export function Discussion({
       return;
     }
     // Committed state is authoritative: only now is the draft spent and its key retired.
+    invalidateHistory(created.id);
     submissionKey.current = '';
     setDraft('');
     setNotice(text.commentPosted);
@@ -277,7 +353,16 @@ export function Discussion({
     try {
       const page = await fetchPage(null);
       if (version !== generation.current) return;
+      for (const commentId of changedCommentIds(comments, page.comments)) {
+        if (commentId !== created.id) invalidateHistory(commentId);
+      }
       const merged = withPost(created, page.comments, !!page.nextCursor);
+      for (const commentId of droppedCommentIds(
+        comments,
+        retainEditTarget(merged.rows, comments, editTarget.current),
+      )) {
+        invalidateHistory(commentId);
+      }
       setComments((rows) =>
         retainEditTarget(
           withPost(created, mergePage(rows, page.comments), !!page.nextCursor)
@@ -291,6 +376,12 @@ export function Discussion({
     } catch {
       if (version !== generation.current) return;
       const merged = withPost(created, comments, !!next);
+      for (const commentId of droppedCommentIds(
+        comments,
+        retainEditTarget(merged.rows, comments, editTarget.current),
+      )) {
+        invalidateHistory(commentId);
+      }
       setComments((rows) =>
         retainEditTarget(
           withPost(created, rows, !!next).rows,
@@ -382,6 +473,7 @@ export function Discussion({
     setComments((rows) =>
       rows.map((entry) => (entry.id === updated.id ? updated : entry)),
     );
+    invalidateHistory(updated.id);
     // A replayed key can converge on an already-withdrawn comment, so the response is not a save.
     if (updated.removedAt !== null) {
       setBusy(true);
@@ -435,6 +527,7 @@ export function Discussion({
     setComments((rows) =>
       rows.map((entry) => (entry.id === removed.id ? removed : entry)),
     );
+    invalidateHistory(removed.id);
     setReason('');
     setReasonFor(null);
     setRemoveNotice(text.commentRemoved);
@@ -457,346 +550,511 @@ export function Discussion({
     return text.editFailed;
   };
   const loadingMore = busy || more;
+  const loadHistory = async (commentId: string) => {
+    if (historyRequestTokens.current[commentId] !== undefined) return;
+    if (history[commentId]) {
+      setHistory((value) => {
+        const next = { ...value };
+        delete next[commentId];
+        return next;
+      });
+      setHistoryError((value) => {
+        const next = { ...value };
+        delete next[commentId];
+        return next;
+      });
+      return;
+    }
+    const requestToken = ++nextHistoryRequestToken.current;
+    const abort = new AbortController();
+    historyRequestTokens.current[commentId] = requestToken;
+    historyAbortControllers.current[commentId] = abort;
+    setHistoryBusy((value) => ({ ...value, [commentId]: true }));
+    setHistoryError((value) => {
+      const next = { ...value };
+      delete next[commentId];
+      return next;
+    });
+    try {
+      const result = await api<CommentHistoryPage>(
+        `/api/properties/${propertyId}/comments/${commentId}/history`,
+        undefined,
+        abort.signal,
+      );
+      if (
+        !mounted.current ||
+        !reviewer ||
+        historyRequestTokens.current[commentId] !== requestToken
+      )
+        return;
+      setHistory((value) => ({ ...value, [commentId]: result }));
+    } catch (error) {
+      if (
+        !mounted.current ||
+        historyRequestTokens.current[commentId] !== requestToken
+      )
+        return;
+      if (
+        error instanceof RequestError &&
+        (error.status === 401 || error.status === 403)
+      ) {
+        onDenied(error.status);
+        return;
+      }
+      setHistoryError((value) => ({ ...value, [commentId]: true }));
+    } finally {
+      if (historyRequestTokens.current[commentId] !== requestToken) return;
+      delete historyRequestTokens.current[commentId];
+      delete historyAbortControllers.current[commentId];
+      setHistoryBusy((value) => {
+        const next = { ...value };
+        delete next[commentId];
+        return next;
+      });
+    }
+  };
   return (
     <section className="panel discussion" aria-labelledby={headingId}>
       <div className="panel-head">
         <h2 id={headingId}>{text.discussion}</h2>
-        <button
-          type="button"
-          className="btn btn-sm btn-ghost"
-          onClick={refresh}
+        <IconAction
+          name="refresh"
+          label={text.refresh}
           disabled={loadingMore}
-        >
-          {text.refresh}
-        </button>
+          onClick={refresh}
+        />
       </div>
-      {busy ? <p role="status">{text.loading}</p> : null}
-      {error ? (
-        <p role="alert">
-          {error === 'not-found'
-            ? text.notFound
-            : error === 'invalid-input'
-              ? text.invalidInput
-              : text.unavailable}{' '}
-          <button
-            type="button"
-            className="btn btn-sm btn-ghost"
-            onClick={refresh}
-          >
-            {text.retry}
-          </button>
-        </p>
-      ) : null}
-      <ol>
-        {comments.map((row) => {
-          const parts = row.authorName.trim().split(/\s+/);
-          const initials = parts
-            .slice(-2)
-            .map((p) => p.charAt(0))
-            .join('')
-            .toUpperCase();
-          const removed = row.removedAt !== null;
-          const editingHere = editing?.id === row.id;
-          // Author withdrawal and editing are the author's own controls and are blocked on an
-          // archived Property; reasoned moderation stays available there for a reviewer.
-          const canWithdraw =
-            !archived && employeeId !== null && employeeId === row.authorId;
-          const canEdit = canWithdraw && !removed;
-          return (
-            <li key={row.id}>
-              <article className="comment">
-                <span className="sgn-avatar" aria-hidden="true">
-                  {initials}
-                </span>
-                <div>
-                  <p className="comment-author" translate="no">
-                    {row.authorName}
-                  </p>
-                  <p className="comment-meta">
-                    <time dateTime={row.createdAt}>
-                      {vietnamTimestamp(row.createdAt, locale)}
-                    </time>{' '}
-                    <span className="field-hint">({text.vietnamTime})</span>
-                    {!removed && row.editedAt !== null ? (
-                      <>
-                        {' '}
-                        <span
-                          className="comment-edited"
-                          title={
-                            vietnamTimestamp(row.editedAt, locale) ?? undefined
-                          }
-                        >
-                          ({text.commentEditedMarker})
-                        </span>
-                      </>
-                    ) : null}
-                  </p>
-                  {removed && !editingHere ? (
-                    <p className="comment-body comment-removed">
-                      {text.commentRemoved}
+      {/* The package draws the discussion rows without the panel inset every other panel
+          body has, which left the cards flush against the panel edge. The wrapper gives
+          them the same card padding at both widths. */}
+      <div className="panel-body">
+        {busy ? <p role="status">{text.loading}</p> : null}
+        {error ? (
+          <p role="alert">
+            {error === 'not-found'
+              ? text.notFound
+              : error === 'invalid-input'
+                ? text.invalidInput
+                : text.unavailable}{' '}
+            <button
+              type="button"
+              className="btn btn-sm btn-ghost"
+              onClick={refresh}
+            >
+              {text.retry}
+            </button>
+          </p>
+        ) : null}
+        <ol>
+          {comments.map((row) => {
+            const parts = row.authorName.trim().split(/\s+/);
+            const initials = parts
+              .slice(-2)
+              .map((p) => p.charAt(0))
+              .join('')
+              .toUpperCase();
+            const removed = row.removedAt !== null;
+            const editingHere = editing?.id === row.id;
+            // Author withdrawal and editing are the author's own controls and are blocked on an
+            // archived Property; reasoned moderation stays available there for a reviewer.
+            const canWithdraw =
+              !archived && employeeId !== null && employeeId === row.authorId;
+            const canEdit = canWithdraw && !removed;
+            return (
+              <li key={row.id}>
+                <article className="comment" data-comment-id={row.id}>
+                  <span className="sgn-avatar" aria-hidden="true">
+                    {initials}
+                  </span>
+                  <div>
+                    <p className="comment-author" translate="no">
+                      {row.authorName}
                     </p>
-                  ) : null}
-                  {/* An entry removed by another session while its editor was open keeps both the
-                      marker and the unsent draft, so the edit is never silently lost. */}
-                  {editingHere ? (
-                    <form
-                      className="comment-edit"
-                      onSubmit={(event) => {
-                        event.preventDefault();
-                        void saveEdit(row);
-                      }}
-                    >
-                      {editReconciled ? (
-                        <div className="field comment-current">
-                          <p className="field-label">{text.commentCurrent}</p>
-                          <p
-                            className={`comment-body${removed ? ' comment-removed' : ''}`}
-                            translate={removed ? undefined : 'no'}
+                    <p className="comment-meta">
+                      <time dateTime={row.createdAt}>
+                        {vietnamTimestamp(row.createdAt, locale)}
+                      </time>{' '}
+                      <span className="field-hint">({text.vietnamTime})</span>
+                      {!removed && row.editedAt !== null ? (
+                        <>
+                          {' '}
+                          <span
+                            className="comment-edited"
+                            title={
+                              vietnamTimestamp(row.editedAt, locale) ??
+                              undefined
+                            }
                           >
-                            {removed ? text.commentRemoved : row.body}
-                          </p>
-                        </div>
+                            ({text.commentEditedMarker})
+                          </span>
+                        </>
                       ) : null}
-                      <div className="field">
-                        <label
-                          className="field-label"
-                          htmlFor={`${editId}-${row.id}`}
-                        >
-                          {text.editComment}
-                        </label>
-                        <textarea
-                          id={`${editId}-${row.id}`}
-                          className="textarea"
-                          rows={4}
-                          maxLength={COMMENT_MAX_LENGTH}
-                          value={editDraft}
-                          onChange={(event) => setEditDraft(event.target.value)}
-                          aria-describedby={`${editHintId}-${row.id}`}
-                          disabled={savingEdit}
-                          autoFocus
-                        />
-                      </div>
-                      <p className="field-hint" id={`${editHintId}-${row.id}`}>
-                        {text.editHint}{' '}
-                        <span translate="no">
-                          {[...editDraft.trim()].length}/{COMMENT_MAX_LENGTH}
-                        </span>
+                    </p>
+                    {removed && !editingHere ? (
+                      <p className="comment-body comment-removed">
+                        {text.commentRemoved}
                       </p>
-                      {editAction?.id === row.id ? (
-                        <p role="alert" className="field-error">
-                          {editMessage(editAction.code)}{' '}
+                    ) : null}
+                    {/* An entry removed by another session while its editor was open keeps both the
+                      marker and the unsent draft, so the edit is never silently lost. */}
+                    {editingHere ? (
+                      <form
+                        className="comment-edit"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          void saveEdit(row);
+                        }}
+                      >
+                        {editReconciled ? (
+                          <div className="field comment-current">
+                            <p className="field-label">{text.commentCurrent}</p>
+                            <p
+                              className={`comment-body${removed ? ' comment-removed' : ''}`}
+                              translate={removed ? undefined : 'no'}
+                            >
+                              {removed ? text.commentRemoved : row.body}
+                            </p>
+                          </div>
+                        ) : null}
+                        <div className="field">
+                          <label
+                            className="field-label"
+                            htmlFor={`${editId}-${row.id}`}
+                          >
+                            {text.editComment}
+                          </label>
+                          <textarea
+                            id={`${editId}-${row.id}`}
+                            className="textarea"
+                            rows={4}
+                            maxLength={COMMENT_MAX_LENGTH}
+                            value={editDraft}
+                            onChange={(event) =>
+                              setEditDraft(event.target.value)
+                            }
+                            aria-describedby={`${editHintId}-${row.id}`}
+                            disabled={savingEdit}
+                            autoFocus
+                          />
+                        </div>
+                        <p
+                          className="field-hint"
+                          id={`${editHintId}-${row.id}`}
+                        >
+                          {text.editHint}{' '}
+                          <span translate="no">
+                            {[...editDraft.trim()].length}/{COMMENT_MAX_LENGTH}
+                          </span>
+                        </p>
+                        {editAction?.id === row.id ? (
+                          <p role="alert" className="field-error">
+                            {editMessage(editAction.code)}{' '}
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-ghost"
+                              onClick={refresh}
+                            >
+                              {text.refresh}
+                            </button>
+                          </p>
+                        ) : null}
+                        <div className="composer-foot">
+                          <button
+                            type="submit"
+                            className="btn btn-primary btn-sm"
+                            disabled={savingEdit}
+                          >
+                            {savingEdit ? text.savingComment : text.saveComment}
+                          </button>
                           <button
                             type="button"
-                            className="btn btn-sm btn-ghost"
-                            onClick={refresh}
+                            className="btn btn-ghost btn-sm"
+                            onClick={cancelEdit}
+                            disabled={savingEdit}
                           >
-                            {text.refresh}
+                            {text.cancel}
                           </button>
-                        </p>
-                      ) : null}
-                      <div className="composer-foot">
-                        <button
-                          type="submit"
-                          className="btn btn-primary btn-sm"
-                          disabled={savingEdit}
-                        >
-                          {savingEdit ? text.savingComment : text.saveComment}
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-sm"
-                          onClick={cancelEdit}
-                          disabled={savingEdit}
-                        >
-                          {text.cancel}
-                        </button>
-                      </div>
-                    </form>
-                  ) : removed ? null : (
-                    <p className="comment-body" translate="no">
-                      {row.body}
-                    </p>
-                  )}
-                  {!removed && !editingHere && (canWithdraw || reviewer) ? (
-                    <div className="comment-actions">
-                      {canEdit ? (
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-ghost"
-                          onClick={() => beginEdit(row)}
-                          disabled={savingEdit || removing === row.id}
-                        >
-                          {text.editComment}
-                        </button>
-                      ) : null}
-                      {canWithdraw ? (
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-ghost"
-                          onClick={() => void remove(row, 'author')}
-                          disabled={removing === row.id}
-                        >
-                          {text.removeComment}
-                        </button>
-                      ) : null}
-                      {reviewer ? (
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-ghost"
-                          aria-expanded={reasonFor === row.id}
-                          aria-controls={`${reasonId}-${row.id}`}
-                          onClick={() => {
-                            setReasonFor(reasonFor === row.id ? null : row.id);
-                            setReason('');
-                            setAction(null);
-                          }}
-                          disabled={removing === row.id}
-                        >
-                          {text.moderateComment}
-                        </button>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  {reasonFor === row.id && !removed ? (
-                    <form
-                      className="comment-moderation"
-                      onSubmit={(event) => {
-                        event.preventDefault();
-                        void remove(row, 'moderation');
-                      }}
-                    >
-                      <div className="field">
-                        <label
-                          className="field-label"
-                          htmlFor={`${reasonId}-${row.id}`}
-                        >
-                          {text.removalReason}
-                        </label>
-                        <textarea
-                          id={`${reasonId}-${row.id}`}
-                          className="textarea"
-                          rows={3}
-                          maxLength={COMMENT_REASON_MAX_LENGTH}
-                          value={reason}
-                          onChange={(event) => setReason(event.target.value)}
-                          aria-describedby={reasonHintId}
-                          disabled={removing === row.id}
-                          autoFocus
-                        />
-                      </div>
-                      <p className="field-hint" id={reasonHintId}>
-                        {text.removalReasonHint}{' '}
-                        <span translate="no">
-                          {[...reason.trim()].length}/
-                          {COMMENT_REASON_MAX_LENGTH}
-                        </span>
+                        </div>
+                      </form>
+                    ) : removed ? null : (
+                      <p className="comment-body" translate="no">
+                        {row.body}
                       </p>
-                      <div className="composer-foot">
-                        <button
-                          type="submit"
-                          className="btn btn-danger btn-sm"
-                          disabled={removing === row.id}
-                        >
-                          {removing === row.id
-                            ? text.removing
-                            : text.confirmRemove}
-                        </button>
+                    )}
+                    {reviewer ? (
+                      <div className="comment-actions">
                         <button
                           type="button"
-                          className="btn btn-ghost btn-sm"
-                          onClick={() => {
-                            setReasonFor(null);
-                            setReason('');
-                            setAction(null);
-                          }}
-                          disabled={removing === row.id}
+                          className="btn btn-sm btn-ghost"
+                          onClick={() => void loadHistory(row.id)}
+                          disabled={historyBusy[row.id] === true}
                         >
-                          {text.cancel}
+                          {history[row.id]
+                            ? text.hideHistory
+                            : historyBusy[row.id]
+                              ? text.loading
+                              : text.viewHistory}
                         </button>
                       </div>
-                    </form>
-                  ) : null}
-                  {action?.id === row.id ? (
-                    <p role="alert" className="field-error">
-                      {actionMessage(action.code)}{' '}
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-ghost"
-                        onClick={refresh}
+                    ) : null}
+                    {reviewer && history[row.id] ? (
+                      <>
+                        {history[row.id]!.events.length ? (
+                          <ol
+                            className="comment-history"
+                            aria-label={text.commentHistory}
+                          >
+                            {history[row.id]!.events.map((event, index) => (
+                              <li
+                                key={`${event.kind}-${event.version ?? index}`}
+                                data-history-kind={event.kind}
+                                data-history-version={event.version ?? ''}
+                              >
+                                <p>
+                                  <strong>
+                                    {event.kind === 'posting'
+                                      ? text.commentPosted
+                                      : event.kind === 'edit'
+                                        ? text.commentEditedMarker
+                                        : event.removalKind === 'author'
+                                          ? text.commentAuthorWithdrawal
+                                          : text.commentModeratedRemoval}
+                                  </strong>{' '}
+                                  —{' '}
+                                  <span
+                                    className="comment-history-body"
+                                    translate="no"
+                                  >
+                                    {event.body}
+                                  </span>
+                                </p>
+                                <p className="comment-meta" translate="no">
+                                  <span className="comment-history-actor">
+                                    {event.actorName}
+                                  </span>{' '}
+                                  ·{' '}
+                                  <time
+                                    className="comment-history-time"
+                                    dateTime={event.occurredAt}
+                                  >
+                                    {vietnamTimestamp(event.occurredAt, locale)}
+                                  </time>{' '}
+                                  ({text.vietnamTime})
+                                </p>
+                                {event.removalKind === 'moderation' &&
+                                event.reason ? (
+                                  <p className="field-hint comment-history-reason">
+                                    {text.removalReason}:{' '}
+                                    <span translate="no">{event.reason}</span>
+                                  </p>
+                                ) : null}
+                              </li>
+                            ))}
+                          </ol>
+                        ) : (
+                          <p className="field-hint">
+                            {text.commentHistoryEmpty}
+                          </p>
+                        )}
+                        {history[row.id]!.hasMore ? (
+                          <p className="field-hint comment-history-more">
+                            {text.commentHistoryMore}
+                          </p>
+                        ) : null}
+                      </>
+                    ) : null}
+                    {reviewer && historyError[row.id] ? (
+                      <p
+                        role="alert"
+                        className="field-error comment-history-error"
                       >
-                        {text.refresh}
-                      </button>
-                    </p>
-                  ) : null}
-                </div>
-              </article>
-            </li>
-          );
-        })}
-      </ol>
-      {!busy && !error && !comments.length ? <p>{text.noComments}</p> : null}
-      {editNotice ? <p role="status">{editNotice}</p> : null}
-      {removeNotice ? <p role="status">{removeNotice}</p> : null}
-      {next ? (
-        <p>
-          <button
-            type="button"
-            className="btn btn-sm btn-ghost"
-            onClick={() => void loadMore()}
-            disabled={loadingMore}
-          >
-            {more ? text.loading : text.moreComments}
-          </button>
-        </p>
-      ) : null}
-      {archived ? null : (
-        <form className="composer" onSubmit={submit}>
-          <div className="field">
-            <label className="field-label" htmlFor={fieldId}>
-              {text.addComment}
-            </label>
-            <textarea
-              id={fieldId}
-              className="textarea"
-              name="comment"
-              rows={4}
-              maxLength={COMMENT_MAX_LENGTH}
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              aria-describedby={helpId}
-              disabled={posting}
-            />
-          </div>
-          <p className="field-hint" id={helpId}>
-            {text.commentHint}{' '}
-            <span translate="no">
-              {[...draft.trim()].length}/{COMMENT_MAX_LENGTH}
-            </span>
-          </p>
-          {postError ? (
-            <p role="alert">
-              {postError}{' '}
-              <button
-                type="button"
-                className="btn btn-sm btn-ghost"
-                onClick={refresh}
-              >
-                {text.refresh}
-              </button>
-            </p>
-          ) : null}
-          {notice ? <p role="status">{notice}</p> : null}
-          <div className="composer-foot">
+                        {text.commentHistoryFailed}{' '}
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          onClick={() => void loadHistory(row.id)}
+                        >
+                          {text.retry}
+                        </button>
+                      </p>
+                    ) : null}
+                    {!removed && !editingHere && (canWithdraw || reviewer) ? (
+                      <div className="comment-actions">
+                        {canEdit ? (
+                          <IconAction
+                            name="edit"
+                            label={text.editComment}
+                            disabled={savingEdit || removing === row.id}
+                            onClick={() => beginEdit(row)}
+                          />
+                        ) : null}
+                        {canWithdraw ? (
+                          <IconAction
+                            name="remove"
+                            label={text.removeComment}
+                            disabled={removing === row.id}
+                            onClick={() => void remove(row, 'author')}
+                          />
+                        ) : null}
+                        {reviewer ? (
+                          <IconAction
+                            name="moderate"
+                            label={text.moderateComment}
+                            expanded={reasonFor === row.id}
+                            controls={`${reasonId}-${row.id}`}
+                            disabled={removing === row.id}
+                            onClick={() => {
+                              setReasonFor(
+                                reasonFor === row.id ? null : row.id,
+                              );
+                              setReason('');
+                              setAction(null);
+                            }}
+                          />
+                        ) : null}
+                      </div>
+                    ) : null}
+                    {reasonFor === row.id && !removed ? (
+                      <form
+                        className="comment-moderation"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          void remove(row, 'moderation');
+                        }}
+                      >
+                        <div className="field">
+                          <label
+                            className="field-label"
+                            htmlFor={`${reasonId}-${row.id}`}
+                          >
+                            {text.removalReason}
+                          </label>
+                          <textarea
+                            id={`${reasonId}-${row.id}`}
+                            className="textarea"
+                            rows={3}
+                            maxLength={COMMENT_REASON_MAX_LENGTH}
+                            value={reason}
+                            onChange={(event) => setReason(event.target.value)}
+                            aria-describedby={reasonHintId}
+                            disabled={removing === row.id}
+                            autoFocus
+                          />
+                        </div>
+                        <p className="field-hint" id={reasonHintId}>
+                          {text.removalReasonHint}{' '}
+                          <span translate="no">
+                            {[...reason.trim()].length}/
+                            {COMMENT_REASON_MAX_LENGTH}
+                          </span>
+                        </p>
+                        <div className="composer-foot">
+                          <button
+                            type="submit"
+                            className="btn btn-danger btn-sm"
+                            disabled={removing === row.id}
+                          >
+                            {removing === row.id
+                              ? text.removing
+                              : text.confirmRemove}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => {
+                              setReasonFor(null);
+                              setReason('');
+                              setAction(null);
+                            }}
+                            disabled={removing === row.id}
+                          >
+                            {text.cancel}
+                          </button>
+                        </div>
+                      </form>
+                    ) : null}
+                    {action?.id === row.id ? (
+                      <p role="alert" className="field-error">
+                        {actionMessage(action.code)}{' '}
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          onClick={refresh}
+                        >
+                          {text.refresh}
+                        </button>
+                      </p>
+                    ) : null}
+                  </div>
+                </article>
+              </li>
+            );
+          })}
+        </ol>
+        {!busy && !error && !comments.length ? <p>{text.noComments}</p> : null}
+        {editNotice ? <p role="status">{editNotice}</p> : null}
+        {removeNotice ? <p role="status">{removeNotice}</p> : null}
+        {next ? (
+          <p>
             <button
-              type="submit"
-              className="btn btn-primary btn-sm"
-              disabled={posting}
+              type="button"
+              className="btn btn-sm btn-ghost"
+              onClick={() => void loadMore()}
+              disabled={loadingMore}
             >
-              {posting ? text.posting : text.postComment}
+              {more ? text.loading : text.moreComments}
             </button>
-          </div>
-        </form>
-      )}
+          </p>
+        ) : null}
+        {archived ? null : (
+          <form className="composer" onSubmit={submit}>
+            <div className="field">
+              <label className="field-label" htmlFor={fieldId}>
+                {text.addComment}
+              </label>
+              <textarea
+                id={fieldId}
+                className="textarea"
+                name="comment"
+                rows={4}
+                maxLength={COMMENT_MAX_LENGTH}
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                aria-describedby={helpId}
+                disabled={posting}
+              />
+            </div>
+            <p className="field-hint" id={helpId}>
+              {text.commentHint}{' '}
+              <span translate="no">
+                {[...draft.trim()].length}/{COMMENT_MAX_LENGTH}
+              </span>
+            </p>
+            {postError ? (
+              <p role="alert">
+                {postError}{' '}
+                <button
+                  type="button"
+                  className="btn btn-sm btn-ghost"
+                  onClick={refresh}
+                >
+                  {text.refresh}
+                </button>
+              </p>
+            ) : null}
+            {notice ? <p role="status">{notice}</p> : null}
+            <div className="composer-foot">
+              <button
+                type="submit"
+                className="btn btn-primary btn-sm"
+                disabled={posting}
+              >
+                {posting ? text.posting : text.postComment}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
     </section>
   );
 }

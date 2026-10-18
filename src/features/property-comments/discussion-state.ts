@@ -2,6 +2,7 @@ import {
   COMMENT_PAGE_SIZE,
   type Comment,
   type CommentCursor,
+  type CommentHistoryPage,
 } from './types.ts';
 
 export const cursorOf = (row: Comment | undefined): CommentCursor | null =>
@@ -30,6 +31,50 @@ export function mergePage(current: Comment[], page: Comment[]): Comment[] {
       return existing;
     return row;
   });
+}
+
+export function changedCommentIds(
+  current: Comment[],
+  page: Comment[],
+): string[] {
+  const existing = new Map(current.map((row) => [row.id, row]));
+  return mergePage(current, page)
+    .filter((row) => {
+      const previous = existing.get(row.id);
+      return previous !== undefined && !sameComment(previous, row);
+    })
+    .map((row) => row.id);
+}
+
+export function droppedCommentIds(
+  current: Comment[],
+  kept: Comment[],
+): string[] {
+  const retained = new Set(kept.map((row) => row.id));
+  return current.filter((row) => !retained.has(row.id)).map((row) => row.id);
+}
+
+export function staleHistoryIds(
+  appended: Comment[],
+  cached: Record<string, CommentHistoryPage>,
+): string[] {
+  return appended
+    .filter((row) => cached[row.id] !== undefined)
+    .map((row) => row.id);
+}
+
+function sameComment(left: Comment, right: Comment): boolean {
+  return (
+    left.id === right.id &&
+    left.propertyId === right.propertyId &&
+    left.authorId === right.authorId &&
+    left.authorName === right.authorName &&
+    left.body === right.body &&
+    left.createdAt === right.createdAt &&
+    left.revision === right.revision &&
+    left.removedAt === right.removedAt &&
+    left.editedAt === right.editedAt
+  );
 }
 
 function timestampKey(value: string): string {

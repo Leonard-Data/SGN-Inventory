@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import type { Json } from '@/types/database';
 import type { Locale } from '@/i18n/messages';
-import { label } from '@/i18n/messages';
+import { label, messages } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import {
   formatVnd,
@@ -74,7 +74,10 @@ export function BusinessValues({
                 extraLabels[name]?.[locale === 'vi' ? 0 : 1] ??
                 name}
             </dt>
-            <dd translate="no">{content}</dd>
+            {/* One clipped line; the full value stays in the DOM and on the title. */}
+            <dd translate="no" title={content ?? undefined}>
+              {content}
+            </dd>
           </div>
         );
       })}
@@ -109,7 +112,11 @@ export function History({
         {busy ? <p role="status">{text.loading}</p> : null}
         {error ? (
           <div className="alert" data-tone="danger" role="alert">
-            <span>{text.unavailable}</span>
+            <span>
+              {error === 'access-changed'
+                ? messages[locale].accessChanged
+                : text.unavailable}
+            </span>
             <button className="btn btn-sm btn-ghost" onClick={reload}>
               {text.refresh}
             </button>
@@ -179,6 +186,7 @@ export function History({
             </>
           ) : null}
         </div>
+        <p className="field-hint">{text.historyNote}</p>
       </div>
     </section>
   );

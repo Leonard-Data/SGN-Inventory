@@ -3,6 +3,7 @@ import { ApiError, type RouteContext } from '@/lib/supabase/route';
 import {
   DIRECTORY_PAGE_SIZE,
   DirectoryError,
+  directoryInvitations,
   directoryOperations,
   directoryPage,
   directoryQuery,
@@ -60,12 +61,26 @@ export async function listEmployees(
     deactivation: directoryOperations(rows, 'deactivate'),
     deletion: directoryOperations(rows, 'delete'),
   };
+  // Newest first, so the first invitation returned for an employee is the one displayed.
+  const { data: invitations, error: invitationError } = await context.client
+    .from('employee_invitations')
+    .select('employee_id,state,revision,updated_at')
+    .in('employee_id', ids)
+    .order('requested_at', { ascending: false })
+    .order('id', { ascending: false });
+  if (invitationError)
+    throw new ApiError(
+      invitationError.code === '42501' ? 403 : 503,
+      invitationError.code === '42501' ? 'access-denied' : 'unavailable',
+    );
+  const invited = directoryInvitations(invitations ?? []);
   return {
     ...page,
     employees: page.employees.map((employee) => ({
       ...employee,
       deactivation: states.deactivation.get(employee.id) ?? null,
       deletion: states.deletion.get(employee.id) ?? null,
+      invitation: invited.get(employee.id) ?? null,
     })),
   };
 }

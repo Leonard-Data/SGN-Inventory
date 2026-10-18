@@ -1,7 +1,7 @@
 import { PDFDocument } from 'pdf-lib';
 import sharp from 'sharp';
+import { maximumFileBytes } from './limits.ts';
 
-export const maximumFileBytes = 20 * 1024 * 1024;
 export const fileMimeTypes = [
   'application/pdf',
   'image/jpeg',

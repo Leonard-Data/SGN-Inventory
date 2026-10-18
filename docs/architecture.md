@@ -11,20 +11,19 @@ flowchart TD
   E["Employee browser"] --> N["Next.js on Vercel"]
   N --> A["Supabase Auth"]
   N --> P["Postgres: RLS and workflow RPCs"]
-  E --> S["Private Supabase Storage"]
-  P --> S
+  E --> S["Private Cloudflare R2"]
   W["Workbook preparation"] --> R["Private staging and reconciliation"]
   R --> P
 ```
 
-The Postgres → Storage line represents authorization through registered file metadata, not a database process transferring file bytes. Browser uploads use a signed-in Supabase client after registration; document downloads use short-lived signed URLs after authorization.
+The browser reaches the private bucket directly and the database never touches file bytes: authorization runs through registered file metadata. The RLS-checked `property_files` record is authorized first, so the short-lived presigned URL is minted only afterwards, and completion attests the exact object bytes under a signature the database verifies.
 
 | Component | Responsibility | Exclusions |
 | --- | --- | --- |
 | Next.js | Responsive Vietnamese/English UI, SSR, validated forms, server actions, request-scoped Supabase clients | Commission computation and direct privileged user-data queries |
 | Supabase Auth | Invitations, authentication, recovery, sessions | Business roles derived from user-editable metadata |
 | Postgres | Inventory, addresses, relationships, activity, approvals, audit, analytic views | Binary files, commission payouts and general accounting |
-| Storage | Private photos, certificates and supporting evidence | Public legal-file URLs and overwrite-in-place |
+| Cloudflare R2 | Private photos, certificates and supporting evidence, reached only through short-lived presigned URLs | Public legal-file URLs and overwrite-in-place |
 | Vercel | Next.js build, preview and production hosting | Database migration authority and scheduled financial jobs |
 | Import tools | Profiling, normalization, reviewed mappings, controlled promotion | Guessing unmatched references or inventing current wards |
 

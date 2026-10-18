@@ -40,7 +40,7 @@ src/
     login/, access-denied/     # Localized sign-in and explicit membership denial
     recover/, reset-password/  # Real delivered recovery, including denied identities
     properties/                # Protected browse and read-only details
-    auth/                      # PKCE/token-hash recovery callbacks
+    auth/                      # PKCE/token-hash callbacks and the fixed invitation destination
     api/                       # Validated auth/session/inventory/locale + health
     globals.css                # Shared responsive presentation
     sgn-auth.css               # Canonical authentication tokens + components (#50)
@@ -48,11 +48,14 @@ src/
   proxy.ts                     # Session refresh, live membership and saved locale
   features/employees/          # Membership guard, auth screens/shell/controls, protected state
   features/properties/         # Bounded queries, details, page views and formatting
-  features/property-files/     # Private file read workspace, types, signed URLs
+  features/property-files/     # Private file read workspace, types, per-property limits, presigned R2 links, released-upload cleanup pass
+  lib/r2.ts                     # Server-only private bucket client: signed PUT/GET, deletion, metadata/bytes
+  lib/supabase/service.ts       # Server-only service-role client for the trusted provider and cleanup steps
   features/property-maintenance/ # Create/edit maintenance, address/contact forms, history
   features/corrections/        # Correction submission, queue and amendment rendering
   features/property-comments/  # Shared Property discussion, submission-key recovery, paging and comment removal
-  features/vendors/            # Vendor directory reads, guarded create and one optional contact block
+  features/vendors/            # Vendor directory reads, guarded create, one optional contact block and explicit property links
+  features/contacts/           # Shared-contact directory read, view rules and correction data access
   features/sales/              # Sale completion confirmation, completed-sale ranking and boundary rules
   i18n/messages.ts             # Equivalent typed VI/EN journey dictionaries
   lib/supabase/route.ts         # User-scoped SSR cookies/cache/input boundary
@@ -60,16 +63,21 @@ src/
   lib/environment.ts           # Pure validated environment Interface
   lib/environment.test.ts      # Configuration invariants
 scripts/
-  check-environment.mjs         # Operator-facing configuration check
+  check-environment.mjs         # Operator-facing configuration check (including R2 readiness)
+  copy-property-files-to-r2.mjs # One-off Supabase→R2 object copy: dry run, --apply, --verify
   release-guard.mjs             # Branch/project isolation, pending migrations and release smoke
   release-guard.test.mjs        # Cross-stage regression risks
   validate-schema.mjs           # Existing embedded SQL assertions
+  audit-retention-contract.mjs  # Embedded private audit-retention regressions
   maintenance-contract.mjs      # Embedded maintenance/history regressions
   correction-contract.mjs       # Embedded correction-workflow regressions
   comments-contract.mjs         # Embedded discussion role/validation/retry/paging regressions
   comment-removal-contract.mjs  # Embedded removal authority, retention and terminal-state regressions
   vendor-contract.mjs           # Embedded vendor authority, validation, retry and paging regressions
-  vendor-acceptance.mjs         # Hosted vendor directory acceptance (executed 14 October 2026)
+  property-vendor-links-contract.mjs # Embedded property-vendor link authority, correction and history regressions
+  vendor-acceptance.mjs         # Hosted vendor-directory and property-vendor-link acceptance harnesses (see testing.md)
+  contact-directory-contract.mjs    # Embedded shared-contact directory read/correction regressions
+  contact-directory-acceptance.mjs  # Hosted real browser/Supabase contact-directory acceptance (executed 17 October 2026)
   sale-completion-contract.mjs   # Embedded sale-completion authority, atomicity, retry and ranking regressions
   sale-completion-acceptance.mjs # Written real browser/Supabase sale-completion acceptance (not yet executed here)
   employee-access-acceptance.mjs # Real app/browser/Auth/RLS dev fixture acceptance
@@ -83,7 +91,7 @@ supabase/
 .husky/pre-commit
 ```
 
-Create additional feature directories only for approved backlog work. Employee access, read-only inventory, private files and issue #7 maintenance/corrections are implemented; the shared Property discussion (#44) has its development-project acceptance executed, with staging/production and keyboard-only/360px mobile gates still unexecuted; issue #45's comment removal and moderation is implemented on that discussion, with its hosted acceptance executed at application head `45f356a` ([testing.md](testing.md#ticket-45-removal-acceptance-executed-13-october-2026)); staging/production and keyboard-only/360px mobile gates remain unexecuted; issue #18's reservation request and independent decision is implemented on the property detail, with its acceptance evidence and remaining gates in [testing.md](testing.md#reservation-acceptance-ticket-18); issue #38's independently confirmed sale completion and completed-sale ranking is implemented on the property detail and `/reports/completed-sales`, with embedded/unit regressions and a written but unexecuted real-browser acceptance harness ([testing.md](testing.md#sale-completion-acceptance-issue-38)); issue #65's admin employee list is implemented with its hosted acceptance harness written but not yet executed, and issue #73's vendor directory is implemented with its hosted acceptance executed at the reviewed head `2a1d69c` ([testing.md](testing.md#vendor-directory-acceptance-issue-73)); rental and remaining UI work is tracked in [delivery-plan.md](delivery-plan.md). The real-mailbox recovery gate prevents claiming completed issue #1 acceptance.
+Create additional feature directories only for approved backlog work. Employee access, read-only inventory, private files and issue #7 maintenance/corrections are implemented; the shared Property discussion (#44) has its development-project acceptance executed, with staging/production and keyboard-only/360px mobile gates still unexecuted; issue #45's comment removal and moderation is implemented on that discussion, with its hosted acceptance executed at application head `45f356a` ([testing.md](testing.md#ticket-45-removal-acceptance-executed-13-october-2026)); staging/production and keyboard-only/360px mobile gates remain unexecuted; issue #18's reservation request and independent decision is implemented on the property detail, with its acceptance evidence and remaining gates in [testing.md](testing.md#reservation-acceptance-ticket-18); issue #38's independently confirmed sale completion and completed-sale ranking is implemented on the property detail and `/reports/completed-sales`, with embedded/unit regressions and a written but unexecuted real-browser acceptance harness ([testing.md](testing.md#sale-completion-acceptance-issue-38)); issue #68's recorded role-bound employee invitation is implemented, its migration applied and verified on the development project, and its hosted acceptance executed there after the sender moved to the verified `sgnewhouse.online` domain - delivery from the real sender, the recorded invited role and state in the admin list, and the delivered link's landing are recorded, with the project's Redirect URLs allow list still outstanding ([testing.md](testing.md#employee-invitation-acceptance-issue-68)); issue #69's acceptance journey is implemented at the same fixed destination — the invitee completes setup, is linked to the recorded employee and activates themselves immediately — with embedded/unit regressions passing and its delivered-link hosted acceptance still a staging gate ([testing.md](testing.md#invitation-acceptance-journey-issue-69)); issue #65's admin employee list is implemented with its hosted acceptance harness written but not yet executed, and issue #73's vendor directory is implemented with its hosted acceptance executed at the reviewed head `2a1d69c` ([testing.md](testing.md#vendor-directory-acceptance-issue-73)); issue #71's shared-contact directory is implemented at `/people/contacts` with its hosted acceptance executed on 17 October 2026, subject to the gates recorded there ([testing.md](testing.md#contact-directory-acceptance-ticket-71)); issue #74's property vendor links are implemented on the property record and the vendor detail, with embedded/unit regressions and its hosted acceptance executed at the reviewed head `86e397a` after the stale-context code was corrected to `PT409`; that historical run executed against the pre-removal schema, which wrote `vendor_link` rows in `public.property_history` for link and unlink and whose harness asserted those rows, while the current head projects none because the trigger is dropped and history stays price-only; it also predates the approved all-active-employee authority, which the final hosted run in the same lane exercised at head `d03aa74`, including the sales link and unlink ([testing.md](testing.md#property-vendor-link-acceptance-issue-74)); rental and remaining UI work is tracked in [delivery-plan.md](delivery-plan.md). The real-mailbox recovery gate prevents claiming completed issue #1 acceptance.
 
 - `src/app/`: route composition, presentation, narrow validated Server Actions/Route Handlers. No direct inventory SQL/query orchestration in rendering.
 - `src/features/<feature>/`: validation, feature data access, domain results and workflow operations; keep feature-specific rendering beside the feature when useful. Export a small Interface, not every internal helper.

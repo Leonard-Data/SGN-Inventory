@@ -6,10 +6,12 @@
 | --- | --- | --- | --- | --- |
 | Read internal inventory, addresses, contacts/files and employee directory | Yes | Yes | Yes | Yes |
 | Read the vendor directory | Yes | Yes | Yes | Yes |
-| Create/maintain vendors | No | Yes | Yes | Yes |
+| Create vendor directory records | No | Yes | Yes | Yes |
+| Link or unlink a property's vendor | Yes | Yes | Yes | Yes |
 | Create property / request reservation | Yes | Yes | Yes | Yes |
 | Edit property/address | Own unarchived | All unarchived | All unarchived | All unarchived |
 | Correct an existing linked shared-contact detail | Yes | Yes | Yes | Yes |
+| Correct an unlinked shared-contact identity | No | Yes | Yes | Yes |
 | Create contacts, change relationship/primary markers or unlink | No | Yes | Yes | Yes |
 | Submit correction request | Yes | Yes | Yes | Yes |
 | Process/reject correction requests | No | Yes | Yes | Yes |
@@ -21,11 +23,12 @@
 | Read the completed-sale ranking | No | No | Yes | Yes |
 | Manage employee activation/roles and catalogs | No | No | No | Yes |
 | Deactivate a linked employee (guarded; provider block confirmed) | No | No | No | Yes |
+| Invite an employee by email and role (guarded; provider request recorded) | No | No | No | Yes |
 | Open the admin employee list (`/people/employees`) | No | No | No | Yes |
 | Read area/employee analytics | No | No | Yes | Yes |
 | Read staging/audit directly through API | No | No | No | No |
 
-These roles are company-wide. No team isolation is assumed. The directory includes work emails and employee phones; treat these as internal data.
+These roles are company-wide. Every active employee, Sales included, may read the vendor directory and link or unlink a recorded vendor on a property they can read. Staff, manager and admin create vendor directory records; vendor editing is ticket #75's work. No team isolation is assumed. The directory includes work emails and employee phones; treat these as internal data.
 
 ## Reservation lifecycle
 
@@ -72,12 +75,12 @@ The required languages are VI/EN, with Vietnamese regional conventions in either
 - Authorization uses a live active employee row, independent of editable Auth profile metadata.
 - Business mutation definers are private, fixed-search-path functions with explicit role checks; public endpoints are invoker wrappers.
 - Views are invoker views; private staging and audit tables have RLS and no client grants.
-- Legal/photos bucket is private. Only registered pending uploads are accepted; ready objects are readable only by active employees under policy.
-- Browser file overwrites and deletion are denied. Upload completion checks object presence and document review is reviewer-only.
+- Property file bytes live in a private R2 bucket reached only through 60-second presigned URLs. The RLS-checked `property_files` record is the read authority: a pending registration accepts one signed upload URL, and a ready object is readable only by an active employee — or an archived property's reviewer — after that record is authorized. The four `R2_*` values are server-only; a missing one fails file operations closed.
+- Browser file overwrite and deletion are refused: the browser only holds a 60-second signed upload URL whose signature covers the object key, the registered byte count and the `If-None-Match` conditional create, so R2 refuses any other body length and refuses to replace an existing object; a refused upload's row is released to `cleanup_pending` at once, and only the trusted server deletes the bytes and then records `failed`. No client session can claim the bytes are gone, the deletion is retried by a server cleanup pass until it succeeds, and no browser path deletes a ready file. Completion re-reads the object from R2 and signs an attestation over its size, hash and decoded format that the database verifies. Document review stays reviewer-only.
 - UI hidden controls improve usability; database policies remain the authority.
 
 ## Operational controls to implement
 
 Validate every form and server input. Require POST/Server Action mutations with origin/CSRF protections appropriate to the route. Limit high-volume search/event submissions in application middleware or an equivalent rate limiter. Prevent shared caching of signed-in data. Keep logs limited to request IDs, error classes and safe identifiers. Alert on repeated reservation conflicts or failed file completions without logging deal/contact content.
 
-Admin user invitations must link the correct Auth account to an employee email and confirm the requested role. The last active admin is protected by a database trigger that refuses a deactivation, demotion, unlink or removal that would leave the company without an active admin, serialized with an advisory lock so concurrent removals cannot both pass; deactivation runs through the guarded `begin_employee_deactivation` RPC and a direct lifecycle, link or role write cannot bypass the guard. Activation, invitation and role-change forms remain unshipped. Bootstrap the first admin through a controlled administrative database action after creating the Auth account.
+Admin user invitations must link the correct Auth account to an employee email and confirm the requested role. The last active admin is protected by a database trigger that refuses a deactivation, demotion, unlink or removal that would leave the company without an active admin, serialized with an advisory lock so concurrent removals cannot both pass; deactivation runs through the guarded `begin_employee_deactivation` RPC and a direct lifecycle, link or role write cannot bypass the guard. An invitation runs through the guarded `begin_employee_invitation` RPC: it records one normalized address and one existing company role under the live admin, creates the invited employee unlinked and inactive, and records the provider request state without activating or linking anyone; the requested role is never written into editable Auth metadata. Only the invitee's own session accepts it: the public invoker `accept_employee_invitation` requires the caller's `auth.uid()` to be the invitation's recorded provider identity, so an email match alone, a different identity, an arbitrary redirect, password recovery or edited Auth metadata never links, activates or promotes anyone, and the recorded role is the one that applies. A valid, current, correctly matched invitation completed by that invitee links and activates the retained employee immediately — the invitee activates themselves, with no manager approval step — while a deactivated, deleted or differently-linked employee is refused and never restored. Admin row actions that activate or change a role remain unshipped. Bootstrap the first admin through a controlled administrative database action after creating the Auth account.

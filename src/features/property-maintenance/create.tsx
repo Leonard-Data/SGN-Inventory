@@ -67,7 +67,9 @@ export function CreateProperty({
                 property_type: 'unclassified',
                 access_type: 'unknown',
               }}
-              names={targetFields.property.filter((k) => k !== 'status')}
+              names={targetFields.property.filter(
+                (k) => k !== 'status' && k !== 'latitude' && k !== 'longitude',
+              )}
             />
             <AddressFields
               locale={locale}

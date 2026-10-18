@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  AccessChangedError,
   loadProtected,
   refocusAction,
   renderedSession,
+  sessionDiffers,
 } from './protected-load.ts';
 import { RequestError } from './api.ts';
 import type { Employee } from './types.ts';
@@ -29,31 +31,49 @@ const manager: Employee = {
 const archived = { property: { id: 'archived-1' } };
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
+const sessionResponse = (employee: Employee, accessRevision = 0) =>
+  Response.json({ employee, accessRevision });
+
+test('an unchanged access revision is the same session', () => {
+  const current = { employee: manager, accessRevision: 2 };
+
+  assert.equal(sessionDiffers(renderedSession(manager), 2, current), false);
+  assert.equal(sessionDiffers(renderedSession(manager), 1, current), true);
+  assert.equal(sessionDiffers(renderedSession(reviewer), 2, current), true);
+});
 
 test('same-identity reload keeps the rendered snapshot without concealing', async (t) => {
   t.mock.method(globalThis, 'fetch', async (path: string) => {
     assert.equal(path, '/api/session');
-    return Response.json({ employee: reviewer });
+    return sessionResponse(reviewer);
   });
   const events: string[] = [];
   const result = await loadProtected({
     source: async () => archived,
     signal: new AbortController().signal,
     renderedFor: renderedSession(reviewer),
+    renderedAccessRevision: 0,
     onIdentityChange: () => {
       events.push('conceal');
     },
   });
   assert.deepEqual(events, []);
-  assert.deepEqual(result, { employee: reviewer, data: archived });
+  assert.deepEqual(result, {
+    employee: reviewer,
+    data: archived,
+    accessRevision: 0,
+  });
 });
 
-test('an ordinary employee replacing a reviewer conceals the archived snapshot before its data is published', async (t) => {
+test('an advanced access revision conceals the rendered snapshot before its data is published', async (t) => {
   const session = Promise.withResolvers<Response>();
   const source = Promise.withResolvers<typeof archived>();
   const events: string[] = [];
   let settled = false;
-  t.mock.method(globalThis, 'fetch', async () => session.promise);
+  let sessionReads = 0;
+  t.mock.method(globalThis, 'fetch', async () =>
+    sessionReads++ === 0 ? session.promise : sessionResponse(reviewer, 1),
+  );
   const pending = loadProtected({
     source: () => {
       events.push('source-requested');
@@ -61,6 +81,7 @@ test('an ordinary employee replacing a reviewer conceals the archived snapshot b
     },
     signal: new AbortController().signal,
     renderedFor: renderedSession(reviewer),
+    renderedAccessRevision: 0,
     onIdentityChange: () => {
       events.push('conceal');
       assert.equal(settled, false);
@@ -69,19 +90,65 @@ test('an ordinary employee replacing a reviewer conceals the archived snapshot b
     settled = true;
   });
   await flush();
-  session.resolve(Response.json({ employee: sales }));
+  session.resolve(sessionResponse(reviewer, 1));
   await flush();
-  assert.deepEqual(events, ['source-requested', 'conceal']);
+  assert.deepEqual(events, ['conceal', 'source-requested']);
   assert.equal(settled, false);
   source.resolve(archived);
-  assert.deepEqual(await pending, { employee: sales, data: archived });
+  assert.deepEqual(await pending, {
+    employee: reviewer,
+    data: archived,
+    accessRevision: 1,
+  });
+});
+
+test('an ordinary employee replacing a reviewer conceals the archived snapshot before its data is published', async (t) => {
+  const session = Promise.withResolvers<Response>();
+  const source = Promise.withResolvers<typeof archived>();
+  const events: string[] = [];
+  let settled = false;
+  let sessionReads = 0;
+  t.mock.method(globalThis, 'fetch', async () =>
+    sessionReads++ === 0 ? session.promise : sessionResponse(sales),
+  );
+  const pending = loadProtected({
+    source: () => {
+      events.push('source-requested');
+      return source.promise;
+    },
+    signal: new AbortController().signal,
+    renderedFor: renderedSession(reviewer),
+    renderedAccessRevision: 0,
+    onIdentityChange: () => {
+      events.push('conceal');
+      assert.equal(settled, false);
+    },
+  }).finally(() => {
+    settled = true;
+  });
+  await flush();
+  session.resolve(sessionResponse(sales));
+  await flush();
+  assert.deepEqual(events, ['conceal', 'source-requested']);
+  assert.equal(settled, false);
+  source.resolve(archived);
+  assert.deepEqual(await pending, {
+    employee: sales,
+    data: archived,
+    accessRevision: 0,
+  });
 });
 
 test('the same employee with a different role conceals the manager snapshot before its data is published', async (t) => {
   const session = Promise.withResolvers<Response>();
   const source = Promise.withResolvers<typeof archived>();
   const events: string[] = [];
-  t.mock.method(globalThis, 'fetch', async () => session.promise);
+  let sessionReads = 0;
+  t.mock.method(globalThis, 'fetch', async () =>
+    sessionReads++ === 0
+      ? session.promise
+      : sessionResponse({ ...manager, role: 'sales' }),
+  );
   const pending = loadProtected({
     source: () => {
       events.push('source-requested');
@@ -89,36 +156,90 @@ test('the same employee with a different role conceals the manager snapshot befo
     },
     signal: new AbortController().signal,
     renderedFor: renderedSession(manager),
+    renderedAccessRevision: 0,
     onIdentityChange: () => {
       events.push('conceal');
     },
   });
   await flush();
-  session.resolve(Response.json({ employee: { ...manager, role: 'sales' } }));
+  session.resolve(sessionResponse({ ...manager, role: 'sales' }));
   await flush();
-  assert.deepEqual(events, ['source-requested', 'conceal']);
+  assert.deepEqual(events, ['conceal', 'source-requested']);
   source.resolve(archived);
   assert.deepEqual(await pending, {
     employee: { ...manager, role: 'sales' },
     data: archived,
+    accessRevision: 0,
   });
 });
 
 test('no rendered identity yet still conceals before publishing', async (t) => {
-  t.mock.method(globalThis, 'fetch', async () =>
-    Response.json({ employee: sales }),
-  );
+  t.mock.method(globalThis, 'fetch', async () => sessionResponse(sales));
   const events: string[] = [];
   const result = await loadProtected({
     source: async () => archived,
     signal: new AbortController().signal,
     renderedFor: null,
+    renderedAccessRevision: null,
     onIdentityChange: () => {
       events.push('conceal');
     },
   });
   assert.deepEqual(events, ['conceal']);
-  assert.deepEqual(result, { employee: sales, data: archived });
+  assert.deepEqual(result, {
+    employee: sales,
+    data: archived,
+    accessRevision: 0,
+  });
+});
+
+test('a revision advancing during the read discards the data it was read under', async (t) => {
+  let sessionReads = 0;
+  let sourceReads = 0;
+  t.mock.method(globalThis, 'fetch', async (path: string) => {
+    assert.equal(path, '/api/session');
+    // The first session read and the recheck after the data both belong to the
+    // superseded revision; the restarted read sees the advanced one.
+    return sessionResponse(sales, sessionReads++ === 0 ? 1 : 3);
+  });
+  const result = await loadProtected({
+    source: async () => {
+      sourceReads++;
+      return { property: { id: `read-${sourceReads}` } };
+    },
+    signal: new AbortController().signal,
+    renderedFor: renderedSession(sales),
+    renderedAccessRevision: 1,
+    onIdentityChange: () => {},
+  });
+  assert.equal(sourceReads, 2);
+  assert.deepEqual(result, {
+    employee: sales,
+    data: { property: { id: 'read-2' } },
+    accessRevision: 3,
+  });
+});
+
+test('a revision that never settles stops after three attempts without publishing', async (t) => {
+  let sessionReads = 0;
+  let sourceReads = 0;
+  t.mock.method(globalThis, 'fetch', async () =>
+    sessionResponse(sales, ++sessionReads),
+  );
+  await assert.rejects(
+    loadProtected({
+      source: async () => {
+        sourceReads++;
+        return archived;
+      },
+      signal: new AbortController().signal,
+      renderedFor: renderedSession(sales),
+      renderedAccessRevision: 0,
+      onIdentityChange: () => {},
+    }),
+    AccessChangedError,
+  );
+  assert.equal(sourceReads, 3);
 });
 
 test('a denied session rejects without publishing or concealing', async (t) => {
@@ -131,6 +252,7 @@ test('a denied session rejects without publishing or concealing', async (t) => {
       source: async () => archived,
       signal: new AbortController().signal,
       renderedFor: renderedSession(reviewer),
+      renderedAccessRevision: 0,
       onIdentityChange: () => {
         concealed += 1;
       },

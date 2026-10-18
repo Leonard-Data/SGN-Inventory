@@ -2,6 +2,13 @@ import 'server-only';
 import { ApiError, uuid, type RouteContext } from '@/lib/supabase/route';
 import type { AddressSummary, PropertyPage, PropertySummary } from './types';
 import {
+  catalogUnitsMatch,
+  filterRpcArgs,
+  INVENTORY_FILTER_KEYS,
+  parseInventoryFilters,
+  type InventoryFilters,
+} from './filters';
+import {
   ageCursorArgs,
   decodeAgeCursor,
   encodeAgeCursor,
@@ -21,18 +28,33 @@ export async function browseProperties(
   if ([...query].length > 120) throw new ApiError(400, 'query-too-long');
   if (sort !== null && !isInventoryOrder(sort))
     throw new ApiError(400, 'invalid-input');
-  const allowed =
-    sort === null ? ['query', 'after'] : ['query', 'after', 'sort'];
+  // A filter the address states must be applied or refused; it is never dropped into a
+  // different inventory than the one the address describes.
+  const filters = parseInventoryFilters(params);
+  if (!filters.ok) throw new ApiError(400, 'invalid-input');
+  const allowed = [
+    ...(sort === null ? ['query', 'after'] : ['query', 'after', 'sort']),
+    ...INVENTORY_FILTER_KEYS,
+  ];
   if ([...params.keys()].some((key) => !allowed.includes(key)))
     throw new ApiError(400, 'invalid-input');
+  // The area filter names official units from the same catalog the address form uses; a value
+  // absent from the catalog, or naming the wrong level, is refused instead of matching a
+  // different inventory.
+  await assertAreaUnits(context, filters.filters);
+  // The contact parameter names a recorded Contact the caller may read; an unknown or unreadable
+  // identifier is refused rather than applied as a contact with no linked property.
+  await assertContact(context, filters.filters);
   // The chronological views are a distinct bounded read over eligible inventory; the ordinary
   // UUID-ordered browse keeps serving the full unarchived inventory.
-  if (sort) return listInventoryByAge(context, sort, query, after);
+  if (sort)
+    return listInventoryByAge(context, sort, query, after, filters.filters);
   if (after !== null && !uuid(after)) throw new ApiError(400, 'invalid-input');
   const { data: rows, error } = await context.client
     .rpc('search_properties', {
       p_query: query,
       p_limit: 30,
+      ...filterRpcArgs(filters.filters),
       ...(after ? { p_after: after } : {}),
     })
     .select(
@@ -73,6 +95,7 @@ async function listInventoryByAge(
   order: InventoryOrder,
   query: string,
   after: string | null,
+  filters: InventoryFilters,
 ): Promise<PropertyPage> {
   const decoded = decodeAgeCursor(after);
   if (!decoded.ok) throw new ApiError(400, 'invalid-input');
@@ -83,6 +106,7 @@ async function listInventoryByAge(
       p_query: query,
       // One lookahead row beyond the exposed page decides whether a next page exists.
       p_limit: INVENTORY_PAGE_SIZE + 1,
+      ...filterRpcArgs(filters),
       ...ageCursorArgs(decoded.cursor),
     },
   );
@@ -129,6 +153,45 @@ function accessError(code: string | undefined): ApiError {
   return code === '42501'
     ? new ApiError(403, 'access-denied')
     : new ApiError(503, 'unavailable');
+}
+
+// The province must be a province-level catalog unit and the ward a commune-level unit inside
+// that province, so an address that swaps or mismatches them is refused rather than applied to a
+// different unit.
+async function assertAreaUnits(
+  context: RouteContext,
+  filters: InventoryFilters,
+): Promise<void> {
+  const { province, ward } = filters;
+  if (province === null && ward === null) return;
+  const { data, error } = await context.client
+    .from('admin_unit_versions')
+    .select('id,unit_level,parent_id')
+    .in(
+      'id',
+      [province, ward].filter((id): id is string => id !== null),
+    );
+  if (error) throw new ApiError(503, 'unavailable');
+  if (!catalogUnitsMatch(data ?? [], filters))
+    throw new ApiError(400, 'invalid-input');
+}
+
+// A contact the address states must be a readable recorded identity. The `contacts` read is the
+// caller's own RLS (`member_read`), so an identifier that names no readable contact is refused
+// exactly as the area check refuses an absent catalog unit, instead of silently matching an
+// empty inventory.
+async function assertContact(
+  context: RouteContext,
+  filters: InventoryFilters,
+): Promise<void> {
+  if (filters.contact === null) return;
+  const { data, error } = await context.client
+    .from('contacts')
+    .select('id')
+    .eq('id', filters.contact)
+    .maybeSingle();
+  if (error) throw new ApiError(503, 'unavailable');
+  if (!data) throw new ApiError(400, 'invalid-input');
 }
 
 async function addressSummaries(

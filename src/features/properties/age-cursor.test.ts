@@ -6,6 +6,7 @@ import {
   encodeAgeCursor,
   inventoryPage,
   isInventoryOrder,
+  reversedOrder,
   validTrailToken,
 } from './age-cursor.ts';
 
@@ -95,4 +96,10 @@ test('only the two chronological orderings are accepted', () => {
   assert.equal(isInventoryOrder('newest'), true);
   for (const value of ['', 'asc', 'desc', 'OLDEST', null, undefined])
     assert.equal(isInventoryOrder(value), false);
+});
+
+test('the direction toggle reverses only an active entry-date ordering', () => {
+  assert.equal(reversedOrder(null), null);
+  assert.equal(reversedOrder('oldest'), 'newest');
+  assert.equal(reversedOrder('newest'), 'oldest');
 });
