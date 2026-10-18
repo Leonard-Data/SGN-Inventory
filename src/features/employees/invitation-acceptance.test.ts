@@ -67,7 +67,10 @@ test('an auth failure is retryable only for a transient or throttled provider', 
 });
 
 test('only the unchanged-password refusal counts as an already-set credential', () => {
-  const cases: [Parameters<typeof isSamePasswordRefusal>[0], boolean][] = [
+  const cases: [
+    { code?: string; name?: string; status?: number } | null | undefined,
+    boolean,
+  ][] = [
     [{ code: 'same_password' }, true],
     [{ code: 'same_password', name: 'AuthApiError', status: 422 }, true],
     [{ code: 'weak_password', name: 'AuthApiError', status: 422 }, false],
