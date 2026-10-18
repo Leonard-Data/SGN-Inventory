@@ -6,6 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Environment } from '@/lib/environment';
 import type { Database } from '@/types/database';
 import { readEnvironment } from '@/lib/environment';
+import { originAllowed } from './origin';
 
 export class ApiError extends Error {
   constructor(
@@ -123,23 +124,9 @@ export async function objectBody(
   context: RouteContext,
   maxBytes = 8192,
 ): Promise<Record<string, unknown>> {
-  const origin = request.headers.get('origin');
-  const requestOrigin = request.nextUrl.origin;
-  const referer = request.headers.get('referer');
-  let refererOrigin = '';
-  try {
-    refererOrigin = referer ? new URL(referer).origin : '';
-  } catch {
-    refererOrigin = '';
-  }
-  const sameOriginRequest =
-    origin === context.environment.appUrl ||
-    origin === requestOrigin ||
-    (!origin &&
-      (refererOrigin === context.environment.appUrl ||
-        refererOrigin === requestOrigin ||
-        request.headers.get('sec-fetch-site') === 'same-origin'));
-  if (context.environment.stage === 'prod' && !sameOriginRequest)
+  if (
+    !originAllowed(request.headers, context.environment, request.nextUrl.origin)
+  )
     throw new ApiError(403, 'invalid-origin');
   if (!request.headers.get('content-type')?.startsWith('application/json'))
     throw new ApiError(400, 'invalid-input');
