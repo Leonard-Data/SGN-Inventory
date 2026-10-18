@@ -127,19 +127,24 @@ export async function invitationSessionStatus(
   };
 }
 
-// The guarded acceptance: verify the caller's own recorded invitation before anything is
-// written, set the credential, then link and activate through the invoker RPC. The RPC
-// re-derives the caller's identity and re-checks the recorded invitation, its revision and the
-// still-unlinked, live employee, so no credential is written for a caller the invitation does
-// not name, no credentialless membership is left behind, and a repeated or interrupted setup
-// converges on the same person and role.
+// The guarded acceptance: the caller's own recorded step decides the action. A caller the
+// recorded invitation already linked and activated is returned as accepted without touching
+// the credential or the RPC, so a repeated or interrupted setup converges instead of rewriting
+// a live password. Otherwise the credential is set and the invoker RPC links and activates the
+// exact recorded identity; the RPC re-derives the caller's identity and re-checks the recorded
+// invitation, its revision and the still-unlinked, live employee, so no credentialless
+// membership is left behind and no other person or role is ever assigned.
 export async function acceptInvitation(
   context: RouteContext,
   body: Record<string, unknown>,
 ): Promise<{ status: 'accepted' }> {
   const input: AcceptanceInput | null = acceptanceBody(body);
   if (!input) throw new ApiError(400, 'invalid-input');
-  await invitationSessionStatus(context);
+  const step = await invitationSessionStatus(context);
+  if (step.status === 'active') {
+    context.setLocale(input.locale);
+    return { status: 'accepted' };
+  }
   const { error: passwordError } = await context.client.auth.updateUser({
     password: input.password,
   });
