@@ -352,7 +352,7 @@ export async function contactDirectoryContract({ db, asUser, check, fails }) {
 
   await asUser(5);
   await check(
-    'an unlinked identity stays staff-only and a standalone directory edit invents no parent property',
+    'an unlinked identity is correctable by staff/manager/admin only (issue #72) with no invented parent property',
     async () => {
       const unlinked = (
         await db.query(createContact, [

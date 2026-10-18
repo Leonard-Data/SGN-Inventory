@@ -537,7 +537,7 @@ const vi = {
   contactOwnersEmptyQuery: 'Không tìm thấy chủ nhà phù hợp.',
   contactDirectoryFailed: 'Không thể tải danh sách người liên hệ.',
   contactOpen: 'Xem và đính chính',
-  // Unlinked-identity correction from the directory stays deferred to #72.
+  // Unlinked-identity correction is staff/manager/admin (ticket #72); sales still see this note.
   contactUnlinkedNote:
     'Chưa gắn bất động sản nào nên chưa thể đính chính từ danh sách này; mục này mở khi người liên hệ được gắn vào một bất động sản.',
   contactClose: 'Đóng chi tiết',
@@ -1212,7 +1212,7 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     contactOwnersEmptyQuery: 'No owner matches this search.',
     contactDirectoryFailed: 'The contact directory could not be loaded.',
     contactOpen: 'Open and correct',
-    // Unlinked-identity correction from the directory stays deferred to #72.
+    // Unlinked-identity correction is staff/manager/admin (ticket #72); sales still see this note.
     contactUnlinkedNote:
       'Not linked to a property yet, so it cannot be corrected from this directory; this opens once the contact is linked to a property.',
     contactClose: 'Close details',

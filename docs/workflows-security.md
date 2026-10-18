@@ -11,6 +11,7 @@
 | Create property / request reservation | Yes | Yes | Yes | Yes |
 | Edit property/address | Own unarchived | All unarchived | All unarchived | All unarchived |
 | Correct an existing linked shared-contact detail | Yes | Yes | Yes | Yes |
+| Correct an unlinked shared-contact identity | No | Yes | Yes | Yes |
 | Create contacts, change relationship/primary markers or unlink | No | Yes | Yes | Yes |
 | Submit correction request | Yes | Yes | Yes | Yes |
 | Process/reject correction requests | No | Yes | Yes | Yes |

@@ -755,6 +755,22 @@ try {
   await linkContact(staff, left, classifiedOwner, 'broker');
   await linkContact(staff, right, ownerElsewhere, 'owner');
   await linkContact(manager, archived, archivedOnly, 'owner');
+  // Issue #109: a property–contact link is not a property business-history entry — the
+  // relationship change is attributed in the private audit trail instead. Confirm the
+  // freshly linked properties carry no link-derived `property_history` row.
+  const linkedHistory = await retryResult('read linked-property history', () =>
+    sales
+      .from('property_history')
+      .select('id')
+      .in('property_id', [left, right])
+      .limit(1),
+  );
+  assert.equal(linkedHistory.error, null, 'read linked-property history');
+  assert.deepEqual(
+    linkedHistory.data,
+    [],
+    'a property–contact link records no property_history row',
+  );
   await archiveProperty(manager, archived);
   Object.assign(manifest.properties, { left, right, archived });
   Object.assign(manifest.contacts, {
@@ -1126,7 +1142,7 @@ try {
   assert.equal(
     staffUnlinked.body.contacts[0]?.id,
     unlinkedPerson,
-    'the identity is listed while its correction stays narrowed',
+    'the unlinked identity is listed; only staff/manager/admin may correct it (issue #72)',
   );
   const unlinkedPreview = await appGet(
     staffCookies,
@@ -1141,8 +1157,11 @@ try {
       changes: { notes: 'directory save on an unlinked identity' },
     },
   );
-  assert.equal(unlinkedSave.status, 403, 'unlinked identity save withheld');
-  assert.equal(unlinkedSave.body.error, 'contact-refusal');
+  assert.equal(
+    unlinkedSave.status,
+    200,
+    'staff/manager/admin corrects an unlinked identity from the directory (issue #72)',
+  );
   const allPages = await readDirectoryPages(salesCookies, 'SGN71');
   assert.equal(allPages.pages > 1, true, 'the directory paged');
   const ownersPage = await appGet(
