@@ -1,10 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { S3Client } from '@aws-sdk/client-s3';
-import { presignedUploadPolicy } from './r2-upload.ts';
-
-const twentyMiB = 20 * 1024 * 1024;
-const fiveMiB = 5 * 1024 * 1024;
+import { presignedUploadPut } from './r2-upload.ts';
 
 const client = new S3Client({
   region: 'auto',
@@ -13,78 +10,47 @@ const client = new S3Client({
   credentials: { accessKeyId: 'test', secretAccessKey: 'test' },
 });
 
-type Condition = unknown[] | Record<string, string>;
-
-async function issued(contentType: string, maximumBytes: number) {
-  const { url, fields } = await presignedUploadPolicy(client, {
+async function issued(contentLength: number, expiresIn = 60) {
+  const signature = await presignedUploadPut(client, {
     bucket: 'property-files',
     objectPath: 'property-a/file-1/content',
-    contentType,
-    maximumBytes,
-    expiresIn: 60,
+    contentType: 'application/pdf',
+    contentLength,
+    expiresIn,
   });
-  const encoded = fields.Policy ?? fields.policy;
-  assert.ok(encoded, 'the issued form carries a signed policy');
-  const policy = JSON.parse(
-    Buffer.from(encoded, 'base64').toString('utf8'),
-  ) as {
-    expiration: string;
-    conditions: Condition[];
-  };
-  const range = policy.conditions.find(
-    (condition) =>
-      Array.isArray(condition) && condition[0] === 'content-length-range',
-  );
-  return { url, fields, policy, range };
+  const url = new URL(signature.url);
+  const signedHeaders = (url.searchParams.get('X-Amz-SignedHeaders') ?? '')
+    .split(';')
+    .sort();
+  return { signature, url, signedHeaders };
 }
 
-function pinned(
-  conditions: Condition[],
-  field: string,
-  value: string,
-): boolean {
-  return conditions.some(
-    (condition) =>
-      Array.isArray(condition) &&
-      condition[0] === 'eq' &&
-      condition[1] === `$${field}` &&
-      condition[2] === value,
-  );
-}
-
-test('a document upload policy bounds the body to 20 MiB', async () => {
-  const { range } = await issued('application/pdf', twentyMiB);
-  assert.deepEqual(range, ['content-length-range', 1, twentyMiB]);
+// The signature is the write control: R2 validates these headers itself, so a PUT without
+// the conditional create, or with any body length other than the registered one, is refused
+// before it can store a byte.
+test('the upload signature covers the declared length and the conditional create', async () => {
+  const { signature, signedHeaders } = await issued(2 * 1024 * 1024);
+  assert.deepEqual(signedHeaders, ['content-length', 'host', 'if-none-match']);
+  assert.equal(signature.contentLength, 2 * 1024 * 1024);
 });
 
-test('an image upload policy bounds the body to 5 MiB', async () => {
-  const { range } = await issued('image/png', fiveMiB);
-  assert.deepEqual(range, ['content-length-range', 1, fiveMiB]);
+test('the signature is bound to the object key and the short-lived window', async () => {
+  const { url } = await issued(1024, 60);
+  assert.equal(
+    url.origin + url.pathname,
+    'https://r2.example.test/property-files/property-a/file-1/content',
+  );
+  assert.equal(url.searchParams.get('X-Amz-Expires'), '60');
 });
 
-test('the policy pins the object key, bucket and content type', async () => {
-  const { url, fields, policy } = await issued('image/webp', fiveMiB);
-  assert.equal(url, 'https://r2.example.test/property-files');
-  assert.equal(fields.key, 'property-a/file-1/content');
-  assert.equal(fields.bucket, 'property-files');
-  assert.equal(fields['Content-Type'], 'image/webp');
-  assert.ok(pinned(policy.conditions, 'Content-Type', 'image/webp'));
-  assert.ok(
-    policy.conditions.some(
-      (entry) =>
-        !Array.isArray(entry) && entry.key === 'property-a/file-1/content',
-    ),
+test('each registered size earns its own signature', async () => {
+  const small = await issued(1024);
+  const capped = await issued(20 * 1024 * 1024);
+  assert.equal(small.signature.contentLength, 1024);
+  assert.equal(capped.signature.contentLength, 20 * 1024 * 1024);
+  assert.notEqual(small.url.searchParams.get('X-Amz-Signature'), null);
+  assert.notEqual(
+    small.url.searchParams.get('X-Amz-Signature'),
+    capped.url.searchParams.get('X-Amz-Signature'),
   );
-  assert.ok(
-    policy.conditions.some(
-      (entry) => !Array.isArray(entry) && entry.bucket === 'property-files',
-    ),
-  );
-});
-
-test('the policy expires within the short-lived upload window', async () => {
-  const before = Date.now();
-  const { policy } = await issued('application/pdf', twentyMiB);
-  const remaining = Date.parse(policy.expiration) - before;
-  assert.ok(remaining > 0 && remaining <= 61_000, String(remaining));
 });

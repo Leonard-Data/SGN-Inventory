@@ -7,7 +7,7 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { presignedUploadPolicy, type UploadPolicy } from './r2-upload';
+import { presignedUploadPut, type UploadSignature } from './r2-upload';
 
 // Bearer links stay as short as the previous Storage signed URLs.
 export const signedUrlSeconds = 60;
@@ -66,17 +66,19 @@ export function objectIdentity(etag: string): string {
   ].join('-');
 }
 
+// The signed request is bound to the registered byte count and to a conditional create, so
+// only that exact body can ever be written and an existing object is never replaced.
 export async function presignUpload(
   objectPath: string,
   contentType: string,
-  maximumBytes: number,
-): Promise<UploadPolicy> {
+  contentLength: number,
+): Promise<UploadSignature> {
   const { bucket, client } = storage();
-  return presignedUploadPolicy(client, {
+  return presignedUploadPut(client, {
     bucket,
     objectPath,
     contentType,
-    maximumBytes,
+    contentLength,
     expiresIn: signedUrlSeconds,
   });
 }

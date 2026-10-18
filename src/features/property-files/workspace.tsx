@@ -324,19 +324,21 @@ export function Workspace({
         );
         if (generation.current !== version || signal?.aborted) return false;
         update('uploading');
+        if (file!.size !== registration.uploadBytes)
+          throw new RequestError(400, 'file-mismatch');
         try {
-          // Direct to private R2 under the short-lived signed POST policy, which bounds the
-          // body to this file's class cap; no app-server bytes.
-          const body = new FormData();
-          for (const [name, value] of Object.entries(registration.uploadFields))
-            body.append(name, value);
-          body.append('file', file!);
+          // Direct to private R2 under the short-lived signed PUT, whose signature covers the
+          // registered byte count and requires the conditional create; no app-server bytes.
           await fetch(registration.uploadUrl, {
-            method: 'POST',
+            method: 'PUT',
             cache: 'no-store',
             referrerPolicy: 'no-referrer',
             signal,
-            body,
+            headers: {
+              'Content-Type': recovery?.file.mime_type ?? file!.type,
+              'If-None-Match': '*',
+            },
+            body: file!,
           });
         } catch (failure) {
           if (signal?.aborted) throw failure;

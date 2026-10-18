@@ -10,7 +10,7 @@ import {
   storedObject,
 } from '@/lib/r2';
 import { contentMime, fileMimeTypes } from './content';
-import { fileClass, fileLimits, maximumFileBytes, sizeRefusal } from './limits';
+import { fileClass, maximumFileBytes, sizeRefusal } from './limits';
 import { drainFileCleanup } from './cleanup-pass';
 import { discardRefusedCompletion } from './upload-cleanup';
 import type { DocumentCategoryList, FileRegistrationResult } from './types';
@@ -112,18 +112,18 @@ export async function registerFile(
   )
     throw new ApiError(503, 'unavailable');
   // The registration (and its property-scoped class limit) committed before any URL exists.
-  // The browser then uploads the bytes straight to private R2 under a policy that bounds the
-  // body to this file's class cap; the server never sees them.
-  const policy = await presignUpload(
+  // The browser then writes the bytes straight to private R2 under a signature bound to the
+  // registered byte count; the server never sees them and no larger body can be written.
+  const signature = await presignUpload(
     data.objectPath,
     body.mimeType,
-    fileLimits[kind].maximumBytes,
+    body.sizeBytes,
   );
   return {
     fileId: data.fileId,
     objectPath: data.objectPath,
-    uploadUrl: policy.url,
-    uploadFields: policy.fields,
+    uploadUrl: signature.url,
+    uploadBytes: signature.contentLength,
   };
 }
 

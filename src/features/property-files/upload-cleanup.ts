@@ -1,4 +1,4 @@
-// The upload window and its cleanup. The signed upload policy lives 60 seconds, so a
+// The upload window and its cleanup. The signed upload URL lives 60 seconds, so a
 // registration still pending after 15 minutes can no longer receive bytes; the storage-limits
 // migration applies the same window to its class-slot count.
 export const pendingUploadMs = 15 * 60_000;

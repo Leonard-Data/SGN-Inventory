@@ -1,32 +1,36 @@
-import type { S3Client } from '@aws-sdk/client-s3';
-import { createPresignedPost } from '@aws-sdk/s3-presigned-post';
+import { PutObjectCommand, type S3Client } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
-export type UploadPolicy = { url: string; fields: Record<string, string> };
+export type UploadSignature = { url: string; contentLength: number };
 
-export type UploadPolicyRequest = {
+export type UploadSignatureRequest = {
   bucket: string;
   objectPath: string;
   contentType: string;
-  maximumBytes: number;
+  contentLength: number;
   expiresIn: number;
 };
 
-// The browser uploads straight to R2, so the signed policy is where the per-file byte cap is
-// enforced at write time: R2 rejects a body outside the declared class range instead of
-// storing it. The policy also pins the object key and its content type.
-export async function presignedUploadPolicy(
+// The browser writes straight into the private bucket, so the signed request carries both
+// write controls, and R2 enforces them itself: the exact byte count and the conditional
+// create, which is what makes an existing object unoverwritable.
+export async function presignedUploadPut(
   client: S3Client,
-  request: UploadPolicyRequest,
-): Promise<UploadPolicy> {
-  const { url, fields } = await createPresignedPost(client, {
-    Bucket: request.bucket,
-    Key: request.objectPath,
-    Expires: request.expiresIn,
-    Fields: { 'Content-Type': request.contentType },
-    Conditions: [
-      ['eq', '$Content-Type', request.contentType],
-      ['content-length-range', 1, request.maximumBytes],
-    ],
-  });
-  return { url, fields };
+  request: UploadSignatureRequest,
+): Promise<UploadSignature> {
+  const url = await getSignedUrl(
+    client,
+    new PutObjectCommand({
+      Bucket: request.bucket,
+      Key: request.objectPath,
+      ContentType: request.contentType,
+      ContentLength: request.contentLength,
+      IfNoneMatch: '*',
+    }),
+    {
+      expiresIn: request.expiresIn,
+      signableHeaders: new Set(['content-length', 'if-none-match']),
+    },
+  );
+  return { url, contentLength: request.contentLength };
 }

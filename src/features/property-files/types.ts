@@ -28,7 +28,7 @@ export type FileRegistrationResult = {
   fileId: string;
   objectPath: string;
   uploadUrl: string;
-  uploadFields: Record<string, string>;
+  uploadBytes: number;
 };
 export type RecoverableFile = {
   file: PropertyFile;
