@@ -397,5 +397,13 @@ export function formChanges(
         : (before[key] ?? null);
     if (JSON.stringify(parsed) !== JSON.stringify(prior)) changes[key] = parsed;
   }
+  if (
+    target === 'property' &&
+    'latitude' in changes !== 'longitude' in changes
+  ) {
+    const other = 'latitude' in changes ? 'longitude' : 'latitude';
+    const prior = before[other];
+    if (prior != null) changes[other] = prior as Json;
+  }
   return validateChanges(target, changes);
 }

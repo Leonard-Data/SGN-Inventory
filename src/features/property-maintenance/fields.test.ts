@@ -134,4 +134,26 @@ test('location form changes omit an untouched point and emit a cleared point', (
     }),
     { latitude: null, longitude: null },
   );
+  const movedOnly = new FormData();
+  movedOnly.set('longitude', '106.7000000');
+  assert.deepEqual(
+    formChanges('property', movedOnly, {
+      latitude: '10.7626220',
+      longitude: '106.6601720',
+    }),
+    { longitude: '106.7000000', latitude: '10.7626220' },
+  );
+  const retypedOne = new FormData();
+  retypedOne.set('latitude', '10.7626220');
+  retypedOne.set('longitude', '106.7000000');
+  assert.deepEqual(
+    formChanges('property', retypedOne, {
+      latitude: '10.7626220',
+      longitude: '106.6601720',
+    }),
+    { longitude: '106.7000000', latitude: '10.7626220' },
+  );
+  const unrecorded = new FormData();
+  unrecorded.set('latitude', '10.8000000');
+  assert.throws(() => formChanges('property', unrecorded, {}));
 });
