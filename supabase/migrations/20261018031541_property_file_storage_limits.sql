@@ -51,10 +51,14 @@ begin
   if cat_id is null then raise exception 'invalid category' using errcode = '23514'; end if;
   -- The parent row lock above serializes registrations for one property, and pending rows
   -- reserve their slot, so concurrent uploads cannot overshoot the class limit. Rows with no
-  -- content type (unvalidated legacy data) belong to neither class and hold no slot.
+  -- content type (unvalidated legacy data) belong to neither class and hold no slot. A
+  -- presigned PUT lives 60 seconds, so a registration still pending after 15 minutes cannot
+  -- receive bytes any more: it stays recorded but stops reserving its slot.
   select count(*) into used from public.property_files
-    where property_id = p_property_id and id <> p_file_id and upload_status <> 'failed'
-      and ((mime_type = 'application/pdf') = (file_kind = 'document'));
+    where property_id = p_property_id and id <> p_file_id
+      and ((mime_type = 'application/pdf') = (file_kind = 'document'))
+      and (upload_status = 'ready'
+        or (upload_status = 'pending' and created_at > now() - interval '15 minutes'));
   if file_kind = 'document' and used >= 5 then
     raise exception 'document limit reached' using errcode = 'P0020';
   end if;
@@ -125,10 +129,13 @@ begin
     raise exception 'immutable object changed' using errcode = '23514';
   end if;
   if f.validated_at is not null then return; end if;
-  -- Defensive re-check of the class limit at the moment a pending file becomes readable.
+  -- Defensive re-check of the class limit at the moment a pending file becomes readable,
+  -- with the same 15-minute reservation window as registration.
   select count(*) into used from public.property_files
-    where property_id = f.property_id and id <> f.id and upload_status <> 'failed'
-      and ((mime_type = 'application/pdf') = (file_kind = 'document'));
+    where property_id = f.property_id and id <> f.id
+      and ((mime_type = 'application/pdf') = (file_kind = 'document'))
+      and (upload_status = 'ready'
+        or (upload_status = 'pending' and created_at > now() - interval '15 minutes'));
   if file_kind = 'document' and used >= 5 then
     raise exception 'document limit reached' using errcode = 'P0020';
   end if;
@@ -138,5 +145,26 @@ begin
   update public.property_files set upload_status = 'ready',validated_at = now(),validated_object_id = p_object_id where id = f.id;
 end;
 $$;
+
+-- A completion refusal is terminal for those bytes, so the uploader's pending registration
+-- stops reserving its class slot. The row itself is retained as evidence.
+create function private.fail_property_upload(p_file_id uuid)
+returns void language plpgsql security definer set search_path = '' as $$
+declare
+  me uuid := private.employee_id();
+begin
+  if me is null then raise exception 'active employee required' using errcode = '42501'; end if;
+  update public.property_files set upload_status = 'failed'
+    where id = p_file_id and uploaded_by = me and upload_status = 'pending';
+end;
+$$;
+
+create function public.fail_property_upload(p_file_id uuid)
+returns void language sql security invoker set search_path = '' as $$
+  select private.fail_property_upload(p_file_id);
+$$;
+
+revoke all on function private.fail_property_upload(uuid),public.fail_property_upload(uuid) from public,anon,authenticated;
+grant execute on function private.fail_property_upload(uuid),public.fail_property_upload(uuid) to authenticated;
 
 commit;

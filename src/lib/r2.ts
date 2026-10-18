@@ -16,14 +16,25 @@ let cached: { bucket: string; client: S3Client } | null = null;
 // Server-only configuration. Never falls back to Supabase Storage: a missing value must
 // stop the operation rather than silently write to the wrong place.
 function storage(): { bucket: string; client: S3Client } {
-  const accountId = process.env.R2_ACCOUNT_ID?.trim();
-  const bucket = process.env.R2_BUCKET?.trim();
-  const accessKeyId = process.env.R2_ACCESS_KEY_ID?.trim();
-  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY?.trim();
-  if (!accountId || !bucket || !accessKeyId || !secretAccessKey)
-    throw new Error(
-      'R2 storage is not configured: R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY are required server-only variables',
+  const accountId = process.env.R2_ACCOUNT_ID?.trim() ?? '';
+  const bucket = process.env.R2_BUCKET?.trim() ?? '';
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID?.trim() ?? '';
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY?.trim() ?? '';
+  const missing = [
+    !accountId && 'R2_ACCOUNT_ID',
+    !bucket && 'R2_BUCKET',
+    !accessKeyId && 'R2_ACCESS_KEY_ID',
+    !secretAccessKey && 'R2_SECRET_ACCESS_KEY',
+  ].filter((name): name is string => Boolean(name));
+  if (missing.length) {
+    // The response stays an opaque 503; this log is the operator's only diagnostic.
+    console.error(
+      `R2 storage is not configured; missing ${missing.join(', ')}`,
     );
+    throw new Error(
+      `R2 storage is not configured: ${missing.join(', ')} are required server-only variables`,
+    );
+  }
   cached ??= {
     bucket,
     client: new S3Client({
@@ -31,6 +42,10 @@ function storage(): { bucket: string; client: S3Client } {
       endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
       forcePathStyle: true,
       credentials: { accessKeyId, secretAccessKey },
+      // R2 rejects the SDK's default flexible checksums, which would otherwise be baked into
+      // every presigned URL and into every real upload body.
+      requestChecksumCalculation: 'WHEN_REQUIRED',
+      responseChecksumValidation: 'WHEN_REQUIRED',
     }),
   };
   return cached;
@@ -61,6 +76,9 @@ export async function presignUpload(
       Bucket: bucket,
       Key: objectPath,
       ContentType: contentType,
+      // Only absent bytes may be uploaded, so a repeated PUT within the URL's lifetime
+      // cannot replace validated content.
+      IfNoneMatch: '*',
     }),
     { expiresIn: signedUrlSeconds },
   );

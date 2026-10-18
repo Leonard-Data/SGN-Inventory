@@ -333,6 +333,8 @@ export function Workspace({
             signal,
             headers: {
               'Content-Type': recovery?.file.mime_type ?? file!.type,
+              // Matches the conditional write signed into the URL: an existing object is never replaced.
+              'If-None-Match': '*',
             },
             body: file,
           });

@@ -85,6 +85,9 @@ function storage() {
       accessKeyId: required('R2_ACCESS_KEY_ID'),
       secretAccessKey: required('R2_SECRET_ACCESS_KEY'),
     },
+    // R2 rejects the SDK's default flexible checksums on real upload bodies.
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    responseChecksumValidation: 'WHEN_REQUIRED',
   });
   return { client, bucket: required('R2_BUCKET') };
 }

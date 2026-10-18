@@ -122,6 +122,23 @@ export async function validateAndCompleteFile(
   fileId: string,
   employee: Employee,
 ) {
+  try {
+    return await completeFile(context, propertyId, fileId, employee);
+  } catch (error) {
+    // A refused completion is terminal for these bytes, so the registration stops
+    // reserving its class slot. Transient failures stay pending for a retry.
+    if (error instanceof ApiError && error.status === 400)
+      await context.client.rpc('fail_property_upload', { p_file_id: fileId });
+    throw error;
+  }
+}
+
+async function completeFile(
+  context: RouteContext,
+  propertyId: string,
+  fileId: string,
+  employee: Employee,
+) {
   if (!uuid(propertyId) || !uuid(fileId))
     throw new ApiError(400, 'invalid-input');
   const key = process.env.SGN_FILE_VALIDATION_KEY;

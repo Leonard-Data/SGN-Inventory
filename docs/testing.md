@@ -424,7 +424,9 @@ Property file bytes now live in a private Cloudflare R2 bucket reached only thro
 | --- | --- |
 | Register and upload through the browser | Bytes appear in the private R2 bucket under `<property_uuid>/<file_uuid>/content`; the application server answers no request carrying file bytes; the presigned `PUT` and `GET` links stop working after about 60 seconds |
 | Architected read boundary on an archived property | A non-reviewer receives `404` from the signed endpoint and no URL exists; a reviewer obtains a working 60-second URL after the same RLS-checked record read |
-| Missing or partial `R2_*` configuration | Register, completion, recovery and signed-open fail closed with a server-side error naming the missing variables; nothing falls back to Supabase Storage |
+| Missing or partial `R2_*` configuration | Register, completion, recovery and signed-open fail closed with `503`/`unavailable`; the server log names the missing variables; nothing falls back to Supabase Storage |
+| Bucket CORS rule missing | Browser upload fails with an opaque CORS error rather than a replaced object; adding the app origin, `GET`/`PUT` and the `content-type`/`if-none-match` headers makes the same upload succeed |
+| Repeated `PUT` to a signed upload URL | The second write is refused (`412`) and the object keeps the bytes that completion validated; the record and object stay unchanged |
 | Per-property caps | A sixth document and an eleventh image are refused with the localized limit message and leave no row or object; the cover photo counts inside the 10 images; 20 MiB documents and 5 MiB images accept, one byte more refuses |
 | Retention | Clearing the cover, recategorizing a file and retrying completion never delete the R2 object or the row: the attachment stays readable |
 | Copy script against the development project | Dry run lists what it would copy and copies nothing; `--apply` copies every registered key, then the verification pass reports the whole registered set present with matching sizes; the Supabase bucket still holds every object afterwards |

@@ -575,6 +575,36 @@ await check('completion defensively refuses a pending file that would exceed its
   await fails(completionSql,[racedId,racedId.replace('43000000','83000000'),'image/png',1024,testSha256,createHmac('sha256',Buffer.from(validationKey,'hex')).update(['v1',racedId,limitProperty,employees[0],`${limitProperty}/${racedId}/content`,racedId.replace('43000000','83000000'),'image/png','1024',testSha256].join('|')).digest('hex')],'P0021');
   assert.equal((await db.query('select upload_status from public.property_files where id=$1',[racedId])).rows[0].upload_status,'pending');
 });
+await check('an abandoned or refused upload stops reserving its class slot',async()=>{
+  const slotProperty='20000000-0000-4000-8000-00000000000f';
+  await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
+  await db.query("insert into public.properties(id,property_code,listing_mode,status,created_by) values($1,'SGN-SLOTS','sale','available',$2)",[slotProperty,employees[0]]);
+  // Four registrations abandoned long ago: their signed PUT lived 60 seconds, so they can no
+  // longer receive bytes and must not keep holding slots.
+  await db.query("insert into public.property_files(id,property_id,document_type,object_path,original_filename,mime_type,size_bytes,sha256,purpose,uploaded_by,created_at) select s.fid,$1::uuid,'other',$2::text||'/'||s.fid::text||'/content','stale-'||s.n||'.pdf','application/pdf',1024,$3,'document',$4,now()-interval '20 minutes' from (select ('44000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid as fid,n from generate_series(1,4) n) s",[slotProperty,slotProperty,testSha256,employees[0]]);
+  await asUser(0);
+  const slotDocument=(n)=>`44000000-0000-4000-8000-00000000001${n}`;
+  for(let n=1;n<=5;n++) await db.query(registerSql,[slotDocument(n),slotProperty,`slot-${n}.pdf`,'application/pdf',1024,testSha256,'document',otherCatId]);
+  await fails(registerSql,[slotDocument(6),slotProperty,'slot-6.pdf','application/pdf',1024,testSha256,'document',otherCatId],'P0020');
+  await db.query('select public.fail_property_upload($1)',[slotDocument(5)]);
+  assert.equal((await db.query('select upload_status from public.property_files where id=$1',[slotDocument(5)])).rows[0].upload_status,'failed');
+  await db.query(registerSql,[slotDocument(6),slotProperty,'slot-6.pdf','application/pdf',1024,testSha256,'document',otherCatId]);
+});
+await check('failing an upload never touches a ready row or another employee row',async()=>{
+  await asUser(0);
+  await db.query('select public.fail_property_upload($1)',[limitDocument(1)]);
+  assert.equal((await db.query('select upload_status from public.property_files where id=$1',[limitDocument(1)])).rows[0].upload_status,'ready');
+  const colleagueRow='44000000-0000-4000-8000-000000000201';
+  await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
+  await db.query("insert into public.property_files(id,property_id,document_type,object_path,original_filename,mime_type,size_bytes,sha256,purpose,uploaded_by) values($1,'20000000-0000-4000-8000-00000000000f','other',$2,'colleague.pdf','application/pdf',1024,$3,'document',$4)",[colleagueRow,`20000000-0000-4000-8000-00000000000f/${colleagueRow}/content`,testSha256,employees[0]]);
+  await asUser(1);
+  await db.query('select public.fail_property_upload($1)',[colleagueRow]);
+  await asUser(null);
+  await fails('select public.fail_property_upload($1)',[colleagueRow],'42501');
+  await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
+  assert.equal((await db.query('select upload_status from public.property_files where id=$1',[colleagueRow])).rows[0].upload_status,'pending');
+  await asUser(0);
+});
 const maintainedProperty=await maintenanceContract({db,asUser,check,fails,employees,property,other});
 await correctionContract({db,asUser,check,fails,employees,property:maintainedProperty});
 // Ticket #36: recorded Asking-price history over the allowlisted business-history seam.
