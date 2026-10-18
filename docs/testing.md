@@ -82,6 +82,120 @@ Repository-side delivery configuration only: no cloud operation was performed an
 
 Not executed: no workflow was dispatched and no deployment or migration was performed, so the dispatched behaviour of each switch, the PR preview path and production delivery remain unverified until the external checklist and a real same-repository PR preview exist.
 
+### Executed legacy import dry run (18 October 2026)
+
+`scripts/import-legacy-sheet.mjs` read the live Google Sheet (20,148 master rows, 28 columns) and
+its Drive folder through a service account holding `spreadsheets.readonly` and `drive.readonly`
+and wrote nothing to the sheet, Drive or the database. The report is in
+`imports/legacy-dry-run/` (ignored by Git because it contains personal data); the method and the
+one-command entry point are in [legacy-import.md](legacy-import.md).
+
+- Every master column was mapped or named; no column was dropped silently. The per-column
+  destinations and their current states are owned by
+  [workbook mapping](workbook-mapping.md#property-column-transformations), which reflects the
+  later rules: `Tên người tạo`, `Ngày Chỉnh Sửa gần nhất`, `Note`, `Temp Value` and `Approved`
+  have no destination, and the two employee-map columns are resolved against `public.employees`
+  by a completed write run.
+- Sale price rules: 292 rows above the 200 billion ceiling, 160 with an empty sale price and no
+  rent, 6 unreadable price strings — all quarantined and listed with row numbers; 131 rows with a
+  price of exactly 0 imported as `negotiating` with no numeric price; 2 rental-only rows excluded
+  per the captain's decision.
+- Addresses: 19,062 distinct addresses were resolved with VietMap's address migration API as the
+  primary source (18,769 rows), the published official three-tier → two-tier mapping as fallback,
+  and `admin_unit_versions` for the target unit identity. 289 rows were refused and reported with
+  their reason; 27 rows where VietMap and the official mapping disagree are flagged for review
+  rather than silently settled.
+- Duplicates: 1 repeated PropertyID key (2 rows), 1,670 repeated owner phone values across 4,189
+  rows, and 2,115 rows whose legacy ward resolves to more than one current commune.
+- Contacts: 18,107 distinct owner contacts (name + phone set) covering 19,220 rows; 66 rows have
+  no owner name and create no contact. These figures are from the dry run that preceded the
+  placeholder-owner rule (`isPlaceholderOwner`) and counted every master row, including rows the
+  write run quarantines, so they are not comparable with the write run's importable-set figures
+  recorded below. Creator and editor emails (19 and 32 distinct) are left for email matching
+  against `public.employees` at write time; no employee is created.
+- Child tabs: the captain's `BDS-N` → master row N rule was checked against every resolvable
+  Contracts row. Only 0.3% agree on owner and phone (28.7% for BDS-2..99, 0% for BDS-100 and
+  above), so the row-number join is refused and BDS references stay unresolved; 77,875 child rows
+  still resolve by exact source-key equality. 247 orphan references are counted and listed. That
+  reader still read the `clicks` tab, which the captain excluded afterwards, so this child-row
+  figure includes rows nothing imports.
+- Attachments: 2,352 files (616.9 MiB) matched to their tab rows, 196 rows unmatched, 13
+  unreferenced files, none over the 20 MiB limit. Nothing was downloaded.
+- `Login` was never requested; `Password` and `Monitor` were stripped from the Nhân viên tab as
+  soon as it was read. (That run's reader fetched the whole tab and discarded those cells; the
+  reader now requests the header row first and never fetches a credential column at all.)
+- `scripts/import-legacy-sheet.test.mjs` covers the pure rules; its coverage list is owned by
+  [legacy import](legacy-import.md#tests).
+
+Not executed in that pass: any write.
+
+### Executed legacy import into the development project (18 October 2026)
+
+`scripts/import-legacy-sheet.mjs --write` imported the same snapshot into the development Supabase
+project under the captain's settled rules, with `SGN_ENV=dev` refusing any other target. The run is
+resumable and idempotent: every row carries an identifier derived from its source key, and the
+batch, staging, source-map and entity-map rows record what was written, so re-running converges.
+The run report is written outside Git beside the dry-run report.
+
+- Master: 20,148 data rows — 18,801 imported (`record_review_status = pending`), 483 quarantined
+  (292 above the price ceiling, 160 with no sale price, 23 with no PropertyID, 6 unreadable, 2
+  duplicated keys), 862 empty, 2 rental-only excluded.
+- Sale price exactly 0: 131 rows imported with status `negotiating` and no numeric price; no
+  imported property carries a price above 200 billion.
+- Addresses: 18,801 untouched legacy addresses and 18,515 converted current addresses; 286
+  imported properties keep the legacy address only because no current ward could be resolved.
+- Contacts: 8,039 distinct owner contacts linked 8,444 times; 10,357 imported properties have no
+  contact because the owner name is missing or a placeholder (`Chưa có tên`, `tìm chủ`, `cn`).
+  The identity correction recorded below leaves 8,078 distinct contacts over the same 8,444 links.
+- Child tabs: Historical 18,587 rows archived in `private.staging_rows` and linked to their
+  property, 277 dropped (no exact PropertyID); Attachments 2,220 files stored, 191 dropped (no
+  Drive file) and 61 dropped (property not imported); Contracts (20,532 rows) dropped and clicks
+  (57,040 rows) excluded by captain decision. These are the rows the live sheet held during the
+  run; the per-sheet totals in [workbook mapping](workbook-mapping.md) profile the delivered
+  workbook instead (Historical 19,151, Contracts 20,480), so the two sets of figures are not
+  expected to match.
+- Attachments: those 2,220 stored files are the ready `public.property_files` rows for imported
+  properties, with their sha256, size, validated object identity and ETag-derived identity,
+  uploaded through the application's own registration and completion RPCs into the private R2
+  bucket; every stored image is at most 5 MiB and no property exceeds the 10-image / 5-document
+  limits the database enforces. A read-back taken during the run counted 2,221 because an operator
+  probe registered one extra file; that row and its bucket object were removed, so the project
+  holds exactly the 2,220 files the import's own plan names. A resumed or repeated run reuses each
+  attachment row's file id and skips a file that is already ready, so it cannot duplicate one.
+- Staff: 33 addresses — 1 admin (the captain's own, created silently through the Auth admin API
+  with its password only in a mode-0600 private file), 2 managers (`TPKD`), 1 staff (`Thư ký`) and
+  29 sales, including every `Admin` position except the captain's. 32 invitations were begun,
+  sent through the provider and recorded with the captain's account as the actor; the provider's
+  hourly cap was waited out rather than failed on.
+- Read back: 18,801 properties, 18,801 source-map rows, 18,801 legacy addresses, 18,515 current
+  addresses, 8,444 contact links, 2,220 ready files and 32 recorded invitations, plus sampled
+  properties checked end to end (creator, both addresses, contact, files with hashes, review
+  pending).
+
+Audit of what the pre-fix code wrote (19 October 2026). Scope: the master rows the pre-fix code
+wrote into the development project, not rows written after the fixes. Two facts the earlier rounds
+could not repair, audited against the sheet and corrected in the development project:
+
+- **Owner identity.** Scope: the 18,801 promoted master rows and the 8,444 owner links the
+  pre-fix code wrote. Recomputing those rows from the sheet, 8,444 of them name an owner, and
+  they hold **8,078 distinct owner identities** under the settled derivation (folded name, sorted
+  phones, folded raw phone text). Before the correction, 99 of those contact rows wrongly held more
+  than one identity (253 identities between them), and 110 identities were wrongly split across 226
+  contact rows. The rebuild of all 8,444 links created 7,631 contacts, inserted 8,444 links,
+  removed 7,979 wrong links and 7,592 orphaned duplicate contacts. Read back over the corrected
+  inventory: 0 links are wrong, 0 are missing, 0 sit on a placeholder row, 8,078 distinct contacts
+  are held, and 10,357 of those 18,801 imported properties hold no contact because the sheet names
+  no usable owner.
+- **Status.** The same 18,801 promoted rows were compared against the sheet's `Tạo mới` value: 0
+  rows carried a status the sheet did not record, so nothing was corrected, and the surviving
+  inventory has 0 null statuses. The status quarantine added by the fix rounds therefore governs
+  future writes only; it had no repair to make.
+
+Not executed: no production write (a separate, later authorisation), no schema migration, no RLS
+change. Property, address and contact rows were written over the administrative (owner)
+connection, so row level security was not exercised for them; attachments went through the
+application RPCs as the importing admin and were subject to the shipped limits.
+
 ## Required staging gates
 
 | Test | Expected result |
