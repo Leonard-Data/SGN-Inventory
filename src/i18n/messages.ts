@@ -469,6 +469,8 @@ const vi = {
   inviteChanged:
     'Nhân viên này đã thay đổi hoặc quyền truy cập đã bị tắt. Hãy liên hệ quản trị viên.',
   inviteStale: 'Trạng thái lời mời đã thay đổi. Hãy tải lại trang và thử lại.',
+  inviteSessionRequired:
+    'Hãy mở liên kết lời mời trong email để thiết lập tài khoản. Liên kết khôi phục mật khẩu không thể dùng để kích hoạt.',
   // People → Vendors (#73): the company directory and its one bounded create.
   vendorsLink: 'Nhà cung cấp',
   vendorDirectory: 'Danh sách nhà cung cấp',
@@ -1168,6 +1170,8 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     inviteChanged:
       'This employee changed or access was disabled. Contact an administrator.',
     inviteStale: 'The invitation state changed. Reload the page and try again.',
+    inviteSessionRequired:
+      'Open the invitation link in your email to set up your account. A password-recovery link cannot be used to activate.',
     // People → Vendors (#73): the company directory and its one bounded create.
     vendorsLink: 'Vendors',
     vendorDirectory: 'Vendor directory',

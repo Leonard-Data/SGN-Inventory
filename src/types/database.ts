@@ -1893,6 +1893,18 @@ export type Database = {
         };
         Returns: Json;
       };
+      record_employee_invitation_proof: {
+        Args: {
+          p_invitation_id: string;
+          p_auth_user_id: string;
+          p_revision: number;
+        };
+        Returns: Json;
+      };
+      employee_invitation_proof_valid: {
+        Args: { p_invitation_id: string; p_auth_user_id: string };
+        Returns: boolean;
+      };
       employee_storage_preflight: {
         Args: { p_auth_user_id: string };
         Returns: Json;

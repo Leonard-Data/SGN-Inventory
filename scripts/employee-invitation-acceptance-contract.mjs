@@ -36,6 +36,7 @@ export async function employeeInvitationAcceptanceContract({
   const otherUser = '77000000-0000-4000-8000-0000000000b2';
   const inviteeUser2 = '77000000-0000-4000-8000-0000000000b3';
   const inviteeUser3 = '77000000-0000-4000-8000-0000000000b4';
+  const inviteeUser4 = '77000000-0000-4000-8000-0000000000b5';
 
   const beginSql =
     'select public.begin_employee_invitation($1,$2,$3) as result';
@@ -43,6 +44,8 @@ export async function employeeInvitationAcceptanceContract({
     'select public.record_employee_invitation_result($1,$2,$3,$4,$5,$6,$7) as result';
   const acceptSql =
     'select public.accept_employee_invitation($1,$2,$3) as result';
+  const proofSql =
+    'select public.record_employee_invitation_proof($1,$2,$3) as result';
   const begin = async (email, role, key) =>
     (await db.query(beginSql, [email, role, key])).rows[0].result;
   const record = async (
@@ -65,6 +68,12 @@ export async function employeeInvitationAcceptanceContract({
     ).rows[0].result;
   const accept = async (invitationId, revision, name) =>
     (await db.query(acceptSql, [invitationId, revision, name])).rows[0].result;
+  // The invite session endpoint records this one-time proof; acceptance requires it.
+  const recordProof = async (invitationId, authUserId, revision) => {
+    await asService();
+    return (await db.query(proofSql, [invitationId, authUserId, revision]))
+      .rows[0].result;
+  };
   const employeeRow = async (id) =>
     (
       await db.query(
@@ -74,13 +83,17 @@ export async function employeeInvitationAcceptanceContract({
     ).rows[0];
 
   await asOwner();
-  await db.query('insert into auth.users values ($1),($2),($3),($4),($5)', [
-    adminUser,
-    inviteeUser,
-    otherUser,
-    inviteeUser2,
-    inviteeUser3,
-  ]);
+  await db.query(
+    'insert into auth.users values ($1),($2),($3),($4),($5),($6)',
+    [
+      adminUser,
+      inviteeUser,
+      otherUser,
+      inviteeUser2,
+      inviteeUser3,
+      inviteeUser4,
+    ],
+  );
   await db.query(
     'insert into public.employees(id,auth_user_id,email,display_name,role,is_active) values' +
       " ($1,$2,'accept-admin@example.test','Acceptance Admin','admin',true)",
@@ -126,14 +139,16 @@ export async function employeeInvitationAcceptanceContract({
   );
 
   await asActor(inviteeUser);
-  const accepted = await accept(
-    invitationId,
-    recordedRevision,
-    '  Nguyễn Văn Ẩn  ',
-  );
   await check(
     'the invitee links, activates and names the retained employee',
     async () => {
+      await recordProof(invitationId, inviteeUser, recordedRevision);
+      await asActor(inviteeUser);
+      const accepted = await accept(
+        invitationId,
+        recordedRevision,
+        '  Nguyễn Văn Ẩn  ',
+      );
       assert.equal(accepted.id, employeeId);
       assert.equal(accepted.displayName, 'Nguyễn Văn Ẩn');
       assert.equal(accepted.email, 'invitee@example.test');
@@ -247,6 +262,12 @@ export async function employeeInvitationAcceptanceContract({
       [secondId, second.recorded.revision, '   '],
       '23514',
     );
+    // P2: a tab/newline-only name is blank, not a valid name.
+    await fails(
+      acceptSql,
+      [secondId, second.recorded.revision, '\t\n\r\f\v'],
+      '23514',
+    );
     await fails(
       acceptSql,
       [secondId, second.recorded.revision, 'x'.repeat(201)],
@@ -286,12 +307,49 @@ export async function employeeInvitationAcceptanceContract({
     ),
   );
 
-  // --- A provider-pending invitation is refused -------------------------------------------
+  // --- The provider-pending invitation is refused -----------------------------------------
   await asActor(adminUser);
   const pending = await begin('pending@example.test', 'sales', randomUUID());
   await asActor(inviteeUser);
   await check('an invitation the provider never accepted is refused', () =>
     fails(acceptSql, [pending.id, pending.revision, 'Pending'], 'P0024'),
+  );
+
+  // --- P1: a recovery session (no invite-flow proof) cannot activate ----------------------
+  const recovery = await beginAndRecord(
+    'recovery@example.test',
+    'sales',
+    inviteeUser4,
+  );
+  await asActor(inviteeUser4);
+  await check(
+    "a session without the invitation's own flow proof (a recovery session) is refused",
+    () =>
+      fails(
+        acceptSql,
+        [recovery.begun.id, recovery.recorded.revision, 'Recovery'],
+        'P0026',
+      ),
+  );
+  await check(
+    'the delivered-link proof lets the intended invitee activate',
+    async () => {
+      await recordProof(
+        recovery.begun.id,
+        inviteeUser4,
+        recovery.recorded.revision,
+      );
+      await asActor(inviteeUser4);
+      const ok = await accept(
+        recovery.begun.id,
+        recovery.recorded.revision,
+        'Recovery',
+      );
+      assert.equal(ok.id, recovery.begun.employeeId);
+      const row = await employeeRow(recovery.begun.employeeId);
+      assert.equal(row.auth_user_id, inviteeUser4);
+      assert.equal(row.is_active, true);
+    },
   );
 
   // --- Direct client writes stay refused ---------------------------------------------------

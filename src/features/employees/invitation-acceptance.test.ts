@@ -18,6 +18,9 @@ test('the required name is trimmed, bounded and preserves its spelling', () => {
   for (const value of [
     '',
     '   ',
+    // P2: tabs/newlines and other non-space whitespace are as blank as a space.
+    '\t\n\r\f\v',
+    ' \t\n ',
     'a'.repeat(EMPLOYEE_NAME_MAX_LENGTH + 1),
     null,
     42,

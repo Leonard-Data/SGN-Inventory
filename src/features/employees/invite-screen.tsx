@@ -29,6 +29,7 @@ const submitErrorKey: Record<string, ErrorKey> = {
   'invitation-identity-mismatch': 'inviteMismatch',
   'invitation-changed': 'inviteChanged',
   'invitation-stale': 'inviteStale',
+  'invitation-session-required': 'inviteSessionRequired',
   'invalid-input': 'invalidInput',
   'access-denied': 'denied',
 };

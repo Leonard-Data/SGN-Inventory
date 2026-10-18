@@ -1,4 +1,5 @@
 import 'server-only';
+import type { User } from '@supabase/supabase-js';
 import { ApiError, type RouteContext } from '@/lib/supabase/route';
 import { createEmployeeAdminClient } from './provider-ban';
 import { invitationFromRow } from './invitation';
@@ -67,7 +68,7 @@ async function invitationUser(context: RouteContext) {
 export async function establishInvitationSession(
   context: RouteContext,
   body: Record<string, unknown>,
-): Promise<void> {
+): Promise<{ kind: 'tokens' | 'cookie'; user: User }> {
   const input = acceptanceSessionBody(body);
   if (!input) throw new ApiError(400, 'invalid-input');
   if (input.kind === 'tokens') {
@@ -77,7 +78,42 @@ export async function establishInvitationSession(
     });
     if (error) throw authFailure(error);
   }
-  await invitationUser(context);
+  const user = await invitationUser(context);
+  return { kind: input.kind, user };
+}
+
+// The one-time invite-flow proof. It is created only by this module's session path (the
+// invitee's delivered link established the session) and consumed by the acceptance RPC, so a
+// password-recovery or ordinary sign-in session for the same identity has no proof and cannot
+// activate. Both calls run through the server-only admin client.
+export async function recordInvitationProof(
+  context: RouteContext,
+  setup: InvitationSetup,
+  userId: string,
+): Promise<void> {
+  const admin = createEmployeeAdminClient(context.environment);
+  if (!admin) throw new ApiError(503, 'provider-unavailable');
+  const { error } = await admin.rpc('record_employee_invitation_proof', {
+    p_invitation_id: setup.invitationId,
+    p_auth_user_id: userId,
+    p_revision: setup.revision,
+  });
+  if (error) throw workflowError(error);
+}
+
+export async function invitationProofValid(
+  context: RouteContext,
+  setup: InvitationSetup,
+  userId: string,
+): Promise<boolean> {
+  const admin = createEmployeeAdminClient(context.environment);
+  if (!admin) throw new ApiError(503, 'provider-unavailable');
+  const { data, error } = await admin.rpc('employee_invitation_proof_valid', {
+    p_invitation_id: setup.invitationId,
+    p_auth_user_id: userId,
+  });
+  if (error) throw new ApiError(503, 'unavailable');
+  return data === true;
 }
 
 // The recorded invitation for the caller's own sign-in identity, read through the server-only
@@ -149,11 +185,16 @@ export async function acceptInvitation(
 ): Promise<{ status: 'accepted' }> {
   const input: AcceptanceInput | null = acceptanceBody(body);
   if (!input) throw new ApiError(400, 'invalid-input');
+  const user = await invitationUser(context);
   const step = await invitationSessionStatus(context);
   if (step.status === 'active') {
     context.setLocale(input.locale);
     return { status: 'accepted' };
   }
+  // P1: refusal happens before the credential is written, using the same invite-flow proof the
+  // RPC consumes, so a recovery/ordinary session cannot set a password on this path either.
+  if (!(await invitationProofValid(context, step.setup, user.id)))
+    throw new ApiError(409, 'invitation-session-required');
   const { error: passwordError } = await context.client.auth.updateUser({
     password: input.password,
   });
