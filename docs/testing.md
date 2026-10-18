@@ -387,7 +387,7 @@ Embedded coverage: `scripts/contact-directory-contract.mjs` (in `npm run test:sc
 
 ## Property files staging acceptance
 
-Scope: [private-file protocol](property-files-spec.md) and [document protocol](database-contract.md#document-storage-and-access). Use isolated development/staging with real Supabase Auth, Data API/RLS, Storage and the actual browser interface. The executed development evidence below is separate from these repeatable acceptance gates; embedded tests do not prove hosted permissions or concurrent transactions.
+Scope: [private-file protocol](property-files-spec.md) and [document protocol](database-contract.md#document-storage-and-access). Use isolated development/staging with real Supabase Auth, Data API/RLS, a private Cloudflare R2 bucket (see [R2 storage cutover](#r2-storage-cutover-not-yet-executed)) and the actual browser interface. The executed development evidence below is separate from these repeatable acceptance gates; embedded tests do not prove hosted permissions or concurrent transactions.
 
 Prepare sanitized fixtures through authorized administration:
 
@@ -402,7 +402,7 @@ Prepare sanitized fixtures through authorized administration:
 | Active employee registers an attachment with safe filename, expected MIME/size/hash, and purpose (document or photo); uploads matching bytes; completion validates stored content type/count/hash | File appears in the property workspace as completed with original filename and purpose; a salesperson can upload to another employee's unarchived property without acquiring edit authority |
 | Register but never upload; upload but never complete; complete with mismatched hash/count/type | File does not appear in completed file list; pending/incomplete state is distinguishable; no ready file results from absent or invalid bytes |
 | Legacy files with upload_status='ready' preserve identity, content hash (sha256), original filename, MIME type, size, uploader attribution, review status; signed URL returns exact bytes matching bytes_fixture | All ready-status legacy files appear in the file list; #22 API filters on upload_status='ready' |
-| Attempt empty, oversized (>20 MiB), unsupported-format, and unsafe-path inputs | Localized validation failure before Storage; no partial state, no leaked diagnostics |
+| Attempt empty, oversized (>20 MiB), unsupported-format, and unsafe-path inputs | Localized validation failure before any upload; no partial state, no leaked diagnostics |
 | Uploader retries completion after a lost response; concurrent completion from two browser sessions | One authoritative attachment; exact stored content matches original bytes; no duplicate registration or object overwrite |
 | Network interruption before object creation, after bytes stored but before completion, after completion before response observed | Recovery across refresh, browser closure and subsequent login finds the same registered upload; reselecting matching content reuses same UUID/path; different content is rejected |
 | Uploader creates a company-wide Document category with accented name; another employee reuses it; Other default is applied when no category is selected | Category is available across employees and properties; normalized duplicate creation returns existing category; accented names are preserved; Other is localized per interface language |
@@ -417,6 +417,30 @@ Prepare sanitized fixtures through authorized administration:
 | Live deactivation while file workspace is open | Subsequent requests deny access; protected request/refocus clears displayed file data; restored activation re-enables access |
 | Switch VI/EN during upload, category selection, recovery, and cover operations | Equivalent labels, validation and statuses; filenames, category names, and document bytes remain unchanged |
 | Direct API attempts: metadata readiness mutation, forged completion attestation and old completion/review signatures | Denied without publishing unvalidated bytes; direct overwrite/delete probes need concrete authorization for a newly disposable synthetic object and subsequent exact-byte verification |
+
+### R2 storage cutover (not yet executed)
+
+Property file bytes now live in a private Cloudflare R2 bucket reached only through short-lived presigned URLs. None of the following has been run: the embedded schema harness proves the database caps and the cleanup state transitions, and the unit tests prove the class/limit, read-path ordering, the signed upload headers, the bounded cleanup pass and the delete-before-record ordering, but no live bucket, presigned URL, browser upload, maintenance call or hosted copy has been exercised.
+
+| Scenario | Required observation |
+| --- | --- |
+| Register and upload through the browser | Bytes appear in the private R2 bucket under `<property_uuid>/<file_uuid>/content`; the application server answers no request carrying file bytes; the presigned `PUT` and `GET` links stop working after about 60 seconds |
+| Architected read boundary on an archived property | A non-reviewer receives `404` from the signed endpoint and no URL exists; a reviewer obtains a working 60-second URL after the same RLS-checked record read |
+| Missing or partial `R2_*` configuration | Register, completion and signed-open fail closed with `503`/`unavailable`, while recovery answers `200` with `unknown` states; the server log names the missing variables; nothing falls back to Supabase Storage |
+| Bucket CORS rule missing | Browser upload fails with an opaque CORS error; adding the app origin, the `GET` and `PUT` methods and the `content-type` and `if-none-match` request headers makes the same upload succeed |
+| Body length against the signed upload URL | R2 refuses a body whose length differs from the signed `content-length` with `403 SignatureDoesNotMatch` and stores nothing (a shorter or longer body, including one over the class cap), while the exact registered length uploads normally |
+| Repeated PUT to a signed upload URL | The second write is refused (`412 PreconditionFailed`) and the object keeps the bytes that completion validated; the record and object stay unchanged, so a file is never overwritten |
+| Signed upload URL without its headers | Omitting `If-None-Match` or sending a different `content-length` is refused (`403 SignatureDoesNotMatch`) before any byte is stored |
+| Refused completion | The row passes through `cleanup_pending` and ends `failed` only once the stored object is confirmed gone by the trusted server (the next attempt re-uploads); the class slot is free as soon as the refusal is recorded, a refused completion never deletes a ready file's bytes — including when a rival completion made the file ready first, because the release reports that it moved nothing — and a re-registration against the released row is refused |
+| Transient delete failure after a refusal | With the R2 deletion forced to fail once, the row stays `cleanup_pending` (not `failed`) and the bytes remain; a later server cleanup pass or completion-triggered run retries, deletes them, and only then records `failed`, while the server log names each retried object and the backlog count |
+| Operator cleanup call | `POST /api/maintenance/file-cleanup` without the server-key bearer answers `401` and touches nothing (and `503` when no service key is configured); with it, the release backlog is retried up to 20 registrations, the response reports retried/cleared/remaining, and the same call with no backlog reports `retried 0` |
+| Cleanup of an archived property's released upload | A released upload whose property was archived, made by an employee other than the caller, is still deleted and recorded `failed` by the server pass; no browser session can reach that row or record the deletion |
+| Client attempts to assert cleaned bytes | An authenticated session calling `mark_upload_cleaned` for its own `cleanup_pending` row is refused (`42501`); its bytes are only deleted by the trusted server path |
+| Upload signature for a released or finished row | Registering with the UUID of a `cleanup_pending` or `failed` registration returns the localized validation refusal and mints no upload URL, so no new bytes can land outside the cleanup paths |
+| Expired pending registration | The workspace recovery list reports it `absent` and its bytes are gone from the bucket, while its `property_files` row stays and reselecting the same content reuses its UUID/path |
+| Per-property caps | A sixth document and an eleventh image are refused with the localized limit message and leave no row or object; the cover photo counts inside the 10 images; 20 MiB documents and 5 MiB images accept, one byte more refuses |
+| Retention | Clearing the cover, recategorizing a file and retrying completion never delete a ready file's R2 object or the row: the attachment stays readable |
+| Copy script against the development project | Dry run lists what it would copy and copies nothing; `--apply` copies every registered key, then the verification pass reports the whole registered set present with matching sizes, treats a legacy row with no recorded size as present, and copies nothing less; the Supabase bucket still holds every object afterwards |
 
 Add embedded database regressions only for consumer-visible invariants and run `npm run test:schema` for schema/workflow changes. Browser, real Data API/Storage/RLS and separate-session contention remain distinct proof. Record sanitized observations without tokens, signed URLs, private source payloads or customer records. Never run destructive probes on legacy or real objects or infer cleanup authority.
 

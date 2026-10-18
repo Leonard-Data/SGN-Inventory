@@ -1,12 +1,32 @@
 import 'server-only';
 import { createHash, createHmac } from 'node:crypto';
 import { ApiError, uuid, type RouteContext } from '@/lib/supabase/route';
-import { contentMime, fileMimeTypes, maximumFileBytes } from './content';
+import { createServiceRoleClient } from '@/lib/supabase/service';
+import {
+  deleteObject,
+  objectIdentity,
+  presignUpload,
+  storedBytes,
+  storedObject,
+} from '@/lib/r2';
+import { contentMime, fileMimeTypes } from './content';
+import { fileClass, maximumFileBytes, sizeRefusal } from './limits';
+import { drainFileCleanup } from './cleanup-pass';
+import { discardRefusedCompletion } from './upload-cleanup';
 import type { DocumentCategoryList, FileRegistrationResult } from './types';
 import type { Employee } from '@/features/employees/types';
 
+// SQLSTATEs the storage-limit migration raises; each refusal names the limit it hit.
+const limitCodes: Record<string, string> = {
+  P0020: 'document-limit',
+  P0021: 'image-limit',
+  P0022: 'image-too-large',
+};
+
 function databaseFailure(error: { code?: string }): never {
+  const limit = error.code ? limitCodes[error.code] : undefined;
   if (error.code === '42501') throw new ApiError(403, 'access-denied');
+  if (limit) throw new ApiError(400, limit);
   if (error.code === '23514' || error.code === '22P02')
     throw new ApiError(400, 'invalid-input');
   if (error.code === '23505') throw new ApiError(409, 'file-conflict');
@@ -54,8 +74,10 @@ export async function registerFile(
   )
     throw new ApiError(400, 'invalid-input');
   if (body.sizeBytes <= 0) throw new ApiError(400, 'empty-file');
-  if (body.sizeBytes > maximumFileBytes)
-    throw new ApiError(400, 'file-too-large');
+  const kind = fileClass(body.mimeType);
+  if (!kind) throw new ApiError(400, 'unsupported-format');
+  const sizeRefused = sizeRefusal(kind, body.sizeBytes);
+  if (sizeRefused) throw new ApiError(400, sizeRefused);
   if (
     typeof body.sha256 !== 'string' ||
     !/^[a-f0-9]{64}$/.test(body.sha256) ||
@@ -89,25 +111,75 @@ export async function registerFile(
     typeof data.objectPath !== 'string'
   )
     throw new ApiError(503, 'unavailable');
-  // The route already validated the live employee; this session is transport only, never authorization.
-  const {
-    data: { session },
-    error: sessionError,
-  } = await context.client.auth.getSession();
-  if (sessionError || !session) throw new ApiError(401, 'unauthenticated');
+  // The registration (and its property-scoped class limit) committed before any URL exists.
+  // The browser then writes the bytes straight to private R2 under a signature bound to the
+  // registered byte count; the server never sees them and no larger body can be written.
+  const signature = await presignUpload(
+    data.objectPath,
+    body.mimeType,
+    body.sizeBytes,
+  );
   return {
     fileId: data.fileId,
     objectPath: data.objectPath,
-    uploadUrl:
-      context.environment.supabaseUrl +
-      '/storage/v1/object/property-files/' +
-      data.objectPath.split('/').map(encodeURIComponent).join('/'),
-    publishableKey: context.environment.publishableKey,
-    accessToken: session.access_token,
+    uploadUrl: signature.url,
+    uploadBytes: signature.contentLength,
   };
 }
 
 export async function validateAndCompleteFile(
+  context: RouteContext,
+  propertyId: string,
+  fileId: string,
+  employee: Employee,
+) {
+  try {
+    return await completeFile(context, propertyId, fileId, employee);
+  } catch (error) {
+    // A refused completion is terminal for these bytes, so the stored object is discarded and
+    // the registration stops reserving its class slot. Transient failures stay pending.
+    if (error instanceof ApiError && error.status === 400)
+      await discardRefusedCompletion({
+        remove: deleteObject,
+        log: (message) => console.error(message),
+        pendingOwnerPath: async () => {
+          const { data } = await context.client
+            .from('property_files')
+            .select('object_path,upload_status,uploaded_by')
+            .eq('id', fileId)
+            .eq('property_id', propertyId)
+            .maybeSingle();
+          return data?.upload_status === 'pending' &&
+            data.uploaded_by === employee.id
+            ? data.object_path
+            : null;
+        },
+        releaseSlot: async () => {
+          const { data, error } = await context.client.rpc(
+            'fail_property_upload',
+            { p_file_id: fileId },
+          );
+          if (error) throw error;
+          return data === true;
+        },
+        confirmCleaned: async () => {
+          const admin = createServiceRoleClient(context.environment);
+          if (!admin)
+            throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured');
+          const { error } = await admin.rpc('mark_upload_cleaned', {
+            p_file_id: fileId,
+          });
+          if (error) throw error;
+        },
+      });
+    throw error;
+  } finally {
+    // Ordinary completion traffic drains the released-upload backlog without an operator call.
+    await drainFileCleanup(context.environment);
+  }
+}
+
+async function completeFile(
   context: RouteContext,
   propertyId: string,
   fileId: string,
@@ -145,36 +217,21 @@ export async function validateAndCompleteFile(
     throw new ApiError(403, 'access-denied');
   if (file.upload_status !== 'pending' && file.upload_status !== 'ready')
     throw new ApiError(400, 'invalid-file');
-  const storage = context.client.storage.from('property-files');
-  const { data: info, error: infoError } = await storage.info(file.object_path);
-  if (infoError || !info) {
-    if (
-      infoError &&
-      'statusCode' in infoError &&
-      String(infoError.statusCode) === '404'
-    )
-      throw new ApiError(409, 'missing-bytes');
-    throw new ApiError(503, 'unavailable');
-  }
-  if (!uuid(info.id)) throw new ApiError(503, 'unavailable');
+  const info = await storedObject(file.object_path);
+  if (!info) throw new ApiError(409, 'missing-bytes');
   if (
-    info.size !== undefined &&
-    (info.size <= 0 ||
-      info.size > maximumFileBytes ||
-      (file.size_bytes !== null && info.size !== file.size_bytes))
+    info.size <= 0 ||
+    info.size > maximumFileBytes ||
+    (file.size_bytes !== null && info.size !== file.size_bytes)
   )
     throw new ApiError(400, 'file-mismatch');
-  const { data: blob, error: downloadError } = await storage.download(
-    file.object_path,
-  );
-  if (downloadError || !blob) throw new ApiError(503, 'unavailable');
+  const bytes = await storedBytes(file.object_path);
   if (
-    blob.size <= 0 ||
-    blob.size > maximumFileBytes ||
-    (file.size_bytes !== null && blob.size !== file.size_bytes)
+    bytes.length <= 0 ||
+    bytes.length > maximumFileBytes ||
+    (file.size_bytes !== null && bytes.length !== file.size_bytes)
   )
     throw new ApiError(400, 'file-mismatch');
-  const bytes = Buffer.from(await blob.arrayBuffer());
   const sha256 = createHash('sha256').update(bytes).digest('hex');
   if (file.sha256 !== null && sha256 !== file.sha256)
     throw new ApiError(400, 'file-mismatch');
@@ -184,6 +241,12 @@ export async function validateAndCompleteFile(
   } catch {
     throw new ApiError(400, 'invalid-file');
   }
+  // The class comes from the validated content, so the byte cap cannot be dodged by the
+  // uploader's chosen purpose or category. The count cap is re-checked by the database.
+  const kind = fileClass(mimeType);
+  if (!kind) throw new ApiError(400, 'invalid-file');
+  const sizeRefused = sizeRefusal(kind, bytes.length);
+  if (sizeRefused) throw new ApiError(400, sizeRefused);
   if (
     (file.mime_type !== null && mimeType !== file.mime_type) ||
     (file.mime_type !== null &&
@@ -192,19 +255,17 @@ export async function validateAndCompleteFile(
     (file.purpose === 'photo' && mimeType === 'application/pdf')
   )
     throw new ApiError(400, 'file-mismatch');
-  const { data: currentInfo, error: currentError } = await storage.info(
-    file.object_path,
-  );
-  if (currentError || !currentInfo) throw new ApiError(503, 'unavailable');
-  if (currentInfo.id !== info.id || currentInfo.version !== info.version)
-    throw new ApiError(409, 'file-conflict');
+  const currentInfo = await storedObject(file.object_path);
+  if (!currentInfo) throw new ApiError(503, 'unavailable');
+  if (currentInfo.etag !== info.etag) throw new ApiError(409, 'file-conflict');
+  const objectId = objectIdentity(info.etag);
   const payload = [
     'v1',
     file.id,
     file.property_id,
     file.uploaded_by ?? '',
     file.object_path,
-    info.id,
+    objectId,
     mimeType,
     String(bytes.length),
     sha256,
@@ -216,7 +277,7 @@ export async function validateAndCompleteFile(
     'complete_property_upload',
     {
       p_file_id: file.id,
-      p_object_id: info.id,
+      p_object_id: objectId,
       p_mime_type: mimeType,
       p_size_bytes: bytes.length,
       p_sha256: sha256,

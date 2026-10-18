@@ -14,7 +14,7 @@ import {
   type DeletionConfirmation,
   type DeletionOperation,
 } from './deletion';
-import { createEmployeeAdminClient } from './provider-ban';
+import { createServiceRoleClient } from '@/lib/supabase/service';
 import { supabaseAccountDeletionProvider } from './provider-deletion';
 
 // Issue #67: the session-scoped read and the guarded permanent-deletion call. Membership is
@@ -202,7 +202,7 @@ export async function administerEmployeeAccountDeletion(
 ): Promise<DeletionConfirmation> {
   await employeeTarget(context, employeeId);
   const custodianAuthUserId = await sessionAuthUserId(context);
-  const admin = createEmployeeAdminClient(context.environment);
+  const admin = createServiceRoleClient(context.environment);
   const gateway = databaseGateway(context, admin);
   if (!admin) {
     await gateway.begin(employeeId, key);

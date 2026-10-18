@@ -4,9 +4,9 @@ import type { Environment } from '@/lib/environment';
 import type { Database } from '@/types/database';
 import {
   SIGN_IN_BLOCK_BAN_DURATION,
+  providerServiceKey,
   providerBanResult,
   providerDetail,
-  providerServiceKey,
   type SignInBlocker,
 } from './deactivation';
 

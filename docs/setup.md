@@ -39,15 +39,19 @@ Windows PowerShell: `py -3.11 -m venv .venv`, then `.\.venv\Scripts\Activate.ps1
 
 Copy `.env.example` to ignored `.env.local` (`cp` on POSIX, `Copy-Item` in PowerShell). Supply local or isolated dev values, never production values. Examples are placeholders, not credentials. No live credentials are required for CI, tests or compilation.
 
-| Variable                               | Required value                                                                                                                                                 |
-| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SGN_ENV`                              | `dev` for local/previews/dev, `prod` for production                                                                                                            |
-| `NEXT_PUBLIC_SUPABASE_URL`             | Selected Supabase HTTPS origin; HTTP loopback is allowed only locally in dev                                                                                   |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Matching publishable key (local legacy `anon` JWT accepted); never secret/service-role                                                                         |
-| `NEXT_PUBLIC_APP_URL`                  | Canonical HTTPS origin of that stage; local example is `http://localhost:3000`                                                                                 |
-| `EXPECTED_SUPABASE_PROJECT_REF`        | Selected 20-letter hosted ref; optional locally, required for release checks                                                                                   |
-| `SGN_FILE_VALIDATION_KEY`              | Server-only 64 lowercase hex characters, unique per stage, matching the private DB singleton                                                                   |
-| `SUPABASE_SERVICE_ROLE_KEY`            | Server-only Auth admin capability used only for the provider sign-in block during employee deactivation; never `NEXT_PUBLIC_`, never read by ordinary requests |
+| Variable                               | Required value                                                                                                                                                                             |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `SGN_ENV`                              | `dev` for local/previews/dev, `prod` for production                                                                                                                                        |
+| `NEXT_PUBLIC_SUPABASE_URL`             | Selected Supabase HTTPS origin; HTTP loopback is allowed only locally in dev                                                                                                               |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Matching publishable key (local legacy `anon` JWT accepted); never secret/service-role                                                                                                     |
+| `NEXT_PUBLIC_APP_URL`                  | Canonical HTTPS origin of that stage; local example is `http://localhost:3000`                                                                                                             |
+| `EXPECTED_SUPABASE_PROJECT_REF`        | Selected 20-letter hosted ref; optional locally, required for release checks                                                                                                               |
+| `SGN_FILE_VALIDATION_KEY`              | Server-only 64 lowercase hex characters, unique per stage, matching the private DB singleton                                                                                               |
+| `R2_ACCOUNT_ID`                        | Server-only Cloudflare R2 account id; the S3 endpoint is `https://<id>.r2.cloudflarestorage.com`                                                                                           |
+| `R2_BUCKET`                            | Server-only private R2 bucket for property file bytes; presigned URLs are the only access path                                                                                             |
+| `R2_ACCESS_KEY_ID`                     | Server-only R2 API token access key id with read/write on that one bucket                                                                                                                  |
+| `R2_SECRET_ACCESS_KEY`                 | Server-only R2 API token secret; never `NEXT_PUBLIC_`, never printed or committed                                                                                                          |
+| `SUPABASE_SERVICE_ROLE_KEY`            | Server-only trusted-server capability used only for the employee administration provider steps and the released-upload cleanup pass; never `NEXT_PUBLIC_`, never read by ordinary requests |
 
 ```bash
 npm run check:env
@@ -55,6 +59,14 @@ npm run dev
 ```
 
 `check:env` validates configuration without contacting Supabase or printing keys. `/api/health` is private/no-store configuration readiness only: `200` with `{"status":"ok","stage":"dev"}` (or `prod`), otherwise `503`. It proves neither database connectivity, file-key agreement nor user authorization.
+
+Property file bytes live in a private Cloudflare R2 bucket, in both stages, configured only through the four server-only `R2_*` variables above. Uploads and downloads are short-lived presigned URLs minted only after the RLS-checked `property_files` read, so the application server never streams bytes and no bucket is public. An upload is a 60-second presigned `PUT` whose signature covers the object key and the registered byte count and requires a conditional create, so R2 itself refuses any body whose length differs from the registered size (never more than the class cap) and never replaces an existing object. These are ordinary runtime variables, not build-time ones: a missing value fails the file operation closed with an opaque `503`/`unavailable` response rather than falling back to Supabase Storage, the server log names the missing variables for the operator, and `check:env` reports `R2 storage: not configured` (or fails when only part of the set is present). Never put a bucket credential in a `NEXT_PUBLIC_*` variable or in the repository. Provisioning the buckets, issuing the API tokens and installing the values is separate authorization per stage.
+
+Released uploads whose bytes could not be deleted are retried by a server-side cleanup pass. It needs `SUPABASE_SERVICE_ROLE_KEY` in the stage that runs it (the same server-only secret the employee administration adapters use); a missing or placeholder value leaves the backlog logged and unretried rather than falling back to a client session. Ordinary file-completion traffic drains up to three released registrations per request, and an operator can drain up to twenty at a time by calling `POST /api/maintenance/file-cleanup` with `Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY>`; the response reports `{retried,cleared,remaining}` and nothing is deleted without a confirmed removal.
+
+Each bucket also needs one CORS rule before any browser upload or download works, because the browser itself sends the signed `PUT` and follows the presigned links. Allow the stage's application origin, the `GET` and `PUT` methods, and the `content-type` and `if-none-match` request headers. A bucket with the four `R2_*` values but no CORS rule fails every browser upload with an opaque CORS error, so install the rule while provisioning each stage's bucket.
+
+Moving existing objects is a deliberate operator step: `node scripts/copy-property-files-to-r2.mjs` (dry run by default, `--apply` to copy and then verify, `--verify` for the verification pass alone) copies every registered object from the Supabase `property-files` bucket to R2 with identical keys. It needs `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and the four `R2_*` values in its own shell, deletes nothing in Supabase, and has not been run against a hosted project. Retiring the old bucket is a separate decision taken after a verified copy.
 
 For a Vercel **Preview** deployment, `SGN_ENV` must be `dev`. Runtime redirects and password-recovery links use Vercel's server-supplied `VERCEL_URL` hostname, so they remain on the deployment that initiated the request instead of jumping to the stable dev site. Enable Vercel's automatic system environment variables; do not override `VERCEL_ENV` or `VERCEL_URL`. Local/prebuilt compilation has no deployment URL yet and uses the configured dev origin. Production and the stable dev deployment keep their canonical `NEXT_PUBLIC_APP_URL`. This does not trust request Host headers or widen the production redirect allowlist.
 
@@ -117,7 +129,7 @@ For **each** GitHub environment (`preview` uses the dev values):
 
 ### Exact Supabase settings
 
-- One dev and one prod project with distinct refs and keys. Expose only `public` in the Data API, never `private`. Preserve grants/RLS and the private file bucket. Use the user's publishable-key session for ordinary requests; no service-role fallback.
+- One dev and one prod project with distinct refs and keys. Expose only `public` in the Data API, never `private`. Preserve grants/RLS and the private file buckets (the legacy Supabase one and R2). Use the user's publishable-key session for ordinary requests; no service-role fallback.
 - Disable open signup/anonymous sign-in; employee invitation and live employee linkage remain separate. Supply an authorized linked active test employee for preview acceptance, never real production customer fixtures.
 - Auth **Site URL**: stable dev origin on dev; canonical production origin on prod.
 - Auth **Redirect URLs**: permit `<stage-origin>/auth/callback` for the PKCE recovery flow and `<stage-origin>/auth/invite` for the invitation destination (issue #68), so a delivered invitation returns to the fixed application path instead of the Site URL. Email templates using the token-hash flow must target the same stage's `/auth/confirm` with `type=recovery`; never point dev mail at prod. Configure real SMTP/delivered recovery separately.
