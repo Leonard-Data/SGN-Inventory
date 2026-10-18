@@ -579,13 +579,23 @@ export function createVietMapResolver({
  * catalogue is refused rather than guessed.
  */
 export async function resolveAddress(source, context) {
-  const { catalogue, reference, legacyTree, convertLegacyWard } = context;
+  const {
+    catalogue,
+    reference,
+    legacyReference,
+    legacyTree,
+    convertLegacyWard,
+  } = context;
   const city = text(source.city);
   const district = text(source.district);
   const ward = text(source.ward);
   if (!city) return { status: 'missing_city' };
   if (!district) return { status: 'missing_district' };
   if (!ward) return { status: 'missing_ward' };
+  // An unreachable official reference leaves no fallback: the legacy address stands and the row is
+  // counted under its own reason instead of being matched by name or guessed.
+  if (legacyReference === false)
+    return { status: 'official_reference_unavailable' };
 
   const cityKey = adminNameKey(city);
   const tree = legacyTree(cityKey);
@@ -1664,6 +1674,14 @@ export function renderReport(report) {
     'the legacy ward’s official code; the project catalogue supplies the target unit identity.',
     'A ward name alone never selects a commune.',
     '',
+    ...(report.addresses.legacy_reference_unavailable
+      ? [
+          `**Limitation: the official three-tier reference was unreachable for this run** (${report.addresses.legacy_reference_unavailable}).`,
+          `It is the fallback that would have matched a legacy ward code to its current commune, so ${report.addresses.legacy_reference_rows} row(s) keep their legacy address only, counted below as \`official_reference_unavailable\`; no unit was matched by name or guessed in its place, and no row was given a current province or commune it cannot be verified for.`,
+          'In the development run that reference converted 5 rows (4 through the published legacy mapping, 1 through a ward label that already matched one current commune), so at most that many addresses convert here that did there, and every one of them keeps its untouched legacy address and needs review.',
+          '',
+        ]
+      : []),
     '| Resolved by | Rows |',
     '| --- | ---: |',
     ...report.addresses.sources.map((row) => `| ${row.source} | ${row.rows} |`),
@@ -1682,12 +1700,27 @@ export function renderReport(report) {
       (row) => `| ${row.status} | ${row.rows} | ${row.triples} |`,
     ),
     '',
+    ...(report.addresses.legacy_reference_unavailable
+      ? [
+          'That table counts rows by the fallback status of their legacy unit, so',
+          `\`official_reference_unavailable\` covers every row whose unit would have used the official fallback; the rows VietMap also could not place (${report.addresses.legacy_reference_rows}) are the ones that keep a legacy address only.`,
+          '',
+        ]
+      : []),
     `Rows with a converted current province and commune: **${report.addresses.converted_rows}** of ${report.counts.total_rows}.`,
     `Rows refused: **${report.addresses.refused_rows}**.`,
     '',
     report.addresses.crosswalk_note,
     '',
   );
+  if (report.addresses.legacy_reference_unavailable) {
+    push(
+      '### Sources that disagree',
+      '',
+      'Not computed for this run: comparing VietMap against the official mapping needs that reference, which was unreachable. Every imported property keeps review pending, and no source was preferred over another silently.',
+      '',
+    );
+  }
   if (report.addresses.disagreements.length) {
     push(
       '### Sources that disagree',
@@ -2050,9 +2083,55 @@ export async function run(argv, dependencies = {}) {
 
   const legacyTrees = new Map();
   const conversionCache = new Map();
+
+  // The official three-tier tree is loaded only for cities the workbook actually uses. It is the
+  // fallback for addresses VietMap cannot place, so an unreachable reference is recorded and the
+  // run continues on VietMap alone: an address whose fallback cannot be consulted keeps its legacy
+  // address with its own counted reason rather than being given a unit this run cannot verify.
+  let legacyReferenceError = null;
+  try {
+    const legacyProvinceList = await fetchImpl(`${OPEN_API}/api/v1/?depth=1`, {
+      signal: AbortSignal.timeout(30000),
+    }).then((response) => {
+      if (!response.ok)
+        throw new Error(
+          `provinces.open-api.vn returned ${response.status} for the legacy province list`,
+        );
+      return response.json();
+    });
+    const usedCities = new Set();
+    for (const row of master.slice(1)) {
+      const city = text(row?.[index['Thành phố']]);
+      if (city) usedCities.add(adminNameKey(city));
+    }
+    for (const cityKey of usedCities) {
+      const province = legacyProvinceList.find(
+        (entry) => adminNameKey(entry.name) === cityKey,
+      );
+      if (!province) continue;
+      const response = await fetchImpl(
+        `${OPEN_API}/api/v1/p/${province.code}?depth=3`,
+        { signal: AbortSignal.timeout(60000) },
+      );
+      if (!response.ok)
+        throw new Error(
+          `provinces.open-api.vn returned ${response.status} for legacy province ${province.code}`,
+        );
+      legacyTrees.set(cityKey, await response.json());
+    }
+  } catch (error) {
+    legacyTrees.clear();
+    legacyReferenceError =
+      error instanceof Error ? error.message : String(error);
+    console.error(
+      `official address reference unavailable, continuing on VietMap alone: ${legacyReferenceError}`,
+    );
+  }
+
   const resolveContext = {
     catalogue,
     reference,
+    legacyReference: legacyReferenceError === null,
     legacyTree: (cityKey) => legacyTrees.get(cityKey) ?? null,
     convertLegacyWard: async (code) => {
       if (!conversionCache.has(code)) {
@@ -2079,37 +2158,6 @@ export async function run(argv, dependencies = {}) {
       return conversionCache.get(code);
     },
   };
-
-  // The official three-tier tree is loaded only for cities the workbook actually uses.
-  const legacyProvinceList = await fetchImpl(`${OPEN_API}/api/v1/?depth=1`, {
-    signal: AbortSignal.timeout(30000),
-  }).then((response) => {
-    if (!response.ok)
-      throw new Error(
-        `provinces.open-api.vn returned ${response.status} for the legacy province list`,
-      );
-    return response.json();
-  });
-  const usedCities = new Set();
-  for (const row of master.slice(1)) {
-    const city = text(row?.[index['Thành phố']]);
-    if (city) usedCities.add(adminNameKey(city));
-  }
-  for (const cityKey of usedCities) {
-    const province = legacyProvinceList.find(
-      (entry) => adminNameKey(entry.name) === cityKey,
-    );
-    if (!province) continue;
-    const response = await fetchImpl(
-      `${OPEN_API}/api/v1/p/${province.code}?depth=3`,
-      { signal: AbortSignal.timeout(60000) },
-    );
-    if (!response.ok)
-      throw new Error(
-        `provinces.open-api.vn returned ${response.status} for legacy province ${province.code}`,
-      );
-    legacyTrees.set(cityKey, await response.json());
-  }
 
   const outcomes = new Map();
   const sources = new Map();
@@ -2572,6 +2620,10 @@ export async function run(argv, dependencies = {}) {
     write_outcome: { state: 'dry_run', reason: null },
     addresses: {
       outcomes: addressOutcomes,
+      legacy_reference_unavailable: legacyReferenceError,
+      legacy_reference_rows: records.filter(
+        (record) => record.address_status === 'official_reference_unavailable',
+      ).length,
       sources: [...sources.entries()]
         .sort((a, b) => b[1] - a[1])
         .map(([source, rows]) => ({ source, rows })),
@@ -3229,6 +3281,11 @@ function printSummary(report) {
   console.log(
     `addresses converted=${report.addresses.converted_rows} refused=${report.addresses.refused_rows}`,
   );
+  if (report.addresses.legacy_reference_unavailable) {
+    console.log(
+      `official address reference unavailable: ${report.addresses.legacy_reference_rows} row(s) kept legacy-only and counted as official_reference_unavailable`,
+    );
+  }
   if (report.statuses?.rows) {
     console.log(
       `status quarantined=${report.statuses.rows} values=${report.statuses.values.map((entry) => `${entry.value || '(empty)'} x${entry.rows}`).join(', ')}`,

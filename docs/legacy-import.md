@@ -69,7 +69,10 @@ row, file, invitation or account is written.
   code; `public.admin_unit_versions` supplies the target unit identity. A ward name alone never
   selects a commune. Each property keeps its untouched legacy address; a converted current
   address is added only where a bound was resolved. An unresolved address keeps the legacy row and
-  no current province or commune, and the property needs review.
+  no current province or commune, and the property needs review. When that official reference
+  cannot be reached at all, the run continues on VietMap alone and reports the limitation: every
+  address VietMap cannot place keeps its legacy row, counted as `official_reference_unavailable`,
+  and nothing is matched by ward name or guessed in its place.
 - **Review.** Every imported property starts with `record_review_status = pending`; nothing is
   approved, verified or given a final status by the import. The listing mode comes from the row's
   own sale and rent prices, with the `Loại Hình` label as the fallback. The status comes from the

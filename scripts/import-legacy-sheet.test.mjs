@@ -22,6 +22,7 @@ import {
   readSpreadsheet,
   recordBucket,
   importablePropertyKeys,
+  resolveAddress,
   rosterEmployees,
   statusFromLabel,
   statusQuarantine,
@@ -750,6 +751,58 @@ test('a converted address the project has no unit for is counted and named by un
     { code: '01/00001', rows: 1 },
   ]);
   assert.deepEqual(convertedSkipped([]), { rows: 0, codes: [] });
+});
+
+test('an unreachable official reference keeps the legacy address instead of guessing a unit', async () => {
+  const context = {
+    catalogue: { provinces: new Map(), communes: new Map() },
+    reference: { wardPairs: new Map() },
+    legacyReference: false,
+    legacyTree: () => null,
+    convertLegacyWard: async () => {
+      throw new Error('the official reference must not be consulted');
+    },
+  };
+  const source = {
+    city: 'Thành phố Hồ Chí Minh',
+    district: 'Quận 3',
+    ward: 'Phường 08',
+  };
+  const unavailable = await resolveAddress(source, context);
+  assert.equal(unavailable.status, 'official_reference_unavailable');
+  assert.equal(unavailable.target, undefined);
+  // The reasons the run can still establish without the reference are kept as they were.
+  assert.equal(
+    (
+      await resolveAddress(
+        { city: source.city, district: source.district },
+        context,
+      )
+    ).status,
+    'missing_ward',
+  );
+  // With the reference available the same triple is consulted exactly as before.
+  const consulted = [];
+  const pairKey = `${adminNameKey(source.district)}|${adminNameKey(source.ward)}`;
+  const available = {
+    ...context,
+    reference: { wardPairs: new Map([[pairKey, {}]]) },
+    legacyReference: true,
+    legacyTree: () => ({
+      districts: [
+        { name: 'Quận 3', wards: [{ name: 'Phường 08', code: '26734' }] },
+      ],
+    }),
+    convertLegacyWard: async (code) => {
+      consulted.push(code);
+      return [];
+    },
+  };
+  assert.equal(
+    (await resolveAddress(source, available)).status,
+    'no_current_ward',
+  );
+  assert.deepEqual(consulted, ['26734']);
 });
 
 test('a placeholder owner creates no contact row, a named owner does', () => {
