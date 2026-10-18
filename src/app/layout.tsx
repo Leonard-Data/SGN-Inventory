@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { cookies } from 'next/headers';
-import { IBM_Plex_Mono, Inter, Oswald } from 'next/font/google';
+import { fontVariables } from './fonts';
 // Reports to the Vercel project that served the request; the project's
 // dashboard Analytics view must also be enabled, or nothing is collected.
 import { Analytics } from '@vercel/analytics/next';
@@ -16,26 +16,9 @@ import './sgn-surfaces.css';
 import './sgn-auth.css';
 
 // Canonical authentication typography (ticket #50). Families, weights and the
-// Vietnamese subset match the preserved prototype's Google Fonts request; using
-// next/font self-hosts them at build time instead of loading a runtime CDN.
-const display = Oswald({
-  subsets: ['latin', 'vietnamese'],
-  weight: ['400', '500', '600'],
-  variable: '--sgn-font-display',
-  display: 'swap',
-});
-const body = Inter({
-  subsets: ['latin', 'vietnamese'],
-  weight: ['400', '500', '600'],
-  variable: '--sgn-font-body',
-  display: 'swap',
-});
-const mono = IBM_Plex_Mono({
-  subsets: ['latin', 'vietnamese'],
-  weight: ['400', '500'],
-  variable: '--sgn-font-mono',
-  display: 'swap',
-});
+// Vietnamese subset match the preserved prototype's Google Fonts request; the
+// files are vendored in ./fonts (see ./fonts.ts) so the build never fetches
+// them from Google.
 
 export const metadata: Metadata = {
   title: 'SGN Inventory',
@@ -52,11 +35,7 @@ export default async function RootLayout({
   const locale =
     (await cookies()).get('sgn-locale')?.value === 'en' ? 'en' : 'vi';
   return (
-    <html
-      lang={locale}
-      className={`${display.variable} ${body.variable} ${mono.variable}`}
-      suppressHydrationWarning
-    >
+    <html lang={locale} className={fontVariables} suppressHydrationWarning>
       <body>
         {children}
         <Analytics />
