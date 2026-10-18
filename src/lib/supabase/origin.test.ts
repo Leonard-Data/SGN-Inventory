@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { originAllowed } from './origin.ts';
+import { acceptanceSessionBody } from '../../features/employees/invitation-acceptance.ts';
+
+// Mirrors the invite session route: the guard is only relaxed for a body the route's own
+// classifier calls the delivered token pair.
+const tokenProof = (body: Record<string, unknown>) =>
+  acceptanceSessionBody(body)?.kind === 'tokens';
 
 const appUrl = 'https://sgnewhouse.online';
 const prod = { stage: 'prod' as const, appUrl };
@@ -100,4 +106,57 @@ test('the dev stage behaves as before and never refuses on origin', () => {
     ),
     true,
   );
+});
+
+test('a production POST with a valid invitation token body needs no origin evidence', () => {
+  for (const values of [
+    {},
+    { origin: 'https://evil.example' },
+    { 'sec-fetch-site': 'cross-site' },
+  ] as Record<string, string>[])
+    assert.equal(
+      originAllowed(
+        headers(values),
+        prod,
+        requestOrigin,
+        tokenProof({ accessToken: 'jwt', refreshToken: 'rt' }),
+      ),
+      true,
+      JSON.stringify(values),
+    );
+});
+
+test('the same no-evidence POST with a cookie body is still refused', () => {
+  assert.equal(
+    originAllowed(headers({}), prod, requestOrigin, tokenProof({})),
+    false,
+  );
+});
+
+test('a token body is refused on any route that does not opt in', () => {
+  assert.equal(
+    originAllowed(
+      headers({}),
+      prod,
+      requestOrigin,
+      tokenProof({ accessToken: 'jwt', refreshToken: 'rt' }),
+    ),
+    true,
+  );
+  // The default, used by every other guarded route, ignores the body entirely.
+  assert.equal(originAllowed(headers({}), prod, requestOrigin), false);
+});
+
+test('a token-shaped body with an empty or missing token is not token proof', () => {
+  for (const body of [
+    { accessToken: '', refreshToken: 'rt' },
+    { accessToken: 'jwt', refreshToken: '' },
+    { accessToken: 'jwt' },
+    { refreshToken: 'rt' },
+  ])
+    assert.equal(
+      originAllowed(headers({}), prod, requestOrigin, tokenProof(body)),
+      false,
+      JSON.stringify(body),
+    );
 });
