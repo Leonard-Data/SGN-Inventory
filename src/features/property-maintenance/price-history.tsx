@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import type { Locale } from '@/i18n/messages';
+import { messages, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { formatVnd, vietnamTimestamp } from '@/features/properties/format';
 import type { PriceHistoryPage, PriceSeries } from './data';
@@ -40,7 +40,11 @@ function Series({
       {busy ? <p role="status">{text.loading}</p> : null}
       {error ? (
         <div className="alert" data-tone="danger" role="alert">
-          <span>{text.seriesFailed}</span>
+          <span>
+            {error === 'access-changed'
+              ? messages[locale].accessChanged
+              : text.seriesFailed}
+          </span>
           <button className="btn btn-sm btn-ghost" onClick={reload}>
             {text.refresh}
           </button>

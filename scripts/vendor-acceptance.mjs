@@ -128,7 +128,7 @@ function observed(name, details = {}) {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let retryCount = 0;
 function isTransient(error) {
-  const text = `${error?.message ?? ''} ${error?.details ?? ''}`;
+  const text = `${error?.message ?? ''} ${error?.details ?? ''} ${error?.code ?? ''} ${error?.status ?? ''}`;
   return /fetch failed|ConnectTimeout|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket hang up|Connection terminated|upstream connect error|502|503|504/i.test(
     text,
   );
@@ -153,6 +153,161 @@ async function retryThrown(label, work, attempts = 4) {
       console.log('RETRY', label, attempt);
       await sleep(1500 * attempt);
     }
+  }
+}
+// Ticket #74 probes: a guarded mutation and an application endpoint call tolerate the same
+// transient transport or edge failure the read retry above handles, and a refusal assertion
+// reports the observed error rather than only its code, so a failure in this journey is
+// diagnosable from the run log alone.
+async function rpcCall(label, client, fn, args) {
+  return retryThrown(label, () =>
+    retryResult(label, () => client.rpc(fn, args)),
+  );
+}
+async function endpointCall(label, work, attempts = 4) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const result = await work();
+      const transient =
+        result?.status === 0 || [502, 503, 504].includes(result?.status ?? 0);
+      if (!transient || attempt >= attempts) return result;
+      retryCount++;
+      console.log('RETRY', label, attempt);
+      await sleep(1500 * attempt);
+    } catch (error) {
+      if (!isTransient(error) || attempt >= attempts) throw error;
+      retryCount++;
+      console.log('RETRY', label, attempt);
+      await sleep(1500 * attempt);
+    }
+  }
+}
+const refusal = (error, code) =>
+  `expected ${code}, observed ${JSON.stringify(error ?? null)}`;
+// A ticket #74 inspection read: the same transient retry as `rpcCall`, and a failed read is
+// reported instead of being read as an empty result.
+async function readRows(label, work) {
+  const result = await retryThrown(label, () =>
+    retryResult(label, async () => work()),
+  );
+  assert.equal(result.error, null, refusal(result.error, 'no error'));
+  return result.data ?? [];
+}
+function failureDetails(error, response) {
+  return {
+    message: error?.message ?? error?.details ?? null,
+    code: error?.code ?? null,
+    status: response?.status ?? error?.status ?? null,
+    body: response?.body ?? null,
+  };
+}
+function rpcFailure(result) {
+  return result?.error ?? result?.observedError ?? null;
+}
+function endpointFailure(result) {
+  return JSON.stringify({
+    body: result?.body ?? null,
+    observedError: result?.observedError ?? null,
+  });
+}
+async function recordedLink(client, propertyId, vendorId, label) {
+  return (
+    (
+      await readRows(label, () =>
+        client
+          .from('property_vendors')
+          .select('vendor_id,revision')
+          .eq('property_id', propertyId)
+          .eq('vendor_id', vendorId),
+      )
+    )[0] ?? null
+  );
+}
+async function unlinkRpcCall(label, client, args, attempts = 4) {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    let result;
+    let thrown;
+    try {
+      result = await client.rpc('unlink_property_vendor', args);
+    } catch (error) {
+      thrown = error;
+    }
+    const error = thrown ?? result?.error;
+    if (!error) return result;
+    if (!isTransient(error))
+      return {
+        data: result?.data ?? null,
+        error,
+        observedError: failureDetails(error),
+      };
+    const current = await recordedLink(
+      client,
+      args.p_property_id,
+      args.p_vendor_id,
+      `${label} current link read`,
+    );
+    if (!current)
+      return {
+        data: { removed: true },
+        error: null,
+        observedError: failureDetails(error),
+      };
+    if (attempt === attempts)
+      return {
+        data: result?.data ?? null,
+        error,
+        observedError: failureDetails(error),
+      };
+    retryCount++;
+    console.log('RETRY', label, attempt);
+    await sleep(1500 * attempt);
+  }
+}
+async function unlinkEndpointCall(
+  label,
+  client,
+  propertyId,
+  vendorId,
+  work,
+  attempts = 4,
+) {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    let response;
+    let thrown;
+    try {
+      response = await work();
+    } catch (error) {
+      thrown = error;
+    }
+    const transient = thrown
+      ? isTransient(thrown)
+      : response?.status === 0 ||
+        [502, 503, 504].includes(response?.status ?? 0);
+    if (!transient) {
+      if (thrown)
+        return { status: 0, body: null, observedError: failureDetails(thrown) };
+      return response;
+    }
+    const current = await recordedLink(
+      client,
+      propertyId,
+      vendorId,
+      `${label} current link read`,
+    );
+    if (!current)
+      return {
+        status: 200,
+        body: null,
+        observedError: failureDetails(thrown ?? response?.body, response),
+      };
+    if (attempt === attempts)
+      return {
+        ...(response ?? { status: 0, body: null }),
+        observedError: failureDetails(thrown ?? response?.body, response),
+      };
+    retryCount++;
+    console.log('RETRY', label, attempt);
+    await sleep(1500 * attempt);
   }
 }
 function sessionClient() {
@@ -233,9 +388,47 @@ async function removeFixtures(manifest) {
     employees_retained: [],
     auth_users_removed: [],
     auth_users_retained: [],
+    properties_removed: [],
+    properties_retained: [],
     failures: [],
   };
   if (!manifest) return cleanup;
+  // Ticket #74 fixture properties first: their creator FK would otherwise keep the fixture
+  // employees, and the synthetic history/link rows they own are removed with them. Every
+  // statement is scoped to the recorded ids and a failure is recorded, never thrown.
+  const propertyIds = manifest.propertyIds ?? [];
+  if (propertyIds.length) {
+    const list = propertyIds.map((id) => `'${id}'`).join(',');
+    for (const statement of [
+      `delete from public.property_history where property_id in (${list})`,
+      `delete from public.property_vendors where property_id in (${list})`,
+      `delete from public.activity_events where property_id in (${list})`,
+      `delete from public.property_contacts where property_id in (${list})`,
+      `delete from public.property_addresses where property_id in (${list})`,
+      `delete from public.properties where id in (${list})`,
+    ]) {
+      try {
+        operatorSql(statement);
+      } catch (error) {
+        cleanup.failures.push(`remove fixture property rows: ${error.message}`);
+        break;
+      }
+    }
+    let remaining = propertyIds;
+    try {
+      remaining = operatorSql(
+        `select id::text as id from public.properties where id in (${list})`,
+      ).map((row) => row.id);
+    } catch (error) {
+      cleanup.failures.push(`read fixture properties: ${error.message}`);
+    }
+    cleanup.properties_removed = propertyIds.filter(
+      (id) => !remaining.includes(id),
+    );
+    cleanup.properties_retained = propertyIds.filter((id) =>
+      remaining.includes(id),
+    );
+  }
   const identities = Object.entries(manifest.identities ?? {});
   const employeeIds = identities
     .map(([, identity]) => identity.employeeId)
@@ -335,6 +528,9 @@ async function createFixtures() {
     identities: {},
     unlinked: null,
     retainedVendorIds: [],
+    // Ticket #74 link fixtures: synthetic properties this run created, removed before the
+    // fixture employees their creator FK would otherwise keep.
+    propertyIds: [],
   };
   for (const [name, role, active] of identities) {
     const email = `${filePrefix}.${name}.${runToken}@example.test`;
@@ -486,7 +682,7 @@ async function readAllPages(cookies) {
   let cursor = null;
   let pages = 0;
   for (;;) {
-    const parameters = new URLSearchParams({ query: 'SGN73' });
+    const parameters = new URLSearchParams({ query: runToken });
     if (cursor) {
       parameters.set('before', cursor.before);
       parameters.set('beforeId', cursor.beforeId);
@@ -518,6 +714,14 @@ async function readAllPages(cookies) {
 const browsers = [];
 const profileDirs = [];
 const runStamp = new Date().toISOString().replace(/[-:.TZ]/g, '');
+// Named bridge ports are hashed into a small range, so stale bridges from another run can collide.
+const bridgePorts = new Map();
+let nextBridgePort = 20000 + (Number.parseInt(runToken, 16) % 40000);
+function allocateBridgePort() {
+  const port = nextBridgePort;
+  nextBridgePort = nextBridgePort >= 59999 ? 20000 : nextBridgePort + 1;
+  return port;
+}
 async function startBrowser(cdpPort) {
   const profile = path.join(workdir, `chrome-${cdpPort}-${runStamp}`);
   profileDirs.push(profile);
@@ -557,18 +761,36 @@ async function stopBrowsers() {
   profileDirs.length = 0;
 }
 function browser(session, cdpPort, args) {
-  const result = spawnSync(process.execPath, [browserCli, ...args], {
-    encoding: 'utf8',
-    timeout: 120000,
-    env: {
-      ...process.env,
-      CHROME_DEVTOOLS_AXI_SESSION: `${session}-${runStamp}`,
-      CHROME_DEVTOOLS_AXI_AUTO_CONNECT: '0',
-      CHROME_DEVTOOLS_AXI_BROWSER_URL: `http://127.0.0.1:${cdpPort}`,
-      CHROME_DEVTOOLS_AXI_MCP_SERVER_URL: '',
-      CHROME_DEVTOOLS_AXI_BRIDGE_TIMEOUT_MS: '180000',
-    },
-  });
+  const sessionName = `${session}-${runStamp}`;
+  let bridgePort = bridgePorts.get(sessionName) ?? allocateBridgePort();
+  let result;
+  for (let attempt = 0; attempt < 16; attempt++) {
+    result = spawnSync(process.execPath, [browserCli, ...args], {
+      encoding: 'utf8',
+      timeout: 120000,
+      env: {
+        ...process.env,
+        CHROME_DEVTOOLS_AXI_SESSION: sessionName,
+        CHROME_DEVTOOLS_AXI_PORT: String(bridgePort),
+        CHROME_DEVTOOLS_AXI_AUTO_CONNECT: '0',
+        CHROME_DEVTOOLS_AXI_BROWSER_URL: `http://127.0.0.1:${cdpPort}`,
+        CHROME_DEVTOOLS_AXI_MCP_SERVER_URL: '',
+        CHROME_DEVTOOLS_AXI_BRIDGE_TIMEOUT_MS: '180000',
+      },
+    });
+    const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+    if (result.status === 0) {
+      bridgePorts.set(sessionName, bridgePort);
+      return result.stdout;
+    }
+    if (
+      !/BRIDGE_NOT_READY/.test(output) ||
+      !/(code 48|already in use)/i.test(output) ||
+      attempt === 15
+    )
+      break;
+    bridgePort = allocateBridgePort();
+  }
   const diagnostic = `${result.stdout ?? ''}\n${result.stderr ?? ''}`
     .split('\n')
     .filter((line) => /^(error|code):/.test(line.trim()))
@@ -604,7 +826,26 @@ async function waitFor(session, cdpPort, expression, attempts = 60) {
     }
     await sleep(500);
   }
-  assert.fail('Timed out waiting for browser state');
+  // A timed-out wait must say what the browser actually showed; naming only the missing
+  // state leaves a real integration failure indistinguishable from a slow read.
+  let state;
+  try {
+    state = evaluate(
+      session,
+      cdpPort,
+      `() => ({
+        path: location.pathname,
+        title: document.title,
+        signedOut: Boolean(document.querySelector('#email')),
+        vendorPanel: Boolean(document.querySelector('[data-od-id="panel-vendors"]')),
+        recordBody: Boolean(document.querySelector('.detail-body')),
+        text: (document.body.innerText || '').replace(/\s+/g, ' ').slice(0, 200),
+      })`,
+    );
+  } catch {
+    state = 'unreadable';
+  }
+  assert.fail(`Timed out waiting for browser state: ${JSON.stringify(state)}`);
 }
 const setInput = (selector, value) => `(() => {
   const el = document.querySelector(${JSON.stringify(selector)});
@@ -675,21 +916,818 @@ const detailScreen = (session, cdpPort) => {
   return value;
 };
 
+// ------------------------------------------------------------------ ticket #74 links
+// A synthetic property created through the guarded operation, so the link fixtures never
+// touch a real record's history.
+async function createLinkProperty(client, address) {
+  const result = await retryResult('create link fixture property', () =>
+    client.rpc('create_property', {
+      p_mode: 'sale',
+      p_facts: {},
+      p_address: { format: 'legacy', address_text: address },
+    }),
+  );
+  assert.equal(result.error, null, 'create link fixture property');
+  return result.data;
+}
+async function propertyRevisionOf(client, id) {
+  const result = await retryResult('read fixture property revision', () =>
+    client
+      .from('properties')
+      .select('revision,status,record_review_status')
+      .eq('id', id)
+      .single(),
+  );
+  assert.equal(result.error, null, 'read fixture property revision');
+  return result.data;
+}
+const vendorSection = (session, cdpPort) => {
+  const value = evaluate(
+    session,
+    cdpPort,
+    `() => {
+      const panel = document.querySelector('[data-od-id="panel-vendors"]');
+      return {
+        path: location.pathname,
+        lang: document.documentElement.lang,
+        heading: panel?.querySelector('h2')?.textContent?.trim() ?? null,
+        rows: panel
+          ? [...panel.querySelectorAll('.record')].map((row) => ({
+              name: row.querySelector('.record-title')?.textContent?.trim() ?? null,
+              meta: row.querySelector('.record-meta')?.textContent?.trim() ?? null,
+            }))
+          : [],
+        linkSummary: panel?.querySelector('details.maintenance summary')?.textContent?.trim() ?? null,
+        unlinkControls: panel
+          ? [...panel.querySelectorAll('button')].filter((node) => /Gỡ liên kết|Unlink/.test(node.textContent)).length
+          : 0,
+        history: [...document.querySelectorAll('.hist-row')].map((row) => ({
+          target: row.querySelector('.hist-field')?.textContent?.trim() ?? null,
+          when: row.querySelector('.hist-when')?.textContent?.trim() ?? null,
+        })),
+      };
+    }`,
+  );
+  assert.equal(typeof value, 'object', 'Unexpected vendor section payload');
+  return value;
+};
+const clickPanelButton = (text) => `(() => {
+  const panel = document.querySelector('[data-od-id="panel-vendors"]');
+  const button = [...panel.querySelectorAll('button')].find((node) => node.textContent.trim() === ${JSON.stringify(text)});
+  if (!button) return false;
+  button.click();
+  return true;
+})()`;
+
+// Ticket #74 through real independent sessions, the real application endpoints and the
+// rendered property record: link visibility, duplicate/stale/archive refusal and the
+// retained unlink history.
+async function vendorLinkJourney({
+  manifest,
+  staff,
+  admin,
+  sales,
+  inactive,
+  unlinked,
+  anonymous,
+  staffCookies,
+  salesCookies,
+  inactiveCookies,
+  unlinkedCookies,
+}) {
+  const recordProperty = async (id) => {
+    manifest.propertyIds.push(id);
+    report.retained_properties = [...manifest.propertyIds];
+    await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', {
+      mode: 0o600,
+    });
+  };
+  const liveProperty = await createLinkProperty(
+    staff,
+    fixtureName('liên kết A'),
+  );
+  await recordProperty(liveProperty);
+  const otherProperty = await createLinkProperty(
+    staff,
+    fixtureName('liên kết B'),
+  );
+  await recordProperty(otherProperty);
+  const archivedProperty = await createLinkProperty(
+    staff,
+    fixtureName('liên kết C'),
+  );
+  await recordProperty(archivedProperty);
+  operatorSql(
+    `update public.properties set archived_at = now() where id = '${archivedProperty}'`,
+  );
+  const vendor = await createVendor(staff, {
+    displayName: fixtureName('nhà cung cấp liên kết'),
+    contactName: 'Phạm Văn Kỹ',
+    phones: ['090 555 6677'],
+  });
+  manifest.retainedVendorIds.push(vendor.id);
+  report.retained_properties = [...manifest.propertyIds];
+  await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', {
+    mode: 0o600,
+  });
+
+  const revision = (await propertyRevisionOf(staff, liveProperty)).revision;
+  const linkArgs = {
+    p_property_id: liveProperty,
+    p_vendor_id: vendor.id,
+    p_expected_property_revision: revision,
+  };
+  const salesLink = await rpcCall(
+    'sales link',
+    sales,
+    'link_property_vendor',
+    linkArgs,
+  );
+  assert.equal(salesLink.error, null, refusal(salesLink.error, 'no error'));
+  assert.equal(salesLink.data.created, true);
+  const salesUnlink = await unlinkRpcCall('sales unlink', sales, {
+    p_property_id: liveProperty,
+    p_vendor_id: vendor.id,
+    p_expected_link_revision: salesLink.data.revision,
+  });
+  assert.equal(
+    salesUnlink.error,
+    null,
+    refusal(rpcFailure(salesUnlink), 'no error'),
+  );
+  assert.equal(
+    salesUnlink.data.removed,
+    true,
+    refusal(rpcFailure(salesUnlink), 'removed link'),
+  );
+  const salesInsert = await sales.from('property_vendors').insert({
+    property_id: liveProperty,
+    vendor_id: vendor.id,
+    created_by: manifest.identities.sales.employeeId,
+  });
+  assert.equal(
+    salesInsert.error?.code,
+    '42501',
+    refusal(salesInsert.error, '42501'),
+  );
+  const salesDelete = await sales
+    .from('property_vendors')
+    .delete()
+    .eq('property_id', liveProperty)
+    .select('vendor_id');
+  assert.ok(
+    salesDelete.error?.code === '42501' ||
+      (salesDelete.data ?? []).length === 0,
+    refusal(salesDelete.error, '42501 or no deleted row'),
+  );
+  assert.equal(
+    (
+      await readRows('sales reads no link row', () =>
+        sales
+          .from('property_vendors')
+          .select('vendor_id')
+          .eq('property_id', liveProperty),
+      )
+    ).length,
+    0,
+  );
+  observed(
+    'a sales employee links and unlinks while direct writes stay blocked',
+  );
+
+  const beforeLink = await propertyRevisionOf(staff, liveProperty);
+  const created = await rpcCall(
+    'first confirmed link',
+    staff,
+    'link_property_vendor',
+    linkArgs,
+  );
+  assert.equal(created.error, null, refusal(created.error, 'no error'));
+  assert.equal(typeof created.data.created, 'boolean');
+  assert.equal(created.data.display_name, vendor.display_name);
+  const converged = await rpcCall(
+    'convergent duplicate link',
+    staff,
+    'link_property_vendor',
+    linkArgs,
+  );
+  assert.equal(converged.error, null, refusal(converged.error, 'no error'));
+  assert.equal(converged.data.created, false);
+  assert.equal(converged.data.revision, created.data.revision);
+  const section = await rpcCall(
+    'property vendor section read',
+    sales,
+    'list_property_vendors',
+    { p_property_id: liveProperty },
+  );
+  assert.equal(section.error, null, refusal(section.error, 'no error'));
+  assert.deepEqual(
+    section.data.map((row) => row.vendor_id),
+    [vendor.id],
+  );
+  assert.equal(section.data[0].contact_name, 'Phạm Văn Kỹ');
+  assert.deepEqual(section.data[0].phones, ['090 555 6677']);
+
+  assert.ok(
+    inactiveCookies,
+    'Inactive login must retain its Auth session cookie',
+  );
+  assert.ok(
+    unlinkedCookies,
+    'Unlinked login must retain its Auth session cookie',
+  );
+  for (const caller of [
+    { name: 'unlinked', client: unlinked, cookies: unlinkedCookies },
+    { name: 'inactive', client: inactive, cookies: inactiveCookies },
+    { name: 'anonymous', client: anonymous, cookies: null },
+  ]) {
+    const deniedLink = await rpcCall(
+      `${caller.name} link refusal`,
+      caller.client,
+      'link_property_vendor',
+      linkArgs,
+    );
+    assert.equal(
+      deniedLink.error?.code,
+      '42501',
+      refusal(deniedLink.error, '42501'),
+    );
+    const deniedUnlink = await caller.client.rpc('unlink_property_vendor', {
+      p_property_id: liveProperty,
+      p_vendor_id: vendor.id,
+      p_expected_link_revision: section.data[0].revision,
+    });
+    assert.equal(
+      deniedUnlink.error?.code,
+      '42501',
+      refusal(deniedUnlink.error, '42501'),
+    );
+    const deniedLinkRoute = await endpointCall(
+      `${caller.name} link endpoint refusal`,
+      () =>
+        appPost(caller.cookies, `/api/properties/${liveProperty}/vendors`, {
+          vendorId: vendor.id,
+          propertyRevision: revision,
+        }),
+    );
+    assert.ok(
+      [401, 403].includes(deniedLinkRoute.status),
+      JSON.stringify(deniedLinkRoute.body),
+    );
+    const deniedUnlinkRoute = await appPost(
+      caller.cookies,
+      `/api/properties/${liveProperty}/vendors/${vendor.id}`,
+      { revision: section.data[0].revision },
+    );
+    assert.ok(
+      [401, 403].includes(deniedUnlinkRoute.status),
+      endpointFailure(deniedUnlinkRoute),
+    );
+  }
+  const unchanged = await readRows(
+    'denied callers leave the link unchanged',
+    () =>
+      sales
+        .from('property_vendors')
+        .select('vendor_id,revision')
+        .eq('property_id', liveProperty),
+  );
+  assert.deepEqual(unchanged, [
+    { vendor_id: vendor.id, revision: section.data[0].revision },
+  ]);
+  observed(
+    'anonymous, unlinked and inactive callers are refused by both link paths without changing the relationship',
+  );
+  observed(
+    'a duplicate link converges on the recorded relationship and a property reader sees it',
+    { vendor: vendor.id, property: liveProperty },
+  );
+
+  // A vendor link is not ownership, a reservation or rental occupancy, and it credits no
+  // owner-contact access on the property it is linked to.
+  const credits = await readRows('owner-contact credit check', () =>
+    admin
+      .from('activity_events')
+      .select('id')
+      .eq('property_id', liveProperty)
+      .eq('kind', 'owner_contact_access'),
+  );
+  assert.equal(credits.length, 0);
+  const locks = await readRows('reservation lock check', () =>
+    admin.from('property_locks').select('id').eq('property_id', liveProperty),
+  );
+  assert.equal(locks.length, 0);
+  const ownership = await readRows('owner link check', () =>
+    sales
+      .from('property_contacts')
+      .select('contact_id')
+      .eq('property_id', liveProperty),
+  );
+  assert.equal(ownership.length, 0);
+  const facts = await propertyRevisionOf(staff, liveProperty);
+  assert.equal(facts.record_review_status, beforeLink.record_review_status);
+  assert.equal(facts.revision, beforeLink.revision);
+  assert.equal(facts.status, 'available');
+  observed(
+    'linking writes no owner link, lock, owner-contact credit or property-fact change',
+  );
+
+  const stale = await rpcCall(
+    'stale property link',
+    staff,
+    'link_property_vendor',
+    { ...linkArgs, p_expected_property_revision: randomUUID() },
+  );
+  assert.equal(stale.error?.code, 'PT409', refusal(stale.error, 'PT409'));
+  const staleUnlink = await staff.rpc('unlink_property_vendor', {
+    p_property_id: liveProperty,
+    p_vendor_id: vendor.id,
+    p_expected_link_revision: randomUUID(),
+  });
+  assert.equal(
+    staleUnlink.error?.code,
+    'PT409',
+    refusal(staleUnlink.error, 'PT409'),
+  );
+  const missingVendor = await rpcCall(
+    'missing vendor link',
+    staff,
+    'link_property_vendor',
+    { ...linkArgs, p_vendor_id: '00000000-0000-4000-8000-00000000dead' },
+  );
+  assert.equal(
+    missingVendor.error?.code,
+    '23503',
+    refusal(missingVendor.error, '23503'),
+  );
+  assert.equal(
+    (
+      await readRows('link row survives the refusals', () =>
+        sales
+          .from('property_vendors')
+          .select('vendor_id')
+          .eq('property_id', liveProperty),
+      )
+    ).length,
+    1,
+  );
+  observed('a stale or missing-company link context changes nothing');
+
+  // The archived boundary: a new link is refused, and the existing projection hides the
+  // archived property from a reader who is not a reviewer.
+  const archivedRevision = (await propertyRevisionOf(admin, archivedProperty))
+    .revision;
+  const archivedLink = await rpcCall(
+    'archived property link refusal',
+    staff,
+    'link_property_vendor',
+    {
+      p_property_id: archivedProperty,
+      p_vendor_id: vendor.id,
+      p_expected_property_revision: archivedRevision,
+    },
+  );
+  assert.equal(
+    archivedLink.error?.code,
+    '42501',
+    refusal(archivedLink.error, '42501'),
+  );
+  operatorSql(
+    `insert into public.property_vendors(property_id,vendor_id,created_by) values ('${archivedProperty}','${vendor.id}','${manifest.identities.staff.employeeId}')`,
+  );
+  const salesArchivedSection = await rpcCall(
+    'sales archived section read',
+    sales,
+    'list_property_vendors',
+    { p_property_id: archivedProperty },
+  );
+  assert.equal(
+    salesArchivedSection.error,
+    null,
+    refusal(salesArchivedSection.error, 'no error'),
+  );
+  assert.equal(salesArchivedSection.data.length, 0);
+  const adminArchivedSection = await rpcCall(
+    'reviewer archived section read',
+    admin,
+    'list_property_vendors',
+    { p_property_id: archivedProperty },
+  );
+  assert.equal(adminArchivedSection.data.length, 1);
+  const salesReach = await rpcCall(
+    'sales vendor reach',
+    sales,
+    'list_vendor_properties',
+    { p_vendor_id: vendor.id },
+  );
+  assert.equal(salesReach.error, null, refusal(salesReach.error, 'no error'));
+  assert.ok(
+    !salesReach.data.some((row) => row.property_id === archivedProperty),
+    'The archived property stays out of the sales projection',
+  );
+  const adminReach = await rpcCall(
+    'reviewer vendor reach',
+    admin,
+    'list_vendor_properties',
+    { p_vendor_id: vendor.id },
+  );
+  assert.ok(
+    adminReach.data.some((row) => row.property_id === archivedProperty),
+    'A reviewer sees the archived linked property',
+  );
+  observed(
+    'an archived property refuses a new link and hides its links outside reviewer authority',
+  );
+
+  // Unlink: only the current relationship goes; the vendor and another property's link
+  // stay, and link changes do not write property-history rows.
+  const secondLink = await rpcCall(
+    'second property link',
+    staff,
+    'link_property_vendor',
+    {
+      p_property_id: otherProperty,
+      p_vendor_id: vendor.id,
+      p_expected_property_revision: (
+        await propertyRevisionOf(staff, otherProperty)
+      ).revision,
+    },
+  );
+  assert.equal(secondLink.error, null, refusal(secondLink.error, 'no error'));
+  const otherHistory = await readRows('other property link history read', () =>
+    sales
+      .from('property_history')
+      .select('target,actor_name,changed_fields,before_values,after_values')
+      .eq('property_id', otherProperty)
+      .order('occurred_at'),
+  );
+  assert.equal(otherHistory.length, 0);
+  const historyBefore = await readRows('link history read', () =>
+    sales
+      .from('property_history')
+      .select('target,actor_name,changed_fields,before_values,after_values')
+      .eq('property_id', liveProperty)
+      .order('occurred_at'),
+  );
+  assert.equal(historyBefore.length, 0);
+  const removed = await unlinkRpcCall('confirmed unlink', staff, {
+    p_property_id: liveProperty,
+    p_vendor_id: vendor.id,
+    p_expected_link_revision: section.data[0].revision,
+  });
+  assert.equal(removed.error, null, refusal(rpcFailure(removed), 'no error'));
+  assert.equal(
+    removed.data.removed,
+    true,
+    refusal(rpcFailure(removed), 'removed link'),
+  );
+  assert.equal(
+    (
+      await readRows('unlinked property reads no link', () =>
+        sales
+          .from('property_vendors')
+          .select('vendor_id')
+          .eq('property_id', liveProperty),
+      )
+    ).length,
+    0,
+  );
+  const retainedVendor = (
+    await readRows('retained vendor read', () =>
+      sales.from('vendors').select(VENDOR_COLUMNS).eq('id', vendor.id),
+    )
+  )[0];
+  assert.equal(retainedVendor.display_name, vendor.display_name);
+  assert.equal(retainedVendor.contact_name, 'Phạm Văn Kỹ');
+  const otherSection = await rpcCall(
+    'other property section read',
+    sales,
+    'list_property_vendors',
+    { p_property_id: otherProperty },
+  );
+  assert.deepEqual(
+    otherSection.data.map((row) => row.vendor_id),
+    [vendor.id],
+  );
+  const historyAfter = await readRows('unlink history read', () =>
+    sales
+      .from('property_history')
+      .select('target,changed_fields,before_values,after_values')
+      .eq('property_id', liveProperty)
+      .order('occurred_at'),
+  );
+  assert.equal(historyAfter.length, 0);
+  observed(
+    'unlink keeps the vendor and the unrelated link without property-history rows',
+    { vendor: vendor.id },
+  );
+
+  // ---------------------------------------------------------------- application
+  const salesSectionRoute = await endpointCall('sales section route', () =>
+    appGet(salesCookies, `/api/properties/${liveProperty}/vendors`),
+  );
+  assert.equal(salesSectionRoute.status, 200);
+  assert.deepEqual(salesSectionRoute.body.vendors, []);
+  const salesLinkRoute = await endpointCall('sales link route', () =>
+    appPost(salesCookies, `/api/properties/${liveProperty}/vendors`, {
+      vendorId: vendor.id,
+      propertyRevision: revision,
+    }),
+  );
+  assert.equal(salesLinkRoute.status, 200, JSON.stringify(salesLinkRoute.body));
+  assert.equal(salesLinkRoute.body.link.vendorId, vendor.id);
+  const salesRouteSection = await rpcCall(
+    'sales route link read',
+    sales,
+    'list_property_vendors',
+    { p_property_id: liveProperty },
+  );
+  const salesUnlinkRoute = await unlinkEndpointCall(
+    'sales unlink route',
+    sales,
+    liveProperty,
+    vendor.id,
+    () =>
+      appPost(
+        salesCookies,
+        `/api/properties/${liveProperty}/vendors/${vendor.id}`,
+        { revision: salesRouteSection.data[0].revision },
+      ),
+  );
+  assert.equal(salesUnlinkRoute.status, 200, endpointFailure(salesUnlinkRoute));
+  const staffLinkRoute = await endpointCall('staff link route', () =>
+    appPost(staffCookies, `/api/properties/${liveProperty}/vendors`, {
+      vendorId: vendor.id,
+      propertyRevision: revision,
+    }),
+  );
+  assert.equal(staffLinkRoute.status, 200, JSON.stringify(staffLinkRoute.body));
+  assert.equal(staffLinkRoute.body.link.vendorId, vendor.id);
+  const malformedRoute = await endpointCall('malformed link route', () =>
+    appPost(staffCookies, `/api/properties/${liveProperty}/vendors`, {
+      vendorId: vendor.id,
+    }),
+  );
+  assert.equal(malformedRoute.status, 400);
+  const staleUnlinkRoute = await appPost(
+    staffCookies,
+    `/api/properties/${liveProperty}/vendors/${vendor.id}`,
+    { revision: randomUUID() },
+  );
+  assert.equal(staleUnlinkRoute.status, 409, endpointFailure(staleUnlinkRoute));
+  assert.equal(
+    staleUnlinkRoute.body.error,
+    'stale-edit',
+    endpointFailure(staleUnlinkRoute),
+  );
+  const currentLink = await rpcCall(
+    'current link read',
+    sales,
+    'list_property_vendors',
+    { p_property_id: liveProperty },
+  );
+  const unlinkRoute = await unlinkEndpointCall(
+    'unlink route',
+    staff,
+    liveProperty,
+    vendor.id,
+    () =>
+      appPost(
+        staffCookies,
+        `/api/properties/${liveProperty}/vendors/${vendor.id}`,
+        { revision: currentLink.data[0].revision },
+      ),
+  );
+  assert.equal(unlinkRoute.status, 200, endpointFailure(unlinkRoute));
+  const afterRouteSection = await rpcCall(
+    'property section after route unlink',
+    sales,
+    'list_property_vendors',
+    { p_property_id: liveProperty },
+  );
+  assert.equal(
+    afterRouteSection.error,
+    null,
+    refusal(afterRouteSection.error, 'no error'),
+  );
+  assert.deepEqual(afterRouteSection.data, []);
+  const vendorDetailRoute = await appGet(
+    salesCookies,
+    '/api/vendors/' + vendor.id,
+  );
+  assert.equal(vendorDetailRoute.status, 200);
+  assert.equal(vendorDetailRoute.body.vendor.displayName, vendor.display_name);
+  assert.ok(Array.isArray(vendorDetailRoute.body.properties));
+  assert.ok(
+    !vendorDetailRoute.body.properties.some(
+      (property) => property.propertyId === archivedProperty,
+    ),
+    'The sales projection hides the archived linked property',
+  );
+  assert.ok(
+    !vendorDetailRoute.body.properties.some(
+      (property) => property.propertyId === liveProperty,
+    ),
+    'The route unlink removes the live property from the vendor projection',
+  );
+  assert.ok(
+    vendorDetailRoute.body.properties.some(
+      (property) => property.propertyId === otherProperty,
+    ),
+  );
+  const historyRoute = await appGet(
+    salesCookies,
+    `/api/properties/${liveProperty}/history`,
+  );
+  assert.equal(historyRoute.status, 200);
+  assert.equal(historyRoute.body.events.length, 0);
+  observed(
+    'the endpoints bind the link bodies without writing property history',
+  );
+
+  // ---------------------------------------------------------------- browser
+  await rpcCall('browser journey link', staff, 'link_property_vendor', {
+    ...linkArgs,
+    p_expected_property_revision: (
+      await propertyRevisionOf(staff, liveProperty)
+    ).revision,
+  });
+  // The same read through the application first: the rendered page must not be the only
+  // evidence that the record is readable for this session.
+  const staffDetailRoute = await endpointCall('staff record route', () =>
+    appGet(staffCookies, `/api/properties/${liveProperty}`),
+  );
+  assert.equal(
+    staffDetailRoute.status,
+    200,
+    JSON.stringify(staffDetailRoute.body),
+  );
+  assert.equal(staffDetailRoute.body.property.id, liveProperty);
+  // Every CDP session shares one browser profile and cookie jar, so the last sign-in wins:
+  // this journey signs in again instead of assuming the directory journey left it signed in.
+  await browserSignIn(
+    'sgn73-staff',
+    9336,
+    manifest.identities.staff.email,
+    manifest.identities.staff.password,
+    '/properties',
+  );
+  browser('sgn73-staff', 9336, [
+    'open',
+    `${appUrl}/properties/${liveProperty}`,
+  ]);
+  await waitFor(
+    'sgn73-staff',
+    9336,
+    `() => Boolean(document.querySelector('[data-od-id="panel-vendors"]'))`,
+    120,
+  );
+  // The shell keeps the employee's saved locale, which the directory journey left on
+  // English, so the VI/default assertions below select Vietnamese explicitly first.
+  evaluate(
+    'sgn73-staff',
+    9336,
+    `(() => { document.querySelector('.lang-switch button[lang=vi]').click(); return true; })()`,
+  );
+  await waitFor(
+    'sgn73-staff',
+    9336,
+    `() => document.querySelector('[data-od-id="panel-vendors"] h2')?.textContent?.trim() === 'Nhà cung cấp'`,
+    120,
+  );
+  const staffSection = vendorSection('sgn73-staff', 9336);
+  assert.equal(staffSection.heading, 'Nhà cung cấp');
+  assert.equal(staffSection.rows.length, 1);
+  assert.equal(staffSection.rows[0].name, vendor.display_name);
+  assert.equal(staffSection.rows[0].meta.includes('Phạm Văn Kỹ'), true);
+  assert.equal(staffSection.linkSummary, 'Liên kết nhà cung cấp đã ghi nhận');
+  assert.equal(staffSection.unlinkControls, 1);
+  evaluate(
+    'sgn73-staff',
+    9336,
+    `(() => { document.querySelector('.lang-switch button[lang=en]').click(); return true; })()`,
+  );
+  await waitFor(
+    'sgn73-staff',
+    9336,
+    `() => document.querySelector('[data-od-id="panel-vendors"] h2')?.textContent?.trim() === 'Vendors'`,
+  );
+  const englishSection = vendorSection('sgn73-staff', 9336);
+  assert.equal(englishSection.lang, 'en');
+  assert.equal(englishSection.linkSummary, 'Link a recorded vendor');
+  assert.equal(englishSection.unlinkControls, 1);
+  evaluate(
+    'sgn73-staff',
+    9336,
+    `(() => { document.querySelector('.lang-switch button[lang=vi]').click(); return true; })()`,
+  );
+  await waitFor(
+    'sgn73-staff',
+    9336,
+    `() => document.querySelector('[data-od-id="panel-vendors"] h2')?.textContent?.trim() === 'Nhà cung cấp'`,
+  );
+  observed('the property vendor section renders equivalent English labels');
+
+  // Remove the mistaken link through the rendered confirmation.
+  evaluate('sgn73-staff', 9336, clickPanelButton('Gỡ liên kết'));
+  await waitFor(
+    'sgn73-staff',
+    9336,
+    `() => [...document.querySelectorAll('[data-od-id="panel-vendors"] button')].some((node) => node.textContent.trim() === 'Xác nhận gỡ liên kết')`,
+  );
+  evaluate('sgn73-staff', 9336, clickPanelButton('Xác nhận gỡ liên kết'));
+  await waitFor(
+    'sgn73-staff',
+    9336,
+    `() => document.querySelectorAll('[data-od-id="panel-vendors"] .record').length === 0`,
+  );
+  const afterUnlink = vendorSection('sgn73-staff', 9336);
+  assert.equal(afterUnlink.rows.length, 0);
+  assert.equal(
+    afterUnlink.history.length,
+    0,
+    'The unlink stays out of property history',
+  );
+  observed(
+    'an active employee removes a mistaken link in the UI without writing property history',
+  );
+
+  // Link the company again through the rendered picker.
+  evaluate(
+    'sgn73-staff',
+    9336,
+    `(() => { const details = document.querySelector('[data-od-id="panel-vendors"] details'); details.open = true; return details.open; })()`,
+  );
+  evaluate(
+    'sgn73-staff',
+    9336,
+    setInput('#vendor-link-search', vendor.display_name),
+  );
+  evaluate('sgn73-staff', 9336, clickPanelButton('Tìm nhà cung cấp'));
+  await waitFor(
+    'sgn73-staff',
+    9336,
+    `() => document.querySelectorAll('#vendor-link-choose option').length === 1`,
+  );
+  evaluate(
+    'sgn73-staff',
+    9336,
+    clickPanelButton('Liên kết với bất động sản này'),
+  );
+  await waitFor(
+    'sgn73-staff',
+    9336,
+    `() => document.querySelector('[data-od-id="panel-vendors"] .record-title')?.textContent?.trim() === ${JSON.stringify(vendor.display_name)}`,
+  );
+  assert.equal(vendorSection('sgn73-staff', 9336).rows.length, 1);
+  observed(
+    'an active employee links a recorded vendor from the property record',
+  );
+
+  await browserSignIn(
+    'sgn73-sales',
+    9336,
+    manifest.identities.sales.email,
+    manifest.identities.sales.password,
+    '/properties',
+  );
+  browser('sgn73-sales', 9336, [
+    'open',
+    `${appUrl}/properties/${liveProperty}`,
+  ]);
+  await waitFor(
+    'sgn73-sales',
+    9336,
+    `() => Boolean(document.querySelector('[data-od-id="panel-vendors"] .record'))`,
+  );
+  const salesSection = vendorSection('sgn73-sales', 9336);
+  assert.equal(salesSection.rows.length, 1);
+  assert.equal(salesSection.rows[0].name, vendor.display_name);
+  assert.equal(salesSection.linkSummary, 'Liên kết nhà cung cấp đã ghi nhận');
+  assert.equal(salesSection.unlinkControls, 1);
+  observed(
+    'a sales employee sees the property vendor link and unlink controls',
+  );
+}
+
 // ------------------------------------------------------------------ run
 const before = { vendors: null, employees: null };
 let manifest = null;
 const report = {
   issue: 73,
+  issues: [73, 74],
   namespace,
   run_token: runToken,
   started_at: new Date().toISOString(),
   observations,
   retained_vendors: [],
+  retained_properties: [],
   before,
   limitations: [
     'Supabase Auth email delivery and invitation acceptance are outside this slice.',
     'The vendor slice has no deletion path, so the synthetic SGN73 vendor rows are retained; the report lists their exact ids and the fixture identities those rows reference.',
-    'A real concurrent-session write race remains a staging gate.',
+    'Ticket #74 link fixtures are synthetic properties created by this harness, and their link and history rows are removed with them; a retained vendor keeps no property link.',
+    'A hosted/staging concurrent-session write race remains a gate; embedded contention is covered by the schema harness.',
   ],
 };
 let failure = null;
@@ -1224,6 +2262,21 @@ try {
   observed(
     'inactive and unlinked identities are refused before the directory renders',
   );
+
+  // ---------------------------------------------------------------- ticket #74
+  await vendorLinkJourney({
+    manifest,
+    staff,
+    admin,
+    sales,
+    inactive,
+    unlinked,
+    anonymous: anonClient,
+    staffCookies,
+    salesCookies,
+    inactiveCookies: inactiveLogin.cookies,
+    unlinkedCookies: unlinkedLogin.cookies,
+  });
 } catch (error) {
   failure = error;
 } finally {

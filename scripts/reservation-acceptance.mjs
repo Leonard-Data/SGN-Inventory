@@ -263,7 +263,7 @@ function screen(session) {
         status:
           document.querySelector('.head-chips .badge')?.textContent?.trim() ??
           null,
-        heading: panel?.querySelector('h2')?.textContent ?? null,
+        heading: document.querySelector('dialog.sgn-dialog[open] .sgn-dialog-head h2')?.textContent ?? null,
         effective: effective ? (effective.innerText ?? null) : null,
         pending: pending ? (pending.innerText ?? null) : null,
         requests: requests.map((node) => ({
@@ -327,15 +327,26 @@ async function settle(session = primary) {
   await new Promise((resolve) => setTimeout(resolve, 600));
   await waitUntil(settled, session);
 }
-// The record's action bar opens the reservation panel in a dialog, so the journey enters the
-// panel through that rendered control. The dialog blocks the rest of the record: it is closed
-// through its own control before the header is used again, and reopened the same way.
+// The record action bar is one menu, so the journey opens the menu and then its item. A
+// dialog blocks the rest of the record: it is closed through its own control before the
+// header is used again, and reopened the same way.
 const reservationAction = '^(Đặt chỗ|Reservations)$';
-const reservationActionReady = `() => [...document.querySelectorAll('.detail-actions button')].some((button) => new RegExp(${JSON.stringify(reservationAction)}).test(button.textContent.trim()))`;
+const openRecordActions = `(() => {
+  const trigger = document.querySelector('.detail-actions button[aria-haspopup="menu"]');
+  if (!trigger) return false;
+  if (trigger.getAttribute('aria-expanded') !== 'true') trigger.click();
+  return true;
+})()`;
+const reservationActionReady = `() => document.querySelector('.detail-actions button[aria-haspopup="menu"]')?.getAttribute('aria-expanded') === 'true' && [...document.querySelectorAll('.actions-menu-item')].some((item) => new RegExp(${JSON.stringify(reservationAction)}).test(item.textContent.trim()))`;
 async function openReservationPanel(session = primary) {
+  await waitUntil(
+    `() => Boolean(document.querySelector('.detail-actions button[aria-haspopup="menu"]'))`,
+    session,
+  );
+  act(openRecordActions, session, 'open the record actions menu');
   await waitUntil(reservationActionReady, session);
   act(
-    clickMatching(reservationAction, '.detail-actions button'),
+    clickMatching(reservationAction, '.actions-menu-item'),
     session,
     'open the reservation panel',
   );

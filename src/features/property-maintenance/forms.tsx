@@ -11,6 +11,7 @@ import type { Locale } from '@/i18n/messages';
 import { fields, formChanges, type Target, type Changes } from './fields';
 import { maintenanceError, maintenanceText, optionLabel } from './messages';
 import { failureRoute } from './refusal-rules';
+import { unitOptionLabels } from './units';
 import type { Unit } from './data';
 
 export function MutationForm({
@@ -219,7 +220,8 @@ function UnitPicker({
       });
     return () => abort.abort();
   }, [level, parent, onDenied]);
-  const text = maintenanceText(locale);
+  const text = maintenanceText(locale),
+    labels = unitOptionLabels(units);
   return (
     <div className="field">
       <label className="field-label" htmlFor={id}>
@@ -236,9 +238,9 @@ function UnitPicker({
         {value && !units.some((u) => u.id === value) ? (
           <option value={value}>{value}</option>
         ) : null}
-        {units.map((unit) => (
+        {units.map((unit, index) => (
           <option key={unit.id} value={unit.id}>
-            {unit.name_vi} ({unit.valid_from} – {unit.valid_to ?? ''})
+            {labels[index]}
           </option>
         ))}
       </select>
@@ -248,19 +250,22 @@ function UnitPicker({
 }
 export function AddressFields({
   values = {},
+  names,
   locale,
   onDenied,
   variant = 'address',
 }: {
   values?: Record<string, unknown>;
+  names?: readonly string[];
   locale: Locale;
   onDenied: (status: number) => void;
   variant?: 'address' | 'mapping';
 }) {
-  const id = useId(),
+  const selected = names ? new Set(names) : null,
+    includes = (name: string) => selected === null || selected.has(name),
+    id = useId(),
     [format, setFormat] = useState(String(values.format ?? '')),
     [province, setProvince] = useState(String(values.province_unit_id ?? '')),
-    [district, setDistrict] = useState(String(values.district_unit_id ?? '')),
     [commune, setCommune] = useState(String(values.commune_unit_id ?? ''));
   const text = maintenanceText(locale),
     current = variant === 'mapping' || format === 'current';
@@ -268,34 +273,41 @@ export function AddressFields({
     <>
       {variant === 'address' ? (
         <>
-          <p>{text.preserveSource}</p>
-          <div className="field">
-            <label className="field-label" htmlFor={id}>
-              {fields.format![locale]}
-            </label>
-            <select
-              id={id}
-              className="select"
-              name="format"
-              required
-              value={format}
-              onChange={(event) => {
-                setFormat(event.target.value);
-                setDistrict('');
-                setCommune('');
-              }}
-              disabled={!!values.id}
-            >
-              <option value="">{text.unknown}</option>
-              {values.format === 'alternate' ? (
-                <option value="alternate">
-                  {optionLabel(locale, 'alternate')}
-                </option>
-              ) : null}
-              <option value="legacy">{optionLabel(locale, 'legacy')}</option>
-              <option value="current">{optionLabel(locale, 'current')}</option>
-            </select>
-          </div>
+          {includes('format') ? (
+            <>
+              <p>{text.preserveSource}</p>
+              <div className="field">
+                <label className="field-label" htmlFor={id}>
+                  {fields.format![locale]}
+                </label>
+                <select
+                  id={id}
+                  className="select"
+                  name="format"
+                  required
+                  value={format}
+                  onChange={(event) => {
+                    setFormat(event.target.value);
+                    setCommune('');
+                  }}
+                  disabled={!!values.id}
+                >
+                  <option value="">{text.unknown}</option>
+                  {values.format === 'alternate' ? (
+                    <option value="alternate">
+                      {optionLabel(locale, 'alternate')}
+                    </option>
+                  ) : null}
+                  <option value="legacy">
+                    {optionLabel(locale, 'legacy')}
+                  </option>
+                  <option value="current">
+                    {optionLabel(locale, 'current')}
+                  </option>
+                </select>
+              </div>
+            </>
+          ) : null}
           <p>{text.rawCurrent}</p>
           <RecordFields
             locale={locale}
@@ -304,11 +316,9 @@ export function AddressFields({
               'address_text',
               'house_number',
               'street',
-              'province_text',
               ...(!current ? ['district_text'] : []),
-              'commune_text',
               'is_primary',
-            ]}
+            ].filter(includes)}
           />
         </>
       ) : (
@@ -327,43 +337,31 @@ export function AddressFields({
           />
         </>
       )}
-      <UnitPicker
-        name="province_unit_id"
-        level="province"
-        value={province}
-        onChange={(value) => {
-          setProvince(value);
-          setDistrict('');
-          setCommune('');
-        }}
-        locale={locale}
-        onDenied={onDenied}
-      />
-      {!current ? (
+      {variant === 'mapping' || includes('province_unit_id') ? (
         <UnitPicker
-          key={'district' + province}
-          name="district_unit_id"
-          level="district"
-          parent={province}
-          value={district}
+          name="province_unit_id"
+          level="province"
+          value={province}
           onChange={(value) => {
-            setDistrict(value);
+            setProvince(value);
             setCommune('');
           }}
           locale={locale}
           onDenied={onDenied}
         />
       ) : null}
-      <UnitPicker
-        key={'commune' + province + district + current}
-        name="commune_unit_id"
-        level="commune"
-        parent={current ? province : district || province}
-        value={commune}
-        onChange={setCommune}
-        locale={locale}
-        onDenied={onDenied}
-      />
+      {variant === 'mapping' || includes('commune_unit_id') ? (
+        <UnitPicker
+          key={'commune' + province}
+          name="commune_unit_id"
+          level="commune"
+          parent={province}
+          value={commune}
+          onChange={setCommune}
+          locale={locale}
+          onDenied={onDenied}
+        />
+      ) : null}
     </>
   );
 }

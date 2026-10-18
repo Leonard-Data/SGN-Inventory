@@ -52,8 +52,40 @@ const vi = {
   sortDefault: 'Mặc định',
   sortOldest: 'Cũ nhất trước',
   sortNewest: 'Mới nhất trước',
+  orderReverse: 'Đảo chiều',
+  orderReverseHint: 'Chọn thứ tự theo ngày nhập kho để đảo chiều thứ tự.',
   ageHint:
     'Chỉ gồm hồ sơ đang chào hoặc đang thương lượng, chưa lưu trữ. Thứ tự dùng ngày nhập kho gốc, không đổi khi cập nhật, đổi giá hoặc đăng lại. Hồ sơ chưa xác định ngày nhập kho được liệt kê sau cùng, không bị ẩn.',
+  filters: 'Bộ lọc',
+  filtersApply: 'Áp dụng bộ lọc',
+  filtersClear: 'Xoá bộ lọc',
+  filtersRemove: 'Bỏ điều kiện lọc',
+  filtersAny: 'Tất cả',
+  filtersInvalid: 'Bộ lọc chưa hợp lệ. Kiểm tra lại giá và diện tích đã nhập.',
+  priceFilterHint:
+    'Không chọn loại giao dịch: mỗi hồ sơ dùng giá chào riêng — hồ sơ cho thuê dùng giá thuê tháng (VND/tháng), còn hồ sơ bán và bán và cho thuê dùng giá bán (nguyên VND). Chọn Bán hoặc Bán và cho thuê để chỉ so sánh giá bán; chọn Cho thuê để chỉ so sánh giá thuê tháng.',
+  areaFilterHint:
+    'Diện tích khớp khi diện tích đất hoặc diện tích sàn nằm trong khoảng.',
+  province: 'Tỉnh / thành phố',
+  ward: 'Xã / phường',
+  areaAdminHint:
+    'Lọc theo tỉnh/thành phố và xã/phường của địa chỉ. Chọn tỉnh/thành phố sẽ gồm mọi xã/phường thuộc tỉnh/thành phố đó; chọn xã/phường sẽ thu hẹp trong xã/phường đó. Khi cả hai được chọn, xã/phường là điều kiện có hiệu lực.',
+  areaFilterUnavailable:
+    'Chưa tải được danh mục tỉnh/thành phố và xã/phường. Bộ lọc giá và diện tích vẫn dùng được.',
+  contactFilter: 'Người liên hệ',
+  contactFilterHint:
+    'Chỉ gồm người liên hệ bạn được phép đọc. Bộ lọc này kết hợp với các điều kiện khác.',
+  priceUnitVnd: 'VND',
+  priceUnitMonthly: 'VND/tháng',
+  priceRangeFrom: 'Giá từ',
+  priceRangeTo: 'Giá đến',
+  salePriceFrom: 'Giá bán từ',
+  salePriceTo: 'Giá bán đến',
+  rentPriceFrom: 'Giá thuê tháng từ',
+  rentPriceTo: 'Giá thuê tháng đến',
+  areaRangeFrom: 'Diện tích từ',
+  areaRangeTo: 'Diện tích đến',
+  emptyFiltered: 'Không có bất động sản khớp bộ lọc.',
   entryDate: 'Ngày nhập kho gốc',
   entryDateUnknown: 'Chưa xác định',
   entryDateLegacy: 'Theo hồ sơ gốc',
@@ -141,6 +173,7 @@ const vi = {
   todaySummary: 'Tổng hợp hôm nay',
   companyHistory: 'Lịch sử theo ngày',
   companyEmployee: 'Nhân viên',
+  companyGroupActivities: 'Số hoạt động: {count}',
   companyActivityNote:
     'Lượt truy cập liên hệ chủ nhà là số bất động sản mà mỗi nhân viên đã mở liên hệ chủ nhà trong ngày (giờ Việt Nam): không phải điểm danh, giờ làm việc, cuộc gọi đã kết nối hay lượt thăm bất động sản.',
   noEmployees: 'Chưa có nhân viên đang hoạt động.',
@@ -155,7 +188,32 @@ const vi = {
     'Các số liệu này chỉ tính hoạt động của chính bạn: lượt xem trang, số bất động sản đã xem và số bất động sản bạn đã mở liên hệ chủ nhà trong ngày (giờ Việt Nam). Không phải điểm danh, giờ làm việc, cuộc gọi đã kết nối hay lượt thăm bất động sản.',
   myActivityEmpty:
     'Không có hoạt động nào được ghi nhận trong khoảng đã chọn. Mỗi ngày vẫn hiển thị với giá trị 0.',
+  provinceActivity: 'Hoạt động mở liên hệ chủ nhà theo tỉnh/thành phố',
+  provinceActivityLink: 'Hoạt động theo tỉnh/thành phố',
+  provinceActivityNote:
+    'Bảng này chỉ dành cho quản lý/quản trị, nhóm theo địa chỉ mới đã xác minh và đơn vị hành chính chính thức mới nhất của từng bất động sản. Mỗi lượt tính là một cặp nhân viên – bất động sản – ngày (giờ Việt Nam) đã mở liên hệ chủ nhà, không phải lượt thăm, số điện thoại hay số lần bấm. Sửa hoặc thu hồi xác minh địa chỉ có thể chuyển hoạt động cũ sang nhóm khác nhưng tổng toàn công ty không đổi.',
+  provinceOwnerContact: 'Lượt mở liên hệ chủ nhà',
+  provinceColumn: 'Tỉnh/Thành phố (địa chỉ đã xác minh)',
+  unverifiedLocation: 'Chưa xác minh vị trí',
+  provinceActivityTotal: 'Tổng cộng',
+  provinceActivityCountsFrom:
+    'Tổng này bằng tổng số lượt mở liên hệ chủ nhà của báo cáo hoạt động công ty trong cùng khoảng ngày.',
+  provinceActivityEmpty:
+    'Không có lượt mở liên hệ chủ nhà nào trong khoảng đã chọn. Nhóm “Chưa xác minh vị trí” vẫn hiển thị với giá trị 0.',
+  provinceActivityBands:
+    'Mức màu chỉ so sánh trong kỳ đã chọn với nhóm có số lượt lớn nhất; mỗi ô đều hiển thị số chính xác và nhãn mức bằng chữ.',
+  activityLevelNone: 'Không phát sinh',
+  activityLevelLow: 'Thấp',
+  activityLevelMedium: 'Trung bình',
+  activityLevelHigh: 'Cao',
   discussion: 'Thảo luận bất động sản',
+  commentHistory: 'Lịch sử bình luận',
+  commentHistoryEmpty: 'Chưa có dữ liệu lịch sử.',
+  commentHistoryMore:
+    'Cửa sổ này giữ 64 sự kiện cũ nhất; các sự kiện mới hơn chưa hiển thị.',
+  commentHistoryFailed: 'Chưa tải được lịch sử bình luận. Vui lòng thử lại.',
+  viewHistory: 'Xem lịch sử',
+  hideHistory: 'Ẩn lịch sử',
   addComment: 'Bình luận',
   commentHint: 'Viết bình luận chung cho bất động sản này. Tối đa 2.000 ký tự.',
   postComment: 'Gửi bình luận',
@@ -190,6 +248,8 @@ const vi = {
   removing: 'Đang gỡ…',
   cancel: 'Huỷ',
   commentRemoved: 'Bình luận đã được gỡ.',
+  commentAuthorWithdrawal: 'Tác giả đã tự gỡ bình luận.',
+  commentModeratedRemoval: 'Đã gỡ do kiểm duyệt.',
   removalReason: 'Lý do kiểm duyệt',
   removalReasonHint:
     'Bắt buộc. Lý do được lưu lại cho quản lý và quản trị viên.',
@@ -230,6 +290,8 @@ const vi = {
   northwest: 'Tây Bắc',
   signOutFailed:
     'Đăng xuất chưa hoàn tất. Thông tin đã được ẩn; vui lòng thử lại.',
+  accessChanged:
+    'Quyền truy cập của bạn đã thay đổi. Tải lại trang để tiếp tục.',
   // Canonical authentication design foundation (tickets #50–#52).
   brandRole: 'Hệ Thống quản lý bất động sản',
   brandTitle: 'Hệ thống quản lý bất động sản Saigon New House.',
@@ -252,7 +314,7 @@ const vi = {
   employeesLink: 'Nhân viên',
   employeeDirectory: 'Danh sách nhân viên',
   employeeDirectoryNote:
-    'Các danh tính nhân viên đã được ghi nhận. “Chưa liên kết đăng nhập” nghĩa là chưa có tài khoản đăng nhập nào được liên kết: hệ thống không ghi nhận lời mời, nên trạng thái này không phải là “đã mời”.',
+    'Các danh tính nhân viên đã được ghi nhận. “Chưa liên kết đăng nhập” chỉ nói về tài khoản đăng nhập; trạng thái lời mời được hiển thị riêng theo bản ghi lời mời thực tế.',
   employeeDirectoryEmpty: 'Chưa có danh tính nhân viên nào được ghi nhận.',
   employeeDirectoryFailed: 'Không thể tải danh sách nhân viên.',
   employeePageInfo: 'Trang này: {n} nhân viên',
@@ -344,6 +406,72 @@ const vi = {
   employeeDeleteProviderUnavailable:
     'Máy chủ chưa có cấu hình xóa tài khoản đăng nhập. Quyền truy cập đã bị tắt; hãy thử lại sau khi cấu hình được khôi phục.',
   employeeDeleteLoadFailed: 'Không thể tải trạng thái xóa tài khoản đăng nhập.',
+  // Employee invitation (issue #68).
+  employeeInviteNote:
+    'Ghi nhận một lời mời cho đúng địa chỉ email và vai trò đã chọn. Người được mời chưa có quyền truy cập cho đến khi tự thiết lập tài khoản trong bước riêng.',
+  employeeInviteEmailHint:
+    'Địa chỉ được chuẩn hóa (bỏ khoảng trắng thừa, chữ thường) trước khi ghi nhận.',
+  employeeInviteRoleHint:
+    'Một trong các vai trò công ty hiện có. Vai trò được ghi vào hồ sơ nhân viên, không ghi vào thông tin đăng nhập.',
+  employeeInviteSubmit: 'Gửi lời mời',
+  employeeInviteTarget: 'Người được mời',
+  employeeInviteState: 'Trạng thái lời mời',
+  employeeInvitePendingLabel: 'Chưa có xác nhận từ nhà cung cấp',
+  employeeInviteReconciliationLabel: 'Cần đối soát lời mời',
+  employeeInviteNoneLabel: 'Chưa ghi nhận lời mời',
+  employeeInviteRecordedLabel: 'Đã ghi nhận lời mời',
+  employeeInviteDeliveryNote:
+    'Đã có danh tính nhà cung cấp cho địa chỉ này. Điều này không xác nhận hộp thư đã nhận được thư và không bật quyền truy cập.',
+  employeeInviteUnconfirmedNote:
+    'Chưa xác nhận việc gửi thư và chưa bật quyền truy cập nào.',
+  employeeInviteSuccess:
+    'Đã ghi nhận lời mời; chưa có quyền truy cập nào được bật.',
+  employeeInvitePending:
+    'Yêu cầu mời đã được ghi nhận; nhà cung cấp chưa xác nhận.',
+  employeeInviteFailed:
+    'Yêu cầu mời đã được ghi nhận, nhưng bước gửi của nhà cung cấp chưa hoàn tất và chưa xác nhận việc gửi thư. Lời mời đã ghi nhận bên dưới hiển thị trạng thái cần đối soát và chi tiết từ nhà cung cấp; hãy thử lại với cùng thao tác.',
+  employeeInviteEmailRecorded:
+    'Email này đã thuộc một nhân viên đã ghi nhận, không phải người mới; hãy xử lý theo chính sách người quay lại.',
+  employeeInviteAlreadyRecorded: 'Đã có lời mời được ghi nhận cho người này.',
+  employeeInviteRoleConflict:
+    'Một vai trò khác đã được ghi nhận cho lời mời đang mở này.',
+  employeeInviteKeyConflict:
+    'Mã thao tác đã được dùng cho một lời mời khác. Hãy mở lại biểu mẫu mời.',
+  employeeInviteStale:
+    'Trạng thái lời mời đã thay đổi. Hãy tải lại trước khi thử lại.',
+  employeeInviteChanged:
+    'Nhân viên này đã thay đổi trong lúc gửi; hãy bắt đầu lại lời mời.',
+  employeeInviteProviderUnavailable:
+    'Máy chủ chưa có cấu hình gửi lời mời. Yêu cầu đã được ghi nhận; hãy thử lại sau khi cấu hình được khôi phục.',
+  employeeInviteLoadFailed: 'Không thể tải trạng thái lời mời.',
+  employeeInviteOpen: 'Ghi nhận lời mời',
+  // The invitation destination is now the acceptance journey (issue #69): the delivered link
+  // is verified, the invitee sets a name and password, and activates immediately on success.
+  inviteTitle: 'Thiết lập tài khoản',
+  inviteLead:
+    'Liên kết lời mời đã được xác minh. Nhập họ tên và chọn mật khẩu để kích hoạt tài khoản của bạn ngay.',
+  inviteVerifying: 'Đang xác minh liên kết lời mời…',
+  inviteEmailLabel: 'Email được mời',
+  inviteNameHint: 'Họ tên được giữ đúng như đã nhập.',
+  inviteNameRequired: 'Vui lòng nhập họ tên.',
+  inviteNameTooLong: 'Họ tên quá dài.',
+  inviteNamePlaceholder: 'Nguyễn Văn A',
+  inviteSubmit: 'Hoàn tất thiết lập',
+  inviteSubmitting: 'Đang thiết lập…',
+  inviteDoneTitle: 'Thiết lập hoàn tất',
+  inviteDoneLead:
+    'Tài khoản của bạn đã được kích hoạt. Bạn có thể bắt đầu sử dụng hệ thống ngay.',
+  inviteContinue: 'Vào kho bất động sản',
+  inviteInvalid:
+    'Liên kết lời mời không hợp lệ hoặc đã hết hạn. Hãy liên hệ quản trị viên để được gửi lại.',
+  inviteNotFound: 'Không tìm thấy lời mời nào cho tài khoản này.',
+  inviteNotAccepted: 'Lời mời này chưa được hệ thống xác nhận.',
+  inviteMismatch: 'Lời mời này thuộc về một tài khoản khác.',
+  inviteChanged:
+    'Nhân viên này đã thay đổi hoặc quyền truy cập đã bị tắt. Hãy liên hệ quản trị viên.',
+  inviteStale: 'Trạng thái lời mời đã thay đổi. Hãy tải lại trang và thử lại.',
+  inviteSessionRequired:
+    'Hãy mở liên kết lời mời trong email để thiết lập tài khoản. Liên kết khôi phục mật khẩu không thể dùng để kích hoạt.',
   // People → Vendors (#73): the company directory and its one bounded create.
   vendorsLink: 'Nhà cung cấp',
   vendorDirectory: 'Danh sách nhà cung cấp',
@@ -381,6 +509,73 @@ const vi = {
   vendorNotFound: 'Không tìm thấy nhà cung cấp hoặc không có quyền đọc.',
   vendorBackToDirectory: 'Về danh sách nhà cung cấp',
   vendorRecordedAt: 'Ghi nhận lúc',
+  vendorPropertyNote:
+    'Nhà cung cấp được ghi nhận cho bất động sản này, tách biệt với chủ sở hữu và người môi giới. Liên kết nhà cung cấp không phải chủ sở hữu, không phải đặt chỗ và không phải trạng thái thuê.',
+  vendorPropertyEmpty: 'Chưa ghi nhận nhà cung cấp nào cho bất động sản này.',
+  vendorPropertyFailed: 'Không thể tải nhà cung cấp của bất động sản này.',
+  vendorLinkOpen: 'Liên kết nhà cung cấp đã ghi nhận',
+  vendorLinkChoose: 'Chọn nhà cung cấp',
+  vendorLinkNone:
+    'Không có nhà cung cấp phù hợp. Ghi nhận công ty trong danh sách nhà cung cấp trước.',
+  vendorLinkSubmit: 'Liên kết với bất động sản này',
+  vendorLinkStale:
+    'Thông tin bất động sản đã thay đổi. Đọc lại trang rồi liên kết lại; chưa có thay đổi nào được lưu.',
+  vendorLinkInvalid: 'Liên kết không hợp lệ. Chọn lại nhà cung cấp.',
+  vendorLinkMissing: 'Không tìm thấy nhà cung cấp hoặc liên kết hiện tại.',
+  vendorLinkFailed:
+    'Chưa xác nhận được kết quả. Đọc lại thông tin hiện tại trước khi thử lại; không tự gửi lại.',
+  vendorUnlink: 'Gỡ liên kết',
+  vendorUnlinkConfirm:
+    'Gỡ liên kết này? Chỉ mối liên hệ hiện tại bị gỡ; nhà cung cấp và các liên kết khác vẫn được giữ.',
+  vendorUnlinkYes: 'Xác nhận gỡ liên kết',
+  vendorLinkedProperties: 'Bất động sản đã liên kết',
+  vendorLinkedPropertiesNote:
+    'Chỉ các bất động sản bạn được phép đọc. Bất động sản đã lưu trữ không hiển thị ngoài quyền của bạn.',
+  vendorLinkedPropertiesEmpty:
+    'Nhà cung cấp này chưa được liên kết với bất động sản nào bạn được phép đọc.',
+  vendorLinkedPropertiesMore: 'Hiển thị 50 bất động sản đã liên kết đầu tiên.',
+  vendorLinkedAt: 'Liên kết lúc',
+  vendorLinkedArchived: 'Đã lưu trữ',
+  // People → Contacts (#71): the shared-identity directory, its Owners view and the
+  // expansion that corrects the shared contact through the one maintenance operation.
+  contactsLink: 'Người liên hệ',
+  contactDirectory: 'Danh sách người liên hệ',
+  contactDirectoryNote:
+    'Một người liên hệ dùng chung cho mọi bất động sản liên kết. Mục Chủ nhà chỉ gồm người có liên kết quan hệ chủ nhà trên bất động sản bạn được đọc; trường phân loại chung không quyết định. Mọi nhân viên đang hoạt động có thể đính chính thông tin đã ghi của người liên hệ đã gắn với một bất động sản.',
+  contactViews: 'Chế độ xem danh sách',
+  contactViewAll: 'Tất cả người liên hệ',
+  contactViewOwners: 'Chủ nhà',
+  contactSearch: 'Tìm tên người liên hệ',
+  contactSearchHint:
+    'Tìm theo tên đã ghi; chỉ tên, không tìm số điện thoại. % và _ là ký tự thường. Tối đa 120 ký tự.',
+  contactColumnName: 'Người liên hệ',
+  contactColumnRelation: 'Quan hệ trên bất động sản',
+  contactColumnPhone: 'Số điện thoại đã ghi',
+  contactPrimaryLink: 'Liên hệ chính',
+  contactColumnProperties: 'Bất động sản liên quan',
+  contactColumnActions: 'Thao tác',
+  contactNoProperties: 'Chưa gắn bất động sản nào',
+  contactPropertyCount: '{n} liên kết đang hoạt động',
+  contactPageInfo: 'Trang này: {n} người liên hệ',
+  contactDirectoryEmpty: 'Chưa có người liên hệ nào được ghi nhận.',
+  contactDirectoryEmptyQuery: 'Không tìm thấy người liên hệ phù hợp.',
+  contactOwnersEmpty:
+    'Chưa có người liên hệ nào được ghi nhận là chủ nhà trên bất động sản bạn được đọc.',
+  contactOwnersEmptyQuery: 'Không tìm thấy chủ nhà phù hợp.',
+  contactDirectoryFailed: 'Không thể tải danh sách người liên hệ.',
+  contactOpen: 'Xem và đính chính',
+  // Unlinked-identity correction is staff/manager/admin (ticket #72); sales still see this note.
+  contactUnlinkedNote:
+    'Chưa gắn bất động sản nào nên chưa thể đính chính từ danh sách này; mục này mở khi người liên hệ được gắn vào một bất động sản.',
+  contactClose: 'Đóng chi tiết',
+  contactLinkedProperties: 'Bất động sản liên quan',
+  contactLinkedPropertiesNote:
+    'Quan hệ được ghi theo từng bất động sản: cùng một người có thể là chủ nhà ở nơi này và môi giới ở nơi khác. Mọi bất động sản nêu trên đều nhận thay đổi và hiển thị thông tin mới ở lần đọc kế tiếp; thay đổi người liên hệ dùng chung không ghi vào lịch sử bất động sản.',
+  contactClassifiedAs: 'Phân loại chung',
+  contactRawPhoneText: 'Văn bản điện thoại gốc',
+  contactEditorTitle: 'Đính chính người liên hệ dùng chung',
+  contactSharedIdentityNote:
+    'Đây là người liên hệ dùng chung: đính chính sẽ áp dụng cho mọi bất động sản đang gắn với người này.',
   saving: 'Đang lưu…',
   notes: 'Ghi chú',
   languageName: 'Ngôn ngữ / Language',
@@ -573,8 +768,41 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     sortDefault: 'Default',
     sortOldest: 'Oldest first',
     sortNewest: 'Newest first',
+    orderReverse: 'Reverse',
+    orderReverseHint: 'Choose an entry-date order to reverse it.',
     ageHint:
       'Available and negotiating unarchived inventory only. Order uses the original inventory entry date and does not change on update, price edit or relisting. Records with an unknown entry date are listed last, never hidden.',
+    filters: 'Filters',
+    filtersApply: 'Apply filters',
+    filtersClear: 'Clear filters',
+    filtersRemove: 'Remove filter',
+    filtersAny: 'Any',
+    filtersInvalid:
+      'The filter set is not valid. Check the entered price and area bounds.',
+    priceFilterHint:
+      'With no listing mode selected, each record uses its own asking price: rental records use monthly asking rent (VND/month), while sale and sale-and-rent records use asking sale price in whole VND. Select Sale or Sale and rent to compare asking sale prices only; select Rent to compare monthly asking rents only.',
+    areaFilterHint:
+      'Area matches when the land area or the floor area is inside the range.',
+    province: 'Province / city',
+    ward: 'Commune / ward',
+    areaAdminHint:
+      "Filter by the address's province/city and commune/ward. Choosing a province/city includes every commune/ward in it; choosing a commune/ward narrows to that ward. When both are set, the ward is the condition in force.",
+    areaFilterUnavailable:
+      'The province and ward catalog could not be loaded. The price and area filters still work.',
+    contactFilter: 'Contact',
+    contactFilterHint:
+      'Only contacts you may read. This filter combines with the other conditions.',
+    priceUnitVnd: 'VND',
+    priceUnitMonthly: 'VND/month',
+    priceRangeFrom: 'Price from',
+    priceRangeTo: 'Price to',
+    salePriceFrom: 'Sale price from',
+    salePriceTo: 'Sale price to',
+    rentPriceFrom: 'Monthly rent from',
+    rentPriceTo: 'Monthly rent to',
+    areaRangeFrom: 'Area from',
+    areaRangeTo: 'Area to',
+    emptyFiltered: 'No property matches these filters.',
     entryDate: 'Original inventory entry date',
     entryDateUnknown: 'Unknown',
     entryDateLegacy: 'From the legacy record',
@@ -663,6 +891,7 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     todaySummary: "Today's summary",
     companyHistory: 'History by day',
     companyEmployee: 'Employee',
+    companyGroupActivities: 'Activities: {count}',
     companyActivityNote:
       'Owner-contact access is the number of properties whose owner contact each employee opened that Vietnam day: not attendance, work hours, connected calls or physical visits.',
     noEmployees: 'No active employees.',
@@ -677,7 +906,32 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
       'These figures cover your own activity only: page views, distinct properties viewed and the number of properties whose owner contact you opened that Vietnam day. Not attendance, work hours, connected calls or physical visits.',
     myActivityEmpty:
       'No activity was recorded in the selected period. Every day still appears with zero values.',
+    provinceActivity: 'Owner-contact activity by province/city',
+    provinceActivityLink: 'Activity by province/city',
+    provinceActivityNote:
+      'This manager/admin-only table groups by each property’s latest verified current address and its canonical official province/city identity. One access is one employee – property – Vietnam day that opened an owner contact, not a physical visit, a phone number or a click count. Correcting or invalidating an address may move earlier activity to another group, but the company total does not change.',
+    provinceOwnerContact: 'Owner-contact accesses',
+    provinceColumn: 'Province/city (verified address)',
+    unverifiedLocation: 'Unverified location',
+    provinceActivityTotal: 'Total',
+    provinceActivityCountsFrom:
+      'This total equals the owner-contact accesses summed from the company activity report for the same date range.',
+    provinceActivityEmpty:
+      'No owner contact was opened in the selected period. The Unverified location group still appears with zero.',
+    provinceActivityBands:
+      'Colour bands compare groups inside the selected period against the largest group; every cell also prints its exact count and a text level label.',
+    activityLevelNone: 'None',
+    activityLevelLow: 'Low',
+    activityLevelMedium: 'Medium',
+    activityLevelHigh: 'High',
     discussion: 'Property discussion',
+    commentHistory: 'Comment history',
+    commentHistoryEmpty: 'No retained history is available.',
+    commentHistoryMore:
+      'This window keeps the 64 oldest events; newer events are not shown here.',
+    commentHistoryFailed: 'Comment history could not be loaded. Try again.',
+    viewHistory: 'View history',
+    hideHistory: 'Hide history',
     addComment: 'Comment',
     commentHint:
       'Write a shared comment about this property. Up to 2,000 characters.',
@@ -713,6 +967,8 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     removing: 'Removing…',
     cancel: 'Cancel',
     commentRemoved: 'Comment removed.',
+    commentAuthorWithdrawal: 'Author withdrew the comment.',
+    commentModeratedRemoval: 'Removed by moderation.',
     removalReason: 'Moderation reason',
     removalReasonHint:
       'Required. The reason is retained for managers and admins.',
@@ -758,7 +1014,7 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     employeesLink: 'Employees',
     employeeDirectory: 'Employee list',
     employeeDirectoryNote:
-      'Recorded employee identities. “Not linked to sign-in” means no sign-in account is linked: the system records no invitation, so it is not shown as invited.',
+      'Recorded employee identities. “Not linked to sign-in” only describes the sign-in account; a recorded invitation is shown as its own marker.',
     employeeDirectoryEmpty: 'No employee identities are recorded.',
     employeeDirectoryFailed: 'The employee list could not be loaded.',
     employeePageInfo: 'This page: {n} employees',
@@ -851,6 +1107,73 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     employeeDeleteProviderUnavailable:
       'The server has no account-deletion configuration. Access is disabled; retry after configuration is restored.',
     employeeDeleteLoadFailed: 'Deletion state did not load.',
+    // Employee invitation (issue #68).
+    employeeInviteNote:
+      'Records one invitation for the chosen email address and role. The invitee has no access until they set up their own account in a separate step.',
+    employeeInviteEmailHint:
+      'The address is normalized (extra whitespace removed, lower case) before it is recorded.',
+    employeeInviteRoleHint:
+      'One of the existing company roles. The role is recorded on the employee record, never in sign-in metadata.',
+    employeeInviteSubmit: 'Send invitation',
+    employeeInviteTarget: 'Invited person',
+    employeeInviteState: 'Invitation state',
+    employeeInvitePendingLabel: 'No provider confirmation yet',
+    employeeInviteReconciliationLabel: 'Invitation reconciliation required',
+    employeeInviteNoneLabel: 'No invitation recorded',
+    employeeInviteRecordedLabel: 'Invitation recorded',
+    employeeInviteDeliveryNote:
+      'The provider holds an identity for this address. This does not confirm the mailbox received the message and enables no access.',
+    employeeInviteUnconfirmedNote:
+      'No delivery is confirmed and no access is enabled.',
+    employeeInviteSuccess:
+      'The invitation is recorded; no access has been enabled.',
+    employeeInvitePending:
+      'The invitation request is recorded; the provider has not confirmed it yet.',
+    employeeInviteFailed:
+      'The invitation request is recorded, but the provider step did not complete and no delivery is confirmed. The recorded invitation below shows the reconciliation state and the provider detail; retry under the same action.',
+    employeeInviteEmailRecorded:
+      'This email already belongs to a recorded employee, not a new person; handle it through the returning-person policy.',
+    employeeInviteAlreadyRecorded:
+      'An invitation is already recorded for this person.',
+    employeeInviteRoleConflict:
+      'A different role is already recorded for this open invitation.',
+    employeeInviteKeyConflict:
+      'This action key was used for a different invitation. Reopen the invitation form.',
+    employeeInviteStale:
+      'The invitation state changed. Reload before retrying.',
+    employeeInviteChanged:
+      'This employee changed while the invitation was sent; restart the invitation.',
+    employeeInviteProviderUnavailable:
+      'The server has no invitation configuration. The request is recorded; retry after configuration is restored.',
+    employeeInviteLoadFailed: 'The invitation state did not load.',
+    employeeInviteOpen: 'Record an invitation',
+    // The invitation destination is now the acceptance journey (issue #69): the delivered link
+    // is verified, the invitee sets a name and password, and activates immediately on success.
+    inviteTitle: 'Set up your account',
+    inviteLead:
+      'Your invitation link is verified. Enter your name and choose a password to activate your account right away.',
+    inviteVerifying: 'Verifying your invitation link…',
+    inviteEmailLabel: 'Invited email',
+    inviteNameHint: 'Your name is kept exactly as entered.',
+    inviteNameRequired: 'Enter your name.',
+    inviteNameTooLong: 'That name is too long.',
+    inviteNamePlaceholder: 'Jane Doe',
+    inviteSubmit: 'Complete setup',
+    inviteSubmitting: 'Setting up…',
+    inviteDoneTitle: 'Setup complete',
+    inviteDoneLead:
+      'Your account is now active. You can start using the system right away.',
+    inviteContinue: 'Continue to inventory',
+    inviteInvalid:
+      'The invitation link is invalid or has expired. Contact an administrator to be re-invited.',
+    inviteNotFound: 'No invitation was found for this account.',
+    inviteNotAccepted: 'This invitation has not been confirmed by the system.',
+    inviteMismatch: 'This invitation belongs to a different account.',
+    inviteChanged:
+      'This employee changed or access was disabled. Contact an administrator.',
+    inviteStale: 'The invitation state changed. Reload the page and try again.',
+    inviteSessionRequired:
+      'Open the invitation link in your email to set up your account. A password-recovery link cannot be used to activate.',
     // People → Vendors (#73): the company directory and its one bounded create.
     vendorsLink: 'Vendors',
     vendorDirectory: 'Vendor directory',
@@ -888,6 +1211,73 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     vendorNotFound: 'The vendor was not found or you cannot read it.',
     vendorBackToDirectory: 'Back to the vendor directory',
     vendorRecordedAt: 'Recorded',
+    vendorPropertyNote:
+      'Supplier companies recorded on this property, separate from owners and brokers. A vendor link is not ownership, a reservation or rental occupancy.',
+    vendorPropertyEmpty: 'No vendor is recorded on this property yet.',
+    vendorPropertyFailed: "This property's vendors could not be loaded.",
+    vendorLinkOpen: 'Link a recorded vendor',
+    vendorLinkChoose: 'Choose a vendor',
+    vendorLinkNone:
+      'No vendor matches. Record the company in the vendor directory first.',
+    vendorLinkSubmit: 'Link to this property',
+    vendorLinkStale:
+      'The property changed. Reload the page and link again; nothing was saved.',
+    vendorLinkInvalid: 'That link was refused. Choose the vendor again.',
+    vendorLinkMissing: 'The vendor or the current link was not found.',
+    vendorLinkFailed:
+      'The outcome could not be confirmed. Read the current information before retrying; do not automatically resubmit.',
+    vendorUnlink: 'Unlink',
+    vendorUnlinkConfirm:
+      'Unlink this relationship? Only the current link is removed; the vendor and its other links remain.',
+    vendorUnlinkYes: 'Confirm unlink',
+    vendorLinkedProperties: 'Linked properties',
+    vendorLinkedPropertiesNote:
+      'Only properties you may read. An archived property stays hidden outside your role.',
+    vendorLinkedPropertiesEmpty:
+      'This vendor is not linked to any property you may read.',
+    vendorLinkedPropertiesMore: 'Showing the first 50 linked properties.',
+    vendorLinkedAt: 'Linked',
+    vendorLinkedArchived: 'Archived',
+    // People → Contacts (#71): the shared-identity directory, its Owners view and the
+    // expansion that corrects the shared contact through the one maintenance operation.
+    contactsLink: 'Contacts',
+    contactDirectory: 'Contact directory',
+    contactDirectoryNote:
+      'One recorded person is shared by every linked property. The Owners view lists only records linked as an owner on a property you can read; the general classification does not decide it. Every active employee can correct the recorded details of a contact linked to a property.',
+    contactViews: 'Directory view',
+    contactViewAll: 'All contacts',
+    contactViewOwners: 'Owners',
+    contactSearch: 'Search contact name',
+    contactSearchHint:
+      'Matches the recorded name only, never a phone number. % and _ are ordinary characters. At most 120 characters.',
+    contactColumnName: 'Contact',
+    contactColumnRelation: 'Property relationship',
+    contactColumnPhone: 'Recorded phone',
+    contactPrimaryLink: 'Primary contact',
+    contactColumnProperties: 'Linked properties',
+    contactColumnActions: 'Actions',
+    contactNoProperties: 'No linked property',
+    contactPropertyCount: '{n} active links',
+    contactPageInfo: 'This page: {n} contacts',
+    contactDirectoryEmpty: 'No contacts are recorded.',
+    contactDirectoryEmptyQuery: 'No contacts match this search.',
+    contactOwnersEmpty:
+      'No contact is recorded as an owner on a property you can read.',
+    contactOwnersEmptyQuery: 'No owner matches this search.',
+    contactDirectoryFailed: 'The contact directory could not be loaded.',
+    contactOpen: 'Open and correct',
+    // Unlinked-identity correction is staff/manager/admin (ticket #72); sales still see this note.
+    contactUnlinkedNote:
+      'Not linked to a property yet, so it cannot be corrected from this directory; this opens once the contact is linked to a property.',
+    contactClose: 'Close details',
+    contactLinkedProperties: 'Linked properties',
+    contactLinkedPropertiesNote:
+      'The relationship is recorded per property: the same person may be an owner on one and a broker on another. Every property listed above receives the change and shows the new details on its next read; a shared-contact correction is not recorded in property history.',
+    contactClassifiedAs: 'General classification',
+    contactRawPhoneText: 'Original phone text',
+    contactEditorTitle: 'Correct the shared contact',
+    contactSharedIdentityNote:
+      'This is the shared contact: a correction applies to every property linked to it.',
     saving: 'Saving…',
     notes: 'Notes',
     signInHelp:
@@ -902,6 +1292,7 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     northwest: 'Northwest',
     signOutFailed:
       'Sign-out did not complete. Information is hidden; please retry.',
+    accessChanged: 'Your access changed. Reload the page to continue.',
     // Canonical authentication design foundation (tickets #50–#52).
     brandRole: 'Real estate management system',
     brandTitle: "Saigon New House's real estate management system.",

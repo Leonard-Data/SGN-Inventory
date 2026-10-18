@@ -1,0 +1,120 @@
+{
+  "issue": 71,
+  "namespace": "SGN71",
+  "run_token": "d41f1c",
+  "started_at": "2026-10-17T08:30:29.101Z",
+  "observations": [
+    {
+      "name": "the synthetic SGN71 fixture namespace is created and linked",
+      "properties": 3,
+      "contacts": 38
+    },
+    {
+      "name": "anonymous, unlinked and inactive callers reach neither the directory nor the operation"
+    },
+    {
+      "name": "the Owners view follows the recorded relationship, not the identity classification"
+    },
+    {
+      "name": "the archived and unlinked boundaries hold for an ordinary employee while a reviewer keeps the archived read"
+    },
+    {
+      "name": "a directory-origin correction commits once to the shared person, shows on every linked property and records no property history"
+    },
+    {
+      "name": "a direct shared-contact write is refused and changes nothing"
+    },
+    {
+      "name": "the directory reads bounded pages without omission and treats query metacharacters as data"
+    },
+    {
+      "name": "the application endpoints refuse malformed input, inactive and unlinked sessions and keep the object-level refusal inline",
+      "inactive_refused_at": "sign-in",
+      "unlinked_refused_at": "sign-in"
+    },
+    {
+      "name": "an anonymous visit to the contact destination is redirected to sign-in"
+    },
+    {
+      "name": "the rendered directory offers the Owners view and filters by the recorded relationship"
+    },
+    {
+      "name": "a salesperson corrects the shared contact from the directory with its affected-set preview"
+    },
+    {
+      "name": "the contact directory renders equivalent English labels"
+    },
+    {
+      "name": "a deactivated membership is refused before the directory renders"
+    },
+    {
+      "name": "a sign-in identity with no active employee is refused before the directory renders"
+    }
+  ],
+  "created": {
+    "properties": [
+      "2809924e-dd00-4d30-8020-99ee3236ded3",
+      "bec984ab-d932-4823-8783-5399da68b18e",
+      "898b688c-f13d-480f-8ac8-d70eef9483c6"
+    ],
+    "contacts": [
+      "e805f57c-7cb4-48ee-9c3d-a05ae5c6ccf2",
+      "a77b4209-f76e-4a50-9ff8-4c4b6e4225b7",
+      "e204f2b4-73f5-4cc9-9e8e-6728f2dec8d2",
+      "48aece53-db7d-4990-a132-c9ab85de0a09",
+      "5c5759f1-c867-4046-9f05-620d85fb301a",
+      "175e9472-b624-46e5-af26-2eccf3178993",
+      "c81880e9-1f63-4918-b118-b8b152c83a1a",
+      "fb104724-38f6-4b3a-bb28-56745acf74cf",
+      "d79b9cdc-89aa-45b2-b380-7aed352da7d7",
+      "cc246583-a67d-4af3-8331-1baa2d0cb400",
+      "e9e0398d-aa20-4bbf-b2d9-f78b3b303097",
+      "6b69186e-9db1-4fdf-91b5-f72472ced0ea",
+      "d3447629-9035-4f8f-8453-3b2abda6b444",
+      "0e84a5a8-cfb1-4ee7-acce-34fb7b28ae5b",
+      "ba531861-3681-40ba-84d0-dff722f1a523",
+      "39307ca7-b637-4fb7-8944-f1ae5dcddc7c",
+      "40d3d0cf-34c4-4ba8-a906-498f7294c397",
+      "3ce66ba3-5e7f-4417-ba84-261f22510826",
+      "5533ff3a-16cb-408d-9576-4eea30500b79",
+      "a94674ad-5509-4162-bd6f-198f09f0ce54",
+      "13c20ff7-aaca-4359-860a-93ab46be8b8b",
+      "99b7e944-aa71-4875-a4b6-7c21f93f5ea1",
+      "347088e1-19e4-42c3-8b6d-f59be38644be",
+      "a9ba860f-4341-44ca-9cb3-d5aaeac9bdf5",
+      "4b2773a3-304b-4c6d-ad32-13e763cf2381",
+      "fe4a4d53-9c39-42a4-b23d-c12518275026",
+      "62745ce5-4483-4ee7-a598-bfab8eb4ec22",
+      "d38c73f0-ef89-4ec7-b1e1-60b54b5aa259",
+      "ad88bf4a-abab-4b14-a63d-b1d1e2ba165e",
+      "b5148dc1-0fcb-4295-9f63-1a042c8a7796",
+      "f28a93f5-1ddf-4a6e-90ff-e85509208a66",
+      "c97b9e08-9928-4760-9719-b98f4d8aace4",
+      "a2f328b2-de3b-4381-9c56-93aeebc02254",
+      "d1edcedf-320f-439d-a1e6-1cbadf5c5c49",
+      "ca44d851-ad1a-4a65-9015-7c6741a752fe",
+      "b65eba38-30e4-4161-930e-f440ba0b80bf",
+      "8d4a7704-7021-4a7f-9b58-c9cd7455d934",
+      "3b650fe4-9b6f-4648-b4b8-150f42cc2f8c"
+    ]
+  },
+  "cleanup": {
+    "removed": {
+      "history": true,
+      "links": true,
+      "addresses": true,
+      "contacts": true,
+      "properties": true,
+      "employees": true
+    },
+    "failures": [],
+    "auth_users_removed": 6
+  },
+  "limitations": [
+    "Supabase Auth email delivery and invitation acceptance are outside this slice.",
+    "Two genuinely independent browser sessions are used for the read/denial rows; a sustained production-load contention benchmark is not claimed.",
+    "The directory slice has no contact deletion path in the product; fixtures are removed through the separately authorized owner connection and the report records the exact ids."
+  ],
+  "finished_at": "2026-10-17T08:32:17.213Z",
+  "failed": null
+}

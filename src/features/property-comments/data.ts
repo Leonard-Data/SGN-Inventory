@@ -8,6 +8,8 @@ import {
   type Comment,
   type CommentPage,
   type CommentRemovalKind,
+  type CommentHistoryEvent,
+  type CommentHistoryPage,
 } from './types';
 
 function databaseError(error: { code?: string }) {
@@ -51,6 +53,61 @@ function comment(row: unknown): Comment {
     revision: value.revision,
     removedAt,
     editedAt,
+  };
+}
+
+export async function commentHistory(
+  context: RouteContext,
+  id: string,
+  commentId: string,
+): Promise<CommentHistoryPage> {
+  if (!uuid(id) || !uuid(commentId)) throw new ApiError(400, 'invalid-input');
+  const { data, error } = await context.client.rpc(
+    'list_property_comment_history',
+    {
+      p_property_id: id,
+      p_comment_id: commentId,
+    },
+  );
+  if (error) databaseError(error);
+  if (!Array.isArray(data)) throw new ApiError(503, 'unavailable');
+  const events = data.map((row) => {
+    const value = row as Record<string, unknown>;
+    const kind = value.event_kind;
+    const removalKind = value.removal_kind;
+    const reason = value.reason;
+    if (
+      !['posting', 'edit', 'removal'].includes(String(kind)) ||
+      (value.version !== null && !Number.isInteger(value.version)) ||
+      typeof value.body !== 'string' ||
+      !uuid(value.actor_id) ||
+      typeof value.actor_name !== 'string' ||
+      typeof value.occurred_at !== 'string' ||
+      typeof value.has_more !== 'boolean' ||
+      (kind === 'removal'
+        ? removalKind !== 'author' && removalKind !== 'moderation'
+        : removalKind !== null) ||
+      (kind === 'removal'
+        ? reason !== null && typeof reason !== 'string'
+        : reason !== null)
+    )
+      throw new ApiError(503, 'unavailable');
+    return {
+      kind: kind as CommentHistoryEvent['kind'],
+      version: value.version as number | null,
+      body: value.body,
+      actorId: value.actor_id,
+      actorName: value.actor_name,
+      occurredAt: value.occurred_at,
+      removalKind: removalKind as CommentHistoryEvent['removalKind'],
+      reason: reason as string | null,
+    };
+  });
+  return {
+    events,
+    hasMore: data.some(
+      (row) => (row as Record<string, unknown>).has_more === true,
+    ),
   };
 }
 

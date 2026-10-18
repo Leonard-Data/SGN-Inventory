@@ -7,7 +7,7 @@ One company's shared property inventory, employee access, contacts, reservations
 ### Employees and access
 
 **Employee invitation**:
-An offer to join the company's internal inventory. Acceptance alone does not establish active employee access.
+An offer to join the company's internal inventory, recorded against the intended employee and address. Acceptance by that intended invitee links and activates the retained employee immediately, with no separate approval.
 _Avoid_: Access approval
 
 **Linked employee**:
@@ -23,7 +23,7 @@ An employee whose company inventory access is disabled, regardless of whether th
 _Avoid_: Signed-out employee
 
 **Unlinked employee**:
-An employee record with no confirmed sign-in identity that has never had one confirmed and recorded as deleted. It is a distinct access state, not a pending invitation and not a disabled account; the schema records no invitation.
+An employee record with no confirmed sign-in identity that has never had one confirmed and recorded as deleted. It is a distinct access state, not a disabled account. A recorded invitation is separate lifecycle evidence: it does not make the employee linked, and an unlinked person with no recorded invitation is not invited.
 _Avoid_: Invited employee
 
 **Account-deleted employee**:
@@ -100,12 +100,16 @@ _Avoid_: Verified match
 The recorded relationship between a property and a contact, such as owner or broker. Several contacts may belong to a property, with at most one marked primary.
 _Avoid_: Contact inferred from sheet position
 
+**Property location**:
+The recorded map point for a property, stored as a `latitude`/`longitude` pair that a staff editor sets or corrects by clicking a map during property-fact editing. It is saved through the same revision-checked maintenance path as the other facts, so it grants no separate editing authority and a change flags the record for review. Its absence is an unrecorded location, never a coordinate at the world origin.
+_Avoid_: Address text as location, an empty world map pretending to be data
+
 **Contact**:
 A shared named party whose contact details may be used by several properties. Its relationship to each property is recorded separately as a property contact link.
 _Avoid_: Property-specific phone record
 
 **Shared-contact detail correction**:
-A correction of the identity details of an existing linked Contact by any Active employee who can read the property it was opened from. It commits immediately and appears in the change history of every Property linked at that moment, and it is separate from Property-fact authority: it does not create, link, unlink or merge contacts.
+A correction of the identity details of an existing shared Contact. Any Active employee may correct a Contact linked to a readable Property, whether opened from that Property or from the shared-contact directory, and staff/manager/admin may also correct an unlinked identity through the same operation (issue #72). It commits immediately and applies to the shared person for every Property linked at that moment; it is no longer recorded in the property change history, and it is separate from Property-fact authority: it does not create, link, unlink or merge contacts.
 _Avoid_: Property-fact edit, contact creation, approval
 
 **Record verification**:
@@ -125,7 +129,7 @@ A separately attributed addition to an open Correction request's explanation, pr
 _Avoid_: Replacement request, edited original
 
 **Property change history**:
-The record of who changed information affecting a property, when, and its before/after values, including property facts, addresses, contact links and shared-contact details displayed on that property.
+The record of who changed a Property's asking price, when, and its before/after values. Only recorded asking-price changes add rows; creation, address, contact, link, note and status changes are not recorded here — they are attributed instead in the private audit trail with the actor, time and before/after values, subject to that trail's own 90-day retention window, deliberately not the permanent record this history would have been — and rows recorded before this rule was applied are retained and stay readable.
 _Avoid_: Approval queue, page-view history
 
 **Asking-price history**:
@@ -148,11 +152,19 @@ _Avoid_: Oldest record, guessed date
 The number of Vietnam business days from a property's Inventory entry date to today, shown in the chronological inventory views. It does not reset when a property is relisted, repriced, corrected or otherwise updated.
 _Avoid_: Listing age, update age
 
+**Inventory filter set**:
+The optional conditions used to narrow inventory by status, listing mode, property type, price, land or floor area in square metres, the administrative area of an address (province/city and its dependent commune/ward; the narrower ward governs when both are selected), or a recorded contact linked to a property. Without a selected listing mode, a price range uses each listing's own asking price; with a selected mode, it uses only that mode's asking price. A contact condition matches through the recorded property↔contact link and applies the same unarchived boundary as the contact directory's linked-property count, so the two never disagree.
+_Avoid_: Fixed sale-price basis; "area" for province/ward
+
 ### Vendors
 
 **Vendor**:
-A company the inventory works with, recorded as its own directory identity and distinct from an owner, broker, contact or employee. Every active employee may read recorded vendors; only staff, manager and admin roles add them. This slice records the company and its contact block only: no property link, edit, procurement or payment record.
+A company the inventory works with, recorded as its own directory identity and distinct from an owner, broker, contact or employee. Every active employee may read recorded vendors; only staff, manager and admin roles add vendor directory records, while every active employee may link or unlink a recorded vendor on an unarchived property. The directory slice records the company and its contact block; a separate slice links a recorded vendor to a property, and vendor detail editing remains a further slice.
 _Avoid_: Supplier contact, owner type, broker record
+
+**Vendor link**:
+An explicit recorded relationship between one property and one recorded vendor. It is not an owner link, a reservation or rental occupancy: it carries no owner-primary marker, no occupancy state and no owner-contact access credit, and a property has at most one link per vendor. The current link row carries its creator and link time; removing a mistaken link keeps the vendor and its other links and does not write Property change history.
+_Avoid_: Owner relationship, lock, tenant record
 
 **Vendor contact block**:
 The one optional set of recorded contact details belonging to a vendor: contact name, phone strings, email, raw address/source text and notes. Each detail is independently known or unknown, and an unknown detail is never filled with an invented default.
@@ -179,6 +191,10 @@ _Avoid_: Attendance report, visit report, performance ranking
 **Employee owner-contact activity ranking**:
 A manager/admin-only order of employees by their total of the Daily owner-contact access counts over a selected Vietnam date range, reconciled to the recorded events, with Page-view events and distinct properties viewed kept separate and never blended into the rank. Every currently active employee appears, a zero total is an explicit row, equal totals share a rank with a stable order, and activity recorded while an employee was active stays attributed to that employee after deactivation.
 _Avoid_: Performance score, attendance ranking, composite score, commission ranking, physical-visit ranking
+
+**Province owner-contact activity**:
+A manager/admin-only derived table of the same employee-property-Vietnam-day owner-contact units as Company employee-by-day activity, grouped by each property's latest verified primary current province/city with an always-reported Unverified location group for properties whose province cannot be resolved. Correcting or invalidating an address may regroup earlier activity without changing the company total, and it is never a geographic map, a physical-visit count or a performance score.
+_Avoid_: Province ranking, geographic map, visit report
 
 **Owner-contact access disclosure**:
 A deliberate reveal of a property's recorded owner phone, committed as an Owner-contact access event before the phone is shown. Eligibility comes from the property's recorded owner relationship, and it counts one property per employee per Vietnam day rather than owners, phones or clicks.
@@ -250,12 +266,20 @@ _Avoid_: Draft identity, temporary ID
 An employee-scoped key identifying one author edit operation. Retrying the same comment, opening revision and validated replacement text recovers that accepted operation without adding another retained version; another use is rejected.
 _Avoid_: Comment revision, submission key
 
+**Reviewer-only comment history**:
+A manager/admin-only chronological view of a comment's original post, retained edits and one removal event, including each retained actor and Vietnam time. Author withdrawal has no moderation reason; moderated removal retains its reason. The read keeps the 64 oldest events and reports newer events as omitted; ordinary, inactive, unlinked and anonymous callers cannot read it.
+_Avoid_: Discussion feed, audit log, retention deletion
+
 
 ### Property files
 
 **Property file**:
-A registered document or property photo attached to a property, with a stable identity and original content retained.
+A registered document or property photo attached to a property, with a stable identity and original content retained in the private file store.
 _Avoid_: Uploaded image, attached document
+
+**Property file limit**:
+The per-property ceiling on stored attachments, decided by the file's validated content type rather than its chosen purpose, category or cover choice: at most 5 documents of 20 MiB each and at most 10 images of 5 MiB each, the cover photo counted among the images. A registration reserves its slot before any bytes are accepted; a refused completion releases it to `cleanup_pending` at once and only becomes `failed` once the trusted server has confirmed its bytes deleted, and a registration still pending after 15 minutes no longer counts, so an abandoned attempt never blocks the property for good.
+_Avoid_: Storage quota, category limit
 
 **File completion**:
 Technical confirmation that the stored content is supported, complete and matches its registration, making it privately available to current property readers. It is not human document review, legal authenticity, ownership certification or malware scanning.

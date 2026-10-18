@@ -20,6 +20,7 @@ export async function commentEditContract({
   const remove =
     'select public.remove_property_comment($1,$2,$3,$4,$5) as removed';
   const list = 'select * from public.list_property_comments($1,$2,$3,$4)';
+  const history = 'select * from public.list_property_comment_history($1,$2)';
   const own = async (id) =>
     (
       await db.query(
@@ -210,7 +211,7 @@ export async function commentEditContract({
     async () => {
       const functions = (
         await db.query(
-          "select p.proname,p.prosecdef,n.nspname from pg_proc p join pg_namespace n on n.oid=p.pronamespace where p.proname in ('edit_property_comment','post_property_comment','list_property_comments') order by p.proname,n.nspname",
+          "select p.proname,p.prosecdef,n.nspname from pg_proc p join pg_namespace n on n.oid=p.pronamespace where p.proname in ('edit_property_comment','post_property_comment','list_property_comments','list_property_comment_history') order by p.proname,n.nspname",
         )
       ).rows;
       assert.deepEqual(
@@ -220,6 +221,8 @@ export async function commentEditContract({
         [
           'private.edit_property_comment:true',
           'public.edit_property_comment:false',
+          'private.list_property_comment_history:false',
+          'public.list_property_comment_history:false',
           'public.list_property_comments:false',
           'private.post_property_comment:true',
           'public.post_property_comment:false',
@@ -735,6 +738,39 @@ export async function commentEditContract({
         'versions survive deactivation',
       );
       assert.equal(await editCount(ownComment), 1);
+      for (const actor of [2, 3]) {
+        await asUser(actor);
+        const retained = (await db.query(history, [live, ownComment])).rows;
+        assert.deepEqual(
+          retained.map((row) => [row.event_kind, row.version]),
+          [
+            ['posting', 0],
+            ['edit', 1],
+          ],
+          `reviewer ${actor} keeps reading a deactivated author's history`,
+        );
+        assert.equal(retained[0].body, 'Nội dung gốc của tác giả');
+        assert.equal(retained[0].actor_name, 'Fixture 1');
+        assert.equal(
+          retained[1].body,
+          'Nội dung đã sửa\nDòng thứ hai — giữ dấu.',
+        );
+        assert.equal(retained[1].actor_name, 'Fixture 1');
+        const withdrawal = (await db.query(history, [other, removedComment]))
+          .rows;
+        assert.deepEqual(
+          withdrawal.map((row) => [row.event_kind, row.removal_kind]),
+          [
+            ['posting', null],
+            ['removal', 'author'],
+          ],
+        );
+        assert.equal(withdrawal[0].body, 'Nội dung sẽ bị gỡ');
+        assert.equal(withdrawal[0].actor_name, 'Fixture 1');
+        assert.equal(withdrawal[1].body, 'Nội dung sẽ bị gỡ');
+        assert.equal(withdrawal[1].actor_name, 'Fixture 1');
+      }
+      await asAdmin();
       await db.query('update public.employees set is_active=true where id=$1', [
         employees[1],
       ]);
@@ -837,6 +873,21 @@ export async function commentEditContract({
       await fails('select * from public.property_comment_edits', [], '42501');
     },
   );
+  await asUser('unlinked');
+  await check(
+    'an authenticated unlinked identity cannot edit or read prior versions',
+    async () => {
+      await fails(
+        edit,
+        [live, ownComment, '24000000-0000-0000-0000-0000000000ff', 'Unlinked'],
+        '42501',
+      );
+      assert.deepEqual(
+        (await db.query('select * from public.property_comment_edits')).rows,
+        [],
+      );
+    },
+  );
   await asUser(4);
   await check(
     'an inactive identity reaches neither edits nor evidence',
@@ -855,6 +906,89 @@ export async function commentEditContract({
         ],
         '42501',
       );
+    },
+  );
+  await check(
+    'reviewer history returns complete ordered edits and author removal evidence while ordinary readers get no payload',
+    async () => {
+      for (const actor of [0, 1, 4, 5]) {
+        await asUser(actor);
+        await fails(history, [live, replayComment], '42501');
+      }
+      await asUser('unlinked');
+      assert.deepEqual(
+        (await db.query('select * from public.property_comment_edits')).rows,
+        [],
+      );
+      await fails(history, [live, replayComment], '42501');
+      for (const actor of [2, 3]) {
+        await asUser(actor);
+        const rows = (await db.query(history, [live, replayComment])).rows;
+        assert.equal(rows.length, 4);
+        assert.deepEqual(
+          rows.map((row) => [row.event_kind, row.version]),
+          [
+            ['posting', 0],
+            ['edit', 1],
+            ['edit', 2],
+            ['edit', 3],
+          ],
+        );
+        assert.equal(rows[0].body, 'Nội dung gốc để phát lại');
+        assert.equal(rows[3].body, 'ế'.repeat(2000));
+        assert.equal(
+          rows.every((row) => row.removal_kind === null),
+          true,
+        );
+        assert.equal(
+          rows.every((row) => row.reason === null),
+          true,
+        );
+        assert.equal(
+          rows.every((row) => row.has_more === false),
+          true,
+        );
+        const removed = (await db.query(history, [live, oldestComment])).rows;
+        assert.equal(removed.at(-1).event_kind, 'removal');
+        assert.equal(removed.at(-1).removal_kind, 'author');
+        assert.equal(removed.at(-1).reason, null);
+      }
+    },
+  );
+  await check(
+    'history SQL bounds an over-window comment and reports retained events beyond it',
+    async () => {
+      await asUser(1);
+      const bounded = (
+        await db.query(post, [
+          live,
+          'Bounded original',
+          '24000000-0000-4000-8000-0000000000c1',
+        ])
+      ).rows[0].created;
+      let revision = bounded.revision;
+      for (let version = 1; version <= 64; version++) {
+        const key =
+          '24000000-0000-4000-8000-' + version.toString(16).padStart(12, '0');
+        const edited = (
+          await db.query(editWithKey, [
+            live,
+            bounded.id,
+            revision,
+            `Bounded version ${version}`,
+            key,
+          ])
+        ).rows[0].edited;
+        revision = edited.revision;
+      }
+      await asUser(2);
+      const rows = (await db.query(history, [live, bounded.id])).rows;
+      assert.equal(rows.length, 64);
+      assert.equal(rows[0].event_kind, 'posting');
+      assert.equal(rows[0].body, 'Bounded original');
+      assert.equal(rows.at(-1).version, 63);
+      assert.equal(rows.at(-1).has_more, true);
+      assert.equal(await editCount(bounded.id), 64);
     },
   );
   await asAdmin();

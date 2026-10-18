@@ -2,6 +2,7 @@ import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ApiError, type RouteContext } from '@/lib/supabase/route';
 import type { Database } from '@/types/database';
+import { createServiceRoleClient } from '@/lib/supabase/service';
 import type { Employee } from './types';
 import { activeEmployee } from './access';
 import { accessState } from './directory';
@@ -15,10 +16,7 @@ import {
   type DeactivationOperation,
   type OutstandingReservation,
 } from './deactivation';
-import {
-  createEmployeeAdminClient,
-  supabaseSignInBlocker,
-} from './provider-ban';
+import { supabaseSignInBlocker } from './provider-ban';
 
 // Issue #66: the session-scoped read and the guarded administration call. Membership changes
 // and state transitions run through the two guarded RPCs with the caller's publishable-key
@@ -224,7 +222,7 @@ export async function administerEmployeeDeactivation(
   key: string,
 ): Promise<DeactivationConfirmation> {
   const target = await employeeTarget(context, employeeId);
-  const admin = createEmployeeAdminClient(context.environment);
+  const admin = createServiceRoleClient(context.environment);
   const gateway = databaseGateway(context, admin);
   if (!admin) {
     await gateway.begin(employeeId, key);

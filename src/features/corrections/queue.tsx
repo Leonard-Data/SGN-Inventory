@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import type { Locale } from '@/i18n/messages';
+import { messages, type Locale } from '@/i18n/messages';
 import type { Employee } from '@/features/employees/types';
 import type { PropertyDetail } from '@/features/properties/detail-data';
 import { useProtectedData } from '@/features/employees/use-protected-data';
@@ -17,6 +17,7 @@ import { failureRoute } from '@/features/property-maintenance/refusal-rules';
 import { vietnamTimestamp } from '@/features/properties/format';
 import { CorrectionDraft } from './draft';
 import { Amendments } from './amendments';
+import { changedValues } from './changes';
 import type { Correction, CorrectionPage } from './data';
 function RequestActions({
   request,
@@ -307,7 +308,11 @@ export function CorrectionQueue({
         {busy ? <p role="status">{text.loading}</p> : null}
         {error ? (
           <div className="alert" data-tone="danger" role="alert">
-            <span>{text.unavailable}</span>
+            <span>
+              {error === 'access-changed'
+                ? messages[locale].accessChanged
+                : text.unavailable}
+            </span>
             <button className="btn btn-sm btn-ghost" onClick={reload}>
               {text.refresh}
             </button>
@@ -321,6 +326,11 @@ export function CorrectionQueue({
                   const amendments = data.amendments.filter(
                     (a) => a.request_id === request.id,
                   );
+                  const latestAmendment = amendments[0];
+                  const latestObserved =
+                    latestAmendment?.observed_values ?? request.observed_values;
+                  const latestProposal =
+                    latestAmendment?.proposed_values ?? request.proposed_values;
                   return (
                     <article className="history-event" key={request.id}>
                       <h3>
@@ -356,7 +366,6 @@ export function CorrectionQueue({
                         </time>{' '}
                         ({text.time})
                       </p>
-                      <h4>{text.original}</h4>
                       <p>
                         {text.actor}:{' '}
                         <span translate="no">
@@ -366,28 +375,28 @@ export function CorrectionQueue({
                         </span>
                       </p>
                       <p translate="no">{request.explanation}</p>
-                      <details className="maintenance">
-                        <summary>{text.observed}</summary>
-                        <BusinessValues
-                          values={request.observed_values}
-                          locale={locale}
-                        />
-                      </details>
-                      <details className="maintenance">
-                        <summary>{text.proposal}</summary>
-                        <BusinessValues
-                          values={request.proposed_values}
-                          locale={locale}
-                        />
-                      </details>
-                      <h4>{text.latestProposal}</h4>
-                      <BusinessValues
-                        values={
-                          amendments[0]?.proposed_values ??
-                          request.proposed_values
-                        }
-                        locale={locale}
-                      />
+                      {/* The reviewer judges one change: the fields the proposal names, each
+                          with the value that was observed, and nothing else from the record. */}
+                      <h4>{text.needsUpdate}</h4>
+                      <div className="history-comparison">
+                        <section>
+                          <h4>{text.before}</h4>
+                          <BusinessValues
+                            values={
+                              changedValues(latestObserved, latestProposal)
+                                .observed
+                            }
+                            locale={locale}
+                          />
+                        </section>
+                        <section>
+                          <h4>{text.after}</h4>
+                          <BusinessValues
+                            values={latestProposal}
+                            locale={locale}
+                          />
+                        </section>
+                      </div>
                       {amendments[0] ? (
                         <>
                           <p>

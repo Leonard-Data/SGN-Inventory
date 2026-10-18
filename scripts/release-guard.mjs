@@ -120,6 +120,70 @@ export function verifyPulledConfiguration(values, project, pulled) {
   readEnvironment(pulled, values.SUPABASE_PROJECT_REF);
 }
 
+// A protection-protected project answers its ephemeral *.vercel.app address with
+// an HTML login page, so a stage release smokes the origin that stage actually
+// serves. A preview has no canonical origin of its own and must keep proving the
+// deployment the workflow just created.
+export function stageHealth(values) {
+  const { stage } = releaseConfiguration(values);
+  const origin =
+    values.VERCEL_TARGET === 'preview'
+      ? values.DEPLOYMENT_URL
+      : values.NEXT_PUBLIC_APP_URL;
+  const url = new URL('/api/health', origin);
+  assert.equal(url.protocol, 'https:', 'Deployment URL must use HTTPS');
+  return { stage, url };
+}
+
+const bodyExcerpt = (body) =>
+  body.replace(/\s+/g, ' ').trim().slice(0, 200) || '(empty)';
+
+// A release health failure has to name the URL, status and body that produced it;
+// the configuration assertions above stay masked because they compare key values.
+export class ReleaseSmokeError extends Error {}
+
+export async function checkStageHealth(values, fetchImpl = fetch) {
+  const { stage, url } = stageHealth(values);
+  const headers = values.VERCEL_AUTOMATION_BYPASS_SECRET
+    ? {
+        'x-vercel-protection-bypass': values.VERCEL_AUTOMATION_BYPASS_SECRET,
+      }
+    : {};
+  let response;
+  try {
+    response = await fetchImpl(url, {
+      headers,
+      signal: AbortSignal.timeout(30000),
+    });
+  } catch (error) {
+    throw new ReleaseSmokeError(
+      `Deployment health check could not reach ${url}: ${error?.cause?.code ?? error?.message ?? error}`,
+    );
+  }
+  const body = await response.text();
+  if (response.status !== 200) {
+    throw new ReleaseSmokeError(
+      `Deployment health check ${url} returned ${response.status}; set VERCEL_AUTOMATION_BYPASS_SECRET if that origin is protected. Body: ${bodyExcerpt(body)}`,
+    );
+  }
+  let payload;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    throw new ReleaseSmokeError(
+      `Deployment health check ${url} returned 200 with a non-JSON body; set VERCEL_AUTOMATION_BYPASS_SECRET if that origin is protected. Body: ${bodyExcerpt(body)}`,
+    );
+  }
+  try {
+    assert.deepEqual(payload, { status: 'ok', stage });
+  } catch {
+    throw new ReleaseSmokeError(
+      `Deployment health check ${url} expected {"status":"ok","stage":"${stage}"}. Body: ${bodyExcerpt(body)}`,
+    );
+  }
+  return payload;
+}
+
 // A verify-only run must never pass while the database is behind the commit it
 // is releasing, so the dry run has to prove it is up to date before the release
 // proceeds. The payload is the pinned CLI's `--output-format json` dry-run result.
@@ -170,29 +234,7 @@ if (
         ),
       );
     } else if (command === 'smoke') {
-      const { stage } = releaseConfiguration(process.env);
-      const url = new URL('/api/health', process.env.DEPLOYMENT_URL);
-      assert.equal(url.protocol, 'https:', 'Deployment URL must use HTTPS');
-      const headers = process.env.VERCEL_AUTOMATION_BYPASS_SECRET
-        ? {
-            'x-vercel-protection-bypass':
-              process.env.VERCEL_AUTOMATION_BYPASS_SECRET,
-          }
-        : {};
-      const response = await fetch(url, {
-        headers,
-        signal: AbortSignal.timeout(30000),
-      });
-      assert.equal(
-        response.status,
-        200,
-        'Deployment health must return 200; configure protection bypass if required',
-      );
-      assert.deepEqual(
-        await response.json(),
-        { status: 'ok', stage },
-        'Deployment stage mismatch',
-      );
+      await checkStageHealth(process.env);
     } else if (command === 'pending') {
       releasePendingMigrations(
         JSON.parse(await readFile(process.argv[3], 'utf8')),
@@ -203,11 +245,15 @@ if (
       );
     }
     console.log(`Release ${command} check passed`);
-  } catch {
-    // Assertions may contain compared key values; never print their payloads.
-    console.error(
-      'Release check failed: verify stage activation, branch, stage, project IDs, configuration, pending migrations and deployment health.',
-    );
+  } catch (error) {
+    if (error instanceof ReleaseSmokeError) {
+      console.error(error.message);
+    } else {
+      // Assertions may contain compared key values; never print their payloads.
+      console.error(
+        'Release check failed: verify stage activation, branch, stage, project IDs, configuration, pending migrations and deployment health.',
+      );
+    }
     process.exitCode = 1;
   }
 }

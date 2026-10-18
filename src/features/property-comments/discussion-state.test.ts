@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  changedCommentIds,
+  droppedCommentIds,
   mergePage,
   mergeStaleEditState,
   retainEditTarget,
+  staleHistoryIds,
   withPost,
 } from './discussion-state.ts';
 import { COMMENT_PAGE_SIZE, type Comment } from './types.ts';
@@ -222,6 +225,73 @@ test('editor refresh keeps loaded older-page rows without an exact result', () =
     newest,
     older,
   ]);
+});
+
+test('post slice reports only rows the reconciliation drops', () => {
+  const page = Array.from({ length: COMMENT_PAGE_SIZE }, (_, index) =>
+    comment(
+      `page-${index}`,
+      `Page ${index}`,
+      `2026-10-13T09:${String(index).padStart(2, '0')}:00.000Z`,
+    ),
+  );
+  const created = comment('created', 'New post', '2026-10-13T10:00:00.000Z');
+  const posted = withPost(created, page, true).rows;
+  assert.deepEqual(droppedCommentIds(page, posted), ['page-29']);
+  assert.deepEqual(
+    droppedCommentIds(page, retainEditTarget(posted, page, 'page-29')),
+    [],
+    'A retained edit target is not reported dropped',
+  );
+  assert.deepEqual(
+    droppedCommentIds(
+      page.slice(0, 10),
+      withPost(created, page.slice(0, 10), false).rows,
+    ),
+    [],
+    'A page below the bound drops nothing',
+  );
+});
+
+test('re-appended rows clear cached history entries', () => {
+  const older = comment('older', 'Older', '2026-10-12T09:00:00.000Z');
+  const edited = {
+    ...older,
+    body: 'Edited',
+    revision: 'older-revision-2',
+    editedAt: '2026-10-13T10:00:00.000Z',
+  };
+  const other = comment('other', 'Other', '2026-10-11T09:00:00.000Z');
+  const cachedPage = { events: [], hasMore: false };
+  assert.deepEqual(staleHistoryIds([edited, other], { older: cachedPage }), [
+    'older',
+  ]);
+  assert.deepEqual(
+    staleHistoryIds([other], {}),
+    [],
+    'A row with no cached history entry is not reported',
+  );
+});
+
+test('post reconciliation identifies only changed existing rows', () => {
+  const unchanged = comment(
+    'unchanged',
+    'Unchanged',
+    '2026-10-13T09:00:00.000Z',
+  );
+  const edited = comment('edited', 'Before', '2026-10-12T09:00:00.000Z');
+  const refreshed = {
+    ...edited,
+    body: 'After',
+    editedAt: '2026-10-13T10:00:00.000Z',
+    revision: 'edited-revision-2',
+  };
+  const newComment = comment('new', 'New', '2026-10-13T11:00:00.000Z');
+
+  assert.deepEqual(
+    changedCommentIds([unchanged, edited], [unchanged, refreshed, newComment]),
+    ['edited'],
+  );
 });
 
 test('ordinary page refresh still follows the refreshed page contents', () => {

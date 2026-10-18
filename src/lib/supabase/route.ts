@@ -6,6 +6,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Environment } from '@/lib/environment';
 import type { Database } from '@/types/database';
 import { readEnvironment } from '@/lib/environment';
+import { acceptanceSessionBody } from '@/features/employees/invitation-acceptance';
+import { originAllowed } from './origin';
 
 export class ApiError extends Error {
   constructor(
@@ -118,29 +120,28 @@ export async function runRoute(
     return context ? context.finish(response) : response;
   }
 }
+// `invitationTokens` is opt-in per route and never trusts the request shape in advance: the
+// origin decision for such a route waits until the body has been parsed and classified as the
+// delivered invitation token pair, which is the same credential the route acts on. A `cookie`
+// body, and every route that does not opt in, still needs today's origin evidence.
 export async function objectBody(
   request: NextRequest,
   context: RouteContext,
   maxBytes = 8192,
+  invitationTokens = false,
 ): Promise<Record<string, unknown>> {
-  const origin = request.headers.get('origin');
-  const requestOrigin = request.nextUrl.origin;
-  const referer = request.headers.get('referer');
-  let refererOrigin = '';
-  try {
-    refererOrigin = referer ? new URL(referer).origin : '';
-  } catch {
-    refererOrigin = '';
-  }
-  const sameOriginRequest =
-    origin === context.environment.appUrl ||
-    origin === requestOrigin ||
-    (!origin &&
-      (refererOrigin === context.environment.appUrl ||
-        refererOrigin === requestOrigin ||
-        request.headers.get('sec-fetch-site') === 'same-origin'));
-  if (context.environment.stage === 'prod' && !sameOriginRequest)
-    throw new ApiError(403, 'invalid-origin');
+  const requireOrigin = (tokenProof: boolean) => {
+    if (
+      !originAllowed(
+        request.headers,
+        context.environment,
+        request.nextUrl.origin,
+        tokenProof,
+      )
+    )
+      throw new ApiError(403, 'invalid-origin');
+  };
+  if (!invitationTokens) requireOrigin(false);
   if (!request.headers.get('content-type')?.startsWith('application/json'))
     throw new ApiError(400, 'invalid-input');
   const reader = request.body?.getReader();
@@ -169,6 +170,10 @@ export async function objectBody(
   }
   if (!body || typeof body !== 'object' || Array.isArray(body))
     throw new ApiError(400, 'invalid-input');
+  if (invitationTokens)
+    requireOrigin(
+      acceptanceSessionBody(body as Record<string, unknown>)?.kind === 'tokens',
+    );
   return body as Record<string, unknown>;
 }
 export { isUuid as uuid } from './query';

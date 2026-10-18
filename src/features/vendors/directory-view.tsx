@@ -148,7 +148,9 @@ export function VendorDirectory({
               ? text.invalidInput
               : error === 'sign-out-failed'
                 ? text.signOutFailed
-                : text.vendorDirectoryFailed}
+                : error === 'access-changed'
+                  ? text.accessChanged
+                  : text.vendorDirectoryFailed}
           </span>
           <button
             type="button"

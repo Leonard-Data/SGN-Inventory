@@ -6,7 +6,7 @@ export async function propertyDetail(context: RouteContext, id: string) {
   const { data: property, error } = await context.client
     .from('properties')
     .select(
-      'id,revision,property_code,listing_mode,property_type,access_type,status,record_review_status,legal_status,sale_price_vnd::text,monthly_rent_vnd::text,land_area_m2::text,frontage_m::text,depth_m::text,floor_area_m2::text,floors,bedrooms,bathrooms,direction,ownership_type,parcel_number,map_sheet_number,construction_text,area_raw,notes,updated_at,archived_at,cover_file_id,created_by',
+      'id,revision,property_code,listing_mode,property_type,access_type,status,record_review_status,legal_status,sale_price_vnd::text,monthly_rent_vnd::text,land_area_m2::text,frontage_m::text,depth_m::text,floor_area_m2::text,floors,bedrooms,bathrooms,direction,ownership_type,parcel_number,map_sheet_number,construction_text,area_raw,notes,latitude::text,longitude::text,updated_at,archived_at,cover_file_id,created_by',
     )
     .eq('id', id)
     .maybeSingle();

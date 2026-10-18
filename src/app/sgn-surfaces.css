@@ -90,3 +90,57 @@
 .comment-moderation .composer-foot {
   justify-content: flex-start;
 }
+
+/* An action dialog is one surface, not a panel inside a dialog. The embedded section
+   keeps its own layout but drops its frame, its own heading and its own inset, so the
+   dialog shows one title in the header and one border around the whole surface. */
+.sgn-dialog-body > .panel {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.sgn-dialog-body > .panel > .panel-head {
+  display: none;
+}
+.sgn-dialog-body > .panel > .panel-body {
+  padding: 0;
+}
+/* The dialog already spaces its own body; section dividers do not need the page's
+   between-panel rhythm on top of it. */
+.sgn-dialog-body .form-section + .form-section {
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+}
+
+/* The discussion rows are the package's own list and have no card inset of their own.
+   Inside the panel body they now sit on the same inset every other card surface uses. */
+.discussion > .panel-body > ol {
+  margin-block: 0;
+}
+
+/* The People directory renders the package's tab vocabulary as a filter navigation. An
+   anchor is inline by default, so the tab box is restored, and the current view is marked
+   with aria-current instead of the tablist's aria-selected. */
+.tabs a.tab {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+.tabs a.tab[aria-current='page'] {
+  color: var(--fg);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+/* The province owner-contact table (#35) colour-codes each count cell by its band inside the
+   selected period: one accent at three strengths over the surface, so the screen adds no colour
+   to the token layer. The exact count and the localized level label stay as text in the same
+   cell, so colour never carries the meaning alone and no separate legend is needed. */
+.activity-cell[data-level='low'] {
+  background: color-mix(in oklab, var(--accent) 7%, var(--surface));
+}
+.activity-cell[data-level='medium'] {
+  background: color-mix(in oklab, var(--accent) 14%, var(--surface));
+}
+.activity-cell[data-level='high'] {
+  background: color-mix(in oklab, var(--accent) 18%, var(--surface));
+}

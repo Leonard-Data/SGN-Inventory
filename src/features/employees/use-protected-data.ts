@@ -1,11 +1,13 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Employee } from './types';
+import type { Employee, EmployeeSession } from './types';
 import { api, RequestError } from './api';
 import {
+  AccessChangedError,
   loadProtected,
   refocusAction,
   renderedSession,
+  sessionDiffers,
 } from './protected-load';
 
 export function useProtectedData<T>(
@@ -19,6 +21,7 @@ export function useProtectedData<T>(
   const controller = useRef<AbortController | null>(null);
   const surfaceElement = useRef<HTMLDivElement | null>(null);
   const renderedFor = useRef<string | null>(null);
+  const renderedAccessRevision = useRef<number | null>(null);
   // True while a read will publish or clear the surface: that read decides what
   // the surface shows, so a window focus during it has nothing to do.
   const reading = useRef(false);
@@ -37,6 +40,7 @@ export function useProtectedData<T>(
   const clear = useCallback(() => {
     conceal();
     renderedFor.current = null;
+    renderedAccessRevision.current = null;
     setData(null);
     setEmployee(null);
   }, [conceal]);
@@ -49,27 +53,34 @@ export function useProtectedData<T>(
     const abort = new AbortController();
     controller.current = abort;
     try {
-      const { employee: sessionEmployee, data: result } =
-        await loadProtected<T>({
-          source,
-          signal: abort.signal,
-          renderedFor: renderedFor.current,
-          onIdentityChange: () => {
-            if (surfaceElement.current) surfaceElement.current.hidden = true;
-            renderedFor.current = null;
-            setData(null);
-            setEmployee(null);
-          },
-        });
+      const {
+        employee: sessionEmployee,
+        data: result,
+        accessRevision: sessionAccessRevision,
+      } = await loadProtected<T>({
+        source,
+        signal: abort.signal,
+        renderedFor: renderedFor.current,
+        renderedAccessRevision: renderedAccessRevision.current,
+        onIdentityChange: () => {
+          if (surfaceElement.current) surfaceElement.current.hidden = true;
+          renderedFor.current = null;
+          renderedAccessRevision.current = null;
+          setData(null);
+          setEmployee(null);
+        },
+      });
       if (version !== generation.current) return;
       setEmployee(sessionEmployee);
       setData(result);
       renderedFor.current = renderedSession(sessionEmployee);
+      renderedAccessRevision.current = sessionAccessRevision;
       setError(null);
       if (surfaceElement.current) surfaceElement.current.hidden = false;
     } catch (failure) {
       if (version !== generation.current || abort.signal.aborted) return;
       renderedFor.current = null;
+      renderedAccessRevision.current = null;
       setData(null);
       setEmployee(null);
       if (
@@ -81,7 +92,13 @@ export function useProtectedData<T>(
         );
         return;
       }
-      setError(failure instanceof RequestError ? failure.code : 'unavailable');
+      setError(
+        failure instanceof AccessChangedError
+          ? 'access-changed'
+          : failure instanceof RequestError
+            ? failure.code
+            : 'unavailable',
+      );
     } finally {
       if (version === generation.current) {
         reading.current = false;
@@ -100,8 +117,14 @@ export function useProtectedData<T>(
     // Nothing has been published for this surface yet, so the read in flight owns it.
     if (!renderedFor.current) return;
     try {
-      const session = await api<{ employee: Employee }>('/api/session');
-      if (renderedSession(session.employee) !== renderedFor.current) {
+      const session = await api<EmployeeSession>('/api/session');
+      if (
+        sessionDiffers(
+          renderedFor.current,
+          renderedAccessRevision.current,
+          session,
+        )
+      ) {
         conceal();
         void reload();
       }

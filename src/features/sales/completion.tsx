@@ -37,7 +37,6 @@ export function SaleCompletion({
   onSaved: () => void;
 }) {
   const text = messages[locale],
-    headingId = useId(),
     closerId = useId(),
     dateId = useId(),
     referenceId = useId(),
@@ -169,9 +168,8 @@ export function SaleCompletion({
     <section
       className="panel sale-completion"
       data-loaded={state ? 'yes' : 'no'}
-      aria-labelledby={headingId}
+      aria-label={text.completedSaleTitle}
     >
-      <h2 id={headingId}>{text.completedSaleTitle}</h2>
       {loading && !state ? <p role="status">{text.loading}</p> : null}
       {loadFailed ? (
         <p role="alert">

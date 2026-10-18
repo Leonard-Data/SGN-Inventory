@@ -6,7 +6,8 @@
    vocabulary: compose it, do not restate it). This sheet holds only what that
    package does not draw — the maintenance disclosures and inline editors, the
    owner-contact disclosure, the history comparison rows, the reservation state
-   blocks, and the correction proposal and contact choice lists. Every value
+   blocks, the correction proposal and contact choice lists, and the recorded
+   administration blocks for employee deactivation and invitation. Every value
    comes from `app.css`; nothing here introduces a colour, radius or spacing the
    token layer does not define.
    Blocks the package also defines were deleted rather than restated.
@@ -124,6 +125,15 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-5);
 }
+/* The history panel sits in the 344px detail rail. Stacking its before/after halves, and each
+   label above its value, gives a recorded value the panel's full width, so it clips after its
+   own text instead of after a quarter of the rail. */
+.detail-rail .history-comparison {
+  grid-template-columns: minmax(0, 1fr);
+}
+.detail-rail .history-comparison dl {
+  grid-template-columns: minmax(0, 1fr);
+}
 .history-comparison dl {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -136,7 +146,11 @@
 }
 .history-comparison dd {
   margin: 0;
-  overflow-wrap: anywhere;
+  min-width: 0;
+  /* One clipped line per recorded value; the full text stays in the DOM and on the title. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-weight: 600;
 }
 .history-field {
@@ -173,6 +187,13 @@
   .history-comparison dd {
     margin-bottom: var(--space-2);
   }
+}
+
+/* The recorded invitation block sits under the form that recorded it (issue #68). */
+.invitation-record {
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px dashed var(--border);
 }
 
 /* ── employee deactivation (issue #66) ───────────────────────────────────── */

@@ -1,10 +1,11 @@
 'use client';
 import { useState } from 'react';
-import type { Locale } from '@/i18n/messages';
+import { messages, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { BusinessValues } from '@/features/property-maintenance/history';
 import { maintenanceText } from '@/features/property-maintenance/messages';
 import { vietnamTimestamp } from '@/features/properties/format';
+import { changedValues } from './changes';
 import type { AmendmentPage } from './data';
 function AmendmentList({
   requestId,
@@ -26,7 +27,9 @@ function AmendmentList({
       {busy ? <p role="status">{text.loading}</p> : null}
       {error ? (
         <p role="alert">
-          {text.unavailable}{' '}
+          {error === 'access-changed'
+            ? messages[locale].accessChanged
+            : text.unavailable}{' '}
           <button className="btn btn-sm btn-ghost" onClick={reload}>
             {text.refresh}
           </button>
@@ -50,7 +53,12 @@ function AmendmentList({
                 </p>
                 <p translate="no">{a.explanation}</p>
                 <h4>{text.observed}</h4>
-                <BusinessValues values={a.observed_values} locale={locale} />
+                <BusinessValues
+                  values={
+                    changedValues(a.observed_values, a.proposed_values).observed
+                  }
+                  locale={locale}
+                />
                 <h4>{text.proposal}</h4>
                 <BusinessValues values={a.proposed_values} locale={locale} />
               </section>

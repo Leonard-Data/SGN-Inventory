@@ -16,24 +16,42 @@ import { myActivityContract } from './my-activity-contract.mjs';
 import { rankingContract } from './ranking-contract.mjs';
 import { priceHistoryContract } from './price-history-contract.mjs';
 import { inventoryAgeContract } from './inventory-age-contract.mjs';
+import { inventoryFilterContract } from './inventory-filter-contract.mjs';
 import { vendorContract } from './vendor-contract.mjs';
+import { contactDirectoryContract } from './contact-directory-contract.mjs';
+import { propertyVendorLinkContract } from './property-vendor-links-contract.mjs';
 import { referenceCatalogContract } from './reference-catalog-contract.mjs';
 import { saleCompletionContract } from './sale-completion-contract.mjs';
 import { employeeDeactivationContract } from './employee-deactivation-contract.mjs';
 import { employeeAccountDeletionContract } from './employee-account-deletion-contract.mjs';
+import { auditRetentionContract } from './audit-retention-contract.mjs';
 import { employeeDeactivationConcurrency } from './employee-deactivation-concurrency.mjs';
+import { propertyVendorLinksConcurrency } from './property-vendor-links-concurrency.mjs';
+import { contactLinksConcurrency } from './contact-links-concurrency.mjs';
+import { employeeInvitationContract } from './employee-invitation-contract.mjs';
+import { employeeInvitationConcurrency } from './employee-invitation-concurrency.mjs';
+import { employeeInvitationAcceptanceContract } from './employee-invitation-acceptance-contract.mjs';
 import { applyEmbeddedSchema } from './embedded-schema.mjs';
+import { provinceActivityContract } from './province-activity-contract.mjs';
 const root = process.env.SGN_PROJECT_ROOT || process.cwd();
 const db = new PGlite({extensions:{unaccent,pg_trgm,pgcrypto}});
 await applyEmbeddedSchema({root,exec:(sql)=>db.exec(sql)});
 // Supabase defaults may grant privileges on future objects. Test our explicit revokes.
 const users = ['00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000003','00000000-0000-4000-8000-000000000004','00000000-0000-4000-8000-000000000005','00000000-0000-4000-8000-000000000006'];
 const employees = ['10000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000002','10000000-0000-4000-8000-000000000003','10000000-0000-4000-8000-000000000004','10000000-0000-4000-8000-000000000005','10000000-0000-4000-8000-000000000006'];
+const unlinkedUser = '00000000-0000-4000-8000-000000000007';
+const unlinkedEmployee = '10000000-0000-4000-8000-000000000007';
 for(let i=0;i<users.length;i++) {
   await db.query('insert into auth.users values ($1)',[users[i]]);
   await db.query('insert into public.employees(id,auth_user_id,email,display_name,role,is_active) values ($1,$2,$3,$4,$5,$6)',
     [employees[i],users[i],`fixture${i}@example.test`,`Fixture ${i}`,['sales','sales','manager','admin','sales','staff'][i],i!==4]);
 }
+await db.query('insert into auth.users values ($1)', [unlinkedUser]);
+// employees_check requires an unlinked employee row (auth_user_id null) to be inactive.
+await db.query(
+  "insert into public.employees(id,auth_user_id,email,display_name,role,is_active) values ($1,null,'unlinked@example.test','Unlinked fixture','sales',false)",
+  [unlinkedEmployee],
+);
 const property = '20000000-0000-4000-8000-000000000001';
 const other = '20000000-0000-4000-8000-000000000002';
 await db.query("insert into public.properties(id,property_code,listing_mode,status,created_by) values ($1,'SGN-001','sale','available',$2),($3,'SGN-002','sale','available',$4)",[property,employees[0],other,employees[1]]);
@@ -43,7 +61,8 @@ await db.query("insert into public.admin_unit_versions(id,official_code,name_vi,
 await db.query("insert into public.admin_unit_versions(id,official_code,name_vi,unit_level,parent_id,valid_from,source_url) values($1,'TEST-C','Fixture Commune','commune',$2,'2025-07-01','https://example.test/catalog')",[commune,provinceA]);
 let passed = 0;
 async function check(name,fn){ await fn(); passed++; console.log('PASS',name); }
-async function asUser(index){await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[index===null?'':users[index]]);await db.exec(`set role ${index===null?'anon':'authenticated'}`);}
+async function asUser(index){await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[index==='unlinked'?unlinkedUser:index===null?'':users[index]]);await db.exec(`set role ${index===null?'anon':'authenticated'}`);}
+async function asService(){await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");await db.exec('set role service_role');}
 async function fails(sql,params=[],code){let error;try{await db.query(sql,params);}catch(e){error=e;}assert.ok(error,'expected query to be rejected');if(code)assert.equal(error.code,code);}
 await check('all app tables have RLS',async()=>{
  const r=await db.query("select relname from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('public','private') and c.relkind='r' and not c.relrowsecurity");assert.equal(r.rows.length,0);
@@ -64,7 +83,22 @@ await check('salesperson cannot mark property sold',()=>fails("update public.pro
 await check('salesperson cannot grant admin role',async()=>assert.equal((await db.query("update public.employees set role='admin' where id=$1 returning id",[employees[0]])).rows.length,0));
 // The admin employee list is an application-level surface; the employee rows stay readable to
 // every active employee because reservation, comment and history attribution read them.
-await check('active employee keeps the directory read used for business attribution',async()=>assert.equal((await db.query('select id from public.employees')).rows.length,employees.length));
+await check('active employee keeps the directory read used for business attribution',async()=>assert.equal((await db.query('select id from public.employees')).rows.length,employees.length + 1));
+// An access revision advances only when a recorded access fact changes, and it is assigned on
+// every update so no client can choose it; a protected read compares it with the session it
+// authorized on. Fixture 5 is restored to staff, active and its original locale at the end.
+const accessRevision=async(sql,params)=>(await db.query(sql,params)).rows[0].access_revision;
+await db.exec('reset role');
+await check('an ordinary employee edit keeps the access revision',async()=>assert.equal(await accessRevision("update public.employees set preferred_locale='en' where id=$1 returning access_revision",[employees[5]]),0));
+await check('a role change advances the access revision once',async()=>assert.equal(await accessRevision("update public.employees set role='manager' where id=$1 returning access_revision",[employees[5]]),1));
+await check('deactivation and reactivation each advance the access revision',async()=>{
+  assert.equal(await accessRevision('update public.employees set is_active=false where id=$1 returning access_revision',[employees[5]]),2);
+  assert.equal(await accessRevision("update public.employees set role='staff',is_active=true where id=$1 returning access_revision",[employees[5]]),3);
+});
+await db.query("update public.employees set preferred_locale='vi' where id=$1",[employees[5]]);
+await asUser(3);
+await check('an admin cannot choose the access revision',async()=>assert.equal(await accessRevision('update public.employees set access_revision=99 where id=$1 returning access_revision',[employees[5]]),3));
+await asUser(0);
 await check('salesperson cannot read import or audit tables',()=>fails('select * from private.audit_events',[],'42501'));
 const lock=(await db.query('select public.request_property_lock($1,$2) as id',[property,'Customer reached agreement; manager review needed'])).rows[0].id;
 await check('pending request does not reserve property',async()=>assert.equal((await db.query('select * from public.v_effective_property_locks')).rows.length,0));
@@ -98,6 +132,9 @@ await check('wrong current province/commune hierarchy rejected',()=>fails(mainta
 await check('verified address outside unit validity rejected',()=>fails(maintainSql,[other,'mapping',verifiedId,verifiedRev,{...verifiedChanges,effective_on:'2024-10-10'}],'23514'));
 await db.query(maintainSql,[other,'mapping',verifiedId,verifiedRev,verifiedChanges]);
 await check('analytics uses canonical verified unit name',async()=>assert.ok((await db.query('select * from public.v_admin_inventory_by_area')).rows.some(r=>r.current_commune_label==='Fixture Commune')));
+// The form keeps the official selection alone, so search must reach that address through the
+// official unit name even though no written source label was recorded for it.
+await check('address search reaches an official unit name with no source label',async()=>assert.equal((await db.query("select * from public.search_properties('Fixture Commune')")).rows.length,1));
 await asUser(0);
 await check('salesperson admin analytics return no rows',async()=>assert.equal((await db.query('select * from public.v_admin_inventory_by_area')).rows.length,0));
 await asUser(1);
@@ -145,8 +182,9 @@ await check('unsafe names, empty and oversized expectations rejected atomically'
   assert.deepEqual((await db.query('select id from public.property_files')).rows,[{id:fileId}]);
 });
 await check('PDF cannot be registered with photo purpose',()=>fails(registerSql,['40000000-0000-4000-8000-000000000002',property,'scan.pdf','application/pdf',1024,testSha256,'photo',otherCatId],'23514'));
-await check('completion requires actual authoritative object identity and unforgeable attestation',async()=>{
-  await fails(completionSql,completion,'23514');
+await check('completion requires the server attestation over the stored object identity',async()=>{
+  // R2 is not visible to the database, so the attestation is the evidence of the inspected
+  // object; the property_files row keeps deciding who may read it.
   await fails(completionSql,[...completion.slice(0,5),'0'.repeat(64)],'42501');
   assert.equal((await db.query('select upload_status from public.property_files where id=$1',[fileId])).rows[0].upload_status,'pending');
 });
@@ -492,6 +530,140 @@ await asUser(0);await db.exec('reset role');await db.query('update public.employ
 await check('existing identity loses cover mutation authority after live deactivation',()=>fails('select public.set_property_cover($1,$2)',[coverProperty,firstCover.id],'42501'));
 await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");await db.query('update public.employees set is_active=true where id=$1',[employees[0]]);
 assert.deepEqual((await db.query(`select ${coverSourceColumns} from public.property_files where property_id=$1 order by id`,[coverProperty])).rows,coverBefore);
+// Property file storage moved to Cloudflare R2 with per-property class limits.
+const limitProperty='20000000-0000-4000-8000-00000000000a';
+await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
+await db.query("insert into public.properties(id,property_code,listing_mode,status,created_by) values($1,'SGN-LIMITS','sale','available',$2)",[limitProperty,employees[0]]);
+await asUser(0);
+const limitDocument=(index)=>`43000000-0000-4000-8000-00000000000${index}`;
+const limitImage=(index)=>`43000000-0000-4000-8000-0000000001${String(index).padStart(2,'0')}`;
+async function registerLimited(id,mime,size,purpose='document'){
+  const row=(await db.query(registerSql,[id,limitProperty,`limit-${id.slice(-2)}.${mime==='application/pdf'?'pdf':'png'}`,mime,size,testSha256,purpose,otherCatId])).rows[0];
+  return row.result.objectPath;
+}
+async function completeLimited(id,path,mime,size){
+  const objectId=id.replace('43000000','83000000');
+  const signedPayload=['v1',id,limitProperty,employees[0],path,objectId,mime,String(size),testSha256].join('|');
+  const signed=createHmac('sha256',Buffer.from(validationKey,'hex')).update(signedPayload).digest('hex');
+  return db.query(completionSql,[id,objectId,mime,size,testSha256,signed]);
+}
+await check('document class keeps 5 files of up to 20 MiB and refuses the sixth',async()=>{
+  await fails(registerSql,[limitDocument(6),limitProperty,'limit-06.pdf','application/pdf',20971521,testSha256,'document',otherCatId],'23514');
+  const firstPath=await registerLimited(limitDocument(1),'application/pdf',20971520);
+  for(let n=2;n<=5;n++) await registerLimited(limitDocument(n),'application/pdf',1024);
+  await fails(registerSql,[limitDocument(6),limitProperty,'limit-06.pdf','application/pdf',1024,testSha256,'document',otherCatId],'P0020');
+  assert.equal((await db.query("select count(*)::int as n from public.property_files where property_id=$1 and mime_type='application/pdf'",[limitProperty])).rows[0].n,5);
+  await completeLimited(limitDocument(1),firstPath,'application/pdf',20971520);
+});
+await check('image class keeps 10 images of up to 5 MiB and refuses an eleventh',async()=>{
+  await fails(registerSql,[limitImage(11),limitProperty,'limit-11.png','image/png',5242881,testSha256,'photo',otherCatId],'P0022');
+  const paths=[];
+  for(let n=1;n<=10;n++) paths.push(await registerLimited(limitImage(n),'image/png',5242880,n===1?'photo':'document'));
+  await fails(registerSql,[limitImage(11),limitProperty,'limit-11.png','image/png',1024,testSha256,'photo',otherCatId],'P0021');
+  assert.equal((await db.query("select count(*)::int as n from public.property_files where property_id=$1 and mime_type='image/png'",[limitProperty])).rows[0].n,10);
+  await completeLimited(limitImage(1),paths[0],'image/png',5242880);
+});
+await check('the property cover is one of the 10 images and earns no extra slot',async()=>{
+  await db.query('select public.set_property_cover($1,$2)',[limitProperty,limitImage(1)]);
+  assert.equal((await db.query('select cover_file_id from public.properties where id=$1',[limitProperty])).rows[0].cover_file_id,limitImage(1));
+  await fails(registerSql,[limitImage(11),limitProperty,'limit-11.png','image/png',1024,testSha256,'photo',otherCatId],'P0021');
+});
+await check('completion defensively refuses a pending file that would exceed its class limit',async()=>{
+  const racedId='43000000-0000-4000-8000-000000000120';
+  await db.exec('reset role');
+  await db.query("insert into public.property_files(id,property_id,document_type,object_path,original_filename,mime_type,size_bytes,sha256,purpose,uploaded_by) values($1,$2,'other',$3,'raced.png','image/png',1024,$4,'document',$5)",[racedId,limitProperty,`${limitProperty}/${racedId}/content`,testSha256,employees[0]]);
+  await asUser(0);
+  await fails(completionSql,[racedId,racedId.replace('43000000','83000000'),'image/png',1024,testSha256,createHmac('sha256',Buffer.from(validationKey,'hex')).update(['v1',racedId,limitProperty,employees[0],`${limitProperty}/${racedId}/content`,racedId.replace('43000000','83000000'),'image/png','1024',testSha256].join('|')).digest('hex')],'P0021');
+  assert.equal((await db.query('select upload_status from public.property_files where id=$1',[racedId])).rows[0].upload_status,'pending');
+});
+await check('an unvalidated ready image is still confirmed on a property over its class cap',async()=>{
+  const legacyProperty='20000000-0000-4000-8000-000000000012';
+  const legacyFile='46000000-0000-4000-8000-000000000001';
+  const objectId='86000000-0000-4000-8000-000000000001';
+  await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
+  await db.query("insert into public.properties(id,property_code,listing_mode,status,created_by) values($1,'SGN-LEGACY','sale','available',$2)",[legacyProperty,employees[0]]);
+  // Eleven ready images from before the class caps existed: the rows are the authority, so they
+  // all keep their slot and the one without technical confirmation must still be confirmable.
+  await db.query("insert into public.property_files(id,property_id,document_type,object_path,original_filename,mime_type,size_bytes,sha256,purpose,uploaded_by,upload_status,validated_at,validated_object_id) select s.fid,$1::uuid,'other',$2::text||'/'||s.fid::text||'/content','legacy-'||s.n||'.png','image/png',1024,$3,'document',$4,'ready',case when s.n=1 then null else now() end,case when s.n=1 then null else s.fid end from (select ('46000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid as fid,n from generate_series(1,11) n) s",[legacyProperty,legacyProperty,testSha256,employees[0]]);
+  await asUser(0);
+  const signature=createHmac('sha256',Buffer.from(validationKey,'hex')).update(['v1',legacyFile,legacyProperty,employees[0],`${legacyProperty}/${legacyFile}/content`,objectId,'image/png','1024',testSha256].join('|')).digest('hex');
+  await db.query(completionSql,[legacyFile,objectId,'image/png',1024,testSha256,signature]);
+  const confirmed=(await db.query('select upload_status,validated_at,validated_object_id from public.property_files where id=$1',[legacyFile])).rows[0];
+  assert.equal(confirmed.upload_status,'ready');
+  assert.equal(confirmed.validated_object_id,objectId);
+  assert.notEqual(confirmed.validated_at,null);
+  assert.equal((await db.query("select count(*)::int as n from public.property_files where property_id=$1 and upload_status='ready'",[legacyProperty])).rows[0].n,11);
+});
+await check('an abandoned or refused upload stops reserving its class slot',async()=>{
+  const slotProperty='20000000-0000-4000-8000-00000000000f';
+  await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
+  await db.query("insert into public.properties(id,property_code,listing_mode,status,created_by) values($1,'SGN-SLOTS','sale','available',$2)",[slotProperty,employees[0]]);
+  // Four registrations abandoned long ago: their signed upload URL lived 60 seconds, so they
+  // can no longer receive bytes and must not keep holding slots.
+  await db.query("insert into public.property_files(id,property_id,document_type,object_path,original_filename,mime_type,size_bytes,sha256,purpose,uploaded_by,created_at) select s.fid,$1::uuid,'other',$2::text||'/'||s.fid::text||'/content','stale-'||s.n||'.pdf','application/pdf',1024,$3,'document',$4,now()-interval '20 minutes' from (select ('44000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid as fid,n from generate_series(1,4) n) s",[slotProperty,slotProperty,testSha256,employees[0]]);
+  await asUser(0);
+  const slotDocument=(n)=>`44000000-0000-4000-8000-00000000001${n}`;
+  for(let n=1;n<=5;n++) await db.query(registerSql,[slotDocument(n),slotProperty,`slot-${n}.pdf`,'application/pdf',1024,testSha256,'document',otherCatId]);
+  await fails(registerSql,[slotDocument(6),slotProperty,'slot-6.pdf','application/pdf',1024,testSha256,'document',otherCatId],'P0020');
+  // The release reports whether it moved the pending row, so a rival completion that already
+  // made the file ready can never be followed by deleting that file's bytes.
+  assert.equal((await db.query('select public.fail_property_upload($1) as released',[slotDocument(5)])).rows[0].released,true);
+  assert.equal((await db.query('select public.fail_property_upload($1) as released',[slotDocument(5)])).rows[0].released,false);
+  assert.equal((await db.query('select upload_status from public.property_files where id=$1',[slotDocument(5)])).rows[0].upload_status,'cleanup_pending');
+  // The slot is free while the bytes may still exist, and a released row takes no new upload.
+  await fails(registerSql,[slotDocument(5),slotProperty,'slot-5.pdf','application/pdf',1024,testSha256,'document',otherCatId],'23514');
+  await db.query(registerSql,[slotDocument(6),slotProperty,'slot-6.pdf','application/pdf',1024,testSha256,'document',otherCatId]);
+  // No client session may assert that bytes are gone; the trusted server records it.
+  await fails('select public.mark_upload_cleaned($1)',[slotDocument(5)],'42501');
+  await asService();
+  await db.query('select public.mark_upload_cleaned($1)',[slotDocument(5)]);
+  assert.equal((await db.query('select upload_status from public.property_files where id=$1',[slotDocument(5)])).rows[0].upload_status,'failed');
+  await asUser(0);
+  // Only the two-step path reaches failed: a settled row is neither re-uploadable nor re-run.
+  await fails(registerSql,[slotDocument(5),slotProperty,'slot-5.pdf','application/pdf',1024,testSha256,'document',otherCatId],'23514');
+});
+await check('failing an upload never touches a ready row or another employee row',async()=>{
+  await asUser(0);
+  assert.equal((await db.query('select public.fail_property_upload($1) as released',[limitDocument(1)])).rows[0].released,false);
+  assert.equal((await db.query('select upload_status from public.property_files where id=$1',[limitDocument(1)])).rows[0].upload_status,'ready');
+  const colleagueRow='44000000-0000-4000-8000-000000000201';
+  await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
+  await db.query("insert into public.property_files(id,property_id,document_type,object_path,original_filename,mime_type,size_bytes,sha256,purpose,uploaded_by) values($1,'20000000-0000-4000-8000-00000000000f','other',$2,'colleague.pdf','application/pdf',1024,$3,'document',$4)",[colleagueRow,`20000000-0000-4000-8000-00000000000f/${colleagueRow}/content`,testSha256,employees[0]]);
+  await asUser(1);
+  assert.equal((await db.query('select public.fail_property_upload($1) as released',[colleagueRow])).rows[0].released,false);
+  await asUser(null);
+  await fails('select public.fail_property_upload($1)',[colleagueRow],'42501');
+  await fails('select public.mark_upload_cleaned($1)',[colleagueRow],'42501');
+  // Even the trusted server cannot jump a pending upload straight to failed.
+  await asService();
+  await db.query('select public.mark_upload_cleaned($1)',[colleagueRow]);
+  assert.equal((await db.query('select upload_status from public.property_files where id=$1',[colleagueRow])).rows[0].upload_status,'pending');
+  await asUser(0);
+});
+await check('a released upload on an archived property stays reachable for the server sweep',async()=>{
+  const sweepProperty='20000000-0000-4000-8000-000000000011';
+  const sweepFile='45000000-0000-4000-8000-000000000001';
+  await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
+  await db.query("insert into public.properties(id,property_code,listing_mode,status,created_by) values($1,'SGN-SWEEP','sale','available',$2)",[sweepProperty,employees[0]]);
+  await asUser(1);
+  await db.query(registerSql,[sweepFile,sweepProperty,'sweep.pdf','application/pdf',1024,testSha256,'document',otherCatId]);
+  assert.equal((await db.query('select public.fail_property_upload($1) as released',[sweepFile])).rows[0].released,true);
+  await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
+  await db.query('update public.properties set archived_at=now() where id=$1',[sweepProperty]);
+  // No employee session reaches the row once its property is archived, and no session may
+  // record the deletion either.
+  await asUser(0);
+  assert.equal((await db.query('select id from public.property_files where id=$1',[sweepFile])).rows.length,0);
+  await asUser(1);
+  assert.equal((await db.query('select id from public.property_files where id=$1',[sweepFile])).rows.length,0);
+  await fails('select public.mark_upload_cleaned($1)',[sweepFile],'42501');
+  // The trusted server sweep still finds it, whoever uploaded it and wherever it lives.
+  await asService();
+  assert.equal((await db.query("select count(*)::int as n from public.property_files where upload_status='cleanup_pending' and id=$1",[sweepFile])).rows[0].n,1);
+  await db.query('select public.mark_upload_cleaned($1)',[sweepFile]);
+  assert.equal((await db.query('select upload_status from public.property_files where id=$1',[sweepFile])).rows[0].upload_status,'failed');
+  await asUser(0);
+});
 const maintainedProperty=await maintenanceContract({db,asUser,check,fails,employees,property,other});
 await correctionContract({db,asUser,check,fails,employees,property:maintainedProperty});
 // Ticket #36: recorded Asking-price history over the allowlisted business-history seam.
@@ -584,8 +756,12 @@ await myActivityContract({db,asUser,check,fails,employees});
 await rankingContract({db,asUser,check,fails,employees});
 // Issue #37: explicit original inventory entry dates and eligible chronological ordering.
 await inventoryAgeContract({db,asUser,check,fails,employees});
+// Advance Filter and Search Island: the advanced status/mode/type/price/area inventory filters.
+await inventoryFilterContract({db,asUser,check,fails,employees});
 // Seeded Vietnamese province/city and ward/commune reference catalogue.
 await referenceCatalogContract({db,asUser,check,fails,employees,root});
+// Ticket #35: reviewer-only province activity grouped by latest verified primary province.
+await provinceActivityContract({db,asUser,check,fails,employees});
 // Issue #38: one reviewed logical sale completion and the completed-sale ranking.
 await saleCompletionContract({db,asUser,check,fails,employees});
 // Issue #66: guarded employee administration, last-active-admin protection and provider
@@ -595,9 +771,24 @@ await employeeDeactivationContract({db,asUser,check,fails,employees});
 // reference and the historical Auth attribution preserved.
 await employeeAccountDeletionContract({db,asUser,check,fails});
 await employeeDeactivationConcurrency({root,check});
+await propertyVendorLinksConcurrency({root,check});
+await contactLinksConcurrency({root,check});
+// Issue #68: the recorded role-bound employee invitation and its per-address guard.
+await employeeInvitationContract({db,asUser,check,fails});
+await employeeInvitationConcurrency({root,check});
+// Issue #69: accepting the recorded invitation, linking and activating the exact invitee.
+await employeeInvitationAcceptanceContract({db,asUser,check,fails});
 // Ticket #73: the vendor directory authority, validation, retry and paging rules.
 await vendorContract({db,asUser,check,fails,employees});
-const report={checked_at:new Date().toISOString(),engine:'PGlite embedded PostgreSQL plus an embedded real PostgreSQL engine for the two-connection last-admin race; mocked auth/storage schemas',passed,
- limitations:['Not a live Supabase integration test','HTTP Auth, signed URLs, Vercel and browser flows not exercised','Sustained multi-session contention at production load remains a staging acceptance gate']};
+// Ticket #74: property-to-vendor links, their correction and the recorded link row as the trail;
+// property history stays price-only, with no link or unlink projection.
+await propertyVendorLinkContract({db,asUser,check,fails,employees,property,other});
+// Audit-trail retention: the window boundary, repeat safety, own-table binding and the
+// application/API denial around the administrative trim.
+await auditRetentionContract({db,asUser,check,fails,employees});
+// Ticket #71: the shared Contact directory read and its contact-scoped correction.
+await contactDirectoryContract({db,asUser,check,fails,employees});
+const report={checked_at:new Date().toISOString(),engine:'PGlite embedded PostgreSQL plus an embedded real PostgreSQL engine for the two-connection last-admin, property-vendor-link and contact-link races; mocked auth/storage schemas',passed,
+ limitations:['Not a live Supabase integration test','HTTP Auth, presigned R2 URLs, Vercel and browser flows not exercised','Hosted/staging independent-session contention at production load remains an acceptance gate']};
 await fs.writeFile(path.join(root,'docs/validation-results.json'),JSON.stringify(report,null,2)+'\n');
 console.log(`${passed} assertions passed`);await db.close();

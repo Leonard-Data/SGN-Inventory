@@ -4,6 +4,7 @@ import {
   VENDOR_PAGE_SIZE,
   VENDOR_QUERY_MAX_LENGTH,
   VendorDirectoryError,
+  mayLinkPropertyVendors,
   mayMaintainVendors,
   vendorDirectoryQuery,
   vendorPage,
@@ -98,12 +99,18 @@ test('the query is bounded to the shared literal fragment length', () => {
   );
 });
 
-test('C5: every active role reads and only staff/manager/admin maintain', () => {
+test('C5: only staff/manager/admin create a vendor directory record', () => {
   assert.equal(mayMaintainVendors('staff'), true);
   assert.equal(mayMaintainVendors('manager'), true);
   assert.equal(mayMaintainVendors('admin'), true);
   assert.equal(mayMaintainVendors('sales'), false);
   assert.equal(mayMaintainVendors(''), false);
+});
+
+test('C5: every active role may link a vendor to a property', () => {
+  for (const role of ['sales', 'staff', 'manager', 'admin'])
+    assert.equal(mayLinkPropertyVendors(role), true, role);
+  assert.equal(mayLinkPropertyVendors(''), false);
 });
 
 test('the page is bounded and carries the newest-first cursor pair', () => {

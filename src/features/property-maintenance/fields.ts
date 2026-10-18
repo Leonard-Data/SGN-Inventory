@@ -4,7 +4,15 @@ export type Changes = Record<string, Json>;
 type Field = {
   vi: string;
   en: string;
-  kind?: 'money' | 'decimal' | 'count' | 'boolean' | 'phones' | 'uuid' | 'date';
+  kind?:
+    | 'money'
+    | 'decimal'
+    | 'count'
+    | 'boolean'
+    | 'phones'
+    | 'uuid'
+    | 'date'
+    | 'coordinate';
   options?: readonly string[];
   required?: boolean;
 };
@@ -96,6 +104,8 @@ export const fields: Record<string, Field> = {
   },
   area_raw: { vi: 'Diện tích theo nguồn', en: 'Source area text' },
   notes: { vi: 'Ghi chú', en: 'Notes' },
+  latitude: { vi: 'Vĩ độ', en: 'Latitude', kind: 'coordinate' },
+  longitude: { vi: 'Kinh độ', en: 'Longitude', kind: 'coordinate' },
   format: {
     vi: 'Dạng địa chỉ',
     en: 'Address format',
@@ -198,6 +208,8 @@ export const targetFields: Record<Target, readonly string[]> = {
     'construction_text',
     'area_raw',
     'notes',
+    'latitude',
+    'longitude',
   ],
   address: [
     'format',
@@ -230,6 +242,34 @@ export const targetFields: Record<Target, readonly string[]> = {
   ],
   link: ['contact_id', 'relation', 'is_primary', 'remove'],
 };
+const LOCATION_FIELDS = ['latitude', 'longitude'];
+export function correctionFieldNames({
+  target,
+  staff,
+  propertyStatus,
+  observedFormat,
+}: {
+  target: Target;
+  staff: boolean;
+  propertyStatus: string;
+  observedFormat?: unknown;
+}): string[] {
+  return targetFields[target].filter(
+    (name) =>
+      !LOCATION_FIELDS.includes(name) &&
+      (staff || !['contact_id', 'remove'].includes(name)) &&
+      !(name === 'status' && ['sold', 'rented'].includes(propertyStatus)) &&
+      !(
+        target === 'address' &&
+        ['province_text', 'commune_text', 'district_unit_id'].includes(name)
+      ) &&
+      !(
+        target === 'address' &&
+        observedFormat === 'current' &&
+        name.startsWith('district_')
+      ),
+  );
+}
 export class InputError extends Error {
   constructor() {
     super('invalid-input');
@@ -245,6 +285,8 @@ export function validateChanges(target: Target, input: unknown): Changes {
     Array.isArray(input) ||
     !targetFields[target]
   )
+    throw new InputError();
+  if (target === 'property' && 'latitude' in input !== 'longitude' in input)
     throw new InputError();
   for (const [key, value] of Object.entries(input)) {
     if (!targetFields[target].includes(key)) throw new InputError();
@@ -303,6 +345,12 @@ export function validateChanges(target: Target, input: unknown): Changes {
             BigInt(value.split('.')[0]!) >= 1000000n))
       )
         throw new InputError();
+      if (
+        field.kind === 'coordinate' &&
+        (!/^-?[0-9]{1,3}(\.[0-9]{1,7})?$/.test(value) ||
+          Math.abs(Number(value)) > (key === 'latitude' ? 90 : 180))
+      )
+        throw new InputError();
     }
   }
   const result = input as Changes;
@@ -348,6 +396,14 @@ export function formChanges(
         ? String(before[key])
         : (before[key] ?? null);
     if (JSON.stringify(parsed) !== JSON.stringify(prior)) changes[key] = parsed;
+  }
+  if (
+    target === 'property' &&
+    'latitude' in changes !== 'longitude' in changes
+  ) {
+    const other = 'latitude' in changes ? 'longitude' : 'latitude';
+    const prior = before[other];
+    if (prior != null) changes[other] = prior as Json;
   }
   return validateChanges(target, changes);
 }

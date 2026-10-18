@@ -360,16 +360,16 @@ export async function saleCompletionContract({
         ).rows[0].status,
         'sold',
       );
-      const history = (
-        await db.query(
-          "select actor_id,changed_fields,before_values,after_values from public.property_history where property_id=$1 and changed_fields @> '{status}' order by occurred_at",
-          [sameClaimProperty],
-        )
-      ).rows;
-      assert.equal(history.length, 1);
-      assert.equal(history[0].actor_id, employees[2]);
-      assert.equal(history[0].before_values.status, 'available');
-      assert.equal(history[0].after_values.status, 'sold');
+      // A status change is no longer recorded in the property history.
+      assert.equal(
+        (
+          await db.query(
+            "select count(*)::int as n from public.property_history where property_id=$1 and changed_fields @> '{status}'",
+            [sameClaimProperty],
+          )
+        ).rows[0].n,
+        0,
+      );
     },
   );
   await check(
@@ -422,7 +422,7 @@ export async function saleCompletionContract({
             [sameClaimProperty],
           )
         ).rows[0].n,
-        1,
+        0,
       );
       await fails(
         'select public.complete_property_sale($1,$2,$3,$4,$5)',

@@ -5,6 +5,13 @@ const copy = {
   unknown: ['Chưa biết', 'Unknown'],
   create: ['Thêm bất động sản', 'Create property'],
   editFacts: ['Sửa thông tin', 'Edit facts'],
+  tabFacts: ['Thông tin bất động sản', 'Property facts'],
+  tabAddresses: ['Đính chính địa chỉ', 'Address corrections'],
+  tabContacts: ['Đính chính liên hệ', 'Contact corrections'],
+  notEditable: [
+    'Bạn không có quyền sửa phần này. Gửi yêu cầu đính chính nếu thông tin sai.',
+    'You cannot edit this section. Report a correction request if the information is wrong.',
+  ],
   newAddress: ['Thêm địa chỉ đã biết', 'Add a known address'],
   correctAddress: ['Đính chính địa chỉ', 'Correct address'],
   preserveSource: [
@@ -71,8 +78,8 @@ const copy = {
     'I checked: this is the same person; the change applies to every link shown above.',
   ],
   contactRefusal: [
-    'Không sửa được: người liên hệ chung này hiện không gắn với bất động sản nào, hoặc còn gắn với bất động sản đã lưu trữ mà bạn không được đọc. Nhờ quản lý hoặc quản trị viên; chưa có thay đổi nào được lưu.',
-    'Cannot edit: this shared contact is currently not linked to any property, or is also linked to an archived property you cannot read. Ask a manager or admin; nothing was saved.',
+    'Không sửa được: người liên hệ chung này có thể chưa gắn với bất động sản nào, hoặc đang gắn với bất động sản bạn không được đọc. Nhờ người duyệt (quản lý hoặc quản trị viên) nếu bạn cần sửa; chưa có thay đổi nào được lưu.',
+    'Cannot edit: this shared contact is either not linked to any property, or is linked to a property you cannot read. Ask a reviewer (manager or admin) if you need to correct it; nothing was saved.',
   ],
   wrongPerson: [
     'Nhầm người? Thay liên kết tại bất động sản này, không ghi đè người liên hệ chung.',
@@ -88,6 +95,10 @@ const copy = {
   contactSearch: ['Tìm tên người liên hệ', 'Find contact name'],
   chooseContact: ['Chọn người liên hệ', 'Choose a contact'],
   history: ['Lịch sử thay đổi bất động sản', 'Property change history'],
+  historyNote: [
+    'Chỉ ghi nhận thay đổi giá chào; thay đổi địa chỉ, người liên hệ và thông tin khác không còn được ghi vào lịch sử này.',
+    'Only asking-price changes are recorded; address, contact and other field changes are no longer recorded here.',
+  ],
   emptyHistory: [
     'Chưa có thay đổi nghiệp vụ được ghi nhận; lịch sử nhập cũ không được suy đoán.',
     'No recorded business changes yet; imported historical changes are not invented.',
@@ -149,6 +160,8 @@ const copy = {
     'Replacement field (optional)',
   ],
   latestProposal: ['Đề xuất hiện tại', 'Current proposal'],
+  needsUpdate: ['Trường cần đính chính', 'Fields to update'],
+  section: ['Phần thông tin', 'Information section'],
   original: ['Đề xuất gốc', 'Original submission'],
   amendments: ['Các bổ sung được giữ lại', 'Retained amendments'],
   observed: ['Thông tin đã quan sát', 'Observed information'],
@@ -177,10 +190,36 @@ const copy = {
   more: ['Trang tiếp theo', 'Next page'],
   first: ['Trang đầu', 'First page'],
   immediate: [
-    'Bảo trì được lưu ngay và ghi lịch sử; yêu cầu giữ chỗ vẫn cần phê duyệt độc lập.',
-    'Maintenance saves immediately with history; reservations still require independent approval.',
+    'Bảo trì được lưu ngay; chỉ thay đổi giá chào được ghi vào lịch sử. Yêu cầu giữ chỗ vẫn cần phê duyệt độc lập.',
+    'Maintenance saves immediately; only asking-price changes are recorded in the history. Reservations still require independent approval.',
   ],
   primary: ['Địa chỉ / liên kết chính', 'Primary address / link'],
+  location: ['Vị trí trên bản đồ', 'Location on map'],
+  locationHint: [
+    'Nhấn vào bản đồ để đặt hoặc di chuyển điểm, hoặc nhập toạ độ và nhấn "Áp dụng toạ độ"; điểm chỉ được lưu cùng các thông tin khác sau khi áp dụng.',
+    'Click the map to place or move the point, or type coordinates and press "Apply coordinates"; the point saves with the other facts only after you apply it.',
+  ],
+  locationMapLabel: [
+    'Bản đồ chọn vị trí: nhấn để đặt điểm',
+    'Location picker map: click to place the point',
+  ],
+  locationTyped: ['Hoặc nhập toạ độ', 'Or type coordinates'],
+  locationTypedHint: [
+    'Vĩ độ từ -90 đến 90, kinh độ từ -180 đến 180, tối đa 7 chữ số thập phân.',
+    'Latitude from -90 to 90, longitude from -180 to 180, up to 7 decimal places.',
+  ],
+  locationApply: ['Áp dụng toạ độ', 'Apply coordinates'],
+  locationInvalid: [
+    'Toạ độ không hợp lệ: vĩ độ từ -90 đến 90, kinh độ từ -180 đến 180, tối đa 7 chữ số thập phân.',
+    'Invalid coordinates: latitude from -90 to 90, longitude from -180 to 180, up to 7 decimal places.',
+  ],
+  locationClear: ['Xoá vị trí', 'Clear location'],
+  locationRecorded: ['Vị trí đã ghi', 'Recorded location'],
+  locationNoPoint: ['Chưa đặt vị trí.', 'No point placed.'],
+  locationTilesFailed: [
+    'Không tải được nền bản đồ. Vẫn có thể nhấn trên khung bản đồ hoặc nhập toạ độ bên dưới.',
+    'The map background could not load. You can still click the map area or type coordinates below.',
+  ],
 } as const;
 export type CopyKey = keyof typeof copy;
 export function maintenanceText(locale: Locale) {

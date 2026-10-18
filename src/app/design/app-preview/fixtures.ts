@@ -102,10 +102,10 @@ export const plateFixtures: (RecordFields & {
   },
 ];
 
-// Fixtures for the design surfaces the product does not render yet: the record rail's
-// asking-price rows and change timeline, and the people directory (employee accounts and
-// contact book). Fictional, review route only — the product has no price feed and no
-// directory endpoint, so nothing here is wired to a session or a table.
+// Fictional fixtures for the design review route only: the record rail's asking-price rows
+// and change timeline, and the people directory (employee accounts and contact book). The
+// product renders those surfaces from real data now, so nothing here is wired to a session
+// or a table.
 export type PriceFixture = {
   when: string;
   from: string | null;
