@@ -72,7 +72,8 @@ function contactLink(value: unknown): ContactLink {
     !isUuid(row.property_id) ||
     typeof row.property_code !== 'string' ||
     typeof row.relation !== 'string' ||
-    typeof row.is_primary !== 'boolean'
+    typeof row.is_primary !== 'boolean' ||
+    typeof row.archived !== 'boolean'
   )
     throw new ContactDirectoryError('invalid-input');
   return {
@@ -80,7 +81,22 @@ function contactLink(value: unknown): ContactLink {
     propertyCode: row.property_code,
     relation: row.relation,
     isPrimary: row.is_primary,
+    archived: row.archived,
   };
+}
+
+// The single-contact name read behind the inventory contact filter's applied label: a bounded
+// name-only identity read of just that record, never a directory page and never the guarded
+// affected-property detail. A malformed response is a failed name, so the caller presents its
+// own neutral label instead of a bare identifier.
+export function contactName(detail: unknown): string {
+  const value: Record<string, unknown> =
+    detail && typeof detail === 'object' && !Array.isArray(detail)
+      ? (detail as Record<string, unknown>)
+      : {};
+  if (typeof value.displayName !== 'string' || value.displayName === '')
+    throw new ContactDirectoryError('invalid-input');
+  return value.displayName;
 }
 
 // A recorded contact row arrives from the bounded RPC or a live RLS read; never trust its
@@ -100,6 +116,7 @@ export function contactSummary(row: unknown): ContactSummary {
     !Array.isArray(value.links)
   )
     throw new ContactDirectoryError('invalid-input');
+  const links = (value.links as unknown[]).map(contactLink);
   return {
     id: value.id,
     displayName: value.display_name,
@@ -107,7 +124,10 @@ export function contactSummary(row: unknown): ContactSummary {
     phones: value.phones as string[],
     rawPhoneText: optionalText(value.raw_phone_text),
     revision: value.revision,
-    links: (value.links as unknown[]).map(contactLink),
+    links,
+    // The count is pinned to the unarchived links of the same projection, never a separate tally
+    // that could drift from the listed property codes or from the contact-filtered inventory.
+    propertyCount: links.filter((link) => !link.archived).length,
   };
 }
 

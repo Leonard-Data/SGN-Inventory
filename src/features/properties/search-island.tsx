@@ -6,6 +6,8 @@ import type { Locale } from '@/i18n/messages';
 import { label, messages } from '@/i18n/messages';
 import { formatDecimal, formatVnd } from './format';
 import { api, RequestError } from '@/features/employees/api';
+import { contactName } from '@/features/contacts/directory';
+import { ContactPicker } from '@/features/property-maintenance/contact-picker';
 import {
   unitOptionLabels,
   type UnitOption,
@@ -53,6 +55,7 @@ export function SearchIsland({
   const appliedMode = filters.mode ?? '';
   const appliedProvince = filters.province ?? '';
   const appliedWard = filters.ward ?? '';
+  const appliedContact = filters.contact ?? '';
   const appliedStateKey = JSON.stringify([
     query,
     sort,
@@ -61,9 +64,12 @@ export function SearchIsland({
   const [invalid, setInvalid] = useState(false);
   const [mode, setMode] = useState(appliedMode);
   // The dialog's live province selection drives the dependent ward list; applying or dismissing
-  // returns both to the filter set the address currently states.
+  // returns both to the filter set the address currently states. The contact selection is the
+  // same shape: it starts at the applied value and returns to it on dismiss.
   const [province, setProvince] = useState(appliedProvince);
   const [ward, setWard] = useState(appliedWard);
+  const [contact, setContact] = useState(appliedContact);
+  const [contactLabel, setContactLabel] = useState<string | null>(null);
   const [provinces, setProvinces] = useState<AdminUnit[]>([]);
   const [wards, setWards] = useState<AdminUnit[]>([]);
   const [provinceFailed, setProvinceFailed] = useState(false);
@@ -75,6 +81,7 @@ export function SearchIsland({
     setMode(appliedMode);
     setProvince(appliedProvince);
     setWard(appliedWard);
+    setContact(appliedContact);
   }
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -91,7 +98,14 @@ export function SearchIsland({
     setInvalid(false);
     setProvince(appliedProvince);
     setWard(appliedWard);
-  }, [appliedMode, appliedProvince, appliedWard, appliedStateKey]);
+    setContact(appliedContact);
+  }, [
+    appliedMode,
+    appliedProvince,
+    appliedWard,
+    appliedContact,
+    appliedStateKey,
+  ]);
   // The catalog is the same official list the address form reads. A denial clears the protected
   // surface through the handler the inventory list already uses.
   useEffect(() => {
@@ -144,6 +158,40 @@ export function SearchIsland({
       });
     return () => abort.abort();
   }, [province, onDenied]);
+  // The contact filter lists only identities the caller may read, through the bounded name
+  // search and paging the property maintenance picker already uses: a page at a time on
+  // request, never a walk over the whole directory. The applied filter's label is the one
+  // bounded name-only read below, so a reloaded or shared address still names the person even
+  // when the guarded affected-property detail would refuse.
+  useEffect(() => {
+    setContactLabel(null);
+    if (!appliedContact) return;
+    const abort = new AbortController();
+    void api<unknown>(
+      '/api/contacts/' + appliedContact + '/name',
+      undefined,
+      abort.signal,
+    )
+      .then((result) => {
+        if (abort.signal.aborted) return;
+        try {
+          setContactLabel(contactName(result));
+        } catch {
+          setContactLabel(null);
+        }
+      })
+      .catch((failure) => {
+        if (abort.signal.aborted) return;
+        // A genuine miss keeps the neutral label; only a lost session or membership clears the
+        // protected surface.
+        if (
+          failure instanceof RequestError &&
+          (failure.status === 401 || failure.status === 403)
+        )
+          onDenied(failure.status);
+      });
+    return () => abort.abort();
+  }, [appliedContact, onDenied]);
   // Applying starts a new page-one journey with the stated filters, so a paging cursor from the
   // previous filter set can never be replayed against this one.
   function apply(event: FormEvent<HTMLFormElement>) {
@@ -212,6 +260,11 @@ export function SearchIsland({
     applied.push({
       key: 'ward',
       label: `${text.ward}: ${unitName(wards, filters.ward)}`,
+    });
+  if (filters.contact)
+    applied.push({
+      key: 'contact',
+      label: `${text.contactFilter}: ${contactLabel ?? text.unknown}`,
     });
   if (filters.priceMin)
     applied.push({
@@ -376,6 +429,21 @@ export function SearchIsland({
                 {select('mode', text.listingMode, INVENTORY_LISTING_MODES)}
                 {select('type', text.propertyType, INVENTORY_PROPERTY_TYPES)}
               </div>
+            </div>
+            <div className="form-section">
+              <div className="form-grid">
+                <ContactPicker
+                  locale={locale}
+                  selected={contact}
+                  selectedName={
+                    contact === appliedContact ? contactLabel : null
+                  }
+                  onSelected={setContact}
+                  onDenied={onDenied}
+                />
+              </div>
+              <input type="hidden" name="contact" value={contact} />
+              <p className="field-hint">{text.contactFilterHint}</p>
             </div>
             <div className="form-section">
               <div className="form-grid">

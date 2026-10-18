@@ -2,8 +2,9 @@
 // validated. The route validates the same strings the browser carries, so a filter is either
 // applied exactly as the address states or refused as invalid input — never silently dropped.
 // The province/ward pair names official administrative units; the ward is dependent on the
-// province and, when both are set, the narrower ward is the unit the read applies.
-const UNIT_ID =
+// province and, when both are set, the narrower ward is the unit the read applies. The contact
+// value is a recorded contact identity, so it is validated with the same UUID shape.
+const UUID_VALUE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const INVENTORY_STATUSES = [
@@ -34,6 +35,7 @@ export const INVENTORY_FILTER_KEYS = [
   'areaMax',
   'province',
   'ward',
+  'contact',
 ] as const;
 export type InventoryFilterKey = (typeof INVENTORY_FILTER_KEYS)[number];
 export type InventoryFilters = Record<InventoryFilterKey, string | null>;
@@ -48,6 +50,7 @@ export const noInventoryFilters: InventoryFilters = {
   areaMax: null,
   province: null,
   ward: null,
+  contact: null,
 };
 
 const WHOLE_VND = /^\d{1,18}$/;
@@ -77,6 +80,7 @@ export function inventoryFilters(params: URLSearchParams): InventoryFilters {
     areaMax: read('areaMax'),
     province: read('province'),
     ward: read('ward'),
+    contact: read('contact'),
   };
 }
 
@@ -97,16 +101,18 @@ export function parseInventoryFilters(
     areaMax,
     province,
     ward,
+    contact,
   } = filters;
   if (status !== null && !includes(INVENTORY_STATUSES, status)) return refuse();
   if (mode !== null && !includes(INVENTORY_LISTING_MODES, mode))
     return refuse();
   if (type !== null && !includes(INVENTORY_PROPERTY_TYPES, type))
     return refuse();
-  // A unit value is an official catalog identity, so a malformed one is refused here and an
-  // out-of-catalog or wrong-level one is refused by the route's catalog check.
-  for (const unit of [province, ward])
-    if (unit !== null && !UNIT_ID.test(unit)) return refuse();
+  // A unit value is an official catalog identity and the contact is a recorded identity, so a
+  // malformed value is refused here; an out-of-catalog or wrong-level unit and an unknown or
+  // unreadable contact are refused by the route's own checks.
+  for (const value of [province, ward, contact])
+    if (value !== null && !UUID_VALUE.test(value)) return refuse();
   // The ward narrows its parent province; a ward without that province is not a filter set this
   // panel can produce, so it is refused rather than applied as a different inventory.
   if (ward !== null && province === null) return refuse();
@@ -176,6 +182,7 @@ export type InventoryFilterArgs = {
   p_area_min?: number;
   p_area_max?: number;
   p_area_id?: string;
+  p_contact_id?: string;
 };
 
 // Half of each range is optional; an absent bound leaves the database default (no bound) in
@@ -193,6 +200,7 @@ export function filterRpcArgs(filters: InventoryFilters): InventoryFilterArgs {
   // ward governs and the province is kept in the address only as its parent context.
   const areaId = filters.ward ?? filters.province;
   if (areaId) args.p_area_id = areaId;
+  if (filters.contact) args.p_contact_id = filters.contact;
   return args;
 }
 

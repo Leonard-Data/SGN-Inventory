@@ -47,6 +47,24 @@ export async function listContacts(
   }
 }
 
+// A bounded name-only read of one recorded identity under the same `contacts` member read the
+// directory lists with. It runs no affected-property guard, so naming the person an applied
+// filter condition refers to never depends on the caller's preview authority.
+export async function contactNameById(
+  context: RouteContext,
+  id: string,
+): Promise<{ id: string; displayName: string }> {
+  if (!uuid(id)) throw new ApiError(400, 'invalid-input');
+  const { data, error } = await context.client
+    .from('contacts')
+    .select('id,display_name')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) databaseError(error);
+  if (!data) throw new ApiError(404, 'not-found');
+  return { id: data.id, displayName: data.display_name };
+}
+
 // One contact-scoped correction of the shared identity. It is the same database operation
 // the property maintenance branch delegates to: the same allowlist, revision check,
 // affected-set boundary and archived-property refusal. A recorded shared-contact correction

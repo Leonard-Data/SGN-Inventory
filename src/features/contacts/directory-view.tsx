@@ -415,6 +415,12 @@ export function ContactDirectory({
                             <td data-label={text.contactColumnProperties}>
                               {record.links.length ? (
                                 <span className="contact-links">
+                                  <small className="row-meta">
+                                    {text.contactPropertyCount.replace(
+                                      '{n}',
+                                      String(record.propertyCount),
+                                    )}
+                                  </small>
                                   {record.links.map((link) => (
                                     <span
                                       className="contact-link"
@@ -434,6 +440,9 @@ export function ContactDirectory({
                                         {optionLabel(locale, link.relation)}
                                         {link.isPrimary
                                           ? ' · ' + text.contactPrimaryLink
+                                          : ''}
+                                        {link.archived
+                                          ? ' · ' + text.archived
                                           : ''}
                                       </small>
                                     </span>
