@@ -16,9 +16,10 @@ import {
 import {
   inventoryPageCount,
   isInventoryOrder,
-  pageNumbers,
   reversedOrder,
+  INVENTORY_PAGE_SIZES,
   type InventoryOrder,
+  type InventoryPageSize,
 } from './paging';
 
 export function Inventory({
@@ -27,10 +28,12 @@ export function Inventory({
   page,
   sort,
   filters,
+  pageSize,
 }: {
   initialLocale: Locale;
   initialQuery: string;
   page: string | null;
+  pageSize: string | null;
   sort: string | null;
   filters: InventoryFilters;
 }) {
@@ -45,6 +48,7 @@ export function Inventory({
       query: initialQuery,
       ...(sort ? { sort } : {}),
       ...(page ? { page } : {}),
+      ...(pageSize ? { pageSize } : {}),
       ...activeFilters,
     });
   const { employee, data, error, busy, surface, logout, clear, reload } =
@@ -54,7 +58,6 @@ export function Inventory({
   const locale = initialLocale;
   const text = messages[locale];
   const [searchError, setSearchError] = useState(false);
-  const [jump, setJump] = useState('');
   // The toolbar owns the filter panel's trigger, so the island below only renders the dialog.
   const [filtersOpen, setFiltersOpen] = useState(false);
   const denyFiles = useCallback(
@@ -68,8 +71,8 @@ export function Inventory({
   // describe that same result set rather than counting the rows this page happens to hold.
   const total = data?.total ?? 0;
   const servedPage = data?.page ?? 1;
-  const pages = inventoryPageCount(total);
-  const numbers = pageNumbers(servedPage, pages);
+  const activePageSize = Number(pageSize) || 24;
+  const pages = inventoryPageCount(total, activePageSize);
   const numberFormat = useMemo(
     () => new Intl.NumberFormat(locale === 'vi' ? 'vi-VN' : 'en-GB'),
     [locale],
@@ -91,6 +94,7 @@ export function Inventory({
       new URLSearchParams({
         query: initialQuery,
         ...(sort ? { sort } : {}),
+        ...(pageSize ? { pageSize } : {}),
         ...activeFilters,
         ...(target > 1 ? { page: String(target) } : {}),
       })
@@ -107,24 +111,14 @@ export function Inventory({
       })
     );
   }
-  // A jump the caller types is corrected onto the result set instead of asking for a page that
-  // does not exist.
-  function jumpTo(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const target = Number.parseInt(jump, 10);
-    if (!Number.isFinite(target)) return;
-    router.push(href(Math.min(Math.max(target, 1), pages)));
-  }
   const resultLocation = href(servedPage);
-  // A pager step is a real link where its page exists and a disabled control at the boundary, so
-  // an edge of the result set is stated instead of silently doing nothing.
   function step(label: string, target: number, disabled: boolean) {
     return disabled ? (
-      <button className="pager-btn" type="button" disabled>
+      <span className="pager-link is-disabled" aria-disabled="true">
         {label}
-      </button>
+      </span>
     ) : (
-      <a className="pager-btn" href={href(target)}>
+      <a className="pager-link" href={href(target)}>
         {label}
       </a>
     );
@@ -144,17 +138,25 @@ export function Inventory({
           <h1>{text.inventory}</h1>
           <p className="intro-copy">{text.searchHint}</p>
         </div>
-        {employee?.role === 'manager' || employee?.role === 'admin' ? (
-          <div className="page-actions">
+        <div className="page-actions">
+          <Link
+            className="btn btn-primary"
+            href="/properties/new"
+            prefetch={false}
+          >
+            <span aria-hidden="true">＋</span>
+            {text.navNewProperty}
+          </Link>
+          {employee?.role === 'manager' || employee?.role === 'admin' ? (
             <Link
-              className="btn btn-secondary"
+              className="btn btn-ghost"
               href="/activity/company"
               prefetch={false}
             >
               {text.companyActivityLink}
             </Link>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </div>
 
       <section className="panel page-section">
@@ -330,11 +332,19 @@ export function Inventory({
       </section>
 
       {busy ? (
-        <div className="busy-head" role="status">
+        <div className="busy-head" role="status" aria-label={text.loading}>
           <div className="busy-bar" />
-          <div className="busy-line">
-            <span className="spinner" aria-hidden="true" />
-            <span>{text.loading}</span>
+          <div className="property-skeleton-grid" aria-hidden="true">
+            {[1, 2, 3].map((item) => (
+              <div className="sk-card" key={item}>
+                <div className="skeleton sk-cover" />
+                <div className="sk-body">
+                  <div className="skeleton sk-line h20 w80" />
+                  <div className="skeleton sk-line w60" />
+                  <div className="skeleton sk-line w40" />
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       ) : null}
@@ -441,49 +451,30 @@ export function Inventory({
                     .replace('{pages}', numberFormat.format(pages))}
                 </span>
                 <span className="page-buttons">
-                  {step(text.first, 1, servedPage === 1)}
-                  {step(text.previous, servedPage - 1, servedPage === 1)}
-                  {numbers.map((number) =>
-                    number === servedPage ? (
-                      <span
-                        key={number}
-                        className="pager-btn"
-                        aria-current="page"
-                      >
-                        {numberFormat.format(number)}
-                      </span>
-                    ) : (
-                      <a
-                        key={number}
-                        className="pager-btn"
-                        href={href(number)}
-                        aria-label={`${text.jumpToPage} ${numberFormat.format(number)}`}
-                      >
-                        {numberFormat.format(number)}
-                      </a>
-                    ),
-                  )}
-                  {step(text.next, servedPage + 1, servedPage === pages)}
-                  {step(text.last, pages, servedPage === pages)}
-                  <form className="pager-jump" onSubmit={jumpTo}>
-                    <label className="sr" htmlFor="page-jump">
-                      {text.jumpToPage}
-                    </label>
-                    <input
-                      className="input input-sm"
-                      id="page-jump"
-                      type="number"
-                      inputMode="numeric"
-                      min={1}
-                      max={pages}
-                      value={jump}
-                      onChange={(event) => setJump(event.currentTarget.value)}
-                      placeholder={text.jumpToPage}
-                    />
-                    <button className="pager-btn" type="submit">
-                      {text.jump}
-                    </button>
-                  </form>
+                  <label className="page-size-control">
+                    <span>{text.pageSize}</span>
+                    <select
+                      value={String(activePageSize)}
+                      onChange={(event) => {
+                        const next = Number(
+                          event.currentTarget.value,
+                        ) as InventoryPageSize;
+                        const nextUrl = new URL(window.location.href);
+                        nextUrl.searchParams.set('pageSize', String(next));
+                        nextUrl.searchParams.delete('page');
+                        router.push(nextUrl.pathname + nextUrl.search);
+                      }}
+                      aria-label={text.pageSize}
+                    >
+                      {INVENTORY_PAGE_SIZES.map((size) => (
+                        <option key={size} value={size}>
+                          {size}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {step(`‹ ${text.previous}`, servedPage - 1, servedPage === 1)}
+                  {step(`${text.next} ›`, servedPage + 1, servedPage === pages)}
                 </span>
               </nav>
             </>

@@ -12,9 +12,27 @@ import {
 const paging = (values: Record<string, string>) =>
   parseInventoryPaging(new URLSearchParams(values));
 
-test('an absent page number is the first page', () => {
-  assert.deepEqual(paging({}), { ok: true, paging: { page: 1 } });
-  assert.deepEqual(paging({ page: '4' }), { ok: true, paging: { page: 4 } });
+test('an absent page number uses the default page size', () => {
+  assert.deepEqual(paging({}), {
+    ok: true,
+    paging: { page: 1, pageSize: INVENTORY_PAGE_SIZE },
+  });
+  assert.deepEqual(paging({ page: '4' }), {
+    ok: true,
+    paging: { page: 4, pageSize: INVENTORY_PAGE_SIZE },
+  });
+});
+
+test('only supported page sizes are accepted', () => {
+  assert.equal(paging({ pageSize: '12' }).ok, true);
+  assert.equal(paging({ pageSize: '48' }).ok, true);
+  for (const value of ['', '10', '25', '0', '100', 'two']) {
+    assert.deepEqual(
+      paging({ pageSize: value }),
+      { ok: false },
+      `pageSize=${value}`,
+    );
+  }
 });
 
 test('a page the address states must be usable or it is refused', () => {

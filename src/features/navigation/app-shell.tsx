@@ -267,6 +267,7 @@ export function AppShell({
   const pathname = usePathname();
   const [employee, setEmployee] = useState<Employee | null>(given ?? null);
   const [drawer, setDrawer] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const aside = useRef<HTMLElement>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
 
@@ -323,7 +324,7 @@ export function AppShell({
   else if (pathname.startsWith('/people')) crumbs.push({ label: text.people });
 
   return (
-    <div className="sgn-app">
+    <div className={sidebarCollapsed ? 'sgn-app is-collapsed' : 'sgn-app'}>
       <a className="sgn-skip" href="#main-content">
         {text.skipToContent}
       </a>
@@ -383,8 +384,14 @@ export function AppShell({
             type="button"
             aria-expanded={drawer ? 'true' : 'false'}
             aria-controls="sgn-sidebar"
-            aria-label={text.openMenu}
-            onClick={() => setDrawer(!drawer)}
+            aria-label={drawer ? text.close : text.openMenu}
+            onClick={() => {
+              if (window.matchMedia('(max-width: 1039px)').matches) {
+                setDrawer(!drawer);
+              } else {
+                setSidebarCollapsed(!sidebarCollapsed);
+              }
+            }}
           >
             <svg
               viewBox="0 0 24 24"

@@ -7,6 +7,7 @@ export default async function Properties({
   searchParams: Promise<{
     query?: string;
     page?: string;
+    pageSize?: string;
     sort?: string;
     status?: string;
     mode?: string;
@@ -35,6 +36,7 @@ export default async function Properties({
       // unknown or non-numeric value instead of silently browsing a different page of inventory.
       sort={params.sort ?? null}
       page={params.page ?? null}
+      pageSize={params.pageSize ?? null}
       filters={inventoryFilters(search)}
     />
   );

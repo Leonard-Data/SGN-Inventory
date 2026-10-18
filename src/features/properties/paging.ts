@@ -4,8 +4,15 @@
 // the rows and the page links always describe the same result set.
 export type InventoryOrder = 'oldest' | 'newest';
 
-// The page-size selector that varies this is a separate ticket.
-export const INVENTORY_PAGE_SIZE = 30;
+export const INVENTORY_PAGE_SIZES = [12, 24, 48] as const;
+export type InventoryPageSize = (typeof INVENTORY_PAGE_SIZES)[number];
+export const INVENTORY_PAGE_SIZE = 24;
+
+export function isInventoryPageSize(
+  value: unknown,
+): value is InventoryPageSize {
+  return INVENTORY_PAGE_SIZES.some((size) => String(size) === String(value));
+}
 // The numbered links are a bounded window around the current page, so a large result set never
 // renders hundreds of links; first, last and the jump control reach the rest.
 export const INVENTORY_PAGE_WINDOW = 7;
@@ -25,7 +32,7 @@ export function reversedOrder(
   return order === 'oldest' ? 'newest' : 'oldest';
 }
 
-export type InventoryPaging = { page: number };
+export type InventoryPaging = { page: number; pageSize: InventoryPageSize };
 export type InventoryPagingParse =
   { ok: true; paging: InventoryPaging } | { ok: false };
 
@@ -36,14 +43,31 @@ export function parseInventoryPaging(
   params: URLSearchParams,
 ): InventoryPagingParse {
   const page = positive(params.get('page'));
-  if (page === undefined) return { ok: false };
-  return { ok: true, paging: { page: page ?? 1 } };
+  const rawPageSize = params.get('pageSize');
+  if (
+    page === undefined ||
+    (rawPageSize !== null && !isInventoryPageSize(rawPageSize))
+  ) {
+    return { ok: false };
+  }
+  return {
+    ok: true,
+    paging: {
+      page: page ?? 1,
+      pageSize: rawPageSize
+        ? (Number(rawPageSize) as InventoryPageSize)
+        : INVENTORY_PAGE_SIZE,
+    },
+  };
 }
 
 // A result set always has a page one, even when it has no rows, so the pager states where the
 // caller is instead of showing an empty range.
-export function inventoryPageCount(total: number): number {
-  return Math.max(1, Math.ceil(total / INVENTORY_PAGE_SIZE));
+export function inventoryPageCount(
+  total: number,
+  pageSize = INVENTORY_PAGE_SIZE,
+): number {
+  return Math.max(1, Math.ceil(total / pageSize));
 }
 
 // The numbered pages the pager offers: a window of at most INVENTORY_PAGE_WINDOW pages that
