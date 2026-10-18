@@ -95,7 +95,13 @@
   --btn-h-sm: 44px;
 }
 
-@media (max-width: 1039px) { :root { --logo-size: 42px; --topbar-h: 56px; } }
+@media (max-width: 1039px) {
+  :root { --logo-size: 42px; --topbar-h: 56px; }
+  .sgn-app, .sgn-app.is-collapsed { display: block; }
+  .sgn-sidebar { position: fixed; inset: 0 auto 0 0; z-index: 60; width: min(300px, 86vw); transform: translateX(-102%); transition: transform var(--motion-base) var(--ease-standard); box-shadow: 12px 0 32px color-mix(in oklab, var(--fg) 16%, transparent); }
+  .sgn-sidebar.is-open { transform: translateX(0); }
+  .sgn-menu-btn { display: inline-flex; }
+}
 
 /* ── base ───────────────────────────────────────────────────────────────── */
 
@@ -137,7 +143,9 @@ a { color: inherit; }
   grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
   min-height: 100vh;
   min-height: 100dvh;
+  transition: grid-template-columns var(--motion-base) var(--ease-standard);
 }
+.sgn-app.is-collapsed { grid-template-columns: 0 minmax(0, 1fr); }
 .sgn-skip {
   position: absolute; left: var(--space-4); top: -60px; z-index: 90;
   padding: var(--space-3) var(--space-4);
@@ -151,6 +159,7 @@ a { color: inherit; }
 /* ── sidebar ────────────────────────────────────────────────────────────── */
 .sgn-sidebar {
   position: sticky; top: 0;
+  min-width: 0;
   display: flex; flex-direction: column;
   height: 100vh; height: 100dvh;
   padding: var(--space-5) var(--space-4) var(--space-6);
@@ -235,9 +244,9 @@ button.sgn-nav-item { width: 100%; background: transparent; border: 0; text-alig
 .sgn-topbar-right { margin-left: auto; display: flex; align-items: center; gap: var(--space-2); }
 
 .sgn-menu-btn {
-  display: none; width: var(--btn-h-sm); height: var(--btn-h-sm);
+  display: inline-flex; width: var(--btn-h-sm); height: var(--btn-h-sm);
   align-items: center; justify-content: center;
-  background: transparent; border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: var(--surface-warm); border: 0; border-radius: var(--radius-md);
   color: var(--fg);
 }
 .sgn-menu-btn:hover { background: var(--surface); border-color: var(--fg-2); }
@@ -266,13 +275,13 @@ button.sgn-nav-item { width: 100%; background: transparent; border: 0; text-alig
   background: transparent; border: 1px solid transparent; border-radius: var(--radius-pill);
   transition: background var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard);
 }
-.sgn-user-btn:hover { background: var(--surface); border-color: var(--border); }
+.sgn-user-btn:hover, .sgn-user-btn[aria-expanded="true"] { background: var(--surface); border-color: var(--border-soft); box-shadow: var(--shadow-raise); }
 .sgn-avatar {
-  width: 38px; height: 38px; flex: 0 0 auto; display: grid; place-items: center;
-  border-radius: var(--radius-pill);
-  background: var(--surface-warm); color: var(--fg-2);
-  border: 1px solid var(--border);
-  font-size: var(--text-sm); font-weight: 600; letter-spacing: .01em;
+  width: 40px; height: 40px; flex: 0 0 auto; display: grid; place-items: center;
+  border-radius: 13px;
+  background: var(--accent); color: var(--accent-on);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 10%, transparent);
+  font-family: var(--font-display); font-size: var(--text-sm); font-weight: 600; letter-spacing: .02em;
 }
 .sgn-user-copy { text-align: left; line-height: 1.25; }
 .sgn-user-copy b { display: block; font-size: var(--text-sm); font-weight: 600; color: var(--fg); }
@@ -625,7 +634,9 @@ button.sgn-nav-item { width: 100%; background: transparent; border: 0; text-alig
   50%  { transform: translateX(20%) scaleX(.6); }
   100% { transform: translateX(100%) scaleX(.4); }
 }
-.busy-line { display: flex; align-items: center; gap: var(--space-3); font-size: var(--text-sm); color: var(--muted); }
+.busy-line { display: flex; align-items: center; gap: var(--space-3); min-height: 20px; font-size: 0; color: transparent; }
+.busy-line::before { content: ''; display: block; width: min(220px, 55vw); height: 12px; border-radius: var(--radius-pill); background: linear-gradient(90deg, var(--border-soft) 25%, var(--surface-warm) 50%, var(--border-soft) 75%); background-size: 200% 100%; animation: sgn-skeleton 1.4s ease-in-out infinite; }
+@keyframes sgn-skeleton { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 .busy-line .num { font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-2); }
 .spinner { width: 18px; height: 18px; border: 2px solid color-mix(in oklab, var(--accent) 26%, transparent); border-top-color: var(--accent); border-radius: 50%; animation: sgn-spin .8s linear infinite; flex: 0 0 auto; }
 .skeleton { position: relative; overflow: hidden; background: var(--surface-warm); border-radius: var(--radius-sm); }
