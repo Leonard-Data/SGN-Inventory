@@ -5,6 +5,7 @@ import { invitationFromRow } from './invitation';
 import {
   acceptanceBody,
   acceptanceSessionBody,
+  classifyAuthFailure,
   parseAcceptedEmployee,
   type AcceptanceInput,
 } from './invitation-acceptance';
@@ -43,12 +44,8 @@ export type InvitationSessionStatus =
   { status: 'setup'; setup: InvitationSetup } | { status: 'active' };
 
 // A transient Auth/provider failure is retryable, not a refusal of the invitation.
-function authOutage(error: { name?: string; status?: number }): boolean {
-  return error.name === 'AuthRetryableFetchError' || (error.status ?? 0) >= 500;
-}
-
 function authFailure(error: { name?: string; status?: number }): ApiError {
-  return authOutage(error)
+  return classifyAuthFailure(error) === 'retryable'
     ? new ApiError(503, 'unavailable')
     : new ApiError(401, 'invitation-invalid');
 }
@@ -130,18 +127,26 @@ export async function invitationSessionStatus(
   };
 }
 
-// The guarded acceptance: validate the inputs and session, link and activate through the
-// invoker RPC, and only then set the credential. The RPC re-derives the caller's identity and
-// checks the recorded invitation, its revision and the still-unlinked, live employee, so no
-// credential is written for a caller the invitation does not name, and a repeated or
-// interrupted setup converges on the same person and role.
+// The guarded acceptance: verify the caller's own recorded invitation before anything is
+// written, set the credential, then link and activate through the invoker RPC. The RPC
+// re-derives the caller's identity and re-checks the recorded invitation, its revision and the
+// still-unlinked, live employee, so no credential is written for a caller the invitation does
+// not name, no credentialless membership is left behind, and a repeated or interrupted setup
+// converges on the same person and role.
 export async function acceptInvitation(
   context: RouteContext,
   body: Record<string, unknown>,
 ): Promise<void> {
   const input: AcceptanceInput | null = acceptanceBody(body);
   if (!input) throw new ApiError(400, 'invalid-input');
-  await invitationUser(context);
+  await invitationSessionStatus(context);
+  const { error: passwordError } = await context.client.auth.updateUser({
+    password: input.password,
+  });
+  if (passwordError)
+    throw classifyAuthFailure(passwordError) === 'retryable'
+      ? new ApiError(503, 'unavailable')
+      : new ApiError(400, 'invalid-input');
   const { data, error } = await context.client.rpc(
     'accept_employee_invitation',
     {
@@ -152,12 +157,5 @@ export async function acceptInvitation(
   );
   if (error) throw workflowError(error);
   if (!parseAcceptedEmployee(data)) throw new ApiError(503, 'unavailable');
-  const { error: passwordError } = await context.client.auth.updateUser({
-    password: input.password,
-  });
-  if (passwordError)
-    throw authOutage(passwordError)
-      ? new ApiError(503, 'unavailable')
-      : new ApiError(400, 'invalid-input');
   context.setLocale(input.locale);
 }

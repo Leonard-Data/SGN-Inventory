@@ -34,6 +34,24 @@ export type AcceptanceSessionInput =
   | { kind: 'tokens'; accessToken: string; refreshToken: string }
   | { kind: 'cookie' };
 
+export type AuthFailureClass = 'retryable' | 'definite';
+
+// One classification for every Auth/provider error in this flow: a transient network/provider
+// failure or a throttled request is retryable, while every other answer is a definite refusal
+// of what was asked. Callers map the class to their own refusal, so the rule lives once.
+export function classifyAuthFailure(
+  error: { name?: string; status?: number } | null | undefined,
+): AuthFailureClass {
+  if (
+    error &&
+    (error.name === 'AuthRetryableFetchError' ||
+      (error.status ?? 0) >= 500 ||
+      error.status === 429)
+  )
+    return 'retryable';
+  return 'definite';
+}
+
 // The required name is preserved exactly as typed, trimmed only: no case folding, no accent
 // folding, no invented value, and a bounded safe length.
 export function acceptanceName(value: unknown): string | null {

@@ -6,6 +6,7 @@ import {
   acceptanceName,
   acceptancePassword,
   acceptanceSessionBody,
+  classifyAuthFailure,
   parseAcceptedEmployee,
 } from './invitation-acceptance.ts';
 
@@ -43,6 +44,27 @@ test('the backend password bound mirrors the recovery flow', () => {
     assert.equal(acceptancePassword(value), null, JSON.stringify(value));
   assert.equal(acceptancePassword('a'.repeat(8)), 'a'.repeat(8));
   assert.equal(acceptancePassword('a'.repeat(128)), 'a'.repeat(128));
+});
+
+test('an auth failure is retryable only for a transient or throttled provider', () => {
+  const cases: [Parameters<typeof classifyAuthFailure>[0], string][] = [
+    [{ name: 'AuthRetryableFetchError' }, 'retryable'],
+    [{ name: 'AuthRetryableFetchError', status: 400 }, 'retryable'],
+    [{ name: 'AuthApiError', status: 500 }, 'retryable'],
+    [{ name: 'AuthApiError', status: 502 }, 'retryable'],
+    [{ name: 'AuthApiError', status: 503 }, 'retryable'],
+    [{ name: 'AuthApiError', status: 429 }, 'retryable'],
+    [{ name: 'AuthApiError', status: 400 }, 'definite'],
+    [{ name: 'AuthApiError', status: 401 }, 'definite'],
+    [{ name: 'AuthApiError', status: 403 }, 'definite'],
+    [{ name: 'AuthApiError', status: 422 }, 'definite'],
+    [{ name: 'AuthApiError', status: 0 }, 'definite'],
+    [{}, 'definite'],
+    [null, 'definite'],
+    [undefined, 'definite'],
+  ];
+  for (const [error, expected] of cases)
+    assert.equal(classifyAuthFailure(error), expected, JSON.stringify(error));
 });
 
 test('the acceptance request accepts exactly the six validated fields', () => {
