@@ -6,6 +6,7 @@ import { DetailActionDialog } from './detail-dialog';
 import { detailMessages } from './messages';
 import { loadAddressGroup, mergeAddressGroup } from './detail-loader';
 import { formatDecimal, formatInteger, formatVnd } from './format';
+import { mergeLimit } from './merge-rules';
 import type { AddressGroup, AddressGroupMember, MergeReport } from './types';
 
 function decimal(value: string | null, locale: Locale): string | null {
@@ -27,6 +28,7 @@ function mergeFailure(
   code: string,
   locale: Locale,
   text: (typeof messages)[Locale],
+  groupSize: number,
 ): string {
   const dt = detailMessages[locale];
   if (code === 'merge-target') return dt.mergeTarget;
@@ -34,6 +36,12 @@ function mergeFailure(
   if (code === 'file-move-incomplete') return dt.fileMoveIncomplete;
   if (code === 'reservation-conflict') return dt.reservationConflict;
   if (code === 'rental-active') return dt.rentalActive;
+  if (code === 'merge-archived') return dt.mergeArchived;
+  if (code === 'merge-conflict') return dt.mergeConflict;
+  if (code === 'merge-too-large')
+    return dt.mergeTooLarge
+      .replace('{count}', formatInteger(groupSize, locale))
+      .replace('{limit}', formatInteger(mergeLimit, locale));
   if (code === 'invalid-input') return text.invalidInput;
   if (code === 'not-found') return text.notFound;
   return text.unavailable;
@@ -132,6 +140,7 @@ export function SharedAddress({
           problem instanceof RequestError ? problem.code : 'unavailable',
           locale,
           text,
+          others.length,
         ),
       );
     } finally {
@@ -356,7 +365,7 @@ export function SharedAddress({
                   >
                     {dt.keepBoth}
                   </button>
-                  {canMerge ? (
+                  {canMerge && others.length <= mergeLimit ? (
                     <button
                       type="button"
                       className="btn btn-sm btn-danger"
@@ -369,6 +378,13 @@ export function SharedAddress({
               )}
             </div>
             {canMerge ? null : <p className="field-hint">{dt.mergeDenied}</p>}
+            {canMerge && others.length > mergeLimit ? (
+              <p className="field-hint">
+                {dt.mergeTooLarge
+                  .replace('{count}', formatInteger(others.length, locale))
+                  .replace('{limit}', formatInteger(mergeLimit, locale))}
+              </p>
+            ) : null}
           </div>
         )}
       </DetailActionDialog>

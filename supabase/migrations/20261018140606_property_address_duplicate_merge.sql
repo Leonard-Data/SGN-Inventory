@@ -114,8 +114,8 @@ $$;
 
 -- Deliberate merge: manager/admin only, both records named by the caller, same normalised
 -- address, the most complete record surviving, and only file rows whose bytes the server has
--- already copied to their new key. Everything happens in one transaction.
-create function private.merge_address_properties(p_keep_property_id uuid, p_merge_property_ids uuid[], p_moved_file_ids uuid[])
+-- already copied to their new key and attested. Everything happens in one transaction.
+create function private.merge_address_properties(p_keep_property_id uuid, p_merge_property_ids uuid[], p_moved_object_ids uuid[], p_move_signature text)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare
   me uuid := private.employee_id();
@@ -124,6 +124,12 @@ declare
   survivor uuid;
   adopted_cover uuid;
   merged jsonb;
+  move_files public.property_files[];
+  move_count integer;
+  payload text;
+  expected_signature text;
+  key_value text;
+  place integer;
   files_moved integer := 0;
   links_moved integer := 0;
   links_shared integer := 0;
@@ -137,7 +143,7 @@ begin
   end if;
   if p_keep_property_id is null or p_merge_property_ids is null
     or array_length(p_merge_property_ids,1) is null
-    or array_length(p_merge_property_ids,1) > 20
+    or array_length(p_merge_property_ids,1) > 100
     or array_position(p_merge_property_ids,null) is not null
     or p_keep_property_id = any(p_merge_property_ids)
     or (select count(distinct x) from unnest(p_merge_property_ids) x) <> array_length(p_merge_property_ids,1) then
@@ -155,7 +161,7 @@ begin
   end if;
   if target.archived_at is not null
     or exists (select 1 from public.properties where id = any(p_merge_property_ids) and archived_at is not null) then
-    raise exception 'archived property cannot be merged' using errcode = '42501';
+    raise exception 'archived property cannot be merged' using errcode = 'P0017';
   end if;
 
   -- The most complete record survives; a different target is refused, never silently relabelled.
@@ -188,11 +194,30 @@ begin
     raise exception 'rented property cannot be merged away' using errcode = 'P0015';
   end if;
 
-  -- Only rows whose bytes the server already copied to the survivor's key may move.
-  if exists (select 1 from public.property_files f
-             where f.property_id = any(p_merge_property_ids) and f.upload_status = 'ready'
-               and not (f.id = any(coalesce(p_moved_file_ids,'{}'::uuid[])))) then
+  -- Every ready file of a folded record moves, and only the server's attestation over the object
+  -- it copied to the survivor's key proves those bytes are there. The payload binds each file id
+  -- and destination key to the copied object identity, so a claimed but uncopied move is refused.
+  select array_agg(f order by f.id) into move_files
+    from public.property_files f
+    where f.property_id = any(p_merge_property_ids) and f.upload_status = 'ready';
+  move_count := coalesce(array_length(move_files,1),0);
+  if coalesce(array_length(p_moved_object_ids,1),0) <> move_count then
     raise exception 'file move incomplete' using errcode = 'P0016';
+  end if;
+  if move_count > 0 then
+    select key_hex into key_value from private.file_validation_keys where id = 1;
+    if key_value is null then raise exception 'validation unavailable'; end if;
+    payload := 'v1|merge|' || p_keep_property_id::text;
+    for place in 1 .. move_count loop
+      payload := payload || '|' || move_files[place].id::text
+        || '|' || p_keep_property_id::text || '/' || move_files[place].id::text || '/' ||
+          substring(move_files[place].object_path from length(move_files[place].property_id::text || '/' || move_files[place].id::text || '/') + 1)
+        || '|' || p_moved_object_ids[place]::text;
+    end loop;
+    expected_signature := encode(extensions.hmac(convert_to(payload,'UTF8'),decode(key_value,'hex'),'sha256'),'hex');
+    if p_move_signature is null or p_move_signature is distinct from expected_signature then
+      raise exception 'file move not attested' using errcode = 'P0018';
+    end if;
   end if;
 
   select jsonb_agg(jsonb_build_object('id', p.id, 'propertyCode', p.property_code) order by p.property_code)
@@ -202,18 +227,26 @@ begin
   select f.id into adopted_cover
     from public.properties p join public.property_files f on f.id = p.cover_file_id
     where p.id = any(p_merge_property_ids) and f.upload_status = 'ready'
-      and f.id = any(coalesce(p_moved_file_ids,'{}'::uuid[]))
     order by p.created_at, f.id limit 1;
 
-  -- Owner links move; a pair the survivor already records converges on that single link, and at
-  -- most one moved link becomes the survivor's primary contact.
-  with moving as (
+  -- Owner links move; a pair the survivor already records converges on that single link, one moved
+  -- link per contact keeps the (property_id, contact_id) key, and at most one moved link becomes
+  -- the survivor's primary contact.
+  select count(*) into links_shared from public.property_contacts l
+    where l.property_id = any(p_merge_property_ids)
+      and exists (select 1 from public.property_contacts k
+                  where k.property_id = p_keep_property_id and k.contact_id = l.contact_id);
+  with candidates as (
     select l.property_id, l.contact_id, l.is_primary,
-      row_number() over (partition by l.is_primary order by l.property_id, l.contact_id) as primary_place
+      row_number() over (partition by l.contact_id order by l.is_primary desc, l.property_id) as contact_place
     from public.property_contacts l
     where l.property_id = any(p_merge_property_ids)
       and not exists (select 1 from public.property_contacts k
                       where k.property_id = p_keep_property_id and k.contact_id = l.contact_id)
+  ), moving as (
+    select property_id, contact_id, is_primary,
+      row_number() over (partition by is_primary order by property_id, contact_id) as primary_place
+    from candidates where contact_place = 1
   )
   update public.property_contacts l
     set property_id = p_keep_property_id,
@@ -224,11 +257,6 @@ begin
     where l.property_id = m.property_id and l.contact_id = m.contact_id;
   get diagnostics links_moved = row_count;
 
-  select count(*) into links_shared from public.property_contacts l
-    where l.property_id = any(p_merge_property_ids)
-      and exists (select 1 from public.property_contacts k
-                  where k.property_id = p_keep_property_id and k.contact_id = l.contact_id);
-
   update public.property_history set property_id = p_keep_property_id
     where property_id = any(p_merge_property_ids);
   get diagnostics history_moved = row_count;
@@ -238,8 +266,7 @@ begin
     set property_id = p_keep_property_id,
       object_path = p_keep_property_id::text || '/' || f.id::text || '/' ||
         substring(f.object_path from length(f.property_id::text || '/' || f.id::text || '/') + 1)
-    where f.property_id = any(p_merge_property_ids) and f.upload_status = 'ready'
-      and f.id = any(coalesce(p_moved_file_ids,'{}'::uuid[]));
+    where f.property_id = any(p_merge_property_ids) and f.upload_status = 'ready';
   get diagnostics files_moved = row_count;
   perform set_config('sgn.property_merge_keep','',true);
 
@@ -260,17 +287,17 @@ begin
 end;
 $$;
 
-create function public.merge_address_properties(p_keep_property_id uuid, p_merge_property_ids uuid[], p_moved_file_ids uuid[] default '{}')
+create function public.merge_address_properties(p_keep_property_id uuid, p_merge_property_ids uuid[], p_moved_object_ids uuid[] default '{}', p_move_signature text default null)
 returns jsonb language sql security invoker set search_path = '' as $$
-  select private.merge_address_properties(p_keep_property_id,p_merge_property_ids,p_moved_file_ids);
+  select private.merge_address_properties(p_keep_property_id,p_merge_property_ids,p_moved_object_ids,p_move_signature);
 $$;
 
 revoke all on function private.address_match_key(text),private.property_completeness(uuid),
-  private.merge_address_properties(uuid,uuid[],uuid[]),
-  public.property_address_group(uuid),public.merge_address_properties(uuid,uuid[],uuid[])
+  private.merge_address_properties(uuid,uuid[],uuid[],text),
+  public.property_address_group(uuid),public.merge_address_properties(uuid,uuid[],uuid[],text)
   from public,anon,authenticated;
 grant execute on function private.address_match_key(text),private.property_completeness(uuid),
-  private.merge_address_properties(uuid,uuid[],uuid[]),
-  public.property_address_group(uuid),public.merge_address_properties(uuid,uuid[],uuid[])
+  private.merge_address_properties(uuid,uuid[],uuid[],text),
+  public.property_address_group(uuid),public.merge_address_properties(uuid,uuid[],uuid[],text)
   to authenticated;
 commit;

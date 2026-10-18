@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 
 // Issue #147 embedded regressions: the shared-address group read, the deliberate merge that
 // moves linked records onto the most complete property and retires exactly the intended ones,
@@ -11,6 +11,7 @@ export async function addressDuplicateMergeContract({
   check,
   fails,
   employees,
+  validationKey,
 }) {
   const shared =
     '12/3 Nguyễn Thị Minh Khai, Phường 5, Quận 3, Thành phố Hồ Chí Minh';
@@ -22,6 +23,7 @@ export async function addressDuplicateMergeContract({
   const keep = 'a1000000-0000-4000-8000-000000000001';
   const duplicate = 'a1000000-0000-4000-8000-000000000002';
   const alone = 'a1000000-0000-4000-8000-000000000003';
+  const second = 'a1000000-0000-4000-8000-000000000004';
   const keepFile = 'a2000000-0000-4000-8000-000000000001';
   const duplicateFile = 'a2000000-0000-4000-8000-000000000002';
   const keepContact = 'a3000000-0000-4000-8000-000000000001';
@@ -61,13 +63,23 @@ export async function addressDuplicateMergeContract({
        sale_price_vnd,land_area_m2,floor_area_m2,frontage_m,depth_m,floors,bedrooms,notes,ownership_type,created_by)
      values ($1,'SGN147-A','sale','house','available',12000000000,120.5,240.25,6,20,3,4,'Most complete record','individual',$2),
             ($3,'SGN147-B','sale','house','negotiating',9000000000,100,200,5,20,2,3,null,null,$2),
-            ($4,'SGN147-C','rent','apartment','available',null,60,60,null,null,null,2,null,null,$2)`,
-    [keep, employees[0], duplicate, alone],
+            ($4,'SGN147-C','rent','apartment','available',null,60,60,null,null,null,2,null,null,$2),
+            ($5,'SGN147-D','sale','house','available',7000000000,null,null,null,null,null,null,null,null,$2)`,
+    [keep, employees[0], duplicate, alone, second],
   );
   await db.query(
     `insert into public.property_addresses(property_id,format,address_text) values
-       ($1,'legacy',$4),($2,'legacy',$5),($3,'legacy',$6)`,
-    [keep, duplicate, alone, shared, sharedUnaccented, uniqueAddress],
+       ($1,'legacy',$5),($2,'legacy',$6),($3,'legacy',$7),($4,'legacy',$8)`,
+    [
+      keep,
+      duplicate,
+      alone,
+      second,
+      shared,
+      sharedUnaccented,
+      uniqueAddress,
+      shared,
+    ],
   );
   await db.query(
     `insert into public.contacts(id,display_name,phones,contact_type) values
@@ -77,8 +89,8 @@ export async function addressDuplicateMergeContract({
   );
   await db.query(
     `insert into public.property_contacts(property_id,contact_id,relation,is_primary) values
-       ($1,$2,'owner',true),($3,$4,'owner',true)`,
-    [keep, keepContact, duplicate, duplicateContact],
+       ($1,$2,'owner',true),($3,$4,'owner',true),($5,$4,'owner',true)`,
+    [keep, keepContact, duplicate, duplicateContact, second],
   );
   const fileRow = `insert into public.property_files(
       id,property_id,document_type,bucket_id,object_path,original_filename,mime_type,
@@ -115,10 +127,11 @@ export async function addressDuplicateMergeContract({
   await asUser(0);
   const full = await group(keep);
   await check('a shared address reports the whole group', async () => {
-    assert.equal(full.members.length, 2);
+    assert.equal(full.members.length, 3);
     assert.deepEqual(full.members.map((member) => member.propertyCode).sort(), [
       'SGN147-A',
       'SGN147-B',
+      'SGN147-D',
     ]);
     // The most complete record is named as the one the merge would keep.
     assert.equal(full.keepId, keep);
@@ -178,8 +191,8 @@ export async function addressDuplicateMergeContract({
     'merge refuses a target that is not the most complete record',
     () =>
       fails(
-        'select public.merge_address_properties($1,array[$2]::uuid[],array[$3]::uuid[])',
-        [duplicate, keep, duplicateFile],
+        'select public.merge_address_properties($1,array[$2]::uuid[],array[]::uuid[])',
+        [duplicate, keep],
         'P0008',
       ),
   );
@@ -190,12 +203,38 @@ export async function addressDuplicateMergeContract({
       'P0009',
     ),
   );
-  await check('merge refuses before the file bytes are copied across', () =>
+  await check('merge refuses a ready file with no attested move', () =>
     fails(
       'select public.merge_address_properties($1,array[$2]::uuid[],array[]::uuid[])',
       [keep, duplicate],
       'P0016',
     ),
+  );
+  const copiedObjectId = randomUUID();
+  await check(
+    'a claimed file move without the server attestation is refused and nothing moves',
+    async () => {
+      await fails(
+        'select public.merge_address_properties($1,array[$2]::uuid[],array[$3]::uuid[],$4)',
+        [keep, duplicate, copiedObjectId, '0'.repeat(64)],
+        'P0018',
+      );
+      const file = (
+        await db.query(
+          'select property_id,object_path from public.property_files where id=$1',
+          [duplicateFile],
+        )
+      ).rows[0];
+      assert.equal(file.property_id, duplicate);
+      assert.equal(file.object_path, `${duplicate}/${duplicateFile}/content`);
+      const retired = (
+        await db.query(
+          'select archived_at from public.properties where id=$1',
+          [duplicate],
+        )
+      ).rows[0];
+      assert.equal(retired.archived_at, null);
+    },
   );
   await check('direct client file identity change is still refused', () =>
     fails(
@@ -205,10 +244,22 @@ export async function addressDuplicateMergeContract({
     ),
   );
 
+  const signature = createHmac('sha256', Buffer.from(validationKey, 'hex'))
+    .update(
+      [
+        'v1',
+        'merge',
+        keep,
+        duplicateFile,
+        `${keep}/${duplicateFile}/content`,
+        copiedObjectId,
+      ].join('|'),
+    )
+    .digest('hex');
   const report = (
     await db.query(
-      'select public.merge_address_properties($1,array[$2]::uuid[],array[$3]::uuid[]) as report',
-      [keep, duplicate, duplicateFile],
+      'select public.merge_address_properties($1,array[$2,$3]::uuid[],array[$4]::uuid[],$5) as report',
+      [keep, duplicate, second, copiedObjectId, signature],
     )
   ).rows[0].report;
   await check(
@@ -217,7 +268,7 @@ export async function addressDuplicateMergeContract({
       assert.equal(report.keep.propertyCode, 'SGN147-A');
       assert.deepEqual(
         report.merged.map((row) => row.propertyCode),
-        ['SGN147-B'],
+        ['SGN147-B', 'SGN147-D'],
       );
       assert.deepEqual(report.moved, {
         files: 1,
@@ -238,13 +289,18 @@ export async function addressDuplicateMergeContract({
       ).rows[0];
       assert.equal(file.property_id, keep);
       assert.equal(file.object_path, `${keep}/${duplicateFile}/content`);
+      // The contact linked to both folded records keeps exactly one row on the survivor; the
+      // duplicate stays with the archived record instead of violating the property-contacts key.
       const link = (
         await db.query(
-          'select property_id,is_primary from public.property_contacts where contact_id=$1',
+          'select property_id,is_primary from public.property_contacts where contact_id=$1 order by property_id',
           [duplicateContact],
         )
       ).rows;
-      assert.deepEqual(link, [{ property_id: keep, is_primary: false }]);
+      assert.deepEqual(link, [
+        { property_id: keep, is_primary: false },
+        { property_id: second, is_primary: true },
+      ]);
       const history = (
         await db.query(
           'select count(*)::int as n from public.property_history where property_id=$1',
@@ -272,8 +328,8 @@ export async function addressDuplicateMergeContract({
   await check('exactly the intended record was retired', async () => {
     const rows = (
       await db.query(
-        'select id,archived_at from public.properties where id in ($1,$2,$3) order by property_code',
-        [keep, duplicate, 'a1000000-0000-4000-8000-000000000003'],
+        'select id,archived_at from public.properties where id in ($1,$2,$3,$4) order by property_code',
+        [keep, duplicate, alone, second],
       )
     ).rows;
     assert.deepEqual(
@@ -281,7 +337,8 @@ export async function addressDuplicateMergeContract({
       [
         [keep, true],
         [duplicate, false],
-        ['a1000000-0000-4000-8000-000000000003', true],
+        [alone, true],
+        [second, false],
       ],
     );
   });
@@ -300,7 +357,7 @@ export async function addressDuplicateMergeContract({
     fails(
       'select public.merge_address_properties($1,array[$2]::uuid[],array[]::uuid[])',
       [keep, duplicate],
-      '42501',
+      'P0017',
     ),
   );
   await asOwner();

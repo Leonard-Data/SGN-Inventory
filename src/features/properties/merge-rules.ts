@@ -1,5 +1,10 @@
 import { isUuid } from '../../lib/supabase/query.ts';
 
+// The folded-record bound shared by the browser and the database; the legacy data tops out at
+// three properties on one address. A group above it is refused with its own message rather than
+// a generic validation error, and splitting an oversized group is follow-up work.
+export const mergeLimit = 100;
+
 // A merge request names the surviving record in the path and the records folded into it. The
 // body carries nothing else, so a stray or replayed shape is refused before any file is copied.
 export function mergeRequest(
@@ -12,7 +17,7 @@ export function mergeRequest(
     Object.keys(body).some((key) => key !== 'merge') ||
     !Array.isArray(requested) ||
     requested.length === 0 ||
-    requested.length > 20 ||
+    requested.length > mergeLimit ||
     requested.some((value) => !isUuid(value)) ||
     new Set(requested).size !== requested.length ||
     requested.includes(keepId)

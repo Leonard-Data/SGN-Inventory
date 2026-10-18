@@ -1972,7 +1972,8 @@ export type Database = {
         Args: {
           p_keep_property_id: string;
           p_merge_property_ids: string[];
-          p_moved_file_ids?: string[];
+          p_moved_object_ids?: string[];
+          p_move_signature?: string | null;
         };
         Returns: Json;
       };

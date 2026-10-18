@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mergeRequest, movedObjectPath } from './merge-rules.ts';
+import { mergeLimit, mergeRequest, movedObjectPath } from './merge-rules.ts';
 
 const keep = '11111111-1111-4111-8111-111111111111';
 const folded = '22222222-2222-4222-8222-222222222222';
@@ -27,12 +27,17 @@ test('a malformed merge request is refused before anything moves', () => {
   assert.equal(mergeRequest(keep, { merge: [folded, 'x'] }), null);
   assert.equal(mergeRequest(keep, { merge: [null] }), null);
   assert.equal(mergeRequest(keep, { merge: [folded], keepId: keep }), null);
+});
+
+test('the folded-record bound admits a full group and refuses one record more', () => {
+  assert.equal(mergeLimit, 100);
+  const group = (size: number) =>
+    Array.from({ length: size }, () => crypto.randomUUID());
   assert.equal(
-    mergeRequest(keep, {
-      merge: Array.from({ length: 21 }, () => crypto.randomUUID()),
-    }),
-    null,
+    mergeRequest(keep, { merge: group(mergeLimit) })?.merge.length,
+    mergeLimit,
   );
+  assert.equal(mergeRequest(keep, { merge: group(mergeLimit + 1) }), null);
 });
 
 test('a moved file lands on the surviving property key with its own tail', () => {

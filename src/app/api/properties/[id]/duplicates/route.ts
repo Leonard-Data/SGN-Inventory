@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { objectBody, runRoute } from '@/lib/supabase/route';
+import { ApiError, objectBody, runRoute } from '@/lib/supabase/route';
 import { activeEmployee } from '@/features/employees/access';
 import {
   addressGroup,
@@ -19,13 +19,16 @@ export function GET(
 }
 
 // Merging is a deliberate manager/admin action: the confirmation in the browser names both
-// records, and the database re-checks the role, the address and the surviving record itself.
+// records, the route refuses another role before any file is copied, and the database re-checks
+// the role, the address, the attested copies and the surviving record itself.
 export function POST(
   request: NextRequest,
   route: { params: Promise<{ id: string }> },
 ) {
   return runRoute(request, async (context) => {
-    await activeEmployee(context);
+    const employee = await activeEmployee(context);
+    if (employee.role !== 'manager' && employee.role !== 'admin')
+      throw new ApiError(403, 'access-denied');
     return NextResponse.json(
       await mergeDuplicates(
         context,

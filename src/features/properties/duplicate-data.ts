@@ -1,7 +1,8 @@
 import 'server-only';
+import { createHmac } from 'node:crypto';
 import { ApiError, uuid, type RouteContext } from '@/lib/supabase/route';
-import { copyObject, deleteObject } from '@/lib/r2';
-import { mergeRequest, movedObjectPath } from './merge-rules';
+import { copyObject, objectIdentity, storedObject } from '@/lib/r2';
+import { mergeLimit, mergeRequest, movedObjectPath } from './merge-rules';
 import type { AddressGroup, MergeReport } from './types';
 
 // The signed-in employee's read of one address group. The database decides membership on the
@@ -25,10 +26,7 @@ function denied(error: { code?: string }): never {
 }
 
 // Every refusal the merge can name, so the browser reports the cause instead of a generic
-// failure. A database refusal is definite: the transaction rolled back, so nothing moved. An
-// unrecognized failure (a lost response, an outage) is not, so it returns null and leaves the
-// copies in place — an unreferenced copy is harmless, while deleting one the commit already
-// points at would destroy a readable file.
+// failure. An unrecognized failure (a lost response, an outage) stays a 503.
 function mergeRefusal(error: { code?: string }): ApiError | null {
   if (error.code === '42501') return new ApiError(403, 'access-denied');
   if (error.code === 'P0002') return new ApiError(404, 'not-found');
@@ -36,29 +34,37 @@ function mergeRefusal(error: { code?: string }): ApiError | null {
   if (error.code === 'P0009') return new ApiError(409, 'address-mismatch');
   if (error.code === 'P0014') return new ApiError(409, 'reservation-conflict');
   if (error.code === 'P0015') return new ApiError(409, 'rental-active');
-  if (error.code === 'P0016') return new ApiError(409, 'file-move-incomplete');
+  if (error.code === 'P0016' || error.code === 'P0018')
+    return new ApiError(409, 'file-move-incomplete');
+  if (error.code === 'P0017') return new ApiError(409, 'merge-archived');
+  if (error.code === '23505') return new ApiError(409, 'merge-conflict');
   if (error.code === '23514') return new ApiError(400, 'invalid-input');
   return null;
 }
 
 type ReadyFile = { id: string; property_id: string; object_path: string };
+type MovedFile = { id: string; path: string; objectId: string };
 
-// A copy left behind carries no file record, so no read can reach it, and a repeated merge
-// overwrites the same key; a cleanup failure therefore needs no error of its own.
-async function discard(paths: string[]): Promise<void> {
-  await Promise.all(
-    paths.map((path) => deleteObject(path).catch(() => undefined)),
-  );
+// The destination object's identity is the server's evidence that the copied bytes exist; the
+// database refuses any move its own key has not signed.
+async function attestedCopy(from: string, to: string): Promise<string> {
+  await copyObject(from, to);
+  const info = await storedObject(to);
+  if (!info) throw new ApiError(503, 'unavailable');
+  return objectIdentity(info.etag);
 }
 
 // A deliberate, role-checked merge: the bytes of every ready file are copied to the survivor's
-// key first, and only then does the database move the records in one transaction. If the merge
-// is refused, the copies are removed so nothing is left half-moved.
+// key and attested first, and only then does the database move the records in one transaction.
+// Copies are never deleted: a concurrent merge can already reference those keys, and a copy left
+// behind carries no file record, so no read can reach it.
 export async function mergeDuplicates(
   context: RouteContext,
   id: string,
   body: Record<string, unknown>,
 ): Promise<MergeReport> {
+  if (Array.isArray(body.merge) && body.merge.length > mergeLimit)
+    throw new ApiError(400, 'merge-too-large');
   const request = mergeRequest(id, body);
   if (!request) throw new ApiError(400, 'invalid-input');
   const merge = request.merge;
@@ -71,22 +77,35 @@ export async function mergeDuplicates(
     .order('id');
   if (error) denied(error);
   const moving = (files ?? []) as ReadyFile[];
-  const copied: string[] = [];
-  try {
-    for (const file of moving) {
-      const to = movedObjectPath(id, {
-        id: file.id,
-        propertyId: file.property_id,
-        objectPath: file.object_path,
-      });
-      if (!to) throw new ApiError(409, 'file-move-incomplete');
-      await copyObject(file.object_path, to);
-      copied.push(to);
-    }
-  } catch (failure) {
-    await discard(copied);
-    if (failure instanceof ApiError) throw failure;
-    denied({});
+  const moved: MovedFile[] = [];
+  for (const file of moving) {
+    const to = movedObjectPath(id, {
+      id: file.id,
+      propertyId: file.property_id,
+      objectPath: file.object_path,
+    });
+    if (!to) throw new ApiError(409, 'file-move-incomplete');
+    moved.push({
+      id: file.id,
+      path: to,
+      objectId: await attestedCopy(file.object_path, to),
+    });
+  }
+
+  let signature: string | null = null;
+  if (moved.length) {
+    const key = process.env.SGN_FILE_VALIDATION_KEY;
+    if (!key || !/^[a-f0-9]{64}$/.test(key))
+      throw new ApiError(503, 'unavailable');
+    const payload = [
+      'v1',
+      'merge',
+      id,
+      ...moved.flatMap((file) => [file.id, file.path, file.objectId]),
+    ].join('|');
+    signature = createHmac('sha256', Buffer.from(key, 'hex'))
+      .update(payload)
+      .digest('hex');
   }
 
   const { data: report, error: mergeFailure } = await context.client.rpc(
@@ -94,14 +113,13 @@ export async function mergeDuplicates(
     {
       p_keep_property_id: id,
       p_merge_property_ids: merge,
-      p_moved_file_ids: moving.map((file) => file.id),
+      p_moved_object_ids: moved.map((file) => file.objectId),
+      p_move_signature: signature,
     },
   );
   if (mergeFailure) {
     const refusal = mergeRefusal(mergeFailure);
-    if (!refusal) throw new ApiError(503, 'unavailable');
-    await discard(copied);
-    throw refusal;
+    throw refusal ?? new ApiError(503, 'unavailable');
   }
   return report as MergeReport;
 }
