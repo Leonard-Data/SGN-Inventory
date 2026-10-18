@@ -1,12 +1,11 @@
-// The inventory pager carries a page number and a page size in the page address and turns them
-// into the one filtered read that returns the matching total beside its rows. Both orderings -
-// the ordinary browse and the eligible oldest-first/newest-first chronology - are that read, so
-// the count, the rows and the page links always describe the same result set.
+// The inventory pager carries a page number in the page address and turns it into the one
+// filtered read that returns the matching total beside its rows. Both orderings - the ordinary
+// browse and the eligible oldest-first/newest-first chronology - are that read, so the count,
+// the rows and the page links always describe the same result set.
 export type InventoryOrder = 'oldest' | 'newest';
 
+// The page-size selector that varies this is a separate ticket.
 export const INVENTORY_PAGE_SIZE = 30;
-// The database ceiling. The page-size selector that raises it is a separate ticket.
-export const INVENTORY_MAX_PAGE_SIZE = 50;
 // The numbered links are a bounded window around the current page, so a large result set never
 // renders hundreds of links; first, last and the jump control reach the rest.
 export const INVENTORY_PAGE_WINDOW = 7;
@@ -26,25 +25,19 @@ export function reversedOrder(
   return order === 'oldest' ? 'newest' : 'oldest';
 }
 
-export type InventoryPaging = { page: number; pageSize: number };
+export type InventoryPaging = { page: number };
 export type InventoryPagingParse =
   { ok: true; paging: InventoryPaging } | { ok: false };
 
-// An absent value is the first page at the default size. A value the address states must be a
-// plain positive integer inside the ceiling, so a mangled or unsupported page is refused rather
-// than read as a different page than the address asked for.
+// An absent value is the first page. A value the address states must be a plain positive integer,
+// so a mangled or unsupported page is refused rather than read as a different page than the
+// address asked for.
 export function parseInventoryPaging(
   params: URLSearchParams,
 ): InventoryPagingParse {
   const page = positive(params.get('page'));
-  const pageSize = positive(params.get('pageSize'));
-  if (page === undefined || pageSize === undefined) return { ok: false };
-  if (pageSize !== null && pageSize > INVENTORY_MAX_PAGE_SIZE)
-    return { ok: false };
-  return {
-    ok: true,
-    paging: { page: page ?? 1, pageSize: pageSize ?? INVENTORY_PAGE_SIZE },
-  };
+  if (page === undefined) return { ok: false };
+  return { ok: true, paging: { page: page ?? 1 } };
 }
 
 // A result set always has a page one, even when it has no rows, so the pager states where the

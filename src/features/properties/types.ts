@@ -37,7 +37,6 @@ export type PropertyPage = {
   // count, the rows and the pager links cannot describe different result sets.
   total: number;
   page: number;
-  pageSize: number;
   order: InventoryOrder | null;
 };
 // A pending request never reserves the property; only an approved, unexpired reservation is

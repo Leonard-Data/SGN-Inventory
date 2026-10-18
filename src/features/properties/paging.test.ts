@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  INVENTORY_MAX_PAGE_SIZE,
   INVENTORY_PAGE_SIZE,
   inventoryPageCount,
   isInventoryOrder,
@@ -13,18 +12,12 @@ import {
 const paging = (values: Record<string, string>) =>
   parseInventoryPaging(new URLSearchParams(values));
 
-test('an absent page number and size are the first page at the default size', () => {
-  assert.deepEqual(paging({}), {
-    ok: true,
-    paging: { page: 1, pageSize: INVENTORY_PAGE_SIZE },
-  });
-  assert.deepEqual(paging({ page: '4', pageSize: '10' }), {
-    ok: true,
-    paging: { page: 4, pageSize: 10 },
-  });
+test('an absent page number is the first page', () => {
+  assert.deepEqual(paging({}), { ok: true, paging: { page: 1 } });
+  assert.deepEqual(paging({ page: '4' }), { ok: true, paging: { page: 4 } });
 });
 
-test('a page or size the address states must be usable or it is refused', () => {
+test('a page the address states must be usable or it is refused', () => {
   for (const value of [
     '',
     '0',
@@ -37,30 +30,20 @@ test('a page or size the address states must be usable or it is refused', () => 
     '1000000000',
   ])
     assert.deepEqual(paging({ page: value }), { ok: false }, `page=${value}`);
-  for (const value of [
-    '',
-    '0',
-    '0.5',
-    'many',
-    String(INVENTORY_MAX_PAGE_SIZE + 1),
-  ])
-    assert.deepEqual(
-      paging({ pageSize: value }),
-      { ok: false },
-      `pageSize=${value}`,
-    );
-  assert.deepEqual(paging({ pageSize: String(INVENTORY_MAX_PAGE_SIZE) }), {
-    ok: true,
-    paging: { page: 1, pageSize: INVENTORY_MAX_PAGE_SIZE },
-  });
 });
 
 test('a result set always states at least one page', () => {
-  assert.equal(inventoryPageCount(0, 30), 1);
-  assert.equal(inventoryPageCount(1, 30), 1);
-  assert.equal(inventoryPageCount(30, 30), 1);
-  assert.equal(inventoryPageCount(31, 30), 2);
-  assert.equal(inventoryPageCount(61, 30), 3);
+  assert.equal(inventoryPageCount(0, INVENTORY_PAGE_SIZE), 1);
+  assert.equal(inventoryPageCount(1, INVENTORY_PAGE_SIZE), 1);
+  assert.equal(inventoryPageCount(INVENTORY_PAGE_SIZE, INVENTORY_PAGE_SIZE), 1);
+  assert.equal(
+    inventoryPageCount(INVENTORY_PAGE_SIZE + 1, INVENTORY_PAGE_SIZE),
+    2,
+  );
+  assert.equal(
+    inventoryPageCount(INVENTORY_PAGE_SIZE * 2 + 1, INVENTORY_PAGE_SIZE),
+    3,
+  );
 });
 
 test('the numbered pages stay inside the result set and around the current page', () => {

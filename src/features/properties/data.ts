@@ -9,6 +9,7 @@ import {
   type InventoryFilters,
 } from './filters';
 import {
+  INVENTORY_PAGE_SIZE,
   isInventoryOrder,
   parseInventoryPaging,
   type InventoryOrder,
@@ -27,14 +28,13 @@ export async function browseProperties(
   // different inventory than the one the address describes.
   const filters = parseInventoryFilters(params);
   if (!filters.ok) throw new ApiError(400, 'invalid-input');
-  // The page number and page size are read the same way: a mangled, zero or unsupported value is
-  // refused rather than quietly served as a different page than the address states.
+  // The page number is read the same way: a mangled, zero or unsupported value is refused rather
+  // than quietly served as a different page than the address states.
   const paging = parseInventoryPaging(params);
   if (!paging.ok) throw new ApiError(400, 'invalid-input');
   const allowed = [
     'query',
     'page',
-    'pageSize',
     ...(sort === null ? [] : ['sort']),
     ...INVENTORY_FILTER_KEYS,
   ];
@@ -56,7 +56,7 @@ export async function browseProperties(
       p_order: order,
       p_query: query,
       p_page: paging.paging.page,
-      p_page_size: paging.paging.pageSize,
+      p_page_size: INVENTORY_PAGE_SIZE,
       ...filterRpcArgs(filters.filters),
     })
     .select(
@@ -67,7 +67,7 @@ export async function browseProperties(
   // empty: the total is zero and the pager states page one of one.
   const total = rows?.length ? rows[0]!.total_count : 0;
   const page = rows?.length ? rows[0]!.page_number : 1;
-  const summary = { total, page, pageSize: paging.paging.pageSize, order };
+  const summary = { total, page, order };
   if (!rows?.length) return { ...summary, properties: [] };
   const addresses = await addressSummaries(
     context,

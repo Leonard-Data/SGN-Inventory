@@ -26,14 +26,12 @@ export function Inventory({
   initialLocale,
   initialQuery,
   page,
-  pageSize,
   sort,
   filters,
 }: {
   initialLocale: Locale;
   initialQuery: string;
   page: string | null;
-  pageSize: string | null;
   sort: string | null;
   filters: InventoryFilters;
 }) {
@@ -48,7 +46,6 @@ export function Inventory({
       query: initialQuery,
       ...(sort ? { sort } : {}),
       ...(page ? { page } : {}),
-      ...(pageSize ? { pageSize } : {}),
       ...activeFilters,
     });
   const { employee, data, error, busy, surface, logout, clear, reload } =
@@ -72,8 +69,7 @@ export function Inventory({
   // describe that same result set rather than counting the rows this page happens to hold.
   const total = data?.total ?? 0;
   const servedPage = data?.page ?? 1;
-  const servedSize = data?.pageSize ?? INVENTORY_PAGE_SIZE;
-  const pages = inventoryPageCount(total, servedSize);
+  const pages = inventoryPageCount(total, INVENTORY_PAGE_SIZE);
   const numbers = pageNumbers(servedPage, pages);
   const numberFormat = useMemo(
     () => new Intl.NumberFormat(locale === 'vi' ? 'vi-VN' : 'en-GB'),
@@ -88,8 +84,8 @@ export function Inventory({
       setSearchError(false);
     }
   }
-  // Every pager link carries the same search, filters, ordering and page size, so moving between
-  // pages never changes which result set is being paged; an absent page is page one.
+  // Every pager link carries the same search, filters and ordering, so moving between pages never
+  // changes which result set is being paged; an absent page is page one.
   function href(target: number) {
     return (
       '/properties?' +
@@ -98,14 +94,10 @@ export function Inventory({
         ...(sort ? { sort } : {}),
         ...activeFilters,
         ...(target > 1 ? { page: String(target) } : {}),
-        ...(servedSize !== INVENTORY_PAGE_SIZE
-          ? { pageSize: String(servedSize) }
-          : {}),
       })
     );
   }
-  // Switching order starts at page one; the ordering never rewrites the search, the filters or
-  // the page size.
+  // Switching order starts at page one; the ordering never rewrites the search or the filters.
   function orderHref(next: InventoryOrder | null) {
     return (
       '/properties?' +
@@ -113,9 +105,6 @@ export function Inventory({
         query: initialQuery,
         ...(next ? { sort: next } : {}),
         ...activeFilters,
-        ...(servedSize !== INVENTORY_PAGE_SIZE
-          ? { pageSize: String(servedSize) }
-          : {}),
       })
     );
   }

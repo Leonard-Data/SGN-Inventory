@@ -650,32 +650,27 @@ async function appGet(cookies, route) {
   const body = await response.json().catch(() => null);
   return { status: response.status, body };
 }
-// Walk the chronological endpoint the way the browser does: one bounded page at a time,
-// carrying the cursor until the read stops emitting one.
-async function walkApi(cookies, direction) {
+// Walk the chronological endpoint the way the browser does: one bounded page of thirty rows at a
+// time, stepping the page number until the stated total is covered.
+async function walkApi(cookies, direction, expected) {
   const pages = [];
-  let after = null;
-  for (let guard = 0; guard < 200; guard++) {
-    const route =
-      `/api/properties?sort=${direction}` +
-      (after ? `&after=${encodeURIComponent(after)}` : '');
-    const page = await appGet(cookies, route);
-    assert.equal(
-      page.status,
-      200,
-      `inventory ${direction} page ${pages.length}`,
+  const lastPage = Math.max(1, Math.ceil(expected / 30));
+  for (let page = 1; page <= lastPage; page++) {
+    const response = await appGet(
+      cookies,
+      `/api/properties?sort=${direction}&page=${page}`,
     );
-    assert.equal(page.body?.order, direction, 'page ordering label');
-    pages.push(page.body);
-    if (!page.body.nextCursor) return pages;
+    assert.equal(response.status, 200, `inventory ${direction} page ${page}`);
+    assert.equal(response.body?.order, direction, 'page ordering label');
     assert.equal(
-      page.body.properties.length,
-      30,
-      'a cursor is emitted only from a full exposed page',
+      response.body?.total,
+      expected,
+      'every page states the matching total',
     );
-    after = page.body.nextCursor;
+    assert.equal(response.body?.page, page, 'served page number');
+    pages.push(response.body);
   }
-  assert.fail('Chronological walk did not terminate');
+  return pages;
 }
 
 // ------------------------------------------------------------------ browsers
@@ -984,8 +979,8 @@ try {
     fixtures.sales.email,
     fixtures.sales.password,
   );
-  const oldestPages = await walkApi(salesCookies, 'oldest');
-  const newestPages = await walkApi(salesCookies, 'newest');
+  const oldestPages = await walkApi(salesCookies, 'oldest', oldest.length);
+  const newestPages = await walkApi(salesCookies, 'newest', newest.length);
   const oldestApi = oldestPages.flatMap((page) => page.properties);
   const newestApi = newestPages.flatMap((page) => page.properties);
   assert.deepEqual(
@@ -1028,11 +1023,18 @@ try {
   );
   assert.equal(malformedSort.status, 400, 'invalid sort refusal');
   assert.equal(malformedSort.body?.error, 'invalid-input');
-  const malformedCursor = await appGet(
+  const malformedPage = await appGet(
     salesCookies,
-    '/api/properties?sort=oldest&after=not-a-cursor',
+    '/api/properties?sort=oldest&page=not-a-page',
   );
-  assert.equal(malformedCursor.status, 400, 'invalid cursor refusal');
+  assert.equal(malformedPage.status, 400, 'invalid page refusal');
+  assert.equal(malformedPage.body?.error, 'invalid-input');
+  const zeroPage = await appGet(
+    salesCookies,
+    '/api/properties?sort=oldest&page=0',
+  );
+  assert.equal(zeroPage.status, 400, 'zero page refusal');
+  assert.equal(zeroPage.body?.error, 'invalid-input');
   const extraParameter = await appGet(
     salesCookies,
     '/api/properties?sort=oldest&unknown=1',
