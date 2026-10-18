@@ -49,14 +49,15 @@ variants, radii (`--radius-sm|md|lg|pill`), the 4 px space scale, motion
 
 | Role | Family | Weights | Subset |
 | --- | --- | --- | --- |
-| Display / wordmark | Oswald | 400/500/600 | latin, vietnamese |
-| Body / labels / buttons | Inter | 400/500/600 | latin, vietnamese |
-| Mono labels | IBM Plex Mono | 400/500 | latin, vietnamese |
+| Display / wordmark | Oswald | 400/500/600 | latin, latin-ext, vietnamese |
+| Body / labels / buttons | Inter | 400/500/600 | latin, latin-ext, vietnamese |
+| Mono labels | IBM Plex Mono | 400/500 | latin, latin-ext, vietnamese |
 
 The prototype loads these three families from a Google Fonts `<link>`. This
-project binds the same families, weights and subsets through `next/font/google`
-in `src/app/layout.tsx`, which self-hosts them at build time instead of loading a
-runtime CDN. The token names (`--font-display`, `--font-body`, `--font-mono`)
+project binds the same families, weights and subsets to woff2 files vendored in
+`src/app/fonts` through `next/font/local` in `src/app/fonts.ts`, so the build
+fetches nothing from Google and `src/app/layout.tsx` only applies the resulting
+variable classes. The token names (`--font-display`, `--font-body`, `--font-mono`)
 stay the contract; `next/font` appends a `"<family> Fallback"` entry to the
 computed `font-family` list (a size-adjusted fallback used only before the web
 font loads), so rendered glyphs are identical even though the computed
