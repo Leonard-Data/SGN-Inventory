@@ -127,7 +127,7 @@ For **each** GitHub environment (`preview` uses the dev values):
 
 ### Exact Supabase settings
 
-- One dev and one prod project with distinct refs and keys. Expose only `public` in the Data API, never `private`. Preserve grants/RLS and the private file bucket. Use the user's publishable-key session for ordinary requests; no service-role fallback.
+- One dev and one prod project with distinct refs and keys. Expose only `public` in the Data API, never `private`. Preserve grants/RLS and the private file buckets (the legacy Supabase one and R2). Use the user's publishable-key session for ordinary requests; no service-role fallback.
 - Disable open signup/anonymous sign-in; employee invitation and live employee linkage remain separate. Supply an authorized linked active test employee for preview acceptance, never real production customer fixtures.
 - Auth **Site URL**: stable dev origin on dev; canonical production origin on prod.
 - Auth **Redirect URLs**: permit `<stage-origin>/auth/callback` for the PKCE recovery flow and `<stage-origin>/auth/invite` for the invitation destination (issue #68), so a delivered invitation returns to the fixed application path instead of the Site URL. Email templates using the token-hash flow must target the same stage's `/auth/confirm` with `type=recovery`; never point dev mail at prod. Configure real SMTP/delivered recovery separately.

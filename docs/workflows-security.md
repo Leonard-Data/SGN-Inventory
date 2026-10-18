@@ -75,8 +75,8 @@ The required languages are VI/EN, with Vietnamese regional conventions in either
 - Authorization uses a live active employee row, independent of editable Auth profile metadata.
 - Business mutation definers are private, fixed-search-path functions with explicit role checks; public endpoints are invoker wrappers.
 - Views are invoker views; private staging and audit tables have RLS and no client grants.
-- Legal/photos bucket is private. Only registered pending uploads are accepted; ready objects are readable only by active employees under policy.
-- Browser file overwrites and deletion are denied. Upload completion checks object presence and document review is reviewer-only.
+- Property file bytes live in a private R2 bucket reached only through 60-second presigned URLs. The RLS-checked `property_files` record is the read authority: a pending registration accepts one conditional upload, and a ready object is readable only by an active employee — or an archived property's reviewer — after that record is authorized. The four `R2_*` values are server-only; a missing one fails file operations closed.
+- Browser file overwrite and deletion are denied: the presigned `PUT` writes conditionally, and completion re-reads the object from R2 and signs an attestation over its size, hash and decoded format that the database verifies. Document review stays reviewer-only.
 - UI hidden controls improve usability; database policies remain the authority.
 
 ## Operational controls to implement

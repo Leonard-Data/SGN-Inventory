@@ -387,7 +387,7 @@ Embedded coverage: `scripts/contact-directory-contract.mjs` (in `npm run test:sc
 
 ## Property files staging acceptance
 
-Scope: [private-file protocol](property-files-spec.md) and [document protocol](database-contract.md#document-storage-and-access). Use isolated development/staging with real Supabase Auth, Data API/RLS, Storage and the actual browser interface. The executed development evidence below is separate from these repeatable acceptance gates; embedded tests do not prove hosted permissions or concurrent transactions.
+Scope: [private-file protocol](property-files-spec.md) and [document protocol](database-contract.md#document-storage-and-access). Use isolated development/staging with real Supabase Auth, Data API/RLS, a private Cloudflare R2 bucket (see [R2 storage cutover](#r2-storage-cutover-not-yet-executed)) and the actual browser interface. The executed development evidence below is separate from these repeatable acceptance gates; embedded tests do not prove hosted permissions or concurrent transactions.
 
 Prepare sanitized fixtures through authorized administration:
 
@@ -402,7 +402,7 @@ Prepare sanitized fixtures through authorized administration:
 | Active employee registers an attachment with safe filename, expected MIME/size/hash, and purpose (document or photo); uploads matching bytes; completion validates stored content type/count/hash | File appears in the property workspace as completed with original filename and purpose; a salesperson can upload to another employee's unarchived property without acquiring edit authority |
 | Register but never upload; upload but never complete; complete with mismatched hash/count/type | File does not appear in completed file list; pending/incomplete state is distinguishable; no ready file results from absent or invalid bytes |
 | Legacy files with upload_status='ready' preserve identity, content hash (sha256), original filename, MIME type, size, uploader attribution, review status; signed URL returns exact bytes matching bytes_fixture | All ready-status legacy files appear in the file list; #22 API filters on upload_status='ready' |
-| Attempt empty, oversized (>20 MiB), unsupported-format, and unsafe-path inputs | Localized validation failure before Storage; no partial state, no leaked diagnostics |
+| Attempt empty, oversized (>20 MiB), unsupported-format, and unsafe-path inputs | Localized validation failure before any upload; no partial state, no leaked diagnostics |
 | Uploader retries completion after a lost response; concurrent completion from two browser sessions | One authoritative attachment; exact stored content matches original bytes; no duplicate registration or object overwrite |
 | Network interruption before object creation, after bytes stored but before completion, after completion before response observed | Recovery across refresh, browser closure and subsequent login finds the same registered upload; reselecting matching content reuses same UUID/path; different content is rejected |
 | Uploader creates a company-wide Document category with accented name; another employee reuses it; Other default is applied when no category is selected | Category is available across employees and properties; normalized duplicate creation returns existing category; accented names are preserved; Other is localized per interface language |
@@ -415,6 +415,8 @@ Prepare sanitized fixtures through authorized administration:
 | Inactive/unlinked/anonymous attempts file operations | Denied through both browser and direct API; no protected file data exposed |
 | Archived-property file operations (upload, category change, cover) attempted by ordinary employee | Denied; reviewer (operator) can still read archived property files |
 | Live deactivation while file workspace is open | Subsequent requests deny access; protected request/refocus clears displayed file data; restored activation re-enables access |
+| Switch VI/EN during upload, category selection, recovery, and cover operations | Equivalent labels, validation and statuses; filenames, category names, and document bytes remain unchanged |
+| Direct API attempts: metadata readiness mutation, forged completion attestation and old completion/review signatures | Denied without publishing unvalidated bytes; direct overwrite/delete probes need concrete authorization for a newly disposable synthetic object and subsequent exact-byte verification |
 
 ### R2 storage cutover (not yet executed)
 
@@ -430,8 +432,6 @@ Property file bytes now live in a private Cloudflare R2 bucket reached only thro
 | Per-property caps | A sixth document and an eleventh image are refused with the localized limit message and leave no row or object; the cover photo counts inside the 10 images; 20 MiB documents and 5 MiB images accept, one byte more refuses |
 | Retention | Clearing the cover, recategorizing a file and retrying completion never delete the R2 object or the row: the attachment stays readable |
 | Copy script against the development project | Dry run lists what it would copy and copies nothing; `--apply` copies every registered key, then the verification pass reports the whole registered set present with matching sizes; the Supabase bucket still holds every object afterwards |
-| Switch VI/EN during upload, category selection, recovery, and cover operations | Equivalent labels, validation and statuses; filenames, category names, and document bytes remain unchanged |
-| Direct API attempts: metadata readiness mutation, forged completion attestation and old completion/review signatures | Denied without publishing unvalidated bytes; direct overwrite/delete probes need concrete authorization for a newly disposable synthetic object and subsequent exact-byte verification |
 
 Add embedded database regressions only for consumer-visible invariants and run `npm run test:schema` for schema/workflow changes. Browser, real Data API/Storage/RLS and separate-session contention remain distinct proof. Record sanitized observations without tokens, signed URLs, private source payloads or customer records. Never run destructive probes on legacy or real objects or infer cleanup authority.
 
