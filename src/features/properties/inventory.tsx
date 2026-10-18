@@ -17,7 +17,9 @@ import {
   inventoryPageCount,
   isInventoryOrder,
   reversedOrder,
+  INVENTORY_PAGE_SIZES,
   type InventoryOrder,
+  type InventoryPageSize,
 } from './paging';
 
 export function Inventory({
@@ -26,10 +28,12 @@ export function Inventory({
   page,
   sort,
   filters,
+  pageSize,
 }: {
   initialLocale: Locale;
   initialQuery: string;
   page: string | null;
+  pageSize: string | null;
   sort: string | null;
   filters: InventoryFilters;
 }) {
@@ -44,6 +48,7 @@ export function Inventory({
       query: initialQuery,
       ...(sort ? { sort } : {}),
       ...(page ? { page } : {}),
+      ...(pageSize ? { pageSize } : {}),
       ...activeFilters,
     });
   const { employee, data, error, busy, surface, logout, clear, reload } =
@@ -66,7 +71,8 @@ export function Inventory({
   // describe that same result set rather than counting the rows this page happens to hold.
   const total = data?.total ?? 0;
   const servedPage = data?.page ?? 1;
-  const pages = inventoryPageCount(total);
+  const activePageSize = Number(pageSize) || 24;
+  const pages = inventoryPageCount(total, activePageSize);
   const numberFormat = useMemo(
     () => new Intl.NumberFormat(locale === 'vi' ? 'vi-VN' : 'en-GB'),
     [locale],
@@ -88,6 +94,7 @@ export function Inventory({
       new URLSearchParams({
         query: initialQuery,
         ...(sort ? { sort } : {}),
+        ...(pageSize ? { pageSize } : {}),
         ...activeFilters,
         ...(target > 1 ? { page: String(target) } : {}),
       })
@@ -444,6 +451,28 @@ export function Inventory({
                     .replace('{pages}', numberFormat.format(pages))}
                 </span>
                 <span className="page-buttons">
+                  <label className="page-size-control">
+                    <span>{text.pageSize}</span>
+                    <select
+                      value={String(activePageSize)}
+                      onChange={(event) => {
+                        const next = Number(
+                          event.currentTarget.value,
+                        ) as InventoryPageSize;
+                        const nextUrl = new URL(window.location.href);
+                        nextUrl.searchParams.set('pageSize', String(next));
+                        nextUrl.searchParams.delete('page');
+                        router.push(nextUrl.pathname + nextUrl.search);
+                      }}
+                      aria-label={text.pageSize}
+                    >
+                      {INVENTORY_PAGE_SIZES.map((size) => (
+                        <option key={size} value={size}>
+                          {size}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   {step(`‹ ${text.previous}`, servedPage - 1, servedPage === 1)}
                   {step(`${text.next} ›`, servedPage + 1, servedPage === pages)}
                 </span>

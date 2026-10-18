@@ -9,7 +9,6 @@ import {
   type InventoryFilters,
 } from './filters';
 import {
-  INVENTORY_PAGE_SIZE,
   isInventoryOrder,
   parseInventoryPaging,
   type InventoryOrder,
@@ -35,6 +34,7 @@ export async function browseProperties(
   const allowed = [
     'query',
     'page',
+    'pageSize',
     ...(sort === null ? [] : ['sort']),
     ...INVENTORY_FILTER_KEYS,
   ];
@@ -56,7 +56,7 @@ export async function browseProperties(
       p_order: order,
       p_query: query,
       p_page: paging.paging.page,
-      p_page_size: INVENTORY_PAGE_SIZE,
+      p_page_size: paging.paging.pageSize,
       ...filterRpcArgs(filters.filters),
     })
     .select(
