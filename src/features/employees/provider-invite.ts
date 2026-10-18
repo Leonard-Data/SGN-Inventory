@@ -3,9 +3,17 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/database';
 import {
   invitationDestination,
+  providerIdentityScan,
   providerInviteResult,
   type InvitationSender,
+  type ProviderIdentity,
 } from './invitation';
+
+// The Admin API lists identities page by page instead of looking one address up, so the refused
+// retry reads a bounded number of pages. The page size is the provider's own documented default,
+// so no response can be capped below it, and only a page shorter than it proves the list ended.
+const IDENTITY_PAGE_SIZE = 50;
+const IDENTITY_PAGE_LIMIT = 20;
 
 // Issue #68: the server-only invitation boundary. The Auth admin call needs a secret/
 // service-role key; it is read from server configuration only, never exposed through a
@@ -33,6 +41,25 @@ export function supabaseInvitationSender(
             : null,
         },
         request.email,
+      );
+    },
+    // Issue #68 follow-up: the address the provider just refused may already hold an identity,
+    // because an accepted invitation whose recording was lost had already created it. The
+    // identity is matched on exactly the recorded normalized address, and only an exhausted
+    // list may answer `absent`.
+    async identity(email): Promise<ProviderIdentity> {
+      return providerIdentityScan(
+        email,
+        IDENTITY_PAGE_SIZE,
+        IDENTITY_PAGE_LIMIT,
+        async (page, pageSize) => {
+          const { data, error } = await admin.auth.admin.listUsers({
+            page,
+            perPage: pageSize,
+          });
+          if (error) throw new Error(error.message);
+          return data?.users;
+        },
       );
     },
   };

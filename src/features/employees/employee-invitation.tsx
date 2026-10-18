@@ -21,7 +21,7 @@ import {
 
 // Issue #68: the admin invitation form. It records one normalized email and one existing
 // company role under the live admin's authority, then shows what the database recorded and
-// what the provider actually returned: an accepted request is shown as a recorded invitation,
+// what the provider holds: an identity for the address is shown as a recorded invitation,
 // never as delivered mail and never as active access. A retry after an ambiguous failure
 // reuses the same submission key and re-reads the recorded state instead of guessing.
 export function EmployeeInvitationForm({
