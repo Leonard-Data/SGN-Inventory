@@ -1,6 +1,7 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
 import {
+  CopyObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
@@ -88,6 +89,20 @@ export async function deleteObject(objectPath: string): Promise<void> {
   const { bucket, client } = storage();
   await client.send(
     new DeleteObjectCommand({ Bucket: bucket, Key: objectPath }),
+  );
+}
+
+// A merge moves a ready file record to the surviving property, and the record's object key is
+// bound to that property, so the bytes are copied to the new key first and only then does the
+// database move the row. Both keys stay in the same private bucket.
+export async function copyObject(from: string, to: string): Promise<void> {
+  const { bucket, client } = storage();
+  await client.send(
+    new CopyObjectCommand({
+      Bucket: bucket,
+      CopySource: `${bucket}/${from.split('/').map(encodeURIComponent).join('/')}`,
+      Key: to,
+    }),
   );
 }
 
