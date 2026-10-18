@@ -14,7 +14,6 @@ import {
   type InventoryFilters,
 } from './filters';
 import {
-  INVENTORY_PAGE_SIZE,
   inventoryPageCount,
   isInventoryOrder,
   pageNumbers,

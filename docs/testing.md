@@ -814,7 +814,7 @@ Scope: the eligible oldest-first/newest-first inventory views of [issue #37](htt
 | Entry-date truth | Each card shows the recorded original entry date and its Vietnam age, or an explicit unknown marker; no card substitutes `created_at`, `updated_at` or import day for the original date |
 | Preservation | Relisting (withdrawn → available), a price edit and an address correction leave the shown original date, age and position unchanged |
 | Unknown placement | Records with no reliable entry date appear last in both directions, are never dropped, and a page boundary inside the unknown section continues on the same identities |
-| Cursor stability | Walking either direction visits every eligible property exactly once, including across a date tie and the known/unknown boundary |
+| Page stability | Walking every page in either direction visits each eligible property exactly once, including across a date tie and the known/unknown boundary |
 | Exclusions and reservations | Sold, rented, withdrawn, draft and archived properties never appear; a property with an effective reservation still appears with its reservation read separately |
 | Authorization | Anonymous `401`; inactive, unlinked and deactivated-with-existing-JWT identities denied by page navigation and direct request; a reviewer's age list still excludes archived rows; direct Data API writes cannot rewrite the entry date or provenance |
 | Localization and accessibility | Order control, date/age labels and the unknown marker are equivalent in Vietnamese/default and English; switching language preserves the query and order, records no activity and rewrites no record; controls are keyboard reachable on a mobile viewport and no essential state is conveyed by colour alone |
