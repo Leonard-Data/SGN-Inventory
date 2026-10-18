@@ -15,7 +15,7 @@ import {
 // or cached.
 export function POST(request: NextRequest) {
   return runRoute(request, async (context) => {
-    const body = await objectBody(request, context);
+    const body = await objectBody(request, context, 8192, true);
     const session = await establishInvitationSession(context, body);
     const status = await invitationSessionStatus(context);
     if (status.status === 'setup') {
