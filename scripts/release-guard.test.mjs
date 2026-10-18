@@ -6,6 +6,8 @@ import {
   releaseConfiguration,
   releasePendingMigrations,
   verifyPulledConfiguration,
+  checkStageHealth,
+  ReleaseSmokeError,
 } from './release-guard.mjs';
 
 test('stage activation never leaks across delivery kinds', () => {
@@ -232,5 +234,86 @@ test('verify-only release fails while migrations are pending', () => {
   assert.throws(
     () => releasePendingMigrations({ upToDate: true, dryRun: true }),
     /must list its pending migrations/,
+  );
+});
+
+const prodRelease = {
+  ...dev,
+  SGN_ENV: 'prod',
+  GITHUB_REF: 'refs/heads/main',
+  SUPABASE_PROJECT_REF: dev.PROD_SUPABASE_PROJECT_REF,
+  VERCEL_PROJECT_ID: 'prj_prod',
+  NEXT_PUBLIC_SUPABASE_URL: `https://${dev.PROD_SUPABASE_PROJECT_REF}.supabase.co`,
+  NEXT_PUBLIC_APP_URL: 'https://inventory.example.test',
+  // The ephemeral address whose project protection answers with its SSO page.
+  DEPLOYMENT_URL: 'https://sgn-abc123.vercel.app',
+};
+
+function fakeFetch(body, status = 200) {
+  const calls = [];
+  return {
+    calls,
+    fetchImpl: async (url, init) => {
+      calls.push({ url: String(url), headers: init?.headers ?? {} });
+      return new Response(body, { status });
+    },
+  };
+}
+
+test('release smoke reads the origin the stage serves, not the deployment URL', async () => {
+  const canonical = fakeFetch('{"status":"ok","stage":"prod"}');
+  assert.deepEqual(
+    await checkStageHealth(
+      { ...prodRelease, VERCEL_AUTOMATION_BYPASS_SECRET: 'bypass-fixture' },
+      canonical.fetchImpl,
+    ),
+    { status: 'ok', stage: 'prod' },
+  );
+  assert.deepEqual(canonical.calls, [
+    {
+      url: 'https://inventory.example.test/api/health',
+      headers: { 'x-vercel-protection-bypass': 'bypass-fixture' },
+    },
+  ]);
+  // A preview has no canonical origin of its own, so it still proves the
+  // deployment it just created instead of the unrelated stable dev site.
+  const ephemeral = fakeFetch('{"status":"ok","stage":"dev"}');
+  await checkStageHealth(
+    {
+      ...preview,
+      VERCEL_ENV: undefined,
+      DEPLOYMENT_URL: 'https://sgn-pr-123.vercel.app',
+    },
+    ephemeral.fetchImpl,
+  );
+  assert.equal(
+    ephemeral.calls[0].url,
+    'https://sgn-pr-123.vercel.app/api/health',
+  );
+});
+
+test('release smoke reports the stage mismatch it found', async () => {
+  const mismatch = fakeFetch('{"status":"ok","stage":"dev"}');
+  await assert.rejects(
+    checkStageHealth(prodRelease, mismatch.fetchImpl),
+    (error) =>
+      error instanceof ReleaseSmokeError &&
+      /https:\/\/inventory\.example\.test\/api\/health/.test(error.message) &&
+      /"stage":"prod"/.test(error.message) &&
+      /"stage":"dev"/.test(error.message),
+  );
+});
+
+test('release smoke refuses a 200 HTML body instead of parsing it', async () => {
+  const protectedPage = fakeFetch(
+    '<!DOCTYPE html><html><body>Sign in to Vercel</body></html>',
+  );
+  await assert.rejects(
+    checkStageHealth(prodRelease, protectedPage.fetchImpl),
+    (error) =>
+      error instanceof ReleaseSmokeError &&
+      /https:\/\/inventory\.example\.test\/api\/health/.test(error.message) &&
+      /non-JSON body/.test(error.message) &&
+      /Sign in to Vercel/.test(error.message),
   );
 });
