@@ -166,7 +166,12 @@ export function LocationEditor({
           center={center}
           marker={point ? [point.lat, point.lng] : null}
           zoom={point ? 16 : 11}
-          onPick={(picked) => setPoint(picked)}
+          onPick={(picked) =>
+            setPoint({
+              lat: Number(coordinateText(picked.lat)),
+              lng: Number(coordinateText(picked.lng)),
+            })
+          }
           onTileError={() => setTilesFailed(true)}
         />
       </div>

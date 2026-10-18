@@ -66,7 +66,13 @@ export function LocationMap({
     });
     view.current = map;
     const tiles = tileLayer(TILE_URL, { attribution: TILE_ATTRIBUTION });
-    tiles.on('tileerror', () => callbacks.current.onTileError?.());
+    let loaded = false;
+    tiles.on('tileload', () => {
+      loaded = true;
+    });
+    tiles.on('tileerror', () => {
+      if (!loaded) callbacks.current.onTileError?.();
+    });
     tiles.addTo(map);
     map.on('click', (event) => {
       const picked = map.wrapLatLng(event.latlng);
@@ -83,8 +89,10 @@ export function LocationMap({
   }, []);
 
   useEffect(() => {
-    view.current?.setView([centerLat, centerLng], zoom, { animate: false });
-  }, [centerLat, centerLng, zoom]);
+    const map = view.current;
+    if (!map || map.getBounds().contains([centerLat, centerLng])) return;
+    map.setView([centerLat, centerLng], undefined, { animate: false });
+  }, [centerLat, centerLng]);
 
   useEffect(() => {
     const map = view.current;
