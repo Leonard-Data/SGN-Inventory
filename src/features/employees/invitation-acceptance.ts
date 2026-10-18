@@ -39,6 +39,15 @@ export function classifyAuthFailure(
   return 'definite';
 }
 
+// Auth refuses a password equal to the current one. On a repeated or interrupted setup that
+// refusal means the credential is already exactly what the invitee asked for, so the journey
+// continues instead of dead-ending on a password only the invitee can see is unchanged.
+export function isSamePasswordRefusal(
+  error: { code?: string } | null | undefined,
+): boolean {
+  return error?.code === 'same_password';
+}
+
 // The required name is preserved exactly as typed, trimmed only: no case folding, no accent
 // folding, no invented value, and a bounded safe length.
 export function acceptanceName(value: unknown): string | null {

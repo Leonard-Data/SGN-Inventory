@@ -181,7 +181,7 @@ async function createFixtures() {
     assert.equal(created.error, null, `create auth user ${name}`);
     manifest.identities[name].userId = created.data.user.id;
     await persistManifest();
-    const active = name === 'adminA' ? 'true' : 'true';
+    const active = 'true';
     const inserted = ownerSql(
       'insert into public.employees(id,auth_user_id,email,display_name,role,is_active) values ' +
         `(${sqlText(employeeId)}::uuid,${sqlText(created.data.user.id)}::uuid,${sqlText(email)},${sqlText(`${namespace} ${name}`)},${sqlText(role)},${active}) returning id`,

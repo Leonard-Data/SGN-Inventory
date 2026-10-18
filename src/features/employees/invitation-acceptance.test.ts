@@ -7,6 +7,7 @@ import {
   acceptancePassword,
   acceptanceSessionBody,
   classifyAuthFailure,
+  isSamePasswordRefusal,
 } from './invitation-acceptance.ts';
 
 const invitationId = '30000000-0000-4000-8000-000000000001';
@@ -63,6 +64,24 @@ test('an auth failure is retryable only for a transient or throttled provider', 
   ];
   for (const [error, expected] of cases)
     assert.equal(classifyAuthFailure(error), expected, JSON.stringify(error));
+});
+
+test('only the unchanged-password refusal counts as an already-set credential', () => {
+  const cases: [Parameters<typeof isSamePasswordRefusal>[0], boolean][] = [
+    [{ code: 'same_password' }, true],
+    [{ code: 'same_password', name: 'AuthApiError', status: 422 }, true],
+    [{ code: 'weak_password', name: 'AuthApiError', status: 422 }, false],
+    [
+      { code: 'reauthentication_needed', name: 'AuthApiError', status: 403 },
+      false,
+    ],
+    [{ name: 'AuthRetryableFetchError' }, false],
+    [{}, false],
+    [null, false],
+    [undefined, false],
+  ];
+  for (const [error, expected] of cases)
+    assert.equal(isSamePasswordRefusal(error), expected, JSON.stringify(error));
 });
 
 test('the acceptance request accepts exactly the six validated fields', () => {

@@ -6,6 +6,7 @@ import {
   acceptanceBody,
   acceptanceSessionBody,
   classifyAuthFailure,
+  isSamePasswordRefusal,
   type AcceptanceInput,
 } from './invitation-acceptance';
 
@@ -142,7 +143,7 @@ export async function acceptInvitation(
   const { error: passwordError } = await context.client.auth.updateUser({
     password: input.password,
   });
-  if (passwordError)
+  if (passwordError && !isSamePasswordRefusal(passwordError))
     throw classifyAuthFailure(passwordError) === 'retryable'
       ? new ApiError(503, 'unavailable')
       : new ApiError(400, 'invalid-input');
