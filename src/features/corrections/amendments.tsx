@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { messages, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
+import { LoadingSkeleton } from '@/features/skeleton';
 import { BusinessValues } from '@/features/property-maintenance/history';
 import { maintenanceText } from '@/features/property-maintenance/messages';
 import { vietnamTimestamp } from '@/features/properties/format';
@@ -24,7 +25,9 @@ function AmendmentList({
     );
   return (
     <div>
-      {busy ? <p role="status">{text.loading}</p> : null}
+      {busy ? (
+        <LoadingSkeleton label={text.loading} shape="rows" rows={3} />
+      ) : null}
       {error ? (
         <p role="alert">
           {error === 'access-changed'

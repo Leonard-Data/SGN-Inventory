@@ -2,6 +2,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { messages, label, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
+import { LoadingSkeleton } from '@/features/skeleton';
 import { EmployeeDeactivationPanel } from './employee-deactivation';
 import { EmployeeAccountDeletionPanel } from './employee-account-deletion';
 import { EmployeeInvitationForm } from './employee-invitation';
@@ -155,9 +156,13 @@ export function EmployeeDirectory({
       ) : null}
 
       {busy ? (
-        <p className="panel-note" role="status">
-          {text.loading}
-        </p>
+        <LoadingSkeleton
+          label={text.loading}
+          className="panel page-section"
+          shape="table"
+          rows={6}
+          columns={5}
+        />
       ) : null}
 
       <div ref={surface} hidden={!data || busy}>

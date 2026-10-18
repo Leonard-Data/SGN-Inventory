@@ -2,6 +2,7 @@
 import { useMemo } from 'react';
 import Link from 'next/link';
 import { messages, type Locale } from '@/i18n/messages';
+import { LoadingSkeleton } from '@/features/skeleton';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { vietnamDate } from '@/features/properties/format';
 import type { CompletedSaleRanking as CompletedSaleRankingReport } from './types';
@@ -127,9 +128,13 @@ export function CompletedSaleRanking({
       ) : null}
 
       {busy ? (
-        <p className="panel-note" role="status">
-          {text.loading}
-        </p>
+        <LoadingSkeleton
+          label={text.loading}
+          className="panel page-section"
+          shape="table"
+          rows={6}
+          columns={3}
+        />
       ) : null}
 
       <div ref={surface} hidden={!data || busy}>

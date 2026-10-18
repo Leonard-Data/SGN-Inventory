@@ -6,6 +6,7 @@ import type { Locale } from '@/i18n/messages';
 import { messages } from '@/i18n/messages';
 import type { PropertyPage } from './types';
 import { useProtectedData } from '@/features/employees/use-protected-data';
+import { SkeletonCards } from '@/features/skeleton';
 import { PropertyCard } from './property-card';
 import { SearchIsland } from './search-island';
 import {
@@ -331,23 +332,7 @@ export function Inventory({
         </div>
       </section>
 
-      {busy ? (
-        <div className="busy-head" role="status" aria-label={text.loading}>
-          <div className="busy-bar" />
-          <div className="property-skeleton-grid" aria-hidden="true">
-            {[1, 2, 3].map((item) => (
-              <div className="sk-card" key={item}>
-                <div className="skeleton sk-cover" />
-                <div className="sk-body">
-                  <div className="skeleton sk-line h20 w80" />
-                  <div className="skeleton sk-line w60" />
-                  <div className="skeleton sk-line w40" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
+      {busy ? <SkeletonCards label={text.loading} /> : null}
 
       <section className="page-section">
         {error ? (

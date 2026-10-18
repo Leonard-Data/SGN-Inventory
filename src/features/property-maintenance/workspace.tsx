@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { Locale } from '@/i18n/messages';
 import type { Employee } from '@/features/employees/types';
 import { api, RequestError } from '@/features/employees/api';
+import { LoadingSkeleton } from '@/features/skeleton';
 import type { PropertyDetail } from '@/features/properties/detail-data';
 import type { ContactDetail } from './data';
 import { MutationForm, RecordFields, AddressFields } from './forms';
@@ -471,7 +472,9 @@ export function Maintenance({
                   </MutationForm>
                 </details>
               ) : null}
-              {contactBusy ? <p role="status">{text.loading}</p> : null}
+              {contactBusy ? (
+                <LoadingSkeleton label={text.loading} shape="rows" rows={2} />
+              ) : null}
               {contactError ? (
                 <p role="alert">{maintenanceError(locale, contactError)}</p>
               ) : null}

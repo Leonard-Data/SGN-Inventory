@@ -9,6 +9,7 @@ import {
 import { messages, label, type Locale } from '@/i18n/messages';
 import { vietnamTimestamp } from '@/features/properties/format';
 import { api, RequestError } from './api';
+import { LoadingSkeleton } from '@/features/skeleton';
 import {
   deactivationFailure,
   deactivationProblemAfterLoad,
@@ -259,9 +260,7 @@ export function EmployeeAccountDeletionPanel({
 
       <h3>{text.employeeDeactivateOutstanding}</h3>
       {loading ? (
-        <p className="panel-note" role="status">
-          {text.loading}
-        </p>
+        <LoadingSkeleton label={text.loading} shape="rows" rows={2} />
       ) : snapshot ? (
         snapshot.reservations.length ? (
           <ul className="deactivation-reservations">

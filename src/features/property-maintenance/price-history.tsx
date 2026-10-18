@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { messages, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
+import { LoadingSkeleton } from '@/features/skeleton';
 import { formatVnd, vietnamTimestamp } from '@/features/properties/format';
 import type { PriceHistoryPage, PriceSeries } from './data';
 import { maintenanceText } from './messages';
@@ -37,7 +38,14 @@ function Series({
   return (
     <div className="price-series">
       <h3 className="price-series-title">{heading}</h3>
-      {busy ? <p role="status">{text.loading}</p> : null}
+      {busy ? (
+        <LoadingSkeleton
+          label={text.loading}
+          shape="table"
+          rows={4}
+          columns={3}
+        />
+      ) : null}
       {error ? (
         <div className="alert" data-tone="danger" role="alert">
           <span>

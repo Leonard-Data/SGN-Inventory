@@ -33,10 +33,10 @@
   flex-wrap: wrap;
 }
 .heading {
-  font-family: var(--font-display);
-  font-weight: 500;
+  font-family: var(--font-body);
+  font-weight: 600;
   font-size: 22px;
-  letter-spacing: var(--tracking-display);
+  letter-spacing: var(--tracking-heading);
   margin: 32px 0 12px;
 }
 .gallery {

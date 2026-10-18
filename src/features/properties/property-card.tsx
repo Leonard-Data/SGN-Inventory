@@ -110,6 +110,12 @@ export function PropertyCard({
             )}
           </p>
         ) : null}
+        {record.createdBy ? (
+          <p className="card-entry">
+            {label(locale, 'createdBy')}:{' '}
+            <span translate="no">{record.createdBy}</span>
+          </p>
+        ) : null}
         <div className="card-foot">
           <span className="badge" data-tone={statusTone(record.status)}>
             {label(locale, record.status)}

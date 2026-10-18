@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Locale } from '@/i18n/messages';
 import { messages } from '@/i18n/messages';
 import { api, RequestError } from '@/features/employees/api';
+import { LoadingSkeleton, Skeleton } from '@/features/skeleton';
 import { fileMessages } from './messages';
 import type { SignedFileResponse } from './types';
 
@@ -109,7 +110,9 @@ export function CoverImage({
           </button>
         </p>
       ) : (
-        <p role="status">{text.coverLoading}</p>
+        <LoadingSkeleton label={text.coverLoading} className="sk-cover-wait">
+          <Skeleton className="sk-plate" />
+        </LoadingSkeleton>
       )}
     </div>
   );

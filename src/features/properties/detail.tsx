@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { label, messages, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
+import { LoadingSkeleton, Skeleton } from '@/features/skeleton';
 import { RequestError } from '@/features/employees/api';
 import { Workspace } from '@/features/property-files/workspace';
 import { CoverImage } from '@/features/property-files/cover-image';
@@ -457,10 +458,18 @@ export function Detail({
       </div>
 
       {busy && !property ? (
-        <p className="busy-line" role="status">
-          <span className="spinner"></span>
-          {text.loading}
-        </p>
+        <LoadingSkeleton label={text.loading}>
+          <div className="detail-body">
+            <div className="skeleton-stack">
+              <Skeleton className="sk-plate" />
+              <Skeleton h={240} />
+            </div>
+            <div className="skeleton-stack">
+              <Skeleton h={150} />
+              <Skeleton h={120} />
+            </div>
+          </div>
+        </LoadingSkeleton>
       ) : null}
       {error ? (
         <div className="state-panel" data-tone="danger" role="alert">
@@ -772,6 +781,12 @@ export function Detail({
                             {vietnamDate(property.updated_at)}
                           </dd>
                         </div>
+                        {data.creatorName ? (
+                          <div className="fact">
+                            <dt>{text.createdBy}</dt>
+                            <dd translate="no">{data.creatorName}</dd>
+                          </div>
+                        ) : null}
                       </dl>
                       <p className="field-hint">{text.legalNote}</p>
                     </div>
@@ -1155,7 +1170,12 @@ export function Detail({
                         </div>
                       </dl>
                     ) : (
-                      <p role="status">{text.loading}</p>
+                      <LoadingSkeleton
+                        label={text.loading}
+                        shape="table"
+                        rows={4}
+                        columns={2}
+                      />
                     )}
                   </div>
                 </section>

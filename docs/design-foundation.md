@@ -49,19 +49,24 @@ variants, radii (`--radius-sm|md|lg|pill`), the 4 px space scale, motion
 
 | Role | Family | Weights | Subset |
 | --- | --- | --- | --- |
-| Display / wordmark | Oswald | 400/500/600 | latin, latin-ext, vietnamese |
+| Headings / wordmark | Inter | 600 | latin, latin-ext, vietnamese |
 | Body / labels / buttons | Inter | 400/500/600 | latin, latin-ext, vietnamese |
 | Mono labels | IBM Plex Mono | 400/500 | latin, latin-ext, vietnamese |
 
-The prototype loads these three families from a Google Fonts `<link>`. This
+The prototype loads these families from a Google Fonts `<link>`. This
 project binds the same families, weights and subsets to woff2 files vendored in
 `src/app/fonts` through `next/font/local` in `src/app/fonts.ts`, so the build
 fetches nothing from Google and `src/app/layout.tsx` only applies the resulting
-variable classes. The token names (`--font-display`, `--font-body`, `--font-mono`)
-stay the contract; `next/font` appends a `"<family> Fallback"` entry to the
+variable classes. The token names (`--font-body`, `--font-mono`) stay the
+contract; `next/font` appends a `"<family> Fallback"` entry to the
 computed `font-family` list (a size-adjusted fallback used only before the web
 font loads), so rendered glyphs are identical even though the computed
 `font-family` string differs.
+
+The condensed display face (Oswald) is not part of the type system: headings and
+body share Inter, headings at 600 against body 400, and the heading scale sits
+close to body size (`--text-h1`, `--text-h2`). Its files and `--font-display`
+token are gone, so no surface can reintroduce a second sans by accident.
 
 ## Layout contract
 

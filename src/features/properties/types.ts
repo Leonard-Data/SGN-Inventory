@@ -30,6 +30,10 @@ export type PropertySummary = {
   floors: number | null;
   direction: string | null;
   accessType: string | null;
+  // The display name of the employee the record references as its creator, resolved from
+  // that employee row. Null when the creator is missing or no longer resolvable, which the
+  // card renders as nothing rather than as a placeholder.
+  createdBy: string | null;
 };
 export type PropertyPage = {
   properties: PropertySummary[];

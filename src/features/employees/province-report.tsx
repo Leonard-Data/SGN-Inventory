@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import Link from 'next/link';
 import { messages, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
+import { LoadingSkeleton } from '@/features/skeleton';
 import { vietnamDate } from '@/features/properties/format';
 import { activityLevel } from './activity-level';
 import type { ProvinceActivityReport } from './province-report-data';
@@ -146,9 +147,13 @@ export function ProvinceReport({
       ) : null}
 
       {busy ? (
-        <p className="panel-note" role="status">
-          {text.loading}
-        </p>
+        <LoadingSkeleton
+          label={text.loading}
+          className="panel page-section"
+          shape="table"
+          rows={6}
+          columns={2}
+        />
       ) : null}
 
       <div ref={surface} hidden={!data || busy}>

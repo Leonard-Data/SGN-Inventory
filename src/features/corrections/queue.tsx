@@ -4,6 +4,7 @@ import { messages, type Locale } from '@/i18n/messages';
 import type { Employee } from '@/features/employees/types';
 import type { PropertyDetail } from '@/features/properties/detail-data';
 import { useProtectedData } from '@/features/employees/use-protected-data';
+import { LoadingSkeleton } from '@/features/skeleton';
 import { api, RequestError } from '@/features/employees/api';
 import { BusinessValues } from '@/features/property-maintenance/history';
 import type { ContactDetail } from '@/features/property-maintenance/data';
@@ -305,7 +306,9 @@ export function CorrectionQueue({
         <h2 className="panel-title">{text.queue}</h2>
       </div>
       <div className="panel-body">
-        {busy ? <p role="status">{text.loading}</p> : null}
+        {busy ? (
+          <LoadingSkeleton label={text.loading} shape="rows" rows={3} />
+        ) : null}
         {error ? (
           <div className="alert" data-tone="danger" role="alert">
             <span>
