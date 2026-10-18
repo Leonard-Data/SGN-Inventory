@@ -1,8 +1,15 @@
 'use client';
 // Leaflet touches `window`, so this module is only ever imported through a Next.js
 // dynamic import with server rendering disabled (see location.tsx).
-import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
-import { divIcon } from 'leaflet';
+import { useEffect, useRef } from 'react';
+import {
+  divIcon,
+  map as createMap,
+  marker as createMarker,
+  tileLayer,
+  type Map as LeafletMap,
+  type Marker as LeafletMarker,
+} from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
 const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -21,16 +28,6 @@ const pinIcon = divIcon({
   popupAnchor: [0, -28],
 });
 
-function ClickCatcher({ onPick }: { onPick: (point: MapPoint) => void }) {
-  useMapEvents({
-    click(event) {
-      const picked = event.target.wrapLatLng(event.latlng);
-      onPick({ lat: picked.lat, lng: picked.lng });
-    },
-  });
-  return null;
-}
-
 export function LocationMap({
   center,
   marker,
@@ -44,23 +41,59 @@ export function LocationMap({
   onTileError?: () => void;
   zoom?: number;
 }) {
-  return (
-    <MapContainer
-      center={center}
-      zoom={zoom}
-      scrollWheelZoom={false}
-      keyboard={false}
-      className="sgn-map"
-    >
-      <TileLayer
-        url={TILE_URL}
-        attribution={TILE_ATTRIBUTION}
-        eventHandlers={{ tileerror: onTileError }}
-      />
-      {marker ? (
-        <Marker position={marker} icon={pinIcon} interactive={false} />
-      ) : null}
-      {onPick ? <ClickCatcher onPick={onPick} /> : null}
-    </MapContainer>
-  );
+  const container = useRef<HTMLDivElement>(null);
+  const view = useRef<LeafletMap | null>(null);
+  const pin = useRef<LeafletMarker | null>(null);
+  const callbacks = useRef({ onPick, onTileError });
+  const start = useRef({ center, zoom });
+  const lat = marker ? marker[0] : null;
+  const lng = marker ? marker[1] : null;
+
+  useEffect(() => {
+    callbacks.current = { onPick, onTileError };
+  });
+
+  useEffect(() => {
+    const node = container.current;
+    if (!node) return;
+    const map = createMap(node, {
+      center: start.current.center,
+      zoom: start.current.zoom,
+      scrollWheelZoom: false,
+      keyboard: false,
+    });
+    view.current = map;
+    const tiles = tileLayer(TILE_URL, { attribution: TILE_ATTRIBUTION });
+    tiles.on('tileerror', () => callbacks.current.onTileError?.());
+    tiles.addTo(map);
+    map.on('click', (event) => {
+      const picked = map.wrapLatLng(event.latlng);
+      callbacks.current.onPick?.({ lat: picked.lat, lng: picked.lng });
+    });
+    const frame = requestAnimationFrame(() => map.invalidateSize());
+    return () => {
+      cancelAnimationFrame(frame);
+      map.off();
+      map.remove();
+      view.current = null;
+      pin.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const map = view.current;
+    if (!map || lat === null || lng === null) {
+      pin.current?.remove();
+      pin.current = null;
+      return;
+    }
+    if (pin.current) pin.current.setLatLng([lat, lng]);
+    else
+      pin.current = createMarker([lat, lng], {
+        icon: pinIcon,
+        interactive: false,
+      }).addTo(map);
+  }, [lat, lng]);
+
+  return <div ref={container} className="sgn-map" />;
 }
