@@ -54,6 +54,15 @@ begin
   if emp.account_deleted_at is not null then
     raise exception 'the employee sign-in account is deleted' using errcode = 'P0023';
   end if;
+  -- A begun but unconfirmed account deletion already revoked this employee: the row is
+  -- unlinked and inactive exactly like a freshly invited employee, so the open operation is
+  -- what distinguishes them. Acceptance never reverses that revocation.
+  if exists (
+    select 1 from public.employee_admin_operations
+    where employee_id = emp.id and kind = 'delete' and state <> 'completed'
+  ) then
+    raise exception 'employee access already changed; restart the invitation' using errcode = 'P0023';
+  end if;
   if emp.auth_user_id is not null then
     -- Already linked. Converge only for the exact same identity that is still active;
     -- a different identity, a disabled membership or a changed employee is never restored.
@@ -80,7 +89,7 @@ begin
 end;
 $$;
 comment on function private.accept_employee_invitation(uuid,integer,text) is
-  'Links and activates the exact intended invitee on the recorded invitation, setting the required name. The caller''s session must be the recorded provider identity; consumed, deactivated, deleted or mismatched invitations are refused and never restore access.';
+  'Links and activates the exact intended invitee on the recorded invitation, setting the required name. The caller''s session must be the recorded provider identity; consumed, deactivated, deletion-in-flight, deleted or mismatched invitations are refused and never restore access.';
 
 -- 2. The public invoker wrapper, exactly like the other guarded employee operations.
 create function public.accept_employee_invitation(p_invitation_id uuid,p_revision integer,p_display_name text)

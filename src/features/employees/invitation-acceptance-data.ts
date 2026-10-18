@@ -113,6 +113,15 @@ export async function invitationSessionStatus(
   if (!employee) throw new ApiError(409, 'invitation-changed');
   if (employee.account_deleted_at)
     throw new ApiError(409, 'invitation-changed');
+  const { data: deletion, error: deletionError } = await admin
+    .from('employee_admin_operations')
+    .select('id')
+    .eq('employee_id', invitation.employeeId)
+    .eq('kind', 'delete')
+    .neq('state', 'completed')
+    .limit(1);
+  if (deletionError) throw databaseError(deletionError);
+  if (deletion?.[0]) throw new ApiError(409, 'invitation-changed');
   if (employee.auth_user_id === user.id && employee.is_active)
     return { status: 'active' };
   if (employee.auth_user_id !== null)

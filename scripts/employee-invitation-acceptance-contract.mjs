@@ -193,6 +193,41 @@ export async function employeeInvitationAcceptanceContract({
     },
   );
 
+  // --- The deletion in flight: begun but not confirmed -------------------------------------
+  await asOwner();
+  await db.query('update public.employees set is_active = true where id = $1', [
+    employeeId,
+  ]);
+  await asActor(adminUser);
+  await db.query('select public.begin_employee_account_deletion($1,$2)', [
+    employeeId,
+    randomUUID(),
+  ]);
+  await asActor(inviteeUser);
+  await check(
+    'an account deletion in flight is refused and never reversed by acceptance',
+    async () => {
+      await fails(
+        acceptSql,
+        [invitationId, recordedRevision, 'Nguyễn Văn Ẩn'],
+        'P0023',
+      );
+      await asOwner();
+      const row = await employeeRow(employeeId);
+      assert.equal(
+        row.auth_user_id,
+        null,
+        'the in-flight unlink is not reversed',
+      );
+      assert.equal(row.is_active, false, 'disabled access stays disabled');
+      assert.equal(
+        row.account_deleted_at,
+        null,
+        'the deletion is still unconfirmed',
+      );
+    },
+  );
+
   // --- The second invitation: stale, name-bounds and linked-to-another --------------------
   const second = await beginAndRecord(
     'second@example.test',
