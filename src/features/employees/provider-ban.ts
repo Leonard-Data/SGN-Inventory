@@ -12,8 +12,9 @@ import {
 
 // Issue #66: the server-only sign-in blocker boundary. The Admin Auth call needs a
 // secret/service-role key; that key is read from server configuration only, is never
-// exposed through a NEXT_PUBLIC_ variable and this client is used for nothing except the
-// exact employee's Auth admin call and the guarded provider-result RPC.
+// exposed through a NEXT_PUBLIC_ variable and this client is used only by the guarded employee
+// operations: the exact employee's Auth admin call, the guarded provider-result RPCs and the
+// bounded read of the caller's own recorded invitation on the acceptance journey (issue #69).
 export function createEmployeeAdminClient(
   environment: Environment,
   values: Readonly<Record<string, string | undefined>> = process.env,

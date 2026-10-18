@@ -101,7 +101,7 @@ The confirmed journey is: an invited, active employee signs in → searches a le
 
 ### Starting identity and sign-in
 
-- Start after invitation acceptance, confirmed identity linkage and activation through authorized administration. Being invited or authenticated alone does not authorize inventory access.
+- Start after the invitee's own accepted invitation, which confirms the identity linkage and activates the retained employee immediately, with no separate approval. Being invited or authenticated alone does not authorize inventory access.
 - Use email/password sign-in with password recovery and no public signup. Invitation acceptance and employee invitation/linkage/activation management UI are outside this slice.
 - Validate sessions server-side and use live employee membership on every protected server request, as required by the [database contract](database-contract.md#client-and-authorization-contract).
 

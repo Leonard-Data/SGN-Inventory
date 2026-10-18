@@ -444,11 +444,33 @@ const vi = {
     'Máy chủ chưa có cấu hình gửi lời mời. Yêu cầu đã được ghi nhận; hãy thử lại sau khi cấu hình được khôi phục.',
   employeeInviteLoadFailed: 'Không thể tải trạng thái lời mời.',
   employeeInviteOpen: 'Ghi nhận lời mời',
-  // The fixed invitation destination (issue #68). The account-setup journey itself is a
-  // separate ticket, so this surface claims no access and no delivery.
-  inviteTitle: 'Điểm đến của liên kết lời mời',
+  // The invitation destination is now the acceptance journey (issue #69): the delivered link
+  // is verified, the invitee sets a name and password, and activates immediately on success.
+  inviteTitle: 'Thiết lập tài khoản',
   inviteLead:
-    'Đây là điểm đến cố định của một liên kết lời mời. Trang này không đọc thông tin về bất kỳ lời mời nào và không xác nhận lời mời của bạn. Bước tự thiết lập tài khoản cho người được mời chưa được mở trong phiên bản này; khi bước đó sẵn sàng, người được mời có thể đăng nhập bằng địa chỉ email được mời. Trang này không xác nhận hộp thư đã nhận được thư và không bật quyền truy cập.',
+    'Liên kết lời mời đã được xác minh. Nhập họ tên và chọn mật khẩu để kích hoạt tài khoản của bạn ngay.',
+  inviteVerifying: 'Đang xác minh liên kết lời mời…',
+  inviteEmailLabel: 'Email được mời',
+  inviteNameHint: 'Họ tên được giữ đúng như đã nhập.',
+  inviteNameRequired: 'Vui lòng nhập họ tên.',
+  inviteNameTooLong: 'Họ tên quá dài.',
+  inviteNamePlaceholder: 'Nguyễn Văn A',
+  inviteSubmit: 'Hoàn tất thiết lập',
+  inviteSubmitting: 'Đang thiết lập…',
+  inviteDoneTitle: 'Thiết lập hoàn tất',
+  inviteDoneLead:
+    'Tài khoản của bạn đã được kích hoạt. Bạn có thể bắt đầu sử dụng hệ thống ngay.',
+  inviteContinue: 'Vào kho bất động sản',
+  inviteInvalid:
+    'Liên kết lời mời không hợp lệ hoặc đã hết hạn. Hãy liên hệ quản trị viên để được gửi lại.',
+  inviteNotFound: 'Không tìm thấy lời mời nào cho tài khoản này.',
+  inviteNotAccepted: 'Lời mời này chưa được hệ thống xác nhận.',
+  inviteMismatch: 'Lời mời này thuộc về một tài khoản khác.',
+  inviteChanged:
+    'Nhân viên này đã thay đổi hoặc quyền truy cập đã bị tắt. Hãy liên hệ quản trị viên.',
+  inviteStale: 'Trạng thái lời mời đã thay đổi. Hãy tải lại trang và thử lại.',
+  inviteSessionRequired:
+    'Hãy mở liên kết lời mời trong email để thiết lập tài khoản. Liên kết khôi phục mật khẩu không thể dùng để kích hoạt.',
   // People → Vendors (#73): the company directory and its one bounded create.
   vendorsLink: 'Nhà cung cấp',
   vendorDirectory: 'Danh sách nhà cung cấp',
@@ -1123,11 +1145,33 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
       'The server has no invitation configuration. The request is recorded; retry after configuration is restored.',
     employeeInviteLoadFailed: 'The invitation state did not load.',
     employeeInviteOpen: 'Record an invitation',
-    // The fixed invitation destination (issue #68). The account-setup journey itself is a
-    // separate ticket, so this surface claims no access and no delivery.
-    inviteTitle: 'Invitation link destination',
+    // The invitation destination is now the acceptance journey (issue #69): the delivered link
+    // is verified, the invitee sets a name and password, and activates immediately on success.
+    inviteTitle: 'Set up your account',
     inviteLead:
-      'This is the fixed destination of an invitation link. This page reads nothing about any invitation and does not confirm your invitation. The account-setup step for an invited person is not open in this release; once it is, an invited person can sign in with the invited email address. This page does not confirm the mailbox received the message and enables no access.',
+      'Your invitation link is verified. Enter your name and choose a password to activate your account right away.',
+    inviteVerifying: 'Verifying your invitation link…',
+    inviteEmailLabel: 'Invited email',
+    inviteNameHint: 'Your name is kept exactly as entered.',
+    inviteNameRequired: 'Enter your name.',
+    inviteNameTooLong: 'That name is too long.',
+    inviteNamePlaceholder: 'Jane Doe',
+    inviteSubmit: 'Complete setup',
+    inviteSubmitting: 'Setting up…',
+    inviteDoneTitle: 'Setup complete',
+    inviteDoneLead:
+      'Your account is now active. You can start using the system right away.',
+    inviteContinue: 'Continue to inventory',
+    inviteInvalid:
+      'The invitation link is invalid or has expired. Contact an administrator to be re-invited.',
+    inviteNotFound: 'No invitation was found for this account.',
+    inviteNotAccepted: 'This invitation has not been confirmed by the system.',
+    inviteMismatch: 'This invitation belongs to a different account.',
+    inviteChanged:
+      'This employee changed or access was disabled. Contact an administrator.',
+    inviteStale: 'The invitation state changed. Reload the page and try again.',
+    inviteSessionRequired:
+      'Open the invitation link in your email to set up your account. A password-recovery link cannot be used to activate.',
     // People → Vendors (#73): the company directory and its one bounded create.
     vendorsLink: 'Vendors',
     vendorDirectory: 'Vendor directory',

@@ -30,6 +30,7 @@ import { propertyVendorLinksConcurrency } from './property-vendor-links-concurre
 import { contactLinksConcurrency } from './contact-links-concurrency.mjs';
 import { employeeInvitationContract } from './employee-invitation-contract.mjs';
 import { employeeInvitationConcurrency } from './employee-invitation-concurrency.mjs';
+import { employeeInvitationAcceptanceContract } from './employee-invitation-acceptance-contract.mjs';
 import { applyEmbeddedSchema } from './embedded-schema.mjs';
 import { provinceActivityContract } from './province-activity-contract.mjs';
 const root = process.env.SGN_PROJECT_ROOT || process.cwd();
@@ -639,6 +640,8 @@ await contactLinksConcurrency({root,check});
 // Issue #68: the recorded role-bound employee invitation and its per-address guard.
 await employeeInvitationContract({db,asUser,check,fails});
 await employeeInvitationConcurrency({root,check});
+// Issue #69: accepting the recorded invitation, linking and activating the exact invitee.
+await employeeInvitationAcceptanceContract({db,asUser,check,fails});
 // Ticket #73: the vendor directory authority, validation, retry and paging rules.
 await vendorContract({db,asUser,check,fails,employees});
 // Ticket #74: property-to-vendor links, their correction and the recorded link row as the trail;
