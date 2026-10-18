@@ -47,6 +47,10 @@ Copy `.env.example` to ignored `.env.local` (`cp` on POSIX, `Copy-Item` in Power
 | `NEXT_PUBLIC_APP_URL`                  | Canonical HTTPS origin of that stage; local example is `http://localhost:3000`                                                                                 |
 | `EXPECTED_SUPABASE_PROJECT_REF`        | Selected 20-letter hosted ref; optional locally, required for release checks                                                                                   |
 | `SGN_FILE_VALIDATION_KEY`              | Server-only 64 lowercase hex characters, unique per stage, matching the private DB singleton                                                                   |
+| `R2_ACCOUNT_ID`                        | Server-only Cloudflare R2 account id; the S3 endpoint is `https://<id>.r2.cloudflarestorage.com`                                                               |
+| `R2_BUCKET`                            | Server-only private R2 bucket for property file bytes; presigned URLs are the only access path                                                                 |
+| `R2_ACCESS_KEY_ID`                     | Server-only R2 API token access key id with read/write on that one bucket                                                                                      |
+| `R2_SECRET_ACCESS_KEY`                 | Server-only R2 API token secret; never `NEXT_PUBLIC_`, never printed or committed                                                                              |
 | `SUPABASE_SERVICE_ROLE_KEY`            | Server-only Auth admin capability used only for the provider sign-in block during employee deactivation; never `NEXT_PUBLIC_`, never read by ordinary requests |
 
 ```bash
@@ -55,6 +59,10 @@ npm run dev
 ```
 
 `check:env` validates configuration without contacting Supabase or printing keys. `/api/health` is private/no-store configuration readiness only: `200` with `{"status":"ok","stage":"dev"}` (or `prod`), otherwise `503`. It proves neither database connectivity, file-key agreement nor user authorization.
+
+Property file bytes live in a private Cloudflare R2 bucket, in both stages, configured only through the four server-only `R2_*` variables above. Uploads and downloads are short-lived presigned URLs minted only after the RLS-checked `property_files` read, so the application server never streams bytes and no bucket is public. These are ordinary runtime variables, not build-time ones: a missing value fails the file operation closed with a server-side error naming the missing variables rather than falling back to Supabase Storage, and `check:env` reports `R2 storage: not configured` (or fails when only part of the set is present). Never put a bucket credential in a `NEXT_PUBLIC_*` variable or in the repository. Provisioning the buckets, issuing the API tokens and installing the values is separate authorization per stage.
+
+Moving existing objects is a deliberate operator step: `node scripts/copy-property-files-to-r2.mjs` (dry run by default, `--apply` to copy and then verify, `--verify` for the verification pass alone) copies every registered object from the Supabase `property-files` bucket to R2 with identical keys. It needs `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and the four `R2_*` values in its own shell, deletes nothing in Supabase, and has not been run against a hosted project. Retiring the old bucket is a separate decision taken after a verified copy.
 
 For a Vercel **Preview** deployment, `SGN_ENV` must be `dev`. Runtime redirects and password-recovery links use Vercel's server-supplied `VERCEL_URL` hostname, so they remain on the deployment that initiated the request instead of jumping to the stable dev site. Enable Vercel's automatic system environment variables; do not override `VERCEL_ENV` or `VERCEL_URL`. Local/prebuilt compilation has no deployment URL yet and uses the configured dev origin. Production and the stable dev deployment keep their canonical `NEXT_PUBLIC_APP_URL`. This does not trust request Host headers or widen the production redirect allowlist.
 

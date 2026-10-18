@@ -1,5 +1,7 @@
 import 'server-only';
 import { ApiError, uuid, type RouteContext } from '@/lib/supabase/route';
+import { presignDownload } from '@/lib/r2';
+import { signAuthorizedFile, type FileRead, type Lookup } from './read-path';
 import type { PropertyFileList, SignedFileResponse } from './types';
 
 export async function propertyFiles(
@@ -32,44 +34,51 @@ export async function authorizeAndSignFile(
     throw new ApiError(400, 'invalid-input');
   if (typeof download !== 'boolean') throw new ApiError(400, 'invalid-input');
 
-  // Verify property exists and caller has access (RLS on properties table)
-  const { data: property, error: propError } = await context.client
-    .from('properties')
-    .select('id')
-    .eq('id', propertyId)
-    .maybeSingle();
-  if (propError) {
-    if (propError.code === '42501') throw new ApiError(403, 'access-denied');
-    throw new ApiError(503, 'unavailable');
-  }
-  if (!property) throw new ApiError(404, 'not-found');
-
-  // Verify file exists, belongs to property, is ready — RLS ensures caller has access
-  const { data: file, error: fileError } = await context.client
-    .from('property_files')
-    .select('id,object_path,original_filename')
-    .eq('property_id', propertyId)
-    .eq('id', fileId)
-    .eq('upload_status', 'ready')
-    .maybeSingle();
-  if (fileError) {
-    if (fileError.code === '42501') throw new ApiError(403, 'access-denied');
-    throw new ApiError(503, 'unavailable');
-  }
-  if (!file) throw new ApiError(404, 'not-found');
-
-  // Create signed URL (60 seconds)
-  const { data: signed, error: signError } = await context.client.storage
-    .from('property-files')
-    .createSignedUrl(file.object_path, 60);
-
-  if (signError || !signed) throw new ApiError(503, 'unavailable');
-  // The SDK re-encodes query parameters; append once to preserve Vietnamese download names.
-  const signedUrl = new URL(signed.signedUrl);
-  if (download) signedUrl.searchParams.set('download', file.original_filename);
-
-  return {
-    url: signedUrl.href,
-    expiresAt: Math.floor(Date.now() / 1000) + 60,
-  };
+  // The two reads below run under the caller's session and inherit RLS, including the
+  // archived-property reviewer boundary. Only their result can produce a URL.
+  const outcome = await signAuthorizedFile(
+    {
+      readProperty: async (id) => {
+        const { data: property, error } = await context.client
+          .from('properties')
+          .select('id')
+          .eq('id', id)
+          .maybeSingle();
+        if (error)
+          return {
+            refused: error.code === '42501' ? 403 : 503,
+          } satisfies Lookup<unknown>;
+        return property
+          ? { found: property }
+          : ({ refused: 404 } satisfies Lookup<unknown>);
+      },
+      readFile: async (id, wantedFileId) => {
+        const { data: file, error } = await context.client
+          .from('property_files')
+          .select('id,object_path,original_filename')
+          .eq('property_id', id)
+          .eq('id', wantedFileId)
+          .eq('upload_status', 'ready')
+          .maybeSingle();
+        if (error)
+          return {
+            refused: error.code === '42501' ? 403 : 503,
+          } satisfies Lookup<FileRead>;
+        return file
+          ? {
+              found: {
+                objectPath: file.object_path,
+                originalFilename: file.original_filename,
+              },
+            }
+          : ({ refused: 404 } satisfies Lookup<FileRead>);
+      },
+      presign: presignDownload,
+      now: Date.now,
+    },
+    { propertyId, fileId, download },
+  );
+  if (outcome.status !== 'signed')
+    throw new ApiError(outcome.status, outcome.code);
+  return { url: outcome.url, expiresAt: outcome.expiresAt };
 }

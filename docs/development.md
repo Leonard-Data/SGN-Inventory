@@ -48,7 +48,8 @@ src/
   proxy.ts                     # Session refresh, live membership and saved locale
   features/employees/          # Membership guard, auth screens/shell/controls, protected state
   features/properties/         # Bounded queries, details, page views and formatting
-  features/property-files/     # Private file read workspace, types, signed URLs
+  features/property-files/     # Private file read workspace, types, per-property limits, presigned R2 links
+  lib/r2.ts                     # Server-only private bucket client: presigned PUT/GET, object metadata/bytes
   features/property-maintenance/ # Create/edit maintenance, address/contact forms, history
   features/corrections/        # Correction submission, queue and amendment rendering
   features/property-comments/  # Shared Property discussion, submission-key recovery, paging and comment removal
@@ -61,7 +62,8 @@ src/
   lib/environment.ts           # Pure validated environment Interface
   lib/environment.test.ts      # Configuration invariants
 scripts/
-  check-environment.mjs         # Operator-facing configuration check
+  check-environment.mjs         # Operator-facing configuration check (including R2 readiness)
+  copy-property-files-to-r2.mjs # One-off Supabase→R2 object copy: dry run, --apply, --verify
   release-guard.mjs             # Branch/project isolation, pending migrations and release smoke
   release-guard.test.mjs        # Cross-stage regression risks
   validate-schema.mjs           # Existing embedded SQL assertions

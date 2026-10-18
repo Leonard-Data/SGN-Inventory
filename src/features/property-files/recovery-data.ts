@@ -1,6 +1,7 @@
 import 'server-only';
 import { ApiError, uuid } from '@/lib/supabase/route';
 import type { RouteContext } from '@/lib/supabase/route';
+import { storedObject } from '@/lib/r2';
 import type { FileRecoveryList, RecoverableFile } from './types';
 
 export async function recoverFiles(
@@ -49,28 +50,24 @@ export async function recoverFiles(
       });
       continue;
     }
-    const { data: info, error: infoError } = await context.client.storage
-      .from('property-files')
-      .info(file.object_path);
-    if (info) uploads.push({ file, objectState: 'present' });
-    else if (
-      infoError &&
-      (infoError.statusCode === '404' ||
-        infoError.message === 'Object not found')
-    )
-      uploads.push({ file, objectState: 'absent' });
-    else if (infoError?.message.startsWith('Invalid key:'))
-      uploads.push({
-        file,
-        objectState: 'unusable',
-        error: 'replacement-required',
-      });
-    else
+    // An unreachable or unconfigured store stays 'unknown', never 'absent': bytes must not
+    // be uploaded again over an object that may already be there.
+    let object: Awaited<ReturnType<typeof storedObject>>;
+    try {
+      object = await storedObject(file.object_path);
+    } catch {
       uploads.push({
         file,
         objectState: 'unknown',
         error: 'unknown-object-state',
       });
+      continue;
+    }
+    uploads.push(
+      object
+        ? { file, objectState: 'present' }
+        : { file, objectState: 'absent' },
+    );
   }
   return { uploads };
 }

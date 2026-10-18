@@ -181,8 +181,9 @@ await check('unsafe names, empty and oversized expectations rejected atomically'
   assert.deepEqual((await db.query('select id from public.property_files')).rows,[{id:fileId}]);
 });
 await check('PDF cannot be registered with photo purpose',()=>fails(registerSql,['40000000-0000-4000-8000-000000000002',property,'scan.pdf','application/pdf',1024,testSha256,'photo',otherCatId],'23514'));
-await check('completion requires actual authoritative object identity and unforgeable attestation',async()=>{
-  await fails(completionSql,completion,'23514');
+await check('completion requires the server attestation over the stored object identity',async()=>{
+  // R2 is not visible to the database, so the attestation is the evidence of the inspected
+  // object; the property_files row keeps deciding who may read it.
   await fails(completionSql,[...completion.slice(0,5),'0'.repeat(64)],'42501');
   assert.equal((await db.query('select upload_status from public.property_files where id=$1',[fileId])).rows[0].upload_status,'pending');
 });
@@ -528,6 +529,52 @@ await asUser(0);await db.exec('reset role');await db.query('update public.employ
 await check('existing identity loses cover mutation authority after live deactivation',()=>fails('select public.set_property_cover($1,$2)',[coverProperty,firstCover.id],'42501'));
 await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");await db.query('update public.employees set is_active=true where id=$1',[employees[0]]);
 assert.deepEqual((await db.query(`select ${coverSourceColumns} from public.property_files where property_id=$1 order by id`,[coverProperty])).rows,coverBefore);
+// Property file storage moved to Cloudflare R2 with per-property class limits.
+const limitProperty='20000000-0000-4000-8000-00000000000a';
+await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
+await db.query("insert into public.properties(id,property_code,listing_mode,status,created_by) values($1,'SGN-LIMITS','sale','available',$2)",[limitProperty,employees[0]]);
+await asUser(0);
+const limitDocument=(index)=>`43000000-0000-4000-8000-00000000000${index}`;
+const limitImage=(index)=>`43000000-0000-4000-8000-0000000001${String(index).padStart(2,'0')}`;
+async function registerLimited(id,mime,size,purpose='document'){
+  const row=(await db.query(registerSql,[id,limitProperty,`limit-${id.slice(-2)}.${mime==='application/pdf'?'pdf':'png'}`,mime,size,testSha256,purpose,otherCatId])).rows[0];
+  return row.result.objectPath;
+}
+async function completeLimited(id,path,mime,size){
+  const objectId=id.replace('43000000','83000000');
+  const signedPayload=['v1',id,limitProperty,employees[0],path,objectId,mime,String(size),testSha256].join('|');
+  const signed=createHmac('sha256',Buffer.from(validationKey,'hex')).update(signedPayload).digest('hex');
+  return db.query(completionSql,[id,objectId,mime,size,testSha256,signed]);
+}
+await check('document class keeps 5 files of up to 20 MiB and refuses the sixth',async()=>{
+  await fails(registerSql,[limitDocument(6),limitProperty,'limit-06.pdf','application/pdf',20971521,testSha256,'document',otherCatId],'23514');
+  const firstPath=await registerLimited(limitDocument(1),'application/pdf',20971520);
+  for(let n=2;n<=5;n++) await registerLimited(limitDocument(n),'application/pdf',1024);
+  await fails(registerSql,[limitDocument(6),limitProperty,'limit-06.pdf','application/pdf',1024,testSha256,'document',otherCatId],'P0020');
+  assert.equal((await db.query("select count(*)::int as n from public.property_files where property_id=$1 and mime_type='application/pdf'",[limitProperty])).rows[0].n,5);
+  await completeLimited(limitDocument(1),firstPath,'application/pdf',20971520);
+});
+await check('image class keeps 10 images of up to 5 MiB and refuses an eleventh',async()=>{
+  await fails(registerSql,[limitImage(11),limitProperty,'limit-11.png','image/png',5242881,testSha256,'photo',otherCatId],'P0022');
+  const paths=[];
+  for(let n=1;n<=10;n++) paths.push(await registerLimited(limitImage(n),'image/png',5242880,n===1?'photo':'document'));
+  await fails(registerSql,[limitImage(11),limitProperty,'limit-11.png','image/png',1024,testSha256,'photo',otherCatId],'P0021');
+  assert.equal((await db.query("select count(*)::int as n from public.property_files where property_id=$1 and mime_type='image/png'",[limitProperty])).rows[0].n,10);
+  await completeLimited(limitImage(1),paths[0],'image/png',5242880);
+});
+await check('the property cover is one of the 10 images and earns no extra slot',async()=>{
+  await db.query('select public.set_property_cover($1,$2)',[limitProperty,limitImage(1)]);
+  assert.equal((await db.query('select cover_file_id from public.properties where id=$1',[limitProperty])).rows[0].cover_file_id,limitImage(1));
+  await fails(registerSql,[limitImage(11),limitProperty,'limit-11.png','image/png',1024,testSha256,'photo',otherCatId],'P0021');
+});
+await check('completion defensively refuses a pending file that would exceed its class limit',async()=>{
+  const racedId='43000000-0000-4000-8000-000000000120';
+  await db.exec('reset role');
+  await db.query("insert into public.property_files(id,property_id,document_type,object_path,original_filename,mime_type,size_bytes,sha256,purpose,uploaded_by) values($1,$2,'other',$3,'raced.png','image/png',1024,$4,'document',$5)",[racedId,limitProperty,`${limitProperty}/${racedId}/content`,testSha256,employees[0]]);
+  await asUser(0);
+  await fails(completionSql,[racedId,racedId.replace('43000000','83000000'),'image/png',1024,testSha256,createHmac('sha256',Buffer.from(validationKey,'hex')).update(['v1',racedId,limitProperty,employees[0],`${limitProperty}/${racedId}/content`,racedId.replace('43000000','83000000'),'image/png','1024',testSha256].join('|')).digest('hex')],'P0021');
+  assert.equal((await db.query('select upload_status from public.property_files where id=$1',[racedId])).rows[0].upload_status,'pending');
+});
 const maintainedProperty=await maintenanceContract({db,asUser,check,fails,employees,property,other});
 await correctionContract({db,asUser,check,fails,employees,property:maintainedProperty});
 // Ticket #36: recorded Asking-price history over the allowlisted business-history seam.
@@ -653,6 +700,6 @@ await auditRetentionContract({db,asUser,check,fails,employees});
 // Ticket #71: the shared Contact directory read and its contact-scoped correction.
 await contactDirectoryContract({db,asUser,check,fails,employees});
 const report={checked_at:new Date().toISOString(),engine:'PGlite embedded PostgreSQL plus an embedded real PostgreSQL engine for the two-connection last-admin, property-vendor-link and contact-link races; mocked auth/storage schemas',passed,
- limitations:['Not a live Supabase integration test','HTTP Auth, signed URLs, Vercel and browser flows not exercised','Hosted/staging independent-session contention at production load remains an acceptance gate']};
+ limitations:['Not a live Supabase integration test','HTTP Auth, presigned R2 URLs, Vercel and browser flows not exercised','Hosted/staging independent-session contention at production load remains an acceptance gate']};
 await fs.writeFile(path.join(root,'docs/validation-results.json'),JSON.stringify(report,null,2)+'\n');
 console.log(`${passed} assertions passed`);await db.close();

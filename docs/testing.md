@@ -415,6 +415,19 @@ Prepare sanitized fixtures through authorized administration:
 | Inactive/unlinked/anonymous attempts file operations | Denied through both browser and direct API; no protected file data exposed |
 | Archived-property file operations (upload, category change, cover) attempted by ordinary employee | Denied; reviewer (operator) can still read archived property files |
 | Live deactivation while file workspace is open | Subsequent requests deny access; protected request/refocus clears displayed file data; restored activation re-enables access |
+
+### R2 storage cutover (not yet executed)
+
+Property file bytes now live in a private Cloudflare R2 bucket reached only through short-lived presigned URLs. None of the following has been run: the embedded schema harness proves the database caps and the unit tests prove the class/limit and read-path ordering, but no live bucket, presigned URL, browser upload or hosted copy has been exercised.
+
+| Scenario | Required observation |
+| --- | --- |
+| Register and upload through the browser | Bytes appear in the private R2 bucket under `<property_uuid>/<file_uuid>/content`; the application server answers no request carrying file bytes; the presigned `PUT` and `GET` links stop working after about 60 seconds |
+| Architected read boundary on an archived property | A non-reviewer receives `404` from the signed endpoint and no URL exists; a reviewer obtains a working 60-second URL after the same RLS-checked record read |
+| Missing or partial `R2_*` configuration | Register, completion, recovery and signed-open fail closed with a server-side error naming the missing variables; nothing falls back to Supabase Storage |
+| Per-property caps | A sixth document and an eleventh image are refused with the localized limit message and leave no row or object; the cover photo counts inside the 10 images; 20 MiB documents and 5 MiB images accept, one byte more refuses |
+| Retention | Clearing the cover, recategorizing a file and retrying completion never delete the R2 object or the row: the attachment stays readable |
+| Copy script against the development project | Dry run lists what it would copy and copies nothing; `--apply` copies every registered key, then the verification pass reports the whole registered set present with matching sizes; the Supabase bucket still holds every object afterwards |
 | Switch VI/EN during upload, category selection, recovery, and cover operations | Equivalent labels, validation and statuses; filenames, category names, and document bytes remain unchanged |
 | Direct API attempts: metadata readiness mutation, forged completion attestation and old completion/review signatures | Denied without publishing unvalidated bytes; direct overwrite/delete probes need concrete authorization for a newly disposable synthetic object and subsequent exact-byte verification |
 

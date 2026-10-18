@@ -28,8 +28,6 @@ export type FileRegistrationResult = {
   fileId: string;
   objectPath: string;
   uploadUrl: string;
-  publishableKey: string;
-  accessToken: string;
 };
 export type RecoverableFile = {
   file: PropertyFile;

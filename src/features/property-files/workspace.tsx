@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { messages as globalMessages, type Locale } from '@/i18n/messages';
 import { fileMessages } from './messages';
+import { fileClass, sizeRefusal } from './limits';
 import { IconAction } from '@/features/icon-action';
 import { api, RequestError } from '@/features/employees/api';
 import { CoverImage } from './cover-image';
@@ -262,8 +263,11 @@ export function Workspace({
       let sha256 = '';
       if (file) {
         if (file.size <= 0) throw new RequestError(400, 'empty-file');
-        if (file.size > 20 * 1024 * 1024)
-          throw new RequestError(400, 'file-too-large');
+        const kind = fileClass(file.type);
+        if (kind) {
+          const refusal = sizeRefusal(kind, file.size);
+          if (refusal) throw new RequestError(400, refusal);
+        }
         const digest = new Uint8Array(
           await crypto.subtle.digest('SHA-256', await file.arrayBuffer()),
         );
@@ -321,17 +325,14 @@ export function Workspace({
         if (generation.current !== version || signal?.aborted) return false;
         update('uploading');
         try {
+          // Direct to private R2 under the short-lived signed PUT; no app-server bytes.
           await fetch(registration.uploadUrl, {
-            method: 'POST',
+            method: 'PUT',
             cache: 'no-store',
             referrerPolicy: 'no-referrer',
             signal,
             headers: {
               'Content-Type': recovery?.file.mime_type ?? file!.type,
-              apikey: registration.publishableKey,
-              Authorization: 'Bearer ' + registration.accessToken,
-              'x-upsert': 'false',
-              'cache-control': 'private, no-store',
             },
             body: file,
           });

@@ -274,8 +274,12 @@ _Avoid_: Discussion feed, audit log, retention deletion
 ### Property files
 
 **Property file**:
-A registered document or property photo attached to a property, with a stable identity and original content retained.
+A registered document or property photo attached to a property, with a stable identity and original content retained in the private file store.
 _Avoid_: Uploaded image, attached document
+
+**Property file limit**:
+The per-property ceiling on stored attachments, decided by the file's validated content type rather than its chosen purpose, category or cover choice: at most 5 documents of 20 MiB each and at most 10 images of 5 MiB each, the cover photo counted among the images. A registration reserves its slot before any bytes are accepted.
+_Avoid_: Storage quota, category limit
 
 **File completion**:
 Technical confirmation that the stored content is supported, complete and matches its registration, making it privately available to current property readers. It is not human document review, legal authenticity, ownership certification or malware scanning.
