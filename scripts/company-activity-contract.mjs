@@ -89,7 +89,7 @@ export async function companyActivityContract({
   const read = async (from, to) =>
     (
       await db.query(
-        'select employee_id,employee_name,business_day::text as business_day,page_view_events,distinct_properties_viewed,owner_contact_properties from public.company_employee_daily_activity($1,$2)',
+        'select employee_id,employee_name,employee_email,business_day::text as business_day,page_view_events,distinct_properties_viewed,owner_contact_properties from public.company_employee_daily_activity($1,$2)',
         [from, to],
       )
     ).rows;
@@ -131,6 +131,27 @@ export async function companyActivityContract({
             ownerContactProperties: 0,
           },
         );
+    },
+  );
+  await check(
+    'every report row carries the employee email the group label uses',
+    async () => {
+      for (const row of rows)
+        assert.equal(
+          row.employee_email,
+          (
+            await db.query('select email from public.employees where id = $1', [
+              row.employee_id,
+            ])
+          ).rows[0].email,
+        );
+      // The email is the same recorded identity in every day row of one employee.
+      const emails = new Set(
+        rows
+          .filter((row) => row.employee_id === employees[0])
+          .map((row) => row.employee_email),
+      );
+      assert.deepEqual([...emails], ['fixture0@example.test']);
     },
   );
   await check(

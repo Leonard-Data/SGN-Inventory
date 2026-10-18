@@ -2199,6 +2199,7 @@ export type Database = {
         Returns: {
           business_day: string;
           distinct_properties_viewed: number;
+          employee_email: string;
           employee_id: string;
           employee_name: string;
           owner_contact_properties: number;

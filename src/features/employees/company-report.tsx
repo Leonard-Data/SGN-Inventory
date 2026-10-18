@@ -5,6 +5,7 @@ import { messages, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { vietnamDate } from '@/features/properties/format';
 import type { CompanyActivityReport } from './company-report-data';
+import { activityGroups } from './company-report-groups';
 
 // Company employee-by-day activity report (#57) extended with the employee owner-contact
 // activity ranking (#34). One authenticated screen: the filter posts back to this route so the
@@ -36,6 +37,8 @@ export function CompanyReport({
     () => new Intl.NumberFormat(locale === 'vi' ? 'vi-VN' : 'en-GB'),
     [locale],
   );
+  // One collapsible group per employee, in the daily report's own employee order.
+  const groups = useMemo(() => activityGroups(data?.rows ?? []), [data?.rows]);
   return (
     <>
       <div className="page-head">
@@ -265,56 +268,76 @@ export function CompanyReport({
                         .replace('{to}', vietnamDate(data.to) ?? data.to)}
                     </h3>
                   </div>
-                ) : data.rows.length === 0 ? (
+                ) : groups.length === 0 ? (
                   <div className="state-panel">
                     <h3>{text.noEmployees}</h3>
                   </div>
                 ) : (
-                  <div className="table-wrap">
-                    <table className="data-table stackable">
-                      <thead>
-                        <tr>
-                          <th scope="col">{text.companyEmployee}</th>
-                          <th scope="col">{text.todayDay}</th>
-                          <th scope="col">{text.todayPageViews}</th>
-                          <th scope="col">{text.todayProperties}</th>
-                          <th scope="col">{text.todayOwnerContacts}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {data.rows.map((row) => (
-                          <tr key={row.employeeId + row.businessDay}>
-                            <th scope="row" data-label={text.companyEmployee}>
-                              {row.employeeName}
-                            </th>
-                            <td className="num" data-label={text.todayDay}>
-                              {vietnamDate(row.businessDay)}
-                            </td>
-                            <td
-                              className="num"
-                              data-label={text.todayPageViews}
-                            >
-                              {numberFormat.format(row.pageViewEvents)}
-                            </td>
-                            <td
-                              className="num"
-                              data-label={text.todayProperties}
-                            >
-                              {numberFormat.format(
-                                row.distinctPropertiesViewed,
-                              )}
-                            </td>
-                            <td
-                              className="num"
-                              data-label={text.todayOwnerContacts}
-                            >
-                              {numberFormat.format(row.ownerContactProperties)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  groups.map((group) => (
+                    <details className="maintenance" key={group.employeeId}>
+                      <summary>
+                        <span className="record-head">
+                          <span translate="no">{group.employeeEmail}</span>
+                          <span className="num">
+                            {text.companyGroupActivities.replace(
+                              '{count}',
+                              numberFormat.format(group.count),
+                            )}
+                          </span>
+                        </span>
+                      </summary>
+                      <div className="table-wrap">
+                        <table className="data-table stackable">
+                          <thead>
+                            <tr>
+                              <th scope="col">{text.companyEmployee}</th>
+                              <th scope="col">{text.todayDay}</th>
+                              <th scope="col">{text.todayPageViews}</th>
+                              <th scope="col">{text.todayProperties}</th>
+                              <th scope="col">{text.todayOwnerContacts}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {group.rows.map((row) => (
+                              <tr key={row.employeeId + row.businessDay}>
+                                <th
+                                  scope="row"
+                                  data-label={text.companyEmployee}
+                                >
+                                  {row.employeeName}
+                                </th>
+                                <td className="num" data-label={text.todayDay}>
+                                  {vietnamDate(row.businessDay)}
+                                </td>
+                                <td
+                                  className="num"
+                                  data-label={text.todayPageViews}
+                                >
+                                  {numberFormat.format(row.pageViewEvents)}
+                                </td>
+                                <td
+                                  className="num"
+                                  data-label={text.todayProperties}
+                                >
+                                  {numberFormat.format(
+                                    row.distinctPropertiesViewed,
+                                  )}
+                                </td>
+                                <td
+                                  className="num"
+                                  data-label={text.todayOwnerContacts}
+                                >
+                                  {numberFormat.format(
+                                    row.ownerContactProperties,
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </details>
+                  ))
                 )}
               </div>
             </section>

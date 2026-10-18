@@ -173,6 +173,7 @@ const vi = {
   todaySummary: 'Tổng hợp hôm nay',
   companyHistory: 'Lịch sử theo ngày',
   companyEmployee: 'Nhân viên',
+  companyGroupActivities: 'Số hoạt động: {count}',
   companyActivityNote:
     'Lượt truy cập liên hệ chủ nhà là số bất động sản mà mỗi nhân viên đã mở liên hệ chủ nhà trong ngày (giờ Việt Nam): không phải điểm danh, giờ làm việc, cuộc gọi đã kết nối hay lượt thăm bất động sản.',
   noEmployees: 'Chưa có nhân viên đang hoạt động.',
@@ -890,6 +891,7 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     todaySummary: "Today's summary",
     companyHistory: 'History by day',
     companyEmployee: 'Employee',
+    companyGroupActivities: 'Activities: {count}',
     companyActivityNote:
       'Owner-contact access is the number of properties whose owner contact each employee opened that Vietnam day: not attendance, work hours, connected calls or physical visits.',
     noEmployees: 'No active employees.',
