@@ -329,7 +329,7 @@ Scope: the property detail and edit location surfaces. Tiles are OpenStreetMap r
 
 | Scenario | Required observation |
 | --- | --- |
-| Recorded point on the detail page | The map shows the recorded point with an "open in map" OpenStreetMap link; the read-only map is announced as an image whose text alternative states the recorded latitude and longitude |
+| Recorded point on the detail page | The map shows the recorded point with an "open in map" OpenStreetMap link; the visible caption and the map's group label state the recorded latitude and longitude, and the Leaflet and OpenStreetMap credit links stay visible and reachable by keyboard |
 | No recorded point | The detail page states that no location is recorded and renders no map |
 | Place, move and clear a point in the editor | Clicking the map places/moves the marker, a typed latitude and longitude take effect only after pressing Apply coordinates, clearing removes both coordinates, and the save writes both or neither through the maintenance RPC; range and precision are rejected exactly as the save path rejects them, and a change set naming only one axis is rejected |
 | Location versus correction requests | The location editor is the only place coordinates are set or cleared: the correction report/request draft and its amend path never offer latitude or longitude, so a single coordinate or a half-cleared pair can never be requested; the editor keeps the pair together with the 7-decimal range guidance |

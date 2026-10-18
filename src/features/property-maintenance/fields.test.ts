@@ -103,13 +103,16 @@ test('location coordinates accept exact decimal strings within range and reject 
   ])
     assert.throws(() => validateChanges('property', changes));
   for (const changes of [
-    { latitude: '91' },
-    { latitude: '-90.0000001' },
-    { longitude: '181' },
-    { longitude: '-180.0000001' },
-    { latitude: '10.76262200' }, // eight decimals exceed numeric(10,7)
-    { latitude: 'abc' },
-    { latitude: '10.' },
+    { latitude: '91', longitude: '106.6601720' },
+    { latitude: '-90.0000001', longitude: '106.6601720' },
+    { latitude: '10.7626220', longitude: '181' },
+    { latitude: '10.7626220', longitude: '-180.0000001' },
+    { latitude: '10.76262200', longitude: '106.6601720' }, // eight decimals exceed numeric(10,7)
+    { latitude: '10.7626220', longitude: '106.66017200' },
+    { latitude: 'abc', longitude: '106.6601720' },
+    { latitude: '10.7626220', longitude: 'abc' },
+    { latitude: '10.', longitude: '106.6601720' },
+    { latitude: '10.7626220', longitude: '106.' },
   ])
     assert.throws(() => validateChanges('property', changes));
 });

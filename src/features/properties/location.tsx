@@ -80,7 +80,7 @@ export function PropertyLocation({
       ) : null}
       <div
         className="sgn-map-frame"
-        role="img"
+        role="group"
         aria-label={
           dt.locationRecorded +
           ': ' +
