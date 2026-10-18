@@ -1898,11 +1898,10 @@ export function renderReport(report) {
       `| Converted current addresses | ${write.verification.counts.current_addresses} |`,
       `| Owner contact links | ${write.verification.counts.contact_links} |`,
       `| Files stored | ${write.verification.counts.files} |`,
-      `| Invitations recorded by this run | ${write.staff.invitations.recorded} |`,
-      `| Recorded invitations the project holds | ${write.verification.counts.invitations_recorded} |`,
       '',
       `- Staff addresses planned: ${write.staff.addresses}; silent admin: \`${write.staff.silent_admin ?? '(none)'}\`.`,
-      `- Invitations stated ${write.staff.invitations.stated}, refused ${write.staff.invitations.refused}, recorded ${write.staff.invitations.recorded}; ${write.staff.invitations.failures.length} did not reach recorded.`,
+      `- Invitations this run stated ${write.staff.invitations.stated}, ${write.staff.invitations.refused} refused, and recorded ${write.staff.invitations.recorded} (accepted provider outcome plus accepted outcome write); ${write.staff.invitations.failures.length} did not reach recorded.`,
+      `- Recorded invitations the project as a whole holds, not scoped to this batch: ${write.verification.counts.invitations_recorded}.`,
       ...(write.staff.invitations.failures.length
         ? [
             '',
