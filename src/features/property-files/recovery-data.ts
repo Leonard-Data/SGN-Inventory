@@ -5,6 +5,7 @@ import { deleteObject, storedObject } from '@/lib/r2';
 import {
   discardExpiredRegistration,
   expiredPendingRegistration,
+  sweepReleasedBytes,
   type CleanupStore,
 } from './upload-cleanup';
 import type { FileRecoveryList, RecoverableFile } from './types';
@@ -39,7 +40,7 @@ export async function recoverFiles(
     .eq('uploaded_by', employeeId);
   query = fileId
     ? query.eq('id', fileId)
-    : query.in('upload_status', ['pending', 'failed']);
+    : query.in('upload_status', ['pending', 'failed', 'cleanup_pending']);
   const { data: files, error } = await query.order('created_at', {
     ascending: false,
   });
@@ -48,6 +49,22 @@ export async function recoverFiles(
   const uploads: RecoverableFile[] = [];
   const now = Date.now();
   for (const file of files ?? []) {
+    // A released registration keeps no slot; its only remaining work is deleting the bytes,
+    // which every sweep retries until the deletion succeeds.
+    if (file.upload_status === 'cleanup_pending') {
+      await sweepReleasedBytes(cleanup, file.object_path, async () => {
+        const { error } = await context.client.rpc('mark_upload_cleaned', {
+          p_file_id: file.id,
+        });
+        if (error) throw error;
+      });
+      uploads.push({
+        file,
+        objectState: 'unusable',
+        error: 'replacement-required',
+      });
+      continue;
+    }
     if (
       file.upload_status === 'failed' ||
       !file.mime_type ||

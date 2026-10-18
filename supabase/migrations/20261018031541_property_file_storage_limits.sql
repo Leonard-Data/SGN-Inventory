@@ -9,7 +9,15 @@
 -- category or cover choice: PDF is a document (at most 5, at most 20 MiB each) and
 -- JPEG/PNG/WebP are images (at most 10, at most 5 MiB each). A ready photo that is also the
 -- property cover is one of those images, so it never earns an extra slot.
+--
+-- A refused or abandoned registration releases its slot immediately (`cleanup_pending`) and
+-- only becomes `failed` once the server has confirmed its object is gone, so `failed` always
+-- means "no bytes to worry about".
 begin;
+
+alter table public.property_files drop constraint property_files_upload_status_check;
+alter table public.property_files add constraint property_files_upload_status_check
+  check (upload_status in ('pending','ready','failed','cleanup_pending'));
 
 create or replace function private.register_property_file(
   p_file_id uuid,
@@ -49,10 +57,17 @@ begin
   if not found then raise exception 'unarchived property required' using errcode = '42501'; end if;
   select id into cat_id from public.document_categories where id = p_category_id;
   if cat_id is null then raise exception 'invalid category' using errcode = '23514'; end if;
+  -- Only a registration still awaiting bytes may receive an upload policy: bytes uploaded under
+  -- a released or finished row would be stranded outside every cleanup path. The row lock taken
+  -- here is what makes that check hold for the rest of the transaction.
+  select * into f from public.property_files where id = p_file_id for update;
+  if found and f.upload_status <> 'pending' then
+    raise exception 'registration is not awaiting upload' using errcode = '23514';
+  end if;
   -- The parent row lock above serializes registrations for one property, and pending rows
   -- reserve their slot, so concurrent uploads cannot overshoot the class limit. Rows with no
-  -- content type (unvalidated legacy data) belong to neither class and hold no slot. A
-  -- presigned PUT lives 60 seconds, so a registration still pending after 15 minutes cannot
+  -- content type (unvalidated legacy data) belong to neither class and hold no slot. A signed
+  -- upload policy lives 60 seconds, so a registration still pending after 15 minutes cannot
   -- receive bytes any more: it stays recorded but stops reserving its slot.
   select count(*) into used from public.property_files
     where property_id = p_property_id and id <> p_file_id
@@ -146,15 +161,15 @@ begin
 end;
 $$;
 
--- A completion refusal is terminal for those bytes, so the uploader's pending registration
--- stops reserving its class slot. The row itself is retained as evidence.
+-- A refused completion releases its class slot at once, but the row is not `failed` until the
+-- server confirms its object is gone; the sweeper retries every `cleanup_pending` row.
 create function private.fail_property_upload(p_file_id uuid)
 returns void language plpgsql security definer set search_path = '' as $$
 declare
   me uuid := private.employee_id();
 begin
   if me is null then raise exception 'active employee required' using errcode = '42501'; end if;
-  update public.property_files set upload_status = 'failed'
+  update public.property_files set upload_status = 'cleanup_pending'
     where id = p_file_id and uploaded_by = me and upload_status = 'pending';
 end;
 $$;
@@ -164,7 +179,23 @@ returns void language sql security invoker set search_path = '' as $$
   select private.fail_property_upload(p_file_id);
 $$;
 
-revoke all on function private.fail_property_upload(uuid),public.fail_property_upload(uuid) from public,anon,authenticated;
-grant execute on function private.fail_property_upload(uuid),public.fail_property_upload(uuid) to authenticated;
+create function private.mark_upload_cleaned(p_file_id uuid)
+returns void language plpgsql security definer set search_path = '' as $$
+declare
+  me uuid := private.employee_id();
+begin
+  if me is null then raise exception 'active employee required' using errcode = '42501'; end if;
+  update public.property_files set upload_status = 'failed'
+    where id = p_file_id and uploaded_by = me and upload_status = 'cleanup_pending';
+end;
+$$;
+
+create function public.mark_upload_cleaned(p_file_id uuid)
+returns void language sql security invoker set search_path = '' as $$
+  select private.mark_upload_cleaned(p_file_id);
+$$;
+
+revoke all on function private.fail_property_upload(uuid),public.fail_property_upload(uuid),private.mark_upload_cleaned(uuid),public.mark_upload_cleaned(uuid) from public,anon,authenticated;
+grant execute on function private.fail_property_upload(uuid),public.fail_property_upload(uuid),private.mark_upload_cleaned(uuid),public.mark_upload_cleaned(uuid) to authenticated;
 
 commit;

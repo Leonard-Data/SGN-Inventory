@@ -587,8 +587,15 @@ await check('an abandoned or refused upload stops reserving its class slot',asyn
   for(let n=1;n<=5;n++) await db.query(registerSql,[slotDocument(n),slotProperty,`slot-${n}.pdf`,'application/pdf',1024,testSha256,'document',otherCatId]);
   await fails(registerSql,[slotDocument(6),slotProperty,'slot-6.pdf','application/pdf',1024,testSha256,'document',otherCatId],'P0020');
   await db.query('select public.fail_property_upload($1)',[slotDocument(5)]);
-  assert.equal((await db.query('select upload_status from public.property_files where id=$1',[slotDocument(5)])).rows[0].upload_status,'failed');
+  assert.equal((await db.query('select upload_status from public.property_files where id=$1',[slotDocument(5)])).rows[0].upload_status,'cleanup_pending');
+  // The slot is free while the bytes may still exist, and a released row takes no new upload.
+  await fails(registerSql,[slotDocument(5),slotProperty,'slot-5.pdf','application/pdf',1024,testSha256,'document',otherCatId],'23514');
   await db.query(registerSql,[slotDocument(6),slotProperty,'slot-6.pdf','application/pdf',1024,testSha256,'document',otherCatId]);
+  await db.query('select public.mark_upload_cleaned($1)',[slotDocument(5)]);
+  assert.equal((await db.query('select upload_status from public.property_files where id=$1',[slotDocument(5)])).rows[0].upload_status,'failed');
+  // Only the two-step path reaches failed: a settled row is neither re-uploadable nor re-run.
+  await fails(registerSql,[slotDocument(5),slotProperty,'slot-5.pdf','application/pdf',1024,testSha256,'document',otherCatId],'23514');
+  await db.query('select public.mark_upload_cleaned($1)',[slotDocument(5)]);
 });
 await check('failing an upload never touches a ready row or another employee row',async()=>{
   await asUser(0);
@@ -601,6 +608,9 @@ await check('failing an upload never touches a ready row or another employee row
   await db.query('select public.fail_property_upload($1)',[colleagueRow]);
   await asUser(null);
   await fails('select public.fail_property_upload($1)',[colleagueRow],'42501');
+  await fails('select public.mark_upload_cleaned($1)',[colleagueRow],'42501');
+  await asUser(1);
+  await db.query('select public.mark_upload_cleaned($1)',[colleagueRow]);
   await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
   assert.equal((await db.query('select upload_status from public.property_files where id=$1',[colleagueRow])).rows[0].upload_status,'pending');
   await asUser(0);

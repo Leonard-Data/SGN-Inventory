@@ -1,7 +1,5 @@
 import type { SignedFileResponse } from './types';
 
-export const signedFileSeconds = 60;
-
 export type FileRead = {
   objectPath: string;
   originalFilename: string;
@@ -14,7 +12,12 @@ export type Lookup<T> = { found: T } | { refused: 403 | 404 | 503 };
 export type FileSigning = {
   readProperty: (propertyId: string) => Promise<Lookup<unknown>>;
   readFile: (propertyId: string, fileId: string) => Promise<Lookup<FileRead>>;
-  presign: (objectPath: string, originalFilename?: string) => Promise<string>;
+  // The signer reports the lifetime it actually used, so the returned expiry can never drift
+  // from the URL it describes.
+  presign: (
+    objectPath: string,
+    originalFilename?: string,
+  ) => Promise<{ url: string; expiresIn: number }>;
   now: () => number;
 };
 
@@ -45,13 +48,13 @@ export async function signAuthorizedFile(
   if ('refused' in property) return refusal(property.refused);
   const file = await signing.readFile(request.propertyId, request.fileId);
   if ('refused' in file) return refusal(file.refused);
-  const url = await signing.presign(
+  const signed = await signing.presign(
     file.found.objectPath,
     request.download ? file.found.originalFilename : undefined,
   );
   return {
     status: 'signed',
-    url,
-    expiresAt: Math.floor(signing.now() / 1000) + signedFileSeconds,
+    url: signed.url,
+    expiresAt: Math.floor(signing.now() / 1000) + signed.expiresIn,
   };
 }

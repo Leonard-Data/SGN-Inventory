@@ -35,20 +35,50 @@ export async function discardExpiredRegistration(
   }
 }
 
-// A refused completion can never become readable, so its bytes are discarded while the row is
-// retained as evidence and its class slot is released.
+// Deletes a released registration's bytes, then records that they are gone. A failed removal
+// leaves the row eligible for cleanup, so the next sweep retries it.
+export async function sweepReleasedBytes(
+  store: CleanupStore,
+  objectPath: string,
+  confirmCleaned: () => Promise<void>,
+): Promise<boolean> {
+  try {
+    await store.remove(objectPath);
+  } catch (error) {
+    store.log(
+      `could not remove ${objectPath}; the next sweep retries: ${String(error)}`,
+    );
+    return false;
+  }
+  try {
+    await confirmCleaned();
+  } catch (error) {
+    store.log(
+      `could not record cleaned upload ${objectPath}: ${String(error)}`,
+    );
+    return false;
+  }
+  return true;
+}
+
+// A refused completion releases its class slot at once and discards its bytes. Only a confirmed
+// removal moves the row to 'failed'; otherwise it stays 'cleanup_pending' for a later sweep.
 export async function discardRefusedCompletion(
   deps: CleanupStore & {
     pendingOwnerPath: () => Promise<string | null>;
-    fail: () => Promise<void>;
+    releaseSlot: () => Promise<void>;
+    confirmCleaned: () => Promise<void>;
   },
 ): Promise<void> {
   const objectPath = await deps.pendingOwnerPath();
   if (!objectPath) return;
   try {
-    await deps.remove(objectPath);
+    await deps.releaseSlot();
   } catch (error) {
-    deps.log(`could not remove refused upload ${objectPath}: ${String(error)}`);
+    deps.log(
+      `could not release refused upload ${objectPath}: ${String(error)}`,
+    );
+    return;
   }
-  await deps.fail();
+  await sweepReleasedBytes(deps, objectPath, deps.confirmCleaned);
 }

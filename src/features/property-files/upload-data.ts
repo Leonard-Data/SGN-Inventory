@@ -8,8 +8,8 @@ import {
   storedBytes,
   storedObject,
 } from '@/lib/r2';
-import { contentMime, fileMimeTypes, maximumFileBytes } from './content';
-import { fileClass, fileLimits, sizeRefusal } from './limits';
+import { contentMime, fileMimeTypes } from './content';
+import { fileClass, fileLimits, maximumFileBytes, sizeRefusal } from './limits';
 import { discardRefusedCompletion } from './upload-cleanup';
 import type { DocumentCategoryList, FileRegistrationResult } from './types';
 import type { Employee } from '@/features/employees/types';
@@ -152,10 +152,17 @@ export async function validateAndCompleteFile(
             ? data.object_path
             : null;
         },
-        fail: async () => {
-          await context.client.rpc('fail_property_upload', {
+        releaseSlot: async () => {
+          const { error } = await context.client.rpc('fail_property_upload', {
             p_file_id: fileId,
           });
+          if (error) throw error;
+        },
+        confirmCleaned: async () => {
+          const { error } = await context.client.rpc('mark_upload_cleaned', {
+            p_file_id: fileId,
+          });
+          if (error) throw error;
         },
       });
     throw error;

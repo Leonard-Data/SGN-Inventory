@@ -1,6 +1,6 @@
 import 'server-only';
 import { ApiError, uuid, type RouteContext } from '@/lib/supabase/route';
-import { presignDownload } from '@/lib/r2';
+import { presignDownload, signedUrlSeconds } from '@/lib/r2';
 import { signAuthorizedFile, type FileRead, type Lookup } from './read-path';
 import type { PropertyFileList, SignedFileResponse } from './types';
 
@@ -73,7 +73,10 @@ export async function authorizeAndSignFile(
             }
           : ({ refused: 404 } satisfies Lookup<FileRead>);
       },
-      presign: presignDownload,
+      presign: async (objectPath, originalFilename) => ({
+        url: await presignDownload(objectPath, originalFilename),
+        expiresIn: signedUrlSeconds,
+      }),
       now: Date.now,
     },
     { propertyId, fileId, download },

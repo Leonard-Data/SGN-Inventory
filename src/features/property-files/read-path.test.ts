@@ -20,7 +20,7 @@ function signing(patch: Partial<FileSigning> = {}) {
     readFile: async () => ({ found: file }),
     presign: async (objectPath, filename) => {
       presigned.push({ objectPath, ...(filename ? { filename } : {}) });
-      return 'https://r2.example.test/signed';
+      return { url: 'https://r2.example.test/signed', expiresIn: 60 };
     },
     now: () => 1_700_000_000_000,
     ...patch,
@@ -41,6 +41,25 @@ test('a readable completed record earns a 60-second URL and nothing more', async
     expiresAt: 1_700_000_000 + 60,
   });
   assert.deepEqual(presigned, [{ objectPath: file.objectPath }]);
+});
+
+test('the reported expiry follows the lifetime the signer actually used', async () => {
+  const { dependencies } = signing({
+    presign: async () => ({
+      url: 'https://r2.example.test/signed',
+      expiresIn: 90,
+    }),
+  });
+  const outcome = await signAuthorizedFile(dependencies, {
+    propertyId,
+    fileId,
+    download: false,
+  });
+  assert.deepEqual(outcome, {
+    status: 'signed',
+    url: 'https://r2.example.test/signed',
+    expiresAt: 1_700_000_000 + 90,
+  });
 });
 
 test('downloading keeps the original Vietnamese filename, opening does not', async () => {

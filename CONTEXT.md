@@ -278,7 +278,7 @@ A registered document or property photo attached to a property, with a stable id
 _Avoid_: Uploaded image, attached document
 
 **Property file limit**:
-The per-property ceiling on stored attachments, decided by the file's validated content type rather than its chosen purpose, category or cover choice: at most 5 documents of 20 MiB each and at most 10 images of 5 MiB each, the cover photo counted among the images. A registration reserves its slot before any bytes are accepted; a refused completion marks it failed, and a registration still pending after 15 minutes no longer counts, so an abandoned attempt never blocks the property for good.
+The per-property ceiling on stored attachments, decided by the file's validated content type rather than its chosen purpose, category or cover choice: at most 5 documents of 20 MiB each and at most 10 images of 5 MiB each, the cover photo counted among the images. A registration reserves its slot before any bytes are accepted; a refused completion releases it to `cleanup_pending` at once and only becomes `failed` once its bytes are confirmed deleted, and a registration still pending after 15 minutes no longer counts, so an abandoned attempt never blocks the property for good.
 _Avoid_: Storage quota, category limit
 
 **File completion**:
