@@ -9,11 +9,11 @@ Profiled the complete provided workbook, not just sample rows. The sanitized `wo
 | Thông tin dự án | 19,233 | Properties, legacy addresses and embedded owner contacts after review |
 | Loại Hình | 2 | Listing modes (sale/rent), not physical property types |
 | Loại dự án | 18 | Reviewed physical/access classification; source property rows use labels |
-| Nhân viên | 17 | Proposed employee roster, inactive until role review and Auth linkage |
-| Contracts | 20,480 | Owner/contact rows despite English sheet name; quarantine unresolved references |
+| Nhân viên | 17 | Staff roster supplying positions; provisioning and the settled role rule are in the [settled rules](legacy-import.md#the-settled-rules) |
+| Contracts | 20,480 | Dropped by captain decision: zero exact property-ID matches and every reference is a `BDS-` id ([settled rules](legacy-import.md#the-settled-rules)) |
 | Historical | 19,151 | Private legacy history archive; do not fabricate new approval audit |
 | Attachments | 2,544 | Attachment metadata plus separately retrieved file bytes |
-| clicks | 56,932 | Page views only, after property/employee resolution |
+| clicks | 56,932 | Excluded by captain decision: not mapped at all ([settled rules](legacy-import.md#the-settled-rules)) |
 | Trạng thái dự án | 6 | Controlled status mapping |
 | Quận | 22 | Historical label reference, not current administrative catalog |
 | Phường | 367 | Historical ward/district labels; app IDs are not official government codes |
@@ -33,15 +33,15 @@ Profiled the complete provided workbook, not just sample rows. The sanitized `wo
 | Attachments unambiguous direct matches | 2,468 / 2,544; 76 unresolved |
 | clicks unambiguous direct matches | 56,431 / 56,932; 501 unresolved/ambiguous |
 
-`Contracts` references use a different key system, largely `BDS-…`; current property IDs have no `BDS-` keys. Do not construct a conversion from worksheet row position. Obtain the former AppSheet export/key mapping or review aliases against reliable property evidence. Store approved alias decisions in `private.property_source_map`. For the duplicate property key, use explicitly reviewed row-specific source keys; related historical references cannot choose between those properties without additional evidence.
+`Contracts` references use a different key system, largely `BDS-…`; current property IDs have no `BDS-` keys, which is why the tab is dropped. Do not construct a conversion from worksheet row position. An approved alias decision would go in `private.property_source_map`. For the duplicate property key, use explicitly reviewed row-specific source keys; related historical references cannot choose between those properties without additional evidence.
 
 ## Property-column transformations
 
 | Source column | Destination | Rule |
 | --- | --- | --- |
 | PropertyID | `private.property_source_map.source_key` | Canonical property UUID is independent; keep source key as provenance; only unambiguous reviewed mappings |
-| Tên người tạo | Staging provenance | Display-name fallback only; never identifies an Auth account |
-| Email Người Tạo | `properties.created_by` via reviewed employee map | Normalize email; unresolved authors remain source provenance, not invented employees |
+| Tên người tạo | No destination | Display-name provenance only; never identifies an Auth account |
+| Email Người Tạo | `properties.created_by`, resolved against `public.employees` in a completed write run | Normalize email; unresolved authors remain source provenance, not invented employees |
 | Ngày Tạo | `properties.entry_on` + `entry_source='legacy'`; `properties.created_at` stays the record creation time | Use the source value as the original inventory entry date only when it is a reliable entry date, interpreting a naive datetime in Vietnam only after confirmation; retain the raw value in staging. Unreliable or absent values leave `entry_on` null with `entry_source='unknown'` instead of substituting `created_at` or the import day |
 | Tên chủ sở hũu | `contacts.display_name` | Generic names such as owner shorthand do not establish identity |
 | Số điện thoai | `contacts.phones` + `raw_phone_text` | Split multiple values; normalized valid mobile strings; preserve invalid/landline text for review |
@@ -61,12 +61,12 @@ Profiled the complete provided workbook, not just sample rows. The sanitized `wo
 | Phường | `commune_text` | Match in the context of legacy province/district |
 | Tên Đường | `street` | Preserve Unicode spelling and source text |
 | Địa Chỉ | `house_number` | Text; retain slashes, alley notation and suffixes |
-| Ngày Chỉnh Sửa gần nhất | Source updated time / `updated_at` during trusted import | Retain source instant; normal app trigger uses server mutation time |
-| Note | Staging or labeled notes | Do not replace another notes column silently |
-| Temp Value | Staging only | Unclear semantics; do not treat as authoritative price |
-| Người chỉnh sửa | `updated_by` via reviewed employee map | Keep unresolved source value; never grant authority from it |
+| Ngày Chỉnh Sửa gần nhất | No destination; the application records its own update time and history | The source edit time is not imported |
+| Note | No destination | Unclear second free-text column; do not replace another notes column silently |
+| Temp Value | No destination | Unclear semantics; do not treat as authoritative price |
+| Người chỉnh sửa | `properties.updated_by`, resolved against `public.employees` in a completed write run | Keep unresolved source value; never grant authority from it |
 | Kết cấu | `construction_text` | Free text; structured floors/rooms are null unless explicitly confirmed |
-| Approved | Staging provenance | Not reservation approval; only 4 true cells, many null/false. Import record review starts pending |
+| Approved | No destination | Not reservation approval; only 4 true cells, many null/false. Import record review starts pending |
 
 ## State and category mapping
 
@@ -84,11 +84,11 @@ Profiled the complete provided workbook, not just sample rows. The sanitized `wo
 
 ## Other-sheet rules
 
-- `Nhân viên`: name/email/phone → employee roster; proposed role map sales labels → sales, Thư ký → staff, TPKD → manager, Admin → admin. Human review authorizes it. Avatar paths can be migrated later to a separate private employee bucket; not part of property files. Password and Monitor are not used for Auth/roles.
-- `Contracts`: PhoneID is masked and not a global contact key. After alias resolution, preserve owner name/phone text and create property/contact links. Prefer embedded property-sheet contacts as an initial reviewed contact source; do not discard the unresolved Contracts rows.
+- `Nhân viên`: name/email/phone → employee roster; the settled role rule is `TPKD` → manager, `Thư ký` → staff, `Admin` → sales except the captain's own address, and everything else → sales ([settled rules](legacy-import.md#the-settled-rules)). Avatar paths can be migrated later to a separate private employee bucket; not part of property files. Password and Monitor are not used for Auth/roles.
+- `Contracts`: dropped by captain decision (zero exact matches). PhoneID is masked and is not a global contact key, and the embedded property-sheet contacts are the contact source. See the [settled rules](legacy-import.md#the-settled-rules).
 - `Historical`: History_ID, Dự án, editor, old prices/phone/area/status/direction/category/notes, date and Chấp nhận remain a private source archive. It is distinct from the new system's immutable audit events.
 - `Attachments`: attachmentID, property reference, URL and modified date are provenance. The URL values are relative AppSheet paths, not downloadable binaries or proof of document type. Retrieve originals from the actual backing drive; verify hashes, type/size, and property linkage before ready status.
-- `clicks`: ID is source provenance; Dự án → resolved property; Nhân viên → reviewed employee; detailed timestamp preferred over date-only value. Repeated/ambiguous source IDs need review. Source phone values remain private provenance if required, never activity KPI content.
+- `clicks`: excluded by captain decision; no row, field or timestamp of it is mapped, so no view record is imported and nothing of the tab counts as migration work.
 
 ## Known preparation issues
 
