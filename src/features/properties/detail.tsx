@@ -6,7 +6,6 @@ import {
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
-  type ReactNode,
 } from 'react';
 import { label, messages, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
@@ -40,6 +39,8 @@ import { Reservation } from './reservation';
 import { SaleCompletion } from '@/features/sales/completion';
 import { detailMessages } from './messages';
 import { PropertyLocation } from './location';
+import { DetailActionDialog } from './detail-dialog';
+import { SharedAddress } from './duplicates';
 import { contactRows } from './contact-rows';
 import { mayLinkPropertyVendors } from '@/features/vendors/directory';
 import { PropertyVendors } from '@/features/vendors/property-vendors';
@@ -47,60 +48,6 @@ import { PropertyVendors } from '@/features/vendors/property-vendors';
 // facts, its documents and its discussion.
 const RECORD_TABS = ['overview', 'docs', 'comments'] as const;
 type RecordTab = (typeof RECORD_TABS)[number];
-// The dialog owns the only heading and the only border on the surface: the embedded
-// section is flattened by `.sgn-dialog-body > .panel` in sgn-app.css, so every action
-// dialog opens with one visible title in the right place instead of an empty band.
-function DetailActionDialog({
-  title,
-  closeLabel,
-  children,
-  open,
-  onClose,
-  size = 'wide',
-}: {
-  title: string;
-  closeLabel: string;
-  children: ReactNode;
-  open: boolean;
-  onClose: () => void;
-  size?: 'default' | 'wide';
-}) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
-
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
-    if (!open && dialog.open) dialog.close();
-  }, [open]);
-
-  return (
-    <dialog
-      ref={dialogRef}
-      className="sgn-dialog"
-      data-size={size}
-      onClose={onClose}
-      onCancel={onClose}
-      aria-label={title}
-    >
-      <div className="sgn-dialog-panel">
-        <div className="sgn-dialog-head">
-          <h2>{title}</h2>
-          <button
-            className="sgn-dialog-close"
-            type="button"
-            onClick={onClose}
-            aria-label={closeLabel}
-          >
-            ×
-          </button>
-        </div>
-        <div className="sgn-dialog-body">{open ? children : null}</div>
-      </div>
-    </dialog>
-  );
-}
-
 type RecordAction = {
   id: 'sale' | 'reservation' | 'edit' | 'correction' | 'requests';
   label: string;
@@ -878,6 +825,24 @@ export function Detail({
                         <p className="field-hint">{text.noCurrent}</p>
                       ) : null}
                       <p className="field-hint">{dt.addrNote}</p>
+                      {/* A shared address is stated here; the comparison and the deliberate
+                          merge live behind it. */}
+                      <SharedAddress
+                        key={
+                          'shared' +
+                          property.id +
+                          property.revision +
+                          refreshTick
+                        }
+                        propertyId={property.id}
+                        locale={locale}
+                        canMerge={
+                          employee?.role === 'manager' ||
+                          employee?.role === 'admin'
+                        }
+                        onDenied={denyFiles}
+                        onMerged={changed}
+                      />
                     </div>
                   </div>
 

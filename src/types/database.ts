@@ -1964,6 +1964,19 @@ export type Database = {
         };
         Returns: string;
       };
+      property_address_group: {
+        Args: { p_property_id: string };
+        Returns: Json;
+      };
+      merge_address_properties: {
+        Args: {
+          p_keep_property_id: string;
+          p_merge_property_ids: string[];
+          p_moved_object_ids?: string[];
+          p_move_signature?: string | null;
+        };
+        Returns: Json;
+      };
       create_contact: { Args: { p_changes: Json }; Returns: string };
       contact_impact: { Args: { p_contact_id: string }; Returns: Json };
       submit_correction: {
