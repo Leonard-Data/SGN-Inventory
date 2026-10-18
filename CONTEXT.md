@@ -100,6 +100,18 @@ _Avoid_: Verified match
 The recorded relationship between a property and a contact, such as owner or broker. Several contacts may belong to a property, with at most one marked primary.
 _Avoid_: Contact inferred from sheet position
 
+**Duplicate address group**:
+The unarchived properties whose primary address carries the same recorded address text after the same lowercased, accent-folded normalisation inventory search uses. Membership states that a decision is needed; it never means the records are the same property, because separate units in one house are an ordinary case.
+_Avoid_: Duplicate property, automatic duplicate
+
+**Property merge**:
+The deliberate manager/admin decision that folds every other record in a duplicate address group into the group's most complete record, moving their photos, documents, history and contact links onto it and archiving the folded records.
+_Avoid_: Automatic deduplication, import merge rule
+
+**Folded property**:
+A record whose content and links were moved onto the surviving property by a merge. It is retained and archived, still readable by a reviewer, and no longer appears in a duplicate address group.
+_Avoid_: Deleted property, merged duplicate
+
 **Property location**:
 The recorded map point for a property, stored as a `latitude`/`longitude` pair that a staff editor sets or corrects by clicking a map during property-fact editing. It is saved through the same revision-checked maintenance path as the other facts, so it grants no separate editing authority and a change flags the record for review. Its absence is an unrecorded location, never a coordinate at the world origin.
 _Avoid_: Address text as location, an empty world map pretending to be data

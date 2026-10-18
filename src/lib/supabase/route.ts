@@ -13,6 +13,7 @@ export class ApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly code: string,
+    public readonly details?: unknown,
   ) {
     super(code);
   }
@@ -110,13 +111,17 @@ export async function runRoute(
     context = createRouteContext(request);
     return context.finish(await handler(context));
   } catch (error) {
-    const response = NextResponse.json(
-      { error: error instanceof ApiError ? error.code : 'unavailable' },
-      {
-        status: error instanceof ApiError ? error.status : 503,
-        headers: privateHeaders,
-      },
-    );
+    const failure =
+      error instanceof ApiError
+        ? {
+            error: error.code,
+            ...(error.details === undefined ? {} : { details: error.details }),
+          }
+        : { error: 'unavailable' };
+    const response = NextResponse.json(failure, {
+      status: error instanceof ApiError ? error.status : 503,
+      headers: privateHeaders,
+    });
     return context ? context.finish(response) : response;
   }
 }

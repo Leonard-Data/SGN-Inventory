@@ -19,6 +19,7 @@
 | Read daily activity | Own | Own | All | All |
 | Approve/reject lock | No | No | Another employee only | Another employee only |
 | Set legal/review state | No | No | Yes | Yes |
+| Merge properties that share an address (archives the folded records) | No | No | Yes | Yes |
 | Confirm a completed sale (another employee's credit) | No | No | Yes | Yes |
 | Read the completed-sale ranking | No | No | Yes | Yes |
 | Manage employee activation/roles and catalogs | No | No | No | Yes |

@@ -61,6 +61,36 @@ export type ReservationState = {
   pending: ReservationRequest[];
   canDecide: boolean;
 };
+// One member of a shared-address group, as the comparison reads it. Owner names are listed the
+// way the record's own contact panel lists them; no phone crosses this boundary.
+export type AddressGroupMember = {
+  id: string;
+  propertyCode: string;
+  listingMode: string;
+  status: string;
+  salePriceVnd: string | null;
+  landAreaM2: string | null;
+  floorAreaM2: string | null;
+  frontageM: string | null;
+  depthM: string | null;
+  owners: string[];
+};
+// The group is empty for a unique address, so the indicator appears only when it holds a second
+// property. keepId names the most complete record, the one a merge would keep.
+export type AddressGroup = {
+  keepId: string | null;
+  members: AddressGroupMember[];
+};
+export type MergeReport = {
+  keep: { id: string; propertyCode: string };
+  merged: { id: string; propertyCode: string }[];
+  moved: {
+    files: number;
+    contactLinks: number;
+    alreadyLinked: number;
+    history: number;
+  };
+};
 // The database returns the disclosure contact and the committed activity reference. A matched
 // retry can return the reference without a contact when the owner link was later removed.
 export type OwnerContactDisclosure = {

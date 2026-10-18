@@ -34,6 +34,7 @@ import { employeeInvitationConcurrency } from './employee-invitation-concurrency
 import { employeeInvitationAcceptanceContract } from './employee-invitation-acceptance-contract.mjs';
 import { applyEmbeddedSchema } from './embedded-schema.mjs';
 import { provinceActivityContract } from './province-activity-contract.mjs';
+import { addressDuplicateMergeContract } from './address-duplicate-merge-contract.mjs';
 const root = process.env.SGN_PROJECT_ROOT || process.cwd();
 const db = new PGlite({extensions:{unaccent,pg_trgm,pgcrypto}});
 await applyEmbeddedSchema({root,exec:(sql)=>db.exec(sql)});
@@ -791,6 +792,8 @@ await propertyVendorLinkContract({db,asUser,check,fails,employees,property,other
 await auditRetentionContract({db,asUser,check,fails,employees});
 // Ticket #71: the shared Contact directory read and its contact-scoped correction.
 await contactDirectoryContract({db,asUser,check,fails,employees});
+// Issue #147: the shared-address group, and the deliberate merge of duplicate records.
+await addressDuplicateMergeContract({db,asUser,check,fails,employees,validationKey});
 const report={checked_at:new Date().toISOString(),engine:'PGlite embedded PostgreSQL plus an embedded real PostgreSQL engine for the two-connection last-admin, property-vendor-link and contact-link races; mocked auth/storage schemas',passed,
  limitations:['Not a live Supabase integration test','HTTP Auth, presigned R2 URLs, Vercel and browser flows not exercised','Hosted/staging independent-session contention at production load remains an acceptance gate']};
 await fs.writeFile(path.join(root,'docs/validation-results.json'),JSON.stringify(report,null,2)+'\n');

@@ -127,7 +127,7 @@ Shipped: the card cover is the site plate drawn from the record's own fields; a 
         panel .plate-hero (top of the grid)  → Plate(hero) | stored cover photograph
         panel Facts      → dl.facts with .fact rows; unknown values print Chưa rõ
         panel Price history → two .price-series groups (sale asking price / monthly asking rent) of .price-row (.price-when, .price-change, .price-note, .price-who), newest-first with per-series paging
-        panel Addresses  → .record rows + mapping .badge, .addrNote policy line
+        panel Addresses  → .record rows + mapping .badge, .addrNote policy line, then for a shared address the .alert[data-tone="neutral"] count of the other records carrying it with a Compare action (issue #147)
         panel Location   → the recorded point on a Leaflet/OpenStreetMap map (.sgn-location/.sgn-map*), its .sgn-map-caption and an "open in map" link, or the explicit no-location line; a tile failure adds the localized notice without unmounting the map or dropping the link
         panel Contacts   → .record rows + owner-contact disclosure (.owner-disclosure/.owner-phone)
         panel Vendors    → .record rows of linked supplier companies, separate from owners and brokers; an active-employee .maintenance disclosure on an unarchived property searches the directory, links one company and confirms removing a mistaken link (issue #74)
@@ -142,6 +142,7 @@ Shipped: the card cover is the site plate drawn from the record's own fields; a 
     dialog "Edit facts" → maintenance workspace (revision-checked) in three sections: *Property facts*, the default opening section, then *Address corrections* and *Contact corrections*. The tab strip switches to a labelled dropdown at 720px, so only one of the two shapes is ever rendered. *Property facts* also carries the map location editor, whose click-to-place map is the pointer path and whose type-the-coordinates controls are the keyboard alternative. Address rows and their correction controls live only in the address section, so the page's own address panel is not repeated here.
     dialog "Correction requests" → correction report (the .maintenance disclosure)
     dialog "My requests" → role-scoped correction queue; each request shows the fields the proposal names, as before/after pairs, with the retained amendments in a disclosure
+    dialog "Compare records at one address" (opened from the address panel, not the actions menu) → .data-table.stackable comparing sale price, floor area, dimensions, owner names, status and listing mode with the kept record badged, [Keep both] which closes writing nothing, and a manager/admin-only [Merge records] reaching a second confirmation that names the kept and every merged record before it reports exactly what moved (issue #147)
 ```
 Shipped as above. The three groups and the main/rail split follow the package's own record screen
 (`ui_kits/app/components/App.jsx`: `overview | docs | comments` inside a `<div>`, beside `<aside class="detail-rail">`).
