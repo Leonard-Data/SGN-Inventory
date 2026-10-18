@@ -42,8 +42,8 @@ export function parseInventoryPaging(
 
 // A result set always has a page one, even when it has no rows, so the pager states where the
 // caller is instead of showing an empty range.
-export function inventoryPageCount(total: number, pageSize: number): number {
-  return Math.max(1, Math.ceil(total / pageSize));
+export function inventoryPageCount(total: number): number {
+  return Math.max(1, Math.ceil(total / INVENTORY_PAGE_SIZE));
 }
 
 // The numbered pages the pager offers: a window of at most INVENTORY_PAGE_WINDOW pages that

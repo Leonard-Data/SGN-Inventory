@@ -804,7 +804,11 @@ const screenExpression = `() => {
       label: link.textContent.trim(),
       current: link.getAttribute('aria-current') === 'true',
     })),
-    pager: pager.map((link) => link.textContent.trim()),
+    nextHref:
+      pager.find(
+        (link) =>
+          link.tagName === 'A' && link.textContent.trim() === 'Trang tiếp',
+      )?.getAttribute('href') ?? null,
     pageInfo: document.querySelector('.pagination .page-info')?.textContent?.trim() ?? null,
     empty: document.querySelector('.state-panel h3')?.textContent?.trim() ?? null,
     overflowX: Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth),
@@ -1111,15 +1115,16 @@ try {
     'browser oldest-first page one shows the exact date and age in Vietnamese',
   );
 
-  // The pager is real browser pagination: every emitted Next leads to a non-empty page and the
-  // final page stops linking forward. A full final page must not produce an empty terminal page.
+  // The pager is real browser pagination: every enabled Next leads to a non-empty page and the
+  // terminal page links no further, so a full final page never produces an empty page after it.
+  const pageCount = Math.ceil(oldest.length / 30);
   const walked = [...view.codes];
-  let pageCount = 1;
-  while (view.pager.includes('Trang tiếp')) {
+  let visited = 1;
+  while (view.nextHref) {
     evaluate(
       'sgn37-vi',
       9341,
-      `(() => { const next = [...document.querySelectorAll('.pagination .pager-btn')].find((link) => link.textContent.trim() === 'Trang tiếp'); next.click(); return true; })()`,
+      `(() => { const next = [...document.querySelectorAll('.pagination a.pager-btn')].find((link) => link.textContent.trim() === 'Trang tiếp'); next.click(); return true; })()`,
     );
     const before = view.codes.join(',');
     let next = null;
@@ -1133,10 +1138,16 @@ try {
       'pagination must not reach an empty page',
     );
     view = next;
-    pageCount++;
+    visited++;
     walked.push(...view.codes);
-    assert.ok(pageCount <= 200, 'pagination did not terminate');
+    assert.ok(visited <= pageCount, 'pagination did not terminate');
   }
+  assert.equal(visited, pageCount, 'browser pagination visits every page');
+  assert.equal(
+    view.pageInfo,
+    `Trang ${pageCount}/${pageCount}`,
+    'the terminal page is the last page of the result set',
+  );
   assert.deepEqual(
     walked,
     oldest.map((record) => record.propertyCode),

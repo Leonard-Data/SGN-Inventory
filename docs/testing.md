@@ -139,7 +139,7 @@ Prepare sanitized fixtures through authorized administration:
 | Search an accented address using an unaccented contiguous fragment | Expected property matches; original address spelling, matching legacy format and verification state remain visible |
 | Search literal `%` and `_` | Only addresses containing the requested literal fragment match; characters do not expand to wildcard matches |
 | Reorder address fragments | No fuzzy or reordered-token matching is promised; the UI does not advertise it |
-| Search similar addresses on distinct properties | Distinct property codes remain identifiable; cursor paging retains distinct results and address summaries are bounded to the current page |
+| Search similar addresses on distinct properties | Distinct property codes remain identifiable; page-number paging states the matching total, retains distinct results on every page and bounds address summaries to the current page |
 | Submit an over-120-character query or a query with no matches | Localized validation rejects the oversized query; a genuine empty result is distinguishable from access denial |
 | Open property/contact details | Required characteristics, typed VND/dimensions, preserved legacy/current addresses, verification badges and all linked owner/broker relationships are shown with names, relations and primary markers; unknown values are explicit; no owner phone is presented automatically and no disclosure control is offered |
 | Open a property without a contact link or verified current mapping | No guessed contact or ward is supplied; the missing/unresolved state is visible |

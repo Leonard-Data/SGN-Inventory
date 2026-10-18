@@ -33,17 +33,11 @@ test('a page the address states must be usable or it is refused', () => {
 });
 
 test('a result set always states at least one page', () => {
-  assert.equal(inventoryPageCount(0, INVENTORY_PAGE_SIZE), 1);
-  assert.equal(inventoryPageCount(1, INVENTORY_PAGE_SIZE), 1);
-  assert.equal(inventoryPageCount(INVENTORY_PAGE_SIZE, INVENTORY_PAGE_SIZE), 1);
-  assert.equal(
-    inventoryPageCount(INVENTORY_PAGE_SIZE + 1, INVENTORY_PAGE_SIZE),
-    2,
-  );
-  assert.equal(
-    inventoryPageCount(INVENTORY_PAGE_SIZE * 2 + 1, INVENTORY_PAGE_SIZE),
-    3,
-  );
+  assert.equal(inventoryPageCount(0), 1);
+  assert.equal(inventoryPageCount(1), 1);
+  assert.equal(inventoryPageCount(INVENTORY_PAGE_SIZE), 1);
+  assert.equal(inventoryPageCount(INVENTORY_PAGE_SIZE + 1), 2);
+  assert.equal(inventoryPageCount(INVENTORY_PAGE_SIZE * 2 + 1), 3);
 });
 
 test('the numbered pages stay inside the result set and around the current page', () => {

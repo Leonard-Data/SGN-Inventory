@@ -69,7 +69,7 @@ export function Inventory({
   // describe that same result set rather than counting the rows this page happens to hold.
   const total = data?.total ?? 0;
   const servedPage = data?.page ?? 1;
-  const pages = inventoryPageCount(total, INVENTORY_PAGE_SIZE);
+  const pages = inventoryPageCount(total);
   const numbers = pageNumbers(servedPage, pages);
   const numberFormat = useMemo(
     () => new Intl.NumberFormat(locale === 'vi' ? 'vi-VN' : 'en-GB'),
