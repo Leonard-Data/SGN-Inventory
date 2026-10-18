@@ -26,7 +26,7 @@ const vi = {
   compare: 'So sánh',
   compareTitle: 'So sánh hồ sơ cùng địa chỉ',
   compareNote:
-    'Các hồ sơ dưới đây có cùng văn bản địa chỉ đã ghi nhận. Chỉ quản lý hoặc quản trị được gộp hồ sơ.',
+    'Các hồ sơ dưới đây có chung địa chỉ đã ghi nhận với hồ sơ này. Chỉ quản lý hoặc quản trị được gộp hồ sơ.',
   recordColumn: 'Hồ sơ',
   dimensions: 'Kích thước',
   keepBadge: 'Hồ sơ giữ lại',
@@ -34,7 +34,7 @@ const vi = {
   mergeStart: 'Gộp hồ sơ',
   mergeConfirm: 'Gộp {merged} vào {keep}?',
   mergeWarning:
-    'Ảnh, tài liệu, lịch sử giá và liên kết liên hệ của các hồ sơ được gộp chuyển sang hồ sơ giữ lại. Các hồ sơ còn lại được lưu trữ và không còn hiện là trùng địa chỉ. Ứng dụng không hoàn tác được thao tác này.',
+    'Ảnh, tài liệu, lịch sử và liên kết liên hệ của các hồ sơ được gộp chuyển sang hồ sơ giữ lại. Các hồ sơ còn lại được lưu trữ và không còn hiện là trùng địa chỉ. Ứng dụng không hoàn tác được thao tác này.',
   mergeConfirmAction: 'Xác nhận gộp',
   mergeDone: 'Đã gộp {merged} vào {keep}.',
   mergeMoved:
@@ -52,7 +52,7 @@ const vi = {
   mergeTarget:
     'Hồ sơ giữ lại phải là hồ sơ đầy đủ nhất trong nhóm. Mở lại so sánh để cập nhật.',
   addressMismatch:
-    'Các hồ sơ không còn dùng cùng địa chỉ. Mở lại so sánh để cập nhật.',
+    'Một hồ sơ không còn chung địa chỉ với nhóm. Mở lại so sánh để cập nhật.',
   fileMoveIncomplete:
     'Chưa chuyển xong tệp của hồ sơ được gộp. Chưa có thay đổi nào được lưu.',
   reservationConflict:
@@ -91,7 +91,7 @@ const en: Record<keyof typeof vi, string> = {
   compare: 'Compare',
   compareTitle: 'Compare records at one address',
   compareNote:
-    'These records carry the same recorded address. Only a manager or admin can merge records.',
+    'These records share a recorded address with this one. Only a manager or admin can merge records.',
   recordColumn: 'Record',
   dimensions: 'Dimensions',
   keepBadge: 'Record kept',
@@ -99,7 +99,7 @@ const en: Record<keyof typeof vi, string> = {
   mergeStart: 'Merge records',
   mergeConfirm: 'Merge {merged} into {keep}?',
   mergeWarning:
-    'The merged records’ photos, documents, price history and contact links move to the record kept. The merged-away records are archived and stop reporting as duplicates. The app cannot undo this.',
+    'The merged records’ photos, documents, history and contact links move to the record kept. The merged-away records are archived and stop reporting as duplicates. The app cannot undo this.',
   mergeConfirmAction: 'Confirm merge',
   mergeDone: 'Merged {merged} into {keep}.',
   mergeMoved:
@@ -117,7 +117,7 @@ const en: Record<keyof typeof vi, string> = {
   mergeTarget:
     'The record kept must be the most complete one in the group. Reopen the comparison.',
   addressMismatch:
-    'The records no longer share this address. Reopen the comparison.',
+    'One record no longer shares an address with the group. Reopen the comparison.',
   fileMoveIncomplete:
     'The merged records’ files were not fully moved. Nothing was saved.',
   reservationConflict:

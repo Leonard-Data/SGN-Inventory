@@ -411,7 +411,7 @@ export async function addressDuplicateMergeContract({
   const bridgeShared =
     '5 Hồ Xuân Hương, Phường 6, Quận 3, Thành phố Hồ Chí Minh';
   const bridgeOther =
-    '5 ho xuan huong, phuong 6, quan 3, thanh pho ho chi minh';
+    '7 Hồ Xuân Hương, Phường 6, Quận 3, Thành phố Hồ Chí Minh';
   const twoAddresses = 'a1000000-0000-4000-8000-000000000005';
   const bridgeKeep = 'a1000000-0000-4000-8000-000000000006';
   const farSide = 'a1000000-0000-4000-8000-000000000007';
@@ -430,6 +430,18 @@ export async function addressDuplicateMergeContract({
     [twoAddresses, bridgeKeep, farSide, bridgeShared, bridgeOther],
   );
   await asUser(0);
+  await check(
+    'the bridged fixture carries two distinct normalised address keys',
+    async () => {
+      const keys = (
+        await db.query(
+          'select private.address_match_key($1) as a, private.address_match_key($2) as b',
+          [bridgeShared, bridgeOther],
+        )
+      ).rows[0];
+      assert.notEqual(keys.a, keys.b);
+    },
+  );
   await check(
     'the comparison publishes a group spanning one record with two addresses',
     async () => {

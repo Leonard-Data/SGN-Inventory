@@ -105,7 +105,7 @@ The unarchived properties whose primary address carries the same recorded addres
 _Avoid_: Duplicate property, automatic duplicate
 
 **Property merge**:
-The deliberate manager/admin decision that folds every other record in a duplicate address group into the group's most complete record, moving their photos, documents, price history and owner links onto it and archiving the folded records.
+The deliberate manager/admin decision that folds every other record in a duplicate address group into the group's most complete record, moving their photos, documents, history and contact links onto it and archiving the folded records.
 _Avoid_: Automatic deduplication, import merge rule
 
 **Folded property**:

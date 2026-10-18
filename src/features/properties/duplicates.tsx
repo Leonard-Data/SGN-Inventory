@@ -5,30 +5,13 @@ import { RequestError } from '@/features/employees/api';
 import { DetailActionDialog } from './detail-dialog';
 import { detailMessages } from './messages';
 import { loadAddressGroup, mergeAddressGroup } from './detail-loader';
+import { dimensions } from './dimension-summary';
 import { formatDecimal, formatInteger, formatVnd } from './format';
 import { mergeLimit } from './merge-rules';
-import type { AddressGroup, AddressGroupMember, MergeReport } from './types';
+import type { AddressGroup, MergeReport } from './types';
 
 function decimal(value: string | null, locale: Locale): string | null {
   return value === null ? null : formatDecimal(value, locale);
-}
-
-// The comparison lists the fields two records can disagree on, in the form the record itself
-// shows them; each recorded frontage and depth is rendered, paired when both exist.
-function dimensions(member: AddressGroupMember, locale: Locale): string | null {
-  const text = messages[locale];
-  const frontage = decimal(member.frontageM, locale);
-  const depth = decimal(member.depthM, locale);
-  const land = decimal(member.landAreaM2, locale);
-  const size =
-    frontage && depth
-      ? `${frontage} × ${depth} m`
-      : frontage
-        ? `${text.frontage} ${frontage} m`
-        : depth
-          ? `${text.depth} ${depth} m`
-          : null;
-  return [size, land ? `${land} m²` : null].filter(Boolean).join(' · ') || null;
 }
 
 type PendingBlocker = { propertyCode: string; requester: string };
