@@ -325,11 +325,19 @@ export function Inventory({
       </section>
 
       {busy ? (
-        <div className="busy-head" role="status">
+        <div className="busy-head" role="status" aria-label={text.loading}>
           <div className="busy-bar" />
-          <div className="busy-line">
-            <span className="spinner" aria-hidden="true" />
-            <span>{text.loading}</span>
+          <div className="property-skeleton-grid" aria-hidden="true">
+            {[1, 2, 3].map((item) => (
+              <div className="sk-card" key={item}>
+                <div className="skeleton sk-cover" />
+                <div className="sk-body">
+                  <div className="skeleton sk-line h20 w80" />
+                  <div className="skeleton sk-line w60" />
+                  <div className="skeleton sk-line w40" />
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       ) : null}
