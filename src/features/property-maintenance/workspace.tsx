@@ -6,6 +6,7 @@ import { api, RequestError } from '@/features/employees/api';
 import type { PropertyDetail } from '@/features/properties/detail-data';
 import type { ContactDetail } from './data';
 import { MutationForm, RecordFields, AddressFields } from './forms';
+import { LocationEditor } from '@/features/properties/location';
 import { targetFields, type Target, type Changes } from './fields';
 import { maintenanceError, maintenanceText, optionLabel } from './messages';
 import { ContactPicker } from './contact-picker';
@@ -248,10 +249,14 @@ export function Maintenance({
                   values={facts}
                   names={targetFields.property.filter(
                     (k) =>
-                      k !== 'status' ||
-                      !['sold', 'rented'].includes(String(facts.status)),
+                      (k !== 'status' ||
+                        !['sold', 'rented'].includes(String(facts.status))) &&
+                      k !== 'latitude' &&
+                      k !== 'longitude',
                   )}
                 />
+                {/* The point is set by clicking the map; typed coordinates are the keyboard alternative. */}
+                <LocationEditor values={facts} locale={locale} />
                 {/* A mistaken price keeps its own revision; this note is optional. */}
                 <div className="field">
                   <label

@@ -194,6 +194,32 @@ const copy = {
     'Maintenance saves immediately; only asking-price changes are recorded in the history. Reservations still require independent approval.',
   ],
   primary: ['Địa chỉ / liên kết chính', 'Primary address / link'],
+  location: ['Vị trí trên bản đồ', 'Location on map'],
+  locationHint: [
+    'Nhấn vào bản đồ để đặt hoặc di chuyển điểm, hoặc nhập toạ độ và nhấn "Áp dụng toạ độ"; điểm chỉ được lưu cùng các thông tin khác sau khi áp dụng.',
+    'Click the map to place or move the point, or type coordinates and press "Apply coordinates"; the point saves with the other facts only after you apply it.',
+  ],
+  locationMapLabel: [
+    'Bản đồ chọn vị trí: nhấn để đặt điểm',
+    'Location picker map: click to place the point',
+  ],
+  locationTyped: ['Hoặc nhập toạ độ', 'Or type coordinates'],
+  locationTypedHint: [
+    'Vĩ độ từ -90 đến 90, kinh độ từ -180 đến 180, tối đa 7 chữ số thập phân.',
+    'Latitude from -90 to 90, longitude from -180 to 180, up to 7 decimal places.',
+  ],
+  locationApply: ['Áp dụng toạ độ', 'Apply coordinates'],
+  locationInvalid: [
+    'Toạ độ không hợp lệ: vĩ độ từ -90 đến 90, kinh độ từ -180 đến 180, tối đa 7 chữ số thập phân.',
+    'Invalid coordinates: latitude from -90 to 90, longitude from -180 to 180, up to 7 decimal places.',
+  ],
+  locationClear: ['Xoá vị trí', 'Clear location'],
+  locationRecorded: ['Vị trí đã ghi', 'Recorded location'],
+  locationNoPoint: ['Chưa đặt vị trí.', 'No point placed.'],
+  locationTilesFailed: [
+    'Không tải được nền bản đồ. Vẫn có thể nhấn trên khung bản đồ hoặc nhập toạ độ bên dưới.',
+    'The map background could not load. You can still click the map area or type coordinates below.',
+  ],
 } as const;
 export type CopyKey = keyof typeof copy;
 export function maintenanceText(locale: Locale) {

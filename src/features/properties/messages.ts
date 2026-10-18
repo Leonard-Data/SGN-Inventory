@@ -21,6 +21,11 @@ const vi = {
   primary: 'Liên hệ chính',
   recordActions: 'Thao tác hồ sơ',
   myRequests: 'Yêu cầu của tôi',
+  location: 'Vị trí',
+  locationRecorded: 'Vị trí đã ghi',
+  noLocation: 'Chưa ghi nhận vị trí trên bản đồ.',
+  openInMap: 'Mở trong bản đồ',
+  mapUnavailable: 'Không tải được nền bản đồ. Dùng liên kết mở bản đồ.',
 };
 
 const en: Record<keyof typeof vi, string> = {
@@ -44,6 +49,12 @@ const en: Record<keyof typeof vi, string> = {
   primary: 'Primary contact',
   recordActions: 'Record actions',
   myRequests: 'My requests',
+  location: 'Location',
+  locationRecorded: 'Recorded location',
+  noLocation: 'No location recorded on the map.',
+  openInMap: 'Open in map',
+  mapUnavailable:
+    'The map background could not load. Use the open-in-map link.',
 };
 
 export const detailMessages: Record<Locale, Record<keyof typeof vi, string>> = {

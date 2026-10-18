@@ -102,6 +102,99 @@ export async function maintenanceContract({
       );
     },
   );
+  const coordinates = async () =>
+    (
+      await db.query(
+        'select latitude::text as lat,longitude::text as lng from public.properties where id=$1',
+        [created],
+      )
+    ).rows[0];
+  await check(
+    'location point saves, clears and enforces range and both-or-neither',
+    async () => {
+      let rev = await revision('properties', created);
+      await db.query(mutate, [
+        created,
+        'property',
+        created,
+        rev,
+        { latitude: '10.7626220', longitude: '106.6601720' },
+      ]);
+      assert.deepEqual(await coordinates(), {
+        lat: '10.7626220',
+        lng: '106.6601720',
+      });
+      // A change must name both axes; a lone axis cannot mix a new value with the stored one.
+      rev = await revision('properties', created);
+      await fails(
+        mutate,
+        [created, 'property', created, rev, { latitude: '10.8000000' }],
+        '23514',
+      );
+      await fails(
+        mutate,
+        [created, 'property', created, rev, { longitude: '106.7000000' }],
+        '23514',
+      );
+      assert.deepEqual(await coordinates(), {
+        lat: '10.7626220',
+        lng: '106.6601720',
+      });
+      // Out-of-range coordinates are rejected by the column checks, mapped to 23514.
+      rev = await revision('properties', created);
+      await fails(
+        mutate,
+        [
+          created,
+          'property',
+          created,
+          rev,
+          { latitude: '91', longitude: '106.5' },
+        ],
+        '23514',
+      );
+      await fails(
+        mutate,
+        [
+          created,
+          'property',
+          created,
+          rev,
+          { latitude: '10.5', longitude: '-180.0000001' },
+        ],
+        '23514',
+      );
+      // Clearing sets both back to null together.
+      rev = await revision('properties', created);
+      await db.query(mutate, [
+        created,
+        'property',
+        created,
+        rev,
+        { latitude: null, longitude: null },
+      ]);
+      assert.deepEqual(await coordinates(), { lat: null, lng: null });
+      // A lone coordinate cannot restore a cleared point.
+      rev = await revision('properties', created);
+      await fails(
+        mutate,
+        [created, 'property', created, rev, { latitude: '10.7626220' }],
+        '23514',
+      );
+      // An ordinary employee cannot set a location on someone else's property.
+      await fails(
+        mutate,
+        [
+          other,
+          'property',
+          other,
+          await revision('properties', other),
+          { latitude: '10.7626220', longitude: '106.6601720' },
+        ],
+        '42501',
+      );
+    },
+  );
   await check(
     'creation validation and failed address roll back all property/history writes',
     async () => {

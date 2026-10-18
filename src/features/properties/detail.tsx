@@ -39,6 +39,7 @@ import { Discussion } from '@/features/property-comments/discussion';
 import { Reservation } from './reservation';
 import { SaleCompletion } from '@/features/sales/completion';
 import { detailMessages } from './messages';
+import { PropertyLocation } from './location';
 import { contactRows } from './contact-rows';
 import { mayLinkPropertyVendors } from '@/features/vendors/directory';
 import { PropertyVendors } from '@/features/vendors/property-vendors';
@@ -877,6 +878,26 @@ export function Detail({
                         <p className="field-hint">{text.noCurrent}</p>
                       ) : null}
                       <p className="field-hint">{dt.addrNote}</p>
+                    </div>
+                  </div>
+
+                  {/* location */}
+                  <div className="panel" data-od-id="panel-location">
+                    <div className="panel-head">
+                      <h2>{dt.location}</h2>
+                    </div>
+                    <div className="panel-body">
+                      <PropertyLocation
+                        key={
+                          'location' +
+                          property.id +
+                          property.revision +
+                          refreshTick
+                        }
+                        latitude={property.latitude}
+                        longitude={property.longitude}
+                        locale={locale}
+                      />
                     </div>
                   </div>
 

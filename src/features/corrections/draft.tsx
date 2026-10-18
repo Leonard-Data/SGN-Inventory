@@ -11,9 +11,9 @@ import {
   RecordFields,
 } from '@/features/property-maintenance/forms';
 import {
+  correctionFieldNames,
   formChanges,
   fields,
-  targetFields,
   type Target,
 } from '@/features/property-maintenance/fields';
 import {
@@ -96,20 +96,12 @@ export function CorrectionDraft({
     targetId = rawId === 'new' ? null : rawId,
     observed = observation(detail, target, targetId);
   const staff = ['staff', 'manager', 'admin'].includes(role);
-  const available = targetFields[target].filter(
-    (name) =>
-      (staff || !['contact_id', 'remove'].includes(name)) &&
-      !(name === 'status' && ['sold', 'rented'].includes(property.status)) &&
-      !(
-        target === 'address' &&
-        ['province_text', 'commune_text', 'district_unit_id'].includes(name)
-      ) &&
-      !(
-        target === 'address' &&
-        (observed?.values as Record<string, unknown>)?.format === 'current' &&
-        name.startsWith('district_')
-      ),
-  );
+  const available = correctionFieldNames({
+    target,
+    staff,
+    propertyStatus: property.status,
+    observedFormat: (observed?.values as Record<string, unknown>)?.format,
+  });
   const starting = observed
     ? {
         ...observed.values,
