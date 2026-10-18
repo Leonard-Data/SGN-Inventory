@@ -476,15 +476,7 @@ test('an unreadable rent cell is quarantined and counted, never thrown', () => {
     headers.map((header, position) => [header, position]),
   );
   const reference = buildReference({});
-  const row = ['k8', '', 'Đang bán', '23', 'Thoả thuận'];
-  const { mapped, issues } = mapMasterRow(row, index, reference, '2026-10-18');
-  assert.equal(mapped.price_rule, 'unparseable');
-  assert.ok(
-    issues.some((issue) => issue.startsWith('monthly_rent_vnd:')),
-    'the unreadable rent is recorded as an issue',
-  );
-  assert.equal(mapped.property.monthly_rent_vnd, null);
-  assert.equal(
+  const bucketOf = (mapped, issues) =>
     recordBucket({
       empty: false,
       sourceKey: mapped.source_key,
@@ -493,7 +485,37 @@ test('an unreadable rent cell is quarantined and counted, never thrown', () => {
       status: mapped.property.status,
       addressStatus: 'resolved',
       issues,
-    }),
+    });
+
+  const rent = mapMasterRow(
+    ['k8', '', 'Đang bán', '23', 'Thoả thuận'],
+    index,
+    reference,
+    '2026-10-18',
+  );
+  assert.equal(rent.mapped.price_rule, 'rent_unparseable');
+  assert.ok(rent.issues.includes('rent_price_unparseable'));
+  assert.equal(rent.issues.includes('sale_price_unparseable'), false);
+  assert.ok(rent.issues.some((issue) => issue.startsWith('monthly_rent_vnd:')));
+  assert.equal(rent.mapped.property.monthly_rent_vnd, null);
+  // The readable sale price is kept, so the row is not reported as a sale-price problem.
+  assert.equal(rent.mapped.property.sale_price_vnd, '23000000000');
+  assert.equal(
+    bucketOf(rent.mapped, rent.issues),
+    'quarantined_rent_unparseable',
+  );
+
+  const sale = mapMasterRow(
+    ['k9', '', 'Đang bán', 'Không bán', ''],
+    index,
+    reference,
+    '2026-10-18',
+  );
+  assert.equal(sale.mapped.price_rule, 'unparseable');
+  assert.ok(sale.issues.includes('sale_price_unparseable'));
+  assert.equal(sale.issues.includes('rent_price_unparseable'), false);
+  assert.equal(
+    bucketOf(sale.mapped, sale.issues),
     'quarantined_price_unparseable',
   );
 });

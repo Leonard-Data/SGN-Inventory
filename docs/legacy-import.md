@@ -55,7 +55,10 @@ development project only, and production is a separate, later step.
   rent in millions. A sale price above **200 billion** is quarantined as implausible; an empty
   sale price is quarantined (unless rent is above zero, which is a rental-only row the captain
   excluded from this migration); a sale price of exactly `0` imports the property with status
-  `negotiating` and no numeric price; unreadable price text is quarantined rather than guessed.
+  `negotiating` and no numeric price. Unreadable price text is quarantined rather than guessed,
+  and each column keeps its own reason: `sale_price_unparseable` for `Giá Bán (tỷ Đồng)` and
+  `rent_price_unparseable` for `Giá Thuê (triệu Đồng)`, so a row with a readable sale price is
+  never reported as a sale-price problem.
 - **Addresses.** VietMap's address migration API is the primary resolver and answers per address,
   so each distinct address is queried once, sequentially, with bounded retry and cached. Where it
   returns no boundary, the fallback is the published official three-tier → two-tier mapping,

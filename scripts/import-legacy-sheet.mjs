@@ -895,6 +895,7 @@ export function recordBucket({
   if (priceRule === 'price_missing') return 'quarantined_price_missing';
   if (priceRule === 'price_ceiling') return 'quarantined_price_ceiling';
   if (priceRule === 'unparseable') return 'quarantined_price_unparseable';
+  if (priceRule === 'rent_unparseable') return 'quarantined_rent_unparseable';
   if (priceRule === 'rental_only') return 'excluded_rental_only';
   if (!status) return 'quarantined_status_unmapped';
   if (!['resolved', 'current_name'].includes(addressStatus)) return 'review';
@@ -1085,11 +1086,11 @@ export function mapMasterRow(row, index, reference, todayIso) {
   if (sale.error) {
     priceRule = 'unparseable';
     issues.push(`sale_price_vnd:${sale.error}`);
+  } else if (rent.error) {
+    priceRule = 'rent_unparseable';
+    mapped.property.sale_price_vnd = sale.value;
   }
-  if (rent.error) {
-    priceRule = priceRule === 'priced' ? 'unparseable' : priceRule;
-    issues.push(`monthly_rent_vnd:${rent.error}`);
-  }
+  if (rent.error) issues.push(`monthly_rent_vnd:${rent.error}`);
   if (!sale.error && !rent.error) {
     if (sale.value === null) {
       priceRule =
@@ -1114,6 +1115,7 @@ export function mapMasterRow(row, index, reference, todayIso) {
   if (priceRule === 'price_ceiling') issues.push('sale_price_above_ceiling');
   if (priceRule === 'rental_only') issues.push('rental_only');
   if (priceRule === 'unparseable') issues.push('sale_price_unparseable');
+  if (priceRule === 'rent_unparseable') issues.push('rent_price_unparseable');
   // The row's own prices say what is being listed; the sheet's label is only the fallback. A
   // value the parser rejected is not a value, so it never feeds the listing mode.
   const saleAmount = sale.error ? null : sale.value;
@@ -1515,7 +1517,7 @@ export function renderReport(report) {
     `Write: ${outcome.state}${outcome.reason ? ` — ${outcome.reason}` : ''}`,
     '',
     outcome.state === 'completed'
-      ? `**This run wrote to the development project.** ${report.write.verification.counts.properties} properties, ${report.write.verification.counts.files} files and ${report.write.verification.counts.invitations_recorded} recorded invitations; the sheet and Drive were only read. The report is written`
+      ? `**This run wrote to the development project.** The project now holds ${report.write.verification.counts.properties} properties and ${report.write.verification.counts.files} ready files for this batch's source rows, and this run recorded ${report.write.staff.invitations.recorded} invitations (the project holds ${report.write.verification.counts.invitations_recorded} recorded invitations in total); the sheet and Drive were only read. The report is written`
       : outcome.state === 'refused'
         ? `**No writes were made.** The write was refused: ${outcome.reason}. The sheet and Drive were only read. The report is written`
         : outcome.state === 'failed'
@@ -1545,7 +1547,7 @@ export function renderReport(report) {
     '| --- | ---: |',
     ...report.issues.map((row) => `| ${row.issue} | ${row.rows} |`),
     '',
-    '## 2. Sale price rules (captain’s rule set)',
+    '## 2. Price rules (captain’s rule set)',
     '',
     '| Rule | Rows | Effect |',
     '| --- | ---: | --- |',
@@ -1554,6 +1556,7 @@ export function renderReport(report) {
     `| Sale price exactly 0 | ${price.on_application} | imported with status negotiating and no numeric sale price |`,
     `| Sale price empty but rent above zero | ${price.rental_only} | excluded from this migration per captain |`,
     `| Sale price text that cannot be read | ${price.unparseable} | quarantined, never guessed |`,
+    `| Rent price text that cannot be read | ${price.rent_unparseable} | quarantined, never guessed |`,
     '',
   );
   if (price.missing) {
@@ -1859,23 +1862,43 @@ export function renderReport(report) {
       '',
     );
   }
-  if (outcome.state === 'completed' && report.write) {
+  push(
+    '## 11. What a write run does',
+    '',
+    '- Opens (or resumes) one `private.import_batches` row keyed on the snapshot digest and records one',
+    '  `private.staging_rows` row per master, Historical and Attachments source row.',
+    '- Inserts one `public.properties` row per accepted source key, keyed by a stable id derived from the',
+    '  source key, so a repeated or resumed run converges instead of duplicating. Review starts `pending`.',
+    '- Inserts the legacy address untouched, and a converted current address only where a bound was',
+    '  resolved; an unresolved address keeps the legacy row and no current province or commune.',
+    '- Inserts each distinct owner contact once and links it through `public.property_contacts`.',
+    '- Records every source key in `private.property_source_map` and every written row in',
+    '  `private.import_entity_map`.',
+    '- Resolves creator and editor emails against `public.employees`, provisioning the roster first.',
+    '- Downloads each importable attachment, stores the bytes in the private R2 bucket through the',
+    '  application upload path, and registers the property file.',
+    '- Refuses the whole run unless the confirmed digest matches this snapshot.',
+    '',
+  );
+  const writeSection = outcome.state === 'completed' && Boolean(report.write);
+  if (writeSection) {
     const write = report.write;
     const skipped = write.properties.addresses.converted_skipped;
     const skippedSummary = convertedSkipped(skipped);
     push(
-      '## What this run wrote',
+      '## 12. What this run wrote',
       '',
       `Batch \`${write.batch_id}\` (${write.batch_status}).`,
       '',
-      '| Written | Count |',
+      `| Read back for this batch's source rows | Count |`,
       '| --- | ---: |',
       `| Properties | ${write.verification.counts.properties} |`,
       `| Legacy addresses | ${write.verification.counts.legacy_addresses} |`,
       `| Converted current addresses | ${write.verification.counts.current_addresses} |`,
       `| Owner contact links | ${write.verification.counts.contact_links} |`,
       `| Files stored | ${write.verification.counts.files} |`,
-      `| Invitations recorded | ${write.verification.counts.invitations_recorded} |`,
+      `| Invitations recorded by this run | ${write.staff.invitations.recorded} |`,
+      `| Recorded invitations the project holds | ${write.verification.counts.invitations_recorded} |`,
       '',
       `- Staff addresses planned: ${write.staff.addresses}; silent admin: \`${write.staff.silent_admin ?? '(none)'}\`.`,
       `- Invitations stated ${write.staff.invitations.stated}, refused ${write.staff.invitations.refused}, recorded ${write.staff.invitations.recorded}.`,
@@ -1903,23 +1926,7 @@ export function renderReport(report) {
     );
   }
   push(
-    '## 11. What a write run does',
-    '',
-    '- Opens (or resumes) one `private.import_batches` row keyed on the snapshot digest and records one',
-    '  `private.staging_rows` row per master, Historical and Attachments source row.',
-    '- Inserts one `public.properties` row per accepted source key, keyed by a stable id derived from the',
-    '  source key, so a repeated or resumed run converges instead of duplicating. Review starts `pending`.',
-    '- Inserts the legacy address untouched, and a converted current address only where a bound was',
-    '  resolved; an unresolved address keeps the legacy row and no current province or commune.',
-    '- Inserts each distinct owner contact once and links it through `public.property_contacts`.',
-    '- Records every source key in `private.property_source_map` and every written row in',
-    '  `private.import_entity_map`.',
-    '- Resolves creator and editor emails against `public.employees`, provisioning the roster first.',
-    '- Downloads each importable attachment, stores the bytes in the private R2 bucket through the',
-    '  application upload path, and registers the property file.',
-    '- Refuses the whole run unless the confirmed digest matches this snapshot.',
-    '',
-    '## 13. Limits of this run',
+    `## ${writeSection ? 13 : 12}. Limits of this run`,
     '',
     '- `admin_unit_crosswalks` has no reviewed rows and `admin_unit_versions` seeds no district level, so',
     '  the fallback conversion uses the published official mapping.',
@@ -2301,6 +2308,7 @@ export async function run(argv, dependencies = {}) {
     missing: bucketCounts.get('quarantined_price_missing') ?? 0,
     ceiling: bucketCounts.get('quarantined_price_ceiling') ?? 0,
     unparseable: bucketCounts.get('quarantined_price_unparseable') ?? 0,
+    rent_unparseable: bucketCounts.get('quarantined_rent_unparseable') ?? 0,
     rental_only: bucketCounts.get('excluded_rental_only') ?? 0,
     on_application: records.filter(
       (record) =>
@@ -3220,7 +3228,7 @@ function printSummary(report) {
   );
   if (report.write)
     console.log(
-      `written properties=${report.write.verification.counts.properties} files=${report.write.verification.counts.files} invitations=${report.write.verification.counts.invitations_recorded}`,
+      `written properties=${report.write.verification.counts.properties} files=${report.write.verification.counts.files} invitations-recorded-this-run=${report.write.staff.invitations.recorded} project-recorded-invitations=${report.write.verification.counts.invitations_recorded}`,
     );
   const skippedAddresses =
     report.write?.properties?.addresses?.converted_skipped ?? [];
