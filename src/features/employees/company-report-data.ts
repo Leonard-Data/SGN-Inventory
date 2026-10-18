@@ -5,6 +5,8 @@ import { ReportRangeError, reportRange, vietnamToday } from './report-range';
 export type CompanyActivityRow = {
   employeeId: string;
   employeeName: string;
+  // The employee's recorded email, used as the report's group label.
+  employeeEmail: string;
   businessDay: string;
   pageViewEvents: number;
   distinctPropertiesViewed: number;
@@ -107,6 +109,7 @@ async function reportRows(
   return (data ?? []).map((row) => ({
     employeeId: row.employee_id,
     employeeName: row.employee_name,
+    employeeEmail: row.employee_email,
     businessDay: row.business_day,
     pageViewEvents: Number(row.page_view_events),
     distinctPropertiesViewed: Number(row.distinct_properties_viewed),
