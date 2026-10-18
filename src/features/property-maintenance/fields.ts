@@ -242,6 +242,34 @@ export const targetFields: Record<Target, readonly string[]> = {
   ],
   link: ['contact_id', 'relation', 'is_primary', 'remove'],
 };
+const LOCATION_FIELDS = ['latitude', 'longitude'];
+export function correctionFieldNames({
+  target,
+  staff,
+  propertyStatus,
+  observedFormat,
+}: {
+  target: Target;
+  staff: boolean;
+  propertyStatus: string;
+  observedFormat?: unknown;
+}): string[] {
+  return targetFields[target].filter(
+    (name) =>
+      !LOCATION_FIELDS.includes(name) &&
+      (staff || !['contact_id', 'remove'].includes(name)) &&
+      !(name === 'status' && ['sold', 'rented'].includes(propertyStatus)) &&
+      !(
+        target === 'address' &&
+        ['province_text', 'commune_text', 'district_unit_id'].includes(name)
+      ) &&
+      !(
+        target === 'address' &&
+        observedFormat === 'current' &&
+        name.startsWith('district_')
+      ),
+  );
+}
 export class InputError extends Error {
   constructor() {
     super('invalid-input');

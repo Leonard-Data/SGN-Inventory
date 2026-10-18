@@ -332,12 +332,13 @@ Scope: the property detail and edit location surfaces. Tiles are OpenStreetMap r
 | Recorded point on the detail page | The map shows the recorded point with an "open in map" OpenStreetMap link; the read-only map is announced as an image whose text alternative states the recorded latitude and longitude |
 | No recorded point | The detail page states that no location is recorded and renders no map |
 | Place, move and clear a point in the editor | Clicking the map places/moves the marker, a typed latitude and longitude can be applied instead of clicking, clearing removes both coordinates, and the save writes both or neither through the maintenance RPC; range and precision are rejected exactly as the save path rejects them |
+| Location versus correction requests | The location editor is the only place coordinates are set or cleared: the correction report/request draft and its amend path never offer latitude or longitude, so a single coordinate or a half-cleared pair can never be requested; the editor keeps the pair together with the 7-decimal range guidance |
 | Tiles fail to load in the editor | The map stays mounted and the capture surface stays usable: the localized notice says the background could not load, and both clicking the blank map and typing coordinates still set the point; no page reload is needed |
 | Tiles fail to load on the detail page | The localized notice says the background could not load and the open-in-map link remains the usable path |
 | Keyboard and screen reader | The interactive map is a labelled group that says what it is for, never a static image; the typed latitude/longitude inputs and their apply action are reachable and operable by keyboard alone, with localized VI/EN labels, hint and invalid-coordinate message |
 | VI/EN switching | Labels, hints, the tile-failure notice and the no-location state are equivalent in both languages and no coordinate value is rewritten |
 
-Embedded coverage applies to the shared save-path validation (`npm run test:unit` and `npm run test:schema`); the tile-failure behaviour, the real Leaflet rendering and the keyboard journey require the browser gate above and are not claimed by those tests.
+Embedded coverage applies to the shared save-path validation and the correction draft's field list (`npm run test:unit` and `npm run test:schema`); the tile-failure behaviour, the real Leaflet rendering and the keyboard journey require the browser gate above and are not claimed by those tests.
 
 ## Shared-contact detail-edit acceptance (ticket #70)
 
