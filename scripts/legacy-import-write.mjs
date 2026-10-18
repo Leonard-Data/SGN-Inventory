@@ -262,9 +262,13 @@ function http() {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // The link to Drive and R2 drops connections, and a dropped connection otherwise waits forever:
-// each transfer carries its own deadline and is retried a bounded number of times.
+// each transfer carries its own deadline and is retried a bounded number of times. The file
+// transfers get a wider budget than a provider call because that link resets single requests
+// sporadically: one observed run lost nearly half its first attempts with `socket hang up`,
+// which three attempts cannot ride out, while every one of them succeeded on a later attempt.
 const DOWNLOAD_TIMEOUT_MS = 120000;
 const UPLOAD_TIMEOUT_MS = 180000;
+const TRANSFER_ATTEMPTS = 8;
 
 // The link to the provider is long and occasionally drops a connection. A transport failure is
 // retried a bounded number of times; a refusal is never retried.
@@ -1266,7 +1270,7 @@ export async function importAttachments(
       );
       if (!response.ok) return { ok: false, detail: String(response.status) };
       return { ok: true, bytes: Buffer.from(await response.arrayBuffer()) };
-    }).catch((error) => ({
+    }, TRANSFER_ATTEMPTS).catch((error) => ({
       ok: false,
       detail: `network: ${error?.message ?? error}`,
     }));
@@ -1325,11 +1329,14 @@ export async function importAttachments(
             return { ETag: null };
           throw error;
         }
-      });
+      }, TRANSFER_ATTEMPTS);
       if (put) {
         const objectId = put.ETag
           ? objectIdentity(put.ETag)
-          : await headIdentity(storage, objectPath);
+          : await withRetry(
+              () => headIdentity(storage, objectPath),
+              TRANSFER_ATTEMPTS,
+            );
         if (!objectId)
           throw new Error('the stored object has no identity to record');
         const payload = [
