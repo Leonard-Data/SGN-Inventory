@@ -132,8 +132,11 @@ or account is written.
   counts as recorded by the run only when the provider accepted the address and the outcome write
   was accepted; a refused or ambiguous provider attempt leaves the invitation state
   `provider_failed` and is listed in the report with its provider outcome, never counted as
-  recorded. A project-wide recorded-invitation total is labelled as project-wide, so a resumed run
-  cannot present earlier invitations as its own.
+  recorded. The report keeps the per-address list whether the sending phase finishes or dies
+  partway, so a run that emailed some people and then failed still names each address it reached:
+  `attempted` marks an address whose attempt began without a confirmed outcome, and `not_sent` one
+  that was never emailed. A project-wide recorded-invitation total is labelled as project-wide, so
+  a resumed run cannot present earlier invitations as its own.
 
 ## Write runs are resumable and idempotent
 

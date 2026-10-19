@@ -11,6 +11,7 @@ import {
   contactKey,
   contactSummary,
   credentialColumns,
+  invitationSummary,
   isPlaceholderOwner,
   listingModeFromLabel,
   mapMasterRow,
@@ -22,6 +23,7 @@ import {
   readSpreadsheet,
   recordBucket,
   importablePropertyKeys,
+  renderReport,
   resolveAddress,
   rosterEmployees,
   statusFromLabel,
@@ -43,6 +45,7 @@ import {
   PRODUCTION_R2_BUCKET,
   PRODUCTION_R2_ACCOUNT_ID,
   PRODUCTION_APP_URL,
+  sendInvitations,
   staffRoleFor,
 } from './legacy-import-write.mjs';
 
@@ -1569,4 +1572,235 @@ test('the roster position is read by header, not by where a credential column le
     { name: 'Lan', email: 'lan@example.com', position: 'Thư ký' },
     { name: 'Minh', email: 'minh@example.com', position: 'Admin' },
   ]);
+});
+
+test('an invitation phase that dies partway still names every address it reached', async () => {
+  const invitation = (email, role, index) => ({
+    email,
+    role,
+    stated: true,
+    state: 'pending',
+    detail: null,
+    invitation_id: `0000000${index}-0000-4000-8000-00000000000${index}`,
+    revision: 1,
+  });
+  const invitations = [
+    invitation('reached@example.com', 'sales', 1),
+    invitation('dropped@example.com', 'manager', 2),
+    invitation('never@example.com', 'staff', 3),
+  ];
+  const saved = {};
+  for (const key of [
+    'NEXT_PUBLIC_SUPABASE_URL',
+    'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
+    'SUPABASE_SERVICE_ROLE_KEY',
+    'NEXT_PUBLIC_APP_URL',
+  ]) {
+    saved[key] = process.env[key];
+  }
+  Object.assign(process.env, {
+    NEXT_PUBLIC_SUPABASE_URL: 'https://project.supabase.co',
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'publishable',
+    SUPABASE_SERVICE_ROLE_KEY: 'service',
+    NEXT_PUBLIC_APP_URL: 'https://sgnewhouse.online',
+  });
+  const jsonResponse = (status, body) => ({
+    ok: status < 400,
+    status,
+    text: async () => JSON.stringify(body),
+  });
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    if (String(url).endsWith('/auth/v1/invite')) {
+      const { email } = JSON.parse(options.body);
+      if (email === 'dropped@example.com') throw new TypeError('fetch failed');
+      return jsonResponse(200, {
+        id: '3f4a1c2e-5b6d-4e7f-8a9b-0c1d2e3f4a5b',
+        email,
+      });
+    }
+    return jsonResponse(200, null);
+  };
+  const invitationsSent = [];
+  let summary;
+  try {
+    await assert.rejects(
+      sendInvitations({
+        invitations,
+        actorId: null,
+        outcomes: invitationsSent,
+        log: () => {},
+      }),
+      /fetch failed/,
+    );
+    summary = invitationSummary(invitations, invitationsSent);
+  } finally {
+    globalThis.fetch = original;
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+
+  // The address whose connection dropped keeps the attempt, so the run never loses who it emailed.
+  assert.deepEqual(
+    invitationsSent.map((entry) => [
+      entry.email,
+      entry.outcome,
+      entry.recorded,
+    ]),
+    [
+      ['reached@example.com', 'accepted', true],
+      ['dropped@example.com', 'attempted', false],
+    ],
+  );
+  const invitationsReported = invitationRecipients(
+    invitations,
+    invitationsSent,
+  );
+  assert.deepEqual(
+    invitationsReported.map((entry) => [
+      entry.email,
+      entry.outcome,
+      entry.recorded,
+    ]),
+    [
+      ['reached@example.com', 'accepted', true],
+      ['dropped@example.com', 'attempted', false],
+      ['never@example.com', 'not_sent', false],
+    ],
+  );
+  // A failed write keeps the same list in the report instead of dropping it with the write.
+  assert.equal(summary.recorded, 1);
+  assert.equal(summary.origin, 'https://sgnewhouse.online');
+  assert.deepEqual(
+    summary.failures.map((entry) => entry.outcome),
+    ['attempted'],
+  );
+  const rendered = renderReport({
+    generated_at: '2026-10-18T00:00:00Z',
+    spreadsheet_id: 'sheet',
+    spreadsheet_title: 'title',
+    drive_folder_id: 'folder',
+    service_account: 'sa@example.com',
+    digest: 'abc',
+    out_dir: '/tmp/out',
+    stage: 'prod',
+    stage_proven: true,
+    write_outcome: { state: 'failed', reason: 'the connection dropped' },
+    counts: {
+      total_rows: 1,
+      empty_rows: 0,
+      missing_id_rows: 0,
+      distinct_keys: 1,
+      duplicate_keys: 0,
+      ready_rows: 1,
+      review_rows: 0,
+      quarantined_rows: 0,
+      excluded_rows: 0,
+      buckets: [],
+    },
+    prices: {
+      missing: 0,
+      ceiling: 0,
+      on_application: 0,
+      rental_only: 0,
+      unparseable: 0,
+      rent_unparseable: 0,
+      on_application_samples: [],
+    },
+    statuses: { rows: 0, values: [], samples: [] },
+    samples: {},
+    addresses: {
+      legacy_reference_unavailable: null,
+      legacy_reference_failures: [],
+      legacy_reference_rows: 0,
+      sources: [],
+      vietmap: {
+        distinct_addresses: 0,
+        cached_resolved: 0,
+        cached_empty: 0,
+        unique_queries: 0,
+        api_calls: 0,
+        cache_hits: 0,
+        migrate_type_2_calls: 0,
+        failed: 0,
+      },
+      vietmap_statuses: [],
+      outcomes: [],
+      converted_rows: 0,
+      refused_rows: 0,
+      crosswalk_note: 'note',
+      disagreements: [],
+      disagreement_rows: 0,
+      unresolved_units: [],
+      split_units: [],
+      refused_examples: [],
+    },
+    duplicates: {
+      property_keys: [],
+      property_key_rows: 0,
+      phone_repeats: 0,
+      phone_repeat_rows: 0,
+      multi_commune_rows: 0,
+      examples: [],
+    },
+    contacts: {
+      distinct: 0,
+      rows_with_owner: 0,
+      shared: 0,
+      rows_without_owner: 0,
+      placeholder_owner_rows: 0,
+      examples: [],
+    },
+    staff: {
+      creator_emails: 0,
+      creator_rows: 0,
+      editor_emails: 0,
+      editor_rows: 0,
+    },
+    staff_plan: {
+      addresses: 0,
+      from_roster: 0,
+      by_role: [],
+      accounts: [],
+      silent_admin: null,
+      roster_positions: [],
+    },
+    attachments: {
+      folders: [],
+      rows: 0,
+      matched_files: 0,
+      downloadable_bytes: 0,
+      unreferenced_files: 0,
+      dropped: [],
+    },
+    children: [],
+    issues: [],
+    columns: [],
+    dropped_tabs: [],
+    skipped_tabs: [],
+    excluded: [],
+    examples: [],
+    invitations: summary,
+  });
+  const lines = rendered.split('\n');
+  const heading = lines.findIndex((line) =>
+    line.startsWith('## 12. Invitations this run attempted'),
+  );
+  assert.notEqual(heading, -1);
+  const end = lines.findIndex(
+    (line, index) => index > heading && line.startsWith('## '),
+  );
+  const section = lines.slice(heading, end).join('\n');
+  for (const email of [
+    'reached@example.com',
+    'dropped@example.com',
+    'never@example.com',
+  ]) {
+    assert.match(section, new RegExp(email));
+  }
+  assert.match(section, /attempted/);
+  // The limits section keeps its number after the invitations section.
+  assert.match(rendered, /^## 13\. Limits of this run$/m);
 });

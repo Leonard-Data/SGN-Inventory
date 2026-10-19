@@ -1539,6 +1539,14 @@ export function renderReport(report) {
       (row) =>
         `| ${row.source_row} | ${row.source_key} | ${row.owner ?? ''} | ${row.sale_raw ?? '(empty)'} | ${row.rent_raw ?? '(empty)'} |`,
     );
+  const invitationRows = (invitations) => [
+    '| Invitation | Role | Outcome | Recorded | Detail |',
+    '| --- | --- | --- | --- | --- |',
+    ...invitations.recipients.map(
+      (entry) =>
+        `| ${entry.email} | ${entry.role ?? ''} | ${entry.outcome} | ${entry.recorded ? 'yes' : 'no'} | ${entry.detail ?? ''} |`,
+    ),
+  ];
   push(
     `# Legacy workbook ${outcome.title} — ${report.generated_at}`,
     '',
@@ -1966,12 +1974,7 @@ export function renderReport(report) {
       `- Every invitation link pointed at \`${write.staff.invitations.origin}/auth/invite\` (the run's \`NEXT_PUBLIC_APP_URL\`).`,
       `- Recorded invitations the project as a whole holds, not scoped to this batch: ${write.verification.counts.invitations_recorded}.`,
       '',
-      '| Invitation | Role | Outcome | Recorded | Detail |',
-      '| --- | --- | --- | --- | --- |',
-      ...write.staff.invitations.recipients.map(
-        (entry) =>
-          `| ${entry.email} | ${entry.role ?? ''} | ${entry.outcome} | ${entry.recorded ? 'yes' : 'no'} | ${entry.detail ?? ''} |`,
-      ),
+      ...invitationRows(write.staff.invitations),
       '',
       `- Attachments planned ${write.attachments.planned}, dropped ${write.attachments.dropped.reduce((total, entry) => total + entry.count, 0)}; outcomes: ${write.attachments.outcomes.map((entry) => `${entry.outcome} ${entry.count}`).join(', ') || '(none)'}.`,
       `- Rows counted as converted by the dry run but written with the legacy address only, because the project has no admin unit for the target: **${skippedSummary.rows}**, missing ${
@@ -1996,8 +1999,24 @@ export function renderReport(report) {
       '',
     );
   }
+  const partialInvitations =
+    !writeSection && report.invitations?.recipients.length
+      ? report.invitations
+      : null;
+  if (partialInvitations) {
+    push(
+      '## 12. Invitations this run attempted',
+      '',
+      '- The write failed, so this is the invitation record the run reached: `attempted` is an address whose attempt began without a confirmed outcome, `not_sent` was never emailed.',
+      `- ${partialInvitations.recorded} of them were recorded.`,
+      `- Every invitation link pointed at \`${partialInvitations.origin}/auth/invite\` (the run's \`NEXT_PUBLIC_APP_URL\`).`,
+      '',
+      ...invitationRows(partialInvitations),
+      '',
+    );
+  }
   push(
-    `## ${writeSection ? 13 : 12}. Limits of this run`,
+    `## ${writeSection || partialInvitations ? 13 : 12}. Limits of this run`,
     '',
     '- `admin_unit_crosswalks` has no reviewed rows and `admin_unit_versions` seeds no district level, so',
     '  the fallback conversion uses the published official mapping.',
@@ -2686,6 +2705,7 @@ export async function run(argv, dependencies = {}) {
       .map(([issue, rows]) => ({ issue, rows })),
     columns: columnReport(headers),
     write_outcome: { state: 'dry_run', reason: null },
+    invitations: null,
     addresses: {
       outcomes: addressOutcomes,
       legacy_reference_unavailable: legacyReferenceError,
@@ -2786,6 +2806,7 @@ export async function run(argv, dependencies = {}) {
   report.stage_proven = true;
 
   let run;
+  const invitationLog = { invitations: null, sends: [] };
   try {
     run = await writeProject({
       databaseUrl,
@@ -2799,11 +2820,15 @@ export async function run(argv, dependencies = {}) {
       employeeRows,
       drive,
       driveToken: token,
+      invitationLog,
     });
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     console.error(`Write failed: ${reason}`);
     report.write_outcome = { state: 'failed', reason };
+    report.invitations = invitationLog.invitations
+      ? invitationSummary(invitationLog.invitations, invitationLog.sends)
+      : null;
     report.columns = columnReport(headers, {
       write: writeOutcome(report).rosterResolved,
     });
@@ -2946,6 +2971,7 @@ async function writeProject({
   employeeRows,
   drive,
   driveToken,
+  invitationLog,
 }) {
   assertWriteTarget(databaseUrl, process.env);
   const db = await connect(databaseUrl);
@@ -3040,6 +3066,7 @@ async function writeProject({
       actorPassword: password,
       log,
     });
+    invitationLog.invitations = invitations;
     const employeesByEmail = new Map(
       (
         await db.query('select id, lower(email) as email from public.employees')
@@ -3133,6 +3160,7 @@ async function writeProject({
       actorId: employeesByEmail.get(silentAdmin?.email) ?? null,
       waitSeconds: Number(process.env.SGN_INVITE_WAIT_SECONDS ?? 300),
       log,
+      outcomes: invitationLog.sends,
     });
 
     const verification = await verifyImport(db, {
@@ -3150,27 +3178,7 @@ async function writeProject({
         addresses: staff.length,
         silent_admin: silentAdmin?.email ?? null,
         manager_account_file: silentAdmin ? MANAGER_ACCOUNT_FILE : null,
-        invitations: {
-          stated: invitations.filter((entry) => entry.stated).length,
-          refused: invitations.filter((entry) => !entry.stated).length,
-          recorded: recordedInvitations(sends),
-          already_recorded: invitations.filter(
-            (entry) => entry.stated && entry.state === 'recorded',
-          ).length,
-          origin: invitationOrigin(process.env.NEXT_PUBLIC_APP_URL),
-          outcomes: outcomesBy(sends),
-          refusals: invitations
-            .filter((entry) => !entry.stated)
-            .map((entry) => ({ email: entry.email, detail: entry.detail })),
-          failures: sends
-            .filter((entry) => !entry.recorded || entry.outcome !== 'accepted')
-            .map((entry) => ({
-              email: entry.email,
-              outcome: entry.outcome,
-              detail: entry.detail,
-            })),
-          recipients: invitationRecipients(invitations, sends),
-        },
+        invitations: invitationSummary(invitations, sends),
       },
       properties,
       attachments: {
@@ -3201,6 +3209,30 @@ function outcomesBy(entries) {
   for (const entry of entries)
     counts.set(entry.outcome, (counts.get(entry.outcome) ?? 0) + 1);
   return [...counts.entries()].map(([outcome, count]) => ({ outcome, count }));
+}
+
+export function invitationSummary(invitations, sends) {
+  return {
+    stated: invitations.filter((entry) => entry.stated).length,
+    refused: invitations.filter((entry) => !entry.stated).length,
+    recorded: recordedInvitations(sends),
+    already_recorded: invitations.filter(
+      (entry) => entry.stated && entry.state === 'recorded',
+    ).length,
+    origin: invitationOrigin(process.env.NEXT_PUBLIC_APP_URL),
+    outcomes: outcomesBy(sends),
+    refusals: invitations
+      .filter((entry) => !entry.stated)
+      .map((entry) => ({ email: entry.email, detail: entry.detail })),
+    failures: sends
+      .filter((entry) => !entry.recorded || entry.outcome !== 'accepted')
+      .map((entry) => ({
+        email: entry.email,
+        outcome: entry.outcome,
+        detail: entry.detail,
+      })),
+    recipients: invitationRecipients(invitations, sends),
+  };
 }
 
 function detailOf(address) {

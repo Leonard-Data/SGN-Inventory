@@ -1145,6 +1145,9 @@ export async function beginInvitations(
  * Send each open invitation through the provider and record exactly one outcome per row.
  * The provider allows 30 messages an hour, so a refusal for rate is waited out and retried;
  * the invitation keeps its open state while it waits and nothing is claimed until recorded.
+ * Each address is listed the moment its attempt starts, in the caller's own array, so a phase
+ * that dies partway still names who was reached: `attempted` means the attempt began and no
+ * provider outcome was confirmed for it.
  */
 export async function sendInvitations({
   invitations,
@@ -1152,14 +1155,21 @@ export async function sendInvitations({
   waitSeconds = 300,
   maxWaits = 48,
   log = () => {},
+  outcomes = [],
 }) {
   const config = http();
   const open = invitations.filter(
     (entry) =>
       entry.stated && entry.invitation_id && entry.state !== 'recorded',
   );
-  const outcomes = [];
   for (const entry of open) {
+    const attempt = {
+      email: entry.email,
+      outcome: 'attempted',
+      recorded: false,
+      detail: null,
+    };
+    outcomes.push(attempt);
     let attempts = 0;
     let settled = null;
     while (!settled) {
@@ -1211,8 +1221,7 @@ export async function sendInvitations({
       },
     );
     const body = await readJson(response);
-    outcomes.push({
-      email: entry.email,
+    Object.assign(attempt, {
       outcome: settled.outcome,
       recorded: response.ok,
       detail: response.ok
@@ -1236,9 +1245,10 @@ export const recordedInvitations = (sends) =>
 
 /**
  * Every invitation with the role it was begun for and what became of it: the provider outcome
- * when it was emailed, `already_recorded` for one settled before the run, `refused` for one the
- * invitation RPC refused, and `not_sent` for one that was never emailed. `recorded` is the same
- * predicate as `recordedInvitations`.
+ * when it was emailed, `attempted` for one whose attempt began without a confirmed outcome,
+ * `already_recorded` for one settled before the run, `refused` for one the invitation RPC
+ * refused, and `not_sent` for one that was never emailed. `recorded` is the same predicate as
+ * `recordedInvitations`.
  */
 export const invitationRecipients = (invitations, sends) =>
   invitations.map((entry) => {
