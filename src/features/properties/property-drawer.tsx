@@ -3,14 +3,19 @@ import {
   useEffect,
   useId,
   useMemo,
+  useRef,
   useState,
   type ChangeEvent,
   type FormEvent,
 } from 'react';
 import Link from 'next/link';
 import { api, RequestError } from '@/features/employees/api';
+import { EyeIcon } from '@/features/employees/auth-ui';
 import { messages, label, type Locale } from '@/i18n/messages';
 import { useToast } from '@/features/toasts/toast-host';
+import { contactRows, type ContactRow } from './contact-rows';
+import { loadPropertyDetail, revealOwnerContact } from './detail-loader';
+import { HIDDEN_PHONE, ownerPhoneView } from './owner-phone';
 import {
   quickComment,
   type QuickComment,
@@ -40,7 +45,7 @@ import { wholeVnd, squareMetres } from './filters';
 import { detailMessages } from './messages';
 import { statusTone } from './property-card';
 import { MISSING_VALUE, rowPrice, totalAreaM2 } from './table';
-import type { PropertySummary } from './types';
+import type { OwnerContactDisclosure, PropertySummary } from './types';
 
 // How many of the most recent comments the quick view repeats; the full record holds the rest.
 const RECENT_COMMENTS = 5;
@@ -91,6 +96,7 @@ export function PropertyDrawer({
     >
       {property ? (
         <QuickView
+          key={property.id}
           property={property}
           locale={locale}
           resultLocation={resultLocation}
@@ -120,12 +126,27 @@ function QuickView({
   const factsText = detailMessages[locale];
   const notify = useToast();
   const factsId = useId();
+  const ownersId = useId();
   const uploadId = useId();
   const draftId = useId();
   const hintId = useId();
   // null while the newest comments are still being read; an empty list is a real answer.
   const [comments, setComments] = useState<QuickComment[] | null>(null);
   const [commentsFailed, setCommentsFailed] = useState(false);
+  // The property's recorded owner links, read from the same detail read the full record uses.
+  // null while they are still being read; an empty list is a real answer.
+  const [owners, setOwners] = useState<ContactRow[] | null>(null);
+  const [ownersFailed, setOwnersFailed] = useState(false);
+  // The owner phone is held only after a deliberate disclosure, and hiding it drops the value
+  // again, so a hidden number is never in the page text.
+  const [disclosure, setDisclosure] = useState<OwnerContactDisclosure | null>(
+    null,
+  );
+  const [revealBusy, setRevealBusy] = useState(false);
+  const [revealError, setRevealError] = useState<string | null>(null);
+  // One retry reference per opened panel: a lost response recovers the recorded access instead of
+  // adding another, and a new property never reuses the previous key.
+  const revealKey = useRef<{ propertyId: string; key: string } | null>(null);
   const [draft, setDraft] = useState('');
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
@@ -152,6 +173,74 @@ function QuickView({
       });
     return () => abort.abort();
   }, [propertyId, onDenied]);
+
+  // The owner links the quick view states: the recorded names come from the detail read, while
+  // every recorded owner phone stays withheld until the deliberate reveal below.
+  useEffect(() => {
+    const abort = new AbortController();
+    void loadPropertyDetail(propertyId, abort.signal)
+      .then((detail) => {
+        if (abort.signal.aborted) return;
+        setOwners(
+          contactRows(detail.contacts).filter(
+            (row) => row.relation === 'owner',
+          ),
+        );
+        setOwnersFailed(false);
+      })
+      .catch((failure) => {
+        if (abort.signal.aborted) return;
+        if (denied(failure)) onDenied(failure.status);
+        else setOwnersFailed(true);
+      });
+    return () => abort.abort();
+  }, [propertyId, onDenied]);
+
+  const phone = ownerPhoneView(disclosure);
+
+  // Revealing the owner phone is a deliberate action: no read runs on open, render or language
+  // switch, and the database commits the access before the number is shown. Hiding it needs no
+  // read at all — the value is simply dropped.
+  async function toggleOwnerPhone() {
+    if (phone.shown) {
+      setDisclosure(null);
+      return;
+    }
+    if (revealBusy) return;
+    if (!revealKey.current || revealKey.current.propertyId !== propertyId)
+      revealKey.current = { propertyId, key: crypto.randomUUID() };
+    setRevealBusy(true);
+    setRevealError(null);
+    try {
+      const result = await revealOwnerContact(
+        propertyId,
+        revealKey.current.key,
+      );
+      // An archived review is readable without a phone: that is a plain statement, not a reveal.
+      if (!result.contact || result.contact.phone.trim() === '') {
+        setRevealError('owner-phone-missing');
+        return;
+      }
+      setDisclosure(result);
+    } catch (failure) {
+      if (denied(failure)) {
+        onDenied(failure.status);
+        return;
+      }
+      setRevealError(
+        failure instanceof RequestError ? failure.code : 'unavailable',
+      );
+    } finally {
+      setRevealBusy(false);
+    }
+  }
+
+  function revealMessage(code: string): string {
+    if (code === 'owner-contact-missing') return text.ownerContactMissing;
+    if (code === 'owner-phone-missing') return text.ownerPhoneMissing;
+    if (code === 'disclosure-key-conflict') return text.ownerContactKeyConflict;
+    return text.ownerContactFailed;
+  }
 
   // The comment path the whole application uses, reached with one submission key per draft: a
   // retry after an ambiguous failure replays the same key instead of posting twice.
@@ -380,6 +469,58 @@ function QuickView({
             </div>
           ))}
         </dl>
+      </section>
+      <section className="quick-view-section" aria-labelledby={ownersId}>
+        <h3 id={ownersId}>{text.ownerContact}</h3>
+        {ownersFailed ? (
+          <p className="field-hint" role="alert">
+            {text.unavailable}
+          </p>
+        ) : owners === null ? null : owners.length ? (
+          <>
+            <ul className="quick-view-owners">
+              {owners.map((owner) => (
+                <li key={owner.id} translate="no">
+                  {owner.name ?? text.unknown}
+                </li>
+              ))}
+            </ul>
+            <p className="quick-view-owner-phone">
+              {phone.shown ? (
+                <>
+                  <span translate="no">{phone.name}</span>{' '}
+                  <span className="num" translate="no">
+                    {phone.phone}
+                  </span>
+                </>
+              ) : (
+                <span className="num" aria-hidden="true">
+                  {HIDDEN_PHONE}
+                </span>
+              )}
+              <button
+                className="quick-view-reveal"
+                type="button"
+                aria-pressed={phone.shown}
+                aria-label={
+                  phone.shown ? text.hideOwnerPhone : text.showOwnerPhone
+                }
+                aria-busy={revealBusy}
+                disabled={revealBusy}
+                onClick={() => void toggleOwnerPhone()}
+              >
+                <EyeIcon />
+              </button>
+            </p>
+          </>
+        ) : (
+          <p className="field-hint">{text.ownerContactMissing}</p>
+        )}
+        {revealError ? (
+          <p className="field-error" role="alert">
+            {revealMessage(revealError)}
+          </p>
+        ) : null}
       </section>
       <section className="quick-view-section">
         <h3>{text.quickUpload}</h3>

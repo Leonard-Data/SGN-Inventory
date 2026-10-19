@@ -28,9 +28,12 @@ import {
 import {
   cardChunkRows,
   cardColumns,
+  DEFAULT_INVENTORY_VIEW,
   inventoryHref,
+  inventoryViewParam,
   parseInventoryView,
   PHONE_MAX_WIDTH_PX,
+  shownInventoryView,
 } from './view';
 import {
   isInventoryOrder,
@@ -78,11 +81,14 @@ export function Inventory({
   const locale = initialLocale;
   const router = useRouter();
   const parsedView = parseInventoryView(view);
-  const requestedView = parsedView.ok ? parsedView.view : 'cards';
+  const requestedView = parsedView.ok
+    ? parsedView.view
+    : DEFAULT_INVENTORY_VIEW;
+  const viewParam = inventoryViewParam(requestedView);
   // A table address on a phone is answered with cards: the view is not offered there, so the
   // address cannot put a person on one.
   const wide = useSyncExternalStore(subscribeWide, wideSnapshot, wideOnServer);
-  const shownView = wide && requestedView === 'table' ? 'table' : 'cards';
+  const shownView = shownInventoryView(requestedView, wide);
   const activeOrder = isInventoryOrder(sort) ? sort : null;
   // The filters the address states travel with every read of this stream: the free-text search,
   // the ordering, the filter island and the view switch all carry the same set.
@@ -284,14 +290,12 @@ export function Inventory({
     return indexes;
   }, [band.first, band.last, chunkCount]);
 
-  const resultLocation =
-    '/properties?' +
-    new URLSearchParams({
-      query: initialQuery,
-      ...(sort ? { sort } : {}),
-      ...(requestedView === 'table' ? { view: 'table' } : {}),
-      ...activeFilters,
-    });
+  const resultLocation = inventoryHref({
+    query: initialQuery,
+    sort,
+    view: requestedView,
+    filters,
+  });
   const showEntry = order !== null;
   const openDrawer = useCallback(
     (record: PropertySummary, opener: HTMLElement | null) =>
@@ -421,8 +425,8 @@ export function Inventory({
                 </button>
               </div>
               {sort ? <input type="hidden" name="sort" value={sort} /> : null}
-              {requestedView === 'table' ? (
-                <input type="hidden" name="view" value="table" />
+              {viewParam ? (
+                <input type="hidden" name="view" value={viewParam} />
               ) : null}
               {Object.entries(activeFilters).map(([name, value]) => (
                 <input key={name} type="hidden" name={name} value={value} />
@@ -581,11 +585,11 @@ export function Inventory({
                 href={inventoryHref({
                   query: initialQuery,
                   sort,
-                  view: 'cards',
+                  view: DEFAULT_INVENTORY_VIEW,
                   filters,
                 })}
               >
-                {text.viewCards}
+                {text.backToInventory}
               </Link>
             </div>
           </div>
@@ -713,6 +717,7 @@ export function Inventory({
                         key={`${chunkRows}:${index}`}
                         index={index}
                         rows={rowsByChunk.get(index) ?? null}
+                        count={Math.min(chunkRows, total - index * chunkRows)}
                         reserved={heights[index] ?? STREAM_ESTIMATE_PX}
                         locale={locale}
                         onOpen={openDrawer}

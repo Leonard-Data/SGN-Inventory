@@ -1,17 +1,19 @@
 'use client';
 import { memo } from 'react';
 import { messages, type Locale } from '@/i18n/messages';
+import { LoadingSkeleton } from '@/features/skeleton';
 import { COLUMN_HEADINGS, propertyTableRow, TABLE_COLUMNS } from './table';
 import { useMeasuredHeight } from './use-measured';
 import type { PropertySummary } from './types';
 
 // One mounted chunk of the table: the rows a window has answered with, or the space reserved for
-// the chunk until that window arrives. The chunk is one <tbody> of the single table, so the ten
-// columns keep their alignment across chunk boundaries, and it measures its own rows so the
-// stream reserves what rows actually take.
+// the chunk until that window arrives, drawn as a skeleton of the rows. The chunk is one <tbody>
+// of the single table, so the ten columns keep their alignment across chunk boundaries, and it
+// measures its own rows so the stream reserves what rows actually take.
 export const TableChunk = memo(function TableChunk({
   index,
   rows,
+  count,
   reserved,
   locale,
   onOpen,
@@ -19,6 +21,8 @@ export const TableChunk = memo(function TableChunk({
 }: {
   index: number;
   rows: PropertySummary[] | null;
+  // How many rows the window holds: the skeleton stands in for exactly those rows.
+  count: number;
   reserved: number;
   locale: Locale;
   onOpen: (record: PropertySummary, opener: HTMLElement | null) => void;
@@ -30,10 +34,19 @@ export const TableChunk = memo(function TableChunk({
     report: onMeasured,
   });
   if (rows === null) {
+    // The row keeps the whole reserved height, so the skeleton fills the space the rows
+    // themselves will take rather than moving the rest of the list when they arrive.
     return (
       <tbody ref={element}>
         <tr className="inventory-gap" style={{ height: reserved }}>
-          <td colSpan={TABLE_COLUMNS.length} />
+          <td className="inventory-window" colSpan={TABLE_COLUMNS.length}>
+            <LoadingSkeleton
+              label={messages[locale].loading}
+              shape="table"
+              rows={count}
+              columns={TABLE_COLUMNS.length}
+            />
+          </td>
         </tr>
       </tbody>
     );
