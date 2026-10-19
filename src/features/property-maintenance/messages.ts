@@ -30,6 +30,21 @@ const copy = {
   saving: ['Đang lưu…', 'Saving…'],
   cancel: ['Hủy chỉnh sửa', 'Cancel editing'],
   saved: ['Đã lưu.', 'Saved.'],
+  // Save confirmations: the dialog closes, so the confirmation names what was recorded.
+  propertySaved: ['Đã lưu thông tin bất động sản.', 'Property saved.'],
+  propertyCreated: ['Đã tạo bất động sản.', 'Property created.'],
+  addressSaved: ['Đã lưu địa chỉ.', 'Address saved.'],
+  contactSaved: ['Đã lưu người liên hệ.', 'Contact saved.'],
+  linkSaved: ['Đã lưu liên kết người liên hệ.', 'Contact link saved.'],
+  correctionApplied: ['Đã áp dụng đính chính.', 'Correction applied.'],
+  correctionRejected: [
+    'Đã từ chối yêu cầu đính chính.',
+    'Correction request rejected.',
+  ],
+  correctionWithdrawn: [
+    'Đã rút yêu cầu đính chính.',
+    'Correction request withdrawn.',
+  ],
   requestSaved: [
     'Đã ghi nhận yêu cầu; dữ liệu kho chưa bị thay đổi.',
     'Request recorded; inventory has not been changed.',

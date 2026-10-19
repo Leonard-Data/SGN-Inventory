@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-10-18T23:52:44.096Z",
+  "checked_at": "2026-10-19T02:35:51.186Z",
   "engine": "PGlite embedded PostgreSQL plus an embedded real PostgreSQL engine for the two-connection last-admin, property-vendor-link and contact-link races; mocked auth/storage schemas",
   "passed": 655,
   "limitations": [

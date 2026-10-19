@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { messages, type Locale } from '@/i18n/messages';
 import { api, RequestError } from '@/features/employees/api';
+import { useToast } from '@/features/toasts/toast-host';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { LoadingSkeleton } from '@/features/skeleton';
 import type { ContactDetail } from '@/features/property-maintenance/data';
@@ -96,7 +97,7 @@ export function ContactDirectory({
   const [editor, setEditor] = useState<Editor | null>(null);
   const [detailBusy, setDetailBusy] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
-  const [notice, setNotice] = useState(false);
+  const notify = useToast();
   const ownersView = view === 'owners';
   const controller = useRef<AbortController | null>(null);
   useEffect(() => () => controller.current?.abort(), []);
@@ -127,7 +128,6 @@ export function ContactDirectory({
     setEditor(null);
     setDetailBusy(true);
     setDetailError(null);
-    setNotice(false);
     try {
       const result = await api<ContactDetail>(
         '/api/contacts/' + record.id,
@@ -174,7 +174,7 @@ export function ContactDirectory({
   async function saved() {
     setOpened(null);
     setEditor(null);
-    setNotice(true);
+    notify({ saved: true, message: copy.contactSaved });
     await reload();
   }
   const emptyMessage = query
@@ -272,8 +272,6 @@ export function ContactDirectory({
           <p className="search-hint">{text.contactSearchHint}</p>
         </div>
       </section>
-
-      {notice ? <p role="status">{copy.saved}</p> : null}
 
       {error ? (
         <div

@@ -6,6 +6,7 @@ import type { PropertyDetail } from '@/features/properties/detail-data';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { LoadingSkeleton } from '@/features/skeleton';
 import { api, RequestError } from '@/features/employees/api';
+import { useToast } from '@/features/toasts/toast-host';
 import { BusinessValues } from '@/features/property-maintenance/history';
 import type { ContactDetail } from '@/features/property-maintenance/data';
 import {
@@ -47,6 +48,14 @@ function RequestActions({
   useEffect(() => () => controller.current?.abort(), []);
   const text = maintenanceText(locale),
     staff = ['staff', 'manager', 'admin'].includes(employee.role);
+  const notify = useToast();
+  // The dialog closes on a committed decision, so the confirmation names the decision.
+  const decided: Record<string, string> = {
+    apply: text.correctionApplied,
+    reject: text.correctionRejected,
+    withdraw: text.correctionWithdrawn,
+    amend: text.requestSaved,
+  };
   // previewContact() and decide('apply') both route through the shared refusal decision.
   function failure(error: unknown) {
     if (
@@ -71,6 +80,7 @@ function RequestActions({
         requestRevision: snapshot.revision,
         reason,
       });
+      notify({ saved: true, message: decided[action] ?? text.requestSaved });
       onSaved();
     } catch (error) {
       failure(error);
