@@ -356,7 +356,9 @@ function QuickView({
           </span>
           {price ? (
             <b className="num">
-              {vnd(price.value)}
+              {/* The value without its unit, exactly as the table's own price cell draws it; the
+                  unit is named once, in the smaller note beside it. */}
+              {formatDecimal(price.value, locale)}
               <small className="inventory-note">
                 {price.unit === 'monthly'
                   ? text.priceUnitMonthly
