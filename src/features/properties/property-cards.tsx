@@ -3,7 +3,7 @@ import { memo } from 'react';
 import { messages, type Locale } from '@/i18n/messages';
 import { SkeletonCards } from '@/features/skeleton';
 import { PropertyCard } from './property-card';
-import { useMeasuredHeight } from './use-measured';
+import { useMeasuredHeight } from '@/features/stream/use-measured';
 import { CARD_CHUNK_ROWS } from './view';
 import type { PropertySummary } from './types';
 

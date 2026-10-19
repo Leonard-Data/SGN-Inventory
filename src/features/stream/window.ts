@@ -33,6 +33,13 @@ export const STREAM_ESTIMATE_PX = 640;
 // asked for, and an absent or empty value is the first window.
 const STREAM_OFFSET = /^(?:0|[1-9]\d{0,8})$/;
 
+// One window of a read that pages by cursor: its rows and the cursor the following window starts
+// after. A page read hands out the last row it holds, so a short page ends the stream.
+export type CursorPage<T> = {
+  rows: T[];
+  next: string | null;
+};
+
 export type StreamOffsetParse = { ok: true; offset: number } | { ok: false };
 
 export function parseStreamOffset(params: URLSearchParams): StreamOffsetParse {
@@ -231,16 +238,21 @@ export function loadedWindows<T>(
 // The rows of one chunk as the windows on hand hold them. null means a window this chunk needs
 // has not been read yet, so the chunk reserves its space instead of drawing a partial set; a
 // window that has run out ends the chunk early, which is the stream's own end.
+//
+// `total` is the rows the stream accounts for. A caller that knows it passes it: a stream whose
+// last row falls exactly on a read boundary would otherwise ask for a window past its own end and
+// reserve the last, partial chunk for rows that never arrive.
 export function streamChunkRows<T>(
   windows: ReadonlyMap<number, readonly T[]>,
   start: number,
   chunkRows = STREAM_CHUNK_ROWS,
   pageSize = STREAM_PAGE_SIZE,
+  total = Number.POSITIVE_INFINITY,
 ): T[] | null {
   const rows: T[] = [];
   for (
     let position = Math.max(0, start);
-    position < start + chunkRows;
+    position < start + chunkRows && position < total;
     position++
   ) {
     const windowOffset = streamWindowStart(position, pageSize);

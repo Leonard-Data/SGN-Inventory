@@ -25,6 +25,35 @@ const CHUNK = STREAM_CHUNK_ROWS;
 const VIEWPORT = 900;
 const ROW_PX = 72;
 
+test('a stream that states its end ends its last chunk there, not at a read boundary', () => {
+  // Four hundred rows in windows of a hundred: the last chunk starts at row 396 and runs four rows.
+  const windows = new Map<number, readonly string[]>(
+    [0, 100, 200, 300].map((offset) => [
+      offset,
+      Array.from({ length: 100 }, (_, index) => `row-${offset + index}`),
+    ]),
+  );
+  const total = 400;
+  // The chunk asks for a window past the stream's end for its last four positions: told where
+  // the stream ends, it draws the four rows it has instead of reserving the whole chunk.
+  assert.equal(windows.has(400), false);
+  assert.deepEqual(
+    streamChunkRows(windows, 396, STREAM_CHUNK_ROWS, 100, total),
+    ['row-396', 'row-397', 'row-398', 'row-399'],
+  );
+  // Without being told, the same chunk is the reservation it would be for a window not yet read.
+  assert.equal(streamChunkRows(windows, 396, STREAM_CHUNK_ROWS, 100), null);
+  // A chunk that starts past the end holds nothing, and one that ends before it is unaffected.
+  assert.deepEqual(
+    streamChunkRows(windows, 400, STREAM_CHUNK_ROWS, 100, total),
+    [],
+  );
+  assert.equal(
+    streamChunkRows(windows, 384, STREAM_CHUNK_ROWS, 100, total)?.length,
+    12,
+  );
+});
+
 test('the properties list reads the shared arithmetic rather than a copy of it', () => {
   // The extraction is only an extraction if the original module keeps handing out the same
   // functions: the properties tests import them from here, unchanged.
