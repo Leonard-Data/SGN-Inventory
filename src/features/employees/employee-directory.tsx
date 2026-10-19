@@ -1,5 +1,11 @@
 'use client';
-import { Fragment, useEffect, useRef, useState } from 'react';
+import {
+  Fragment,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react';
 import { messages, label, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { LoadingSkeleton } from '@/features/skeleton';
@@ -9,8 +15,11 @@ import { EmployeeInvitationForm } from './employee-invitation';
 import { EmployeeInvitationResendPanel } from './employee-invitation-resend';
 import { EmployeeProfilePanel } from './employee-profile-panel';
 import { mayAdministerEmployees } from './deactivation';
-import { resendableInvitation } from './invitation';
-import { profileEditable } from './profile';
+import {
+  employeeActions,
+  menuIndex,
+  type EmployeeActionId,
+} from './action-menu';
 import {
   deletionResumable,
   deletionStatus,
@@ -27,6 +36,120 @@ import type {
 // that owns the list.
 function redirectDenied(status: number) {
   window.location.replace(status === 403 ? '/access-denied' : '/login');
+}
+
+// The row's actions are one menu, not a row of buttons. The trigger keeps
+// aria-haspopup/aria-expanded, opening moves focus to the first item, the arrow keys and
+// Home/End walk the items, Escape closes and returns focus to the trigger, and a pointer
+// press anywhere outside closes without stealing focus — the contract the record toolbar
+// already uses.
+function EmployeeActionsMenu({
+  label,
+  actions,
+  labels,
+  onPick,
+}: {
+  label: string;
+  actions: EmployeeActionId[];
+  labels: Record<EmployeeActionId, string>;
+  onPick: (action: EmployeeActionId) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [index, setIndex] = useState(0);
+  const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    menu.current?.querySelector<HTMLButtonElement>('button')?.focus();
+    function onPointerDown(event: PointerEvent) {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return;
+      setOpen(false);
+      trigger.current?.focus();
+    }
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+  function onMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const items = [...(menu.current?.querySelectorAll('button') ?? [])];
+    if (!items.length) return;
+    // The focused item is the base, so the state index is only a fallback.
+    const at = items.indexOf(document.activeElement as HTMLButtonElement);
+    const next = menuIndex(event.key, at >= 0 ? at : index, items.length);
+    if (next === null) return;
+    event.preventDefault();
+    setIndex(next);
+    items[next]?.focus();
+  }
+  return (
+    <div className="cell-actions action-popover-wrap" ref={root}>
+      <button
+        ref={trigger}
+        type="button"
+        className="icon-btn"
+        aria-label={label}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => {
+          setIndex(0);
+          setOpen(!open);
+        }}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          aria-hidden="true"
+        >
+          <circle cx="5" cy="12" r="1" />
+          <circle cx="12" cy="12" r="1" />
+          <circle cx="19" cy="12" r="1" />
+        </svg>
+      </button>
+      {open ? (
+        <div
+          ref={menu}
+          className="action-popover"
+          role="menu"
+          aria-label={label}
+          onKeyDown={onMenuKeyDown}
+          onBlur={(event) => {
+            if (
+              !event.currentTarget.contains(event.relatedTarget as Node | null)
+            )
+              setOpen(false);
+          }}
+        >
+          {actions.map((action, at) => (
+            <button
+              key={action}
+              type="button"
+              role="menuitem"
+              tabIndex={at === index ? 0 : -1}
+              onFocus={() => setIndex(at)}
+              onClick={() => {
+                setOpen(false);
+                // The panel the action opens is a row below this one, so the trigger stays
+                // the anchor rather than leaving focus on the body.
+                trigger.current?.focus();
+                onPick(action);
+              }}
+            >
+              {labels[action]}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 // People → Employees (#65): the admin employee list every later lifecycle control acts
@@ -56,7 +179,6 @@ export function EmployeeDirectory({
     panel: 'deactivate' | 'delete' | 'profile' | 'resend';
   } | null>(null);
   const [invitationOpen, setInvitationOpen] = useState(false);
-  const [actionsOpen, setActionsOpen] = useState<string | null>(null);
   const invitationDialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -219,11 +341,6 @@ export function EmployeeDirectory({
                             providerOutcome: deletion.outcome,
                           },
                         );
-                        // Only an employee whose sign-in account is still linked has an
-                        // account left to delete.
-                        const deletable =
-                          employee.access === 'active' ||
-                          employee.access === 'inactive';
                         const deactivationOpen =
                           open?.id === employee.id &&
                           open.panel === 'deactivate';
@@ -233,16 +350,26 @@ export function EmployeeDirectory({
                           open?.id === employee.id && open.panel === 'profile';
                         const resendOpen =
                           open?.id === employee.id && open.panel === 'resend';
-                        // A recorded invitation that was never accepted is the only one that
-                        // can be sent again: an accepted invitation, an active or deleted
-                        // account and a person with no invitation are excluded by the rule, and
-                        // the action stays admin-only like every other control on this page.
-                        const resendable =
-                          mayAdministerEmployees(actor?.role ?? '') &&
-                          resendableInvitation(
-                            employee.invitation,
-                            employee.access,
-                          );
+                        // Which actions this row offers, and their copy: the conditions are
+                        // named once in action-menu.ts and are the ones the row has offered
+                        // since #160.
+                        const actions = employeeActions({
+                          access: employee.access,
+                          invitation: employee.invitation,
+                          deactivation: state,
+                          deletion,
+                          actorRole: actor?.role ?? '',
+                        });
+                        const actionLabels: Record<EmployeeActionId, string> = {
+                          profile: text.employeeEdit,
+                          resend: text.employeeInviteResendOpen,
+                          deactivate: resumable
+                            ? text.employeeDeactivateReconcile
+                            : text.employeeDeactivate,
+                          delete: resumingDeletion
+                            ? text.employeeDeleteReconcile
+                            : text.employeeDelete,
+                        };
                         return (
                           <Fragment key={employee.id}>
                             <tr>
@@ -300,90 +427,14 @@ export function EmployeeDirectory({
                                 ) : null}
                               </td>
                               <td data-label={text.employeeActions}>
-                                <div className="cell-actions action-popover-wrap">
-                                  <button
-                                    type="button"
-                                    className="icon-btn"
-                                    aria-label={text.employeeActions}
-                                    aria-expanded={actionsOpen === employee.id}
-                                    onClick={() =>
-                                      setActionsOpen((current) =>
-                                        current === employee.id
-                                          ? null
-                                          : employee.id,
-                                      )
-                                    }
-                                  >
-                                    <svg
-                                      viewBox="0 0 24 24"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      strokeWidth="2"
-                                      aria-hidden="true"
-                                    >
-                                      <circle cx="5" cy="12" r="1" />
-                                      <circle cx="12" cy="12" r="1" />
-                                      <circle cx="19" cy="12" r="1" />
-                                    </svg>
-                                  </button>
-                                  {actionsOpen === employee.id ? (
-                                    <div className="action-popover" role="menu">
-                                      {profileEditable(employee.access) ? (
-                                        <button
-                                          type="button"
-                                          role="menuitem"
-                                          onClick={() => {
-                                            toggle(employee.id, 'profile');
-                                            setActionsOpen(null);
-                                          }}
-                                        >
-                                          {text.employeeEdit}
-                                        </button>
-                                      ) : null}
-                                      {resendable ? (
-                                        <button
-                                          type="button"
-                                          role="menuitem"
-                                          onClick={() => {
-                                            toggle(employee.id, 'resend');
-                                            setActionsOpen(null);
-                                          }}
-                                        >
-                                          {text.employeeInviteResendOpen}
-                                        </button>
-                                      ) : null}
-                                      {employee.access === 'active' ||
-                                      resumable ? (
-                                        <button
-                                          type="button"
-                                          role="menuitem"
-                                          onClick={() => {
-                                            toggle(employee.id, 'deactivate');
-                                            setActionsOpen(null);
-                                          }}
-                                        >
-                                          {resumable
-                                            ? text.employeeDeactivateReconcile
-                                            : text.employeeDeactivate}
-                                        </button>
-                                      ) : null}
-                                      {deletable || resumingDeletion ? (
-                                        <button
-                                          type="button"
-                                          role="menuitem"
-                                          onClick={() => {
-                                            toggle(employee.id, 'delete');
-                                            setActionsOpen(null);
-                                          }}
-                                        >
-                                          {resumingDeletion
-                                            ? text.employeeDeleteReconcile
-                                            : text.employeeDelete}
-                                        </button>
-                                      ) : null}
-                                    </div>
-                                  ) : null}
-                                </div>
+                                <EmployeeActionsMenu
+                                  label={text.employeeActions}
+                                  actions={actions}
+                                  labels={actionLabels}
+                                  onPick={(action) =>
+                                    toggle(employee.id, action)
+                                  }
+                                />
                               </td>
                             </tr>
                             {profileOpen ? (
