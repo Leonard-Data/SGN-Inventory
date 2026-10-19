@@ -303,6 +303,17 @@ export function Inventory({
     [setOpened],
   );
   const closeDrawer = useCallback(() => setOpened(null), [setOpened]);
+  // The open row states the status the server just recorded, and the stream re-reads so the list
+  // behind the quick view is not left showing a status the record no longer has.
+  const statusChanged = useCallback(
+    (status: string) => {
+      setOpened((current) =>
+        current ? { ...current, record: { ...current.record, status } } : null,
+      );
+      retry();
+    },
+    [setOpened, retry],
+  );
 
   function search(event: FormEvent<HTMLFormElement>) {
     const query = new FormData(event.currentTarget).get('query');
@@ -813,6 +824,7 @@ export function Inventory({
         opener={opened?.opener ?? null}
         onClose={closeDrawer}
         onDenied={denyFiles}
+        onStatusChanged={statusChanged}
       />
     </>
   );

@@ -32,6 +32,49 @@ export type Database = {
         Update: never;
         Relationships: [];
       };
+      property_status_changes: {
+        Row: {
+          id: string;
+          property_id: string;
+          origin: string;
+          state: string;
+          from_status: string;
+          to_status: string;
+          requested_by: string;
+          requested_by_name: string;
+          requested_at: string;
+          note: string | null;
+          decided_by: string | null;
+          decided_by_name: string | null;
+          decided_at: string | null;
+          decision_reason: string | null;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [
+          {
+            foreignKeyName: 'property_status_changes_decided_by_fkey';
+            columns: ['decided_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'property_status_changes_property_id_fkey';
+            columns: ['property_id'];
+            isOneToOne: false;
+            referencedRelation: 'properties';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'property_status_changes_requested_by_fkey';
+            columns: ['requested_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       property_comment_removals: {
         Row: {
           author_id: string;
@@ -2095,6 +2138,10 @@ export type Database = {
         Args: { p_action: string; p_payment_id: string; p_reason: string };
         Returns: undefined;
       };
+      decide_status_request: {
+        Args: { p_approve: boolean; p_change_id: string; p_reason: string };
+        Returns: Json;
+      };
       fail_property_upload: { Args: { p_file_id: string }; Returns: boolean };
       mark_upload_cleaned: { Args: { p_file_id: string }; Returns: undefined };
       employee_owner_contact_ranking: {
@@ -2442,6 +2489,14 @@ export type Database = {
         Returns: undefined;
       };
       set_my_locale: { Args: { p_locale: string }; Returns: undefined };
+      set_property_status: {
+        Args: {
+          p_note?: string | null;
+          p_property_id: string;
+          p_status: string;
+        };
+        Returns: Json;
+      };
       update_employee_profile: {
         Args: {
           p_employee_id: string;

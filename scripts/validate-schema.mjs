@@ -38,6 +38,7 @@ import { employeeProfileContract } from './employee-profile-contract.mjs';
 import { applyEmbeddedSchema } from './embedded-schema.mjs';
 import { provinceActivityContract } from './province-activity-contract.mjs';
 import { addressDuplicateMergeContract } from './address-duplicate-merge-contract.mjs';
+import { statusTrailContract } from './status-trail-contract.mjs';
 const root = process.env.SGN_PROJECT_ROOT || process.cwd();
 const db = new PGlite({extensions:{unaccent,pg_trgm,pgcrypto}});
 await applyEmbeddedSchema({root,exec:(sql)=>db.exec(sql)});
@@ -84,7 +85,7 @@ await asUser(0);
 await check('active salesperson can read inventory',async()=>assert.equal((await db.query('select * from public.properties')).rows.length,2));
 await check('accent insensitive legacy address search',async()=>assert.equal((await db.query("select * from public.page_inventory(p_query => 'ly thuong kiet')")).rows.length,1));
 await check('salesperson cannot bypass revision RPC for another creator property',()=>fails("update public.properties set notes='change' where id=$1 returning id",[other],'42501'));
-await check('salesperson cannot mark property sold',()=>fails("update public.properties set status='sold' where id=$1",[property],'42501'));
+await check('salesperson cannot write a property status directly',()=>fails("update public.properties set status='sold' where id=$1",[property],'42501'));
 await check('salesperson cannot grant admin role',async()=>assert.equal((await db.query("update public.employees set role='admin' where id=$1 returning id",[employees[0]])).rows.length,0));
 // An employee's own record is the only employee row the table read returns; colleague identity
 // for business attribution comes from the sanctioned name projection, which carries no personal
@@ -823,6 +824,8 @@ await auditRetentionContract({db,asUser,check,fails,employees});
 await contactDirectoryContract({db,asUser,check,fails,employees});
 // Issue #147: the shared-address group, and the deliberate merge of duplicate records.
 await addressDuplicateMergeContract({db,asUser,check,fails,employees,validationKey});
+// Ticket #173: the property status trail and direct non-final status changes.
+await statusTrailContract({db,asUser,check,fails,employees});
 const report={checked_at:new Date().toISOString(),engine:'PGlite embedded PostgreSQL plus an embedded real PostgreSQL engine for the two-connection last-admin, property-vendor-link and contact-link races; mocked auth/storage schemas',passed,
  limitations:['Not a live Supabase integration test','HTTP Auth, presigned R2 URLs, Vercel and browser flows not exercised','Hosted/staging independent-session contention at production load remains an acceptance gate']};
 await fs.writeFile(path.join(root,'docs/validation-results.json'),JSON.stringify(report,null,2)+'\n');
