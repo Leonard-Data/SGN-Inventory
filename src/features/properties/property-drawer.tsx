@@ -152,6 +152,7 @@ function QuickView({
   const [postError, setPostError] = useState<string | null>(null);
   const [uploads, setUploads] = useState<UploadRow[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const propertyId = property.id;
 
   useEffect(() => {
@@ -321,6 +322,7 @@ function QuickView({
     // The control is cleared straight away, so choosing the same file again is its own selection.
     event.target.value = '';
     if (!file || uploading) return;
+    setSelectedFileName(file.name);
     const id = crypto.randomUUID();
     setUploads((rows) => [
       { id, name: file.name, state: 'registering' },
@@ -510,6 +512,9 @@ function QuickView({
                 onClick={() => void toggleOwnerPhone()}
               >
                 <EyeIcon />
+                <span className="quick-view-reveal-label">
+                  {phone.shown ? text.hideOwnerPhone : text.showOwnerPhone}
+                </span>
               </button>
             </p>
           </>
@@ -528,14 +533,24 @@ function QuickView({
           <label className="field-label" htmlFor={uploadId}>
             {fileText.selectFiles}
           </label>
-          <input
-            className="input"
-            id={uploadId}
-            type="file"
-            accept="application/pdf,image/jpeg,image/png,image/webp"
-            onChange={(event) => void selectFile(event)}
-            disabled={uploading}
-          />
+          <div className="quick-upload-control">
+            <input
+              className="quick-upload-input"
+              id={uploadId}
+              type="file"
+              accept="application/pdf,image/jpeg,image/png,image/webp"
+              onChange={(event) => void selectFile(event)}
+              disabled={uploading}
+            />
+            <label className="quick-upload-picker" htmlFor={uploadId}>
+              <span className="quick-upload-picker-button">
+                {uploading ? fileText.uploading : fileText.selectFiles}
+              </span>
+              <span className="quick-upload-file-name" translate="no">
+                {selectedFileName ?? fileText.noFiles}
+              </span>
+            </label>
+          </div>
         </div>
         <p className="field-hint">{fileText.uploadNote}</p>
         {uploads.length ? (
