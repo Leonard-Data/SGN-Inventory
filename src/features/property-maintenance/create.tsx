@@ -7,6 +7,7 @@ import { messages } from '@/i18n/messages';
 import { formChanges, targetFields } from './fields';
 import { AddressFields, RecordFields } from './forms';
 import { maintenanceText, optionLabel } from './messages';
+import { useToast } from '@/features/toasts/toast-host';
 export function CreateProperty({
   locale,
   onDenied,
@@ -16,6 +17,7 @@ export function CreateProperty({
 }) {
   const router = useRouter();
   const text = maintenanceText(locale),
+    notify = useToast(),
     [busy, setBusy] = useState(false),
     [error, setError] = useState<string | null>(null);
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -34,6 +36,8 @@ export function CreateProperty({
         facts,
         address,
       });
+      // The record is committed and the new page opens with its confirmation.
+      notify({ saved: true, message: text.propertyCreated });
       router.push('/properties/' + result.id);
     } catch (failure) {
       if (

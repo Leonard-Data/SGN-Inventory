@@ -681,10 +681,16 @@ button.sgn-nav-item { width: 100%; background: transparent; border: 0; text-alig
 .alert[data-tone="danger"] { background: var(--danger-soft); color: var(--danger); }
 .alert[data-tone="neutral"] { background: var(--surface-warm); color: var(--fg-2); }
 
-.toast {
+/* One confirmation queue for the page: the region sits in the corner the record never puts
+   an action in, and each entry keeps the tone rule of the alert vocabulary. */
+.toast-region {
   position: fixed; right: var(--space-6); bottom: var(--space-6); z-index: 80;
+  display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-3);
+  max-width: min(420px, calc(100vw - 40px));
+}
+.toast {
   display: flex; align-items: center; gap: var(--space-3);
-  min-height: var(--control-h); max-width: min(420px, calc(100vw - 40px)); padding: var(--space-3) var(--space-5);
+  min-height: var(--control-h); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-5);
   background: var(--surface); border-left: 3px solid var(--success);
   border-radius: var(--radius-md); box-shadow: var(--shadow-raise);
   font-size: var(--text-sm); color: var(--fg);
@@ -695,6 +701,13 @@ button.sgn-nav-item { width: 100%; background: transparent; border: 0; text-alig
 .toast[data-tone="danger"] svg { color: var(--danger); }
 .toast[data-tone="neutral"] { border-left-color: var(--border); }
 .toast[data-tone="neutral"] svg { color: var(--fg-2); }
+.toast-dismiss {
+  width: var(--btn-h-sm); height: var(--btn-h-sm); flex: 0 0 auto; margin-left: auto;
+  display: grid; place-items: center;
+  background: transparent; color: var(--muted); font-size: var(--text-lg); line-height: 1;
+  border: 1px solid transparent; border-radius: var(--radius-md);
+}
+.toast-dismiss:hover { background: var(--surface-warm); color: var(--fg); border-color: var(--border); }
 .btn.has-count { border-color: var(--fg-2); }
 @keyframes sgn-toast { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
@@ -977,12 +990,13 @@ dialog.sgn-dialog::backdrop { background: color-mix(in oklab, var(--fg) 46%, tra
   .doc-actions { grid-column: 2; }
   .toolbar-search { flex-basis: 100%; }
   .toolbar-sort { flex: 1 1 auto; }
-  .toast { left: var(--space-4); right: var(--space-4); bottom: var(--space-4); }
+  /* A phone holds the confirmation at the top centre, below the top bar it must not cover. */
+  .toast-region { left: var(--space-4); right: var(--space-4); top: calc(var(--topbar-h) + var(--space-3)); bottom: auto; max-width: none; align-items: stretch; }
   .sgn-dialog-panel { width: calc(100vw - 24px); max-height: 92vh; }
 }
 
 @media print {
-  .sgn-sidebar, .sgn-topbar, .sgn-scrim, .toast { display: none !important; }
+  .sgn-sidebar, .sgn-topbar, .sgn-scrim, .toast-region { display: none !important; }
   .sgn-app { grid-template-columns: minmax(0, 1fr); }
   .sgn-content { max-width: none; padding: 0; }
 }

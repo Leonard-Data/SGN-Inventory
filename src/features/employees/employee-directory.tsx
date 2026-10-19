@@ -432,6 +432,7 @@ export function EmployeeDirectory({
                 locale={locale}
                 onChanged={reload}
                 onDenied={redirectDenied}
+                onRecorded={() => setInvitationOpen(false)}
               />
             ) : null}
           </div>

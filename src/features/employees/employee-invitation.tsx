@@ -8,6 +8,7 @@ import {
 } from 'react';
 import { messages, label, type Locale } from '@/i18n/messages';
 import { api, RequestError } from './api';
+import { useToast } from '@/features/toasts/toast-host';
 import { Skeleton } from '@/features/skeleton';
 import {
   EMPLOYEE_ROLES,
@@ -30,13 +31,18 @@ export function EmployeeInvitationForm({
   locale,
   onChanged,
   onDenied,
+  onRecorded,
 }: {
   actorRole: string;
   locale: Locale;
   onChanged: () => void;
   onDenied: (status: number) => void;
+  // A recorded invitation closes the dialog it was recorded from; a pending or failed
+  // provider step keeps it open with its reconciliation state.
+  onRecorded: () => void;
 }) {
   const text = messages[locale];
+  const notify = useToast();
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<EmployeeRole>('sales');
   const [record, setRecord] = useState<InvitationRecord | null>(null);
@@ -157,9 +163,10 @@ export function EmployeeInvitationForm({
       setRecord(next);
       const recorded = invitationStatus(next.invitation);
       if (recorded === 'recorded') {
-        setNotice(text.employeeInviteSuccess);
+        notify({ saved: true, message: text.employeeInviteSuccess });
         // The recorded invitation is terminal for this key: a later person is a new action.
         setActionKey(crypto.randomUUID());
+        onRecorded();
       } else if (recorded === 'reconciliation') {
         setNotice(text.employeeInviteFailed);
       } else {
