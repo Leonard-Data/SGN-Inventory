@@ -11,6 +11,7 @@ import {
   contactKey,
   contactSummary,
   credentialColumns,
+  invitationSummary,
   isPlaceholderOwner,
   listingModeFromLabel,
   mapMasterRow,
@@ -22,6 +23,8 @@ import {
   readSpreadsheet,
   recordBucket,
   importablePropertyKeys,
+  renderReport,
+  resolveAddress,
   rosterEmployees,
   statusFromLabel,
   statusQuarantine,
@@ -31,10 +34,18 @@ import {
 import {
   assertWriteTarget,
   convertedSkipped,
+  declaredStage,
+  invitationOrigin,
+  invitationRecipients,
   recordedInvitations,
   importableBucket,
   planAttachmentImport,
   planStaffAccounts,
+  PRODUCTION_PROJECT_REF,
+  PRODUCTION_R2_BUCKET,
+  PRODUCTION_R2_ACCOUNT_ID,
+  PRODUCTION_APP_URL,
+  sendInvitations,
   staffRoleFor,
 } from './legacy-import-write.mjs';
 
@@ -523,7 +534,7 @@ test('an unreadable rent cell is quarantined and counted, never thrown', () => {
 
 test('a development run is refused unless every write target is the development one', () => {
   const dev = 'a'.repeat(20);
-  const prod = 'b'.repeat(20);
+  const prod = PRODUCTION_PROJECT_REF;
   const values = {
     SGN_ENV: 'dev',
     DEV_SUPABASE_PROJECT_REF: dev,
@@ -551,9 +562,7 @@ test('a development run is refused unless every write target is the development 
   // A production target behind a development label is refused before any connection is opened,
   // and the message names both references.
   const named = (error) =>
-    error.message.includes(prod) &&
-    error.message.includes(dev) &&
-    error.message.includes('production project');
+    error.message.includes(prod) && error.message.includes(dev);
   assert.throws(
     () =>
       assertWriteTarget(
@@ -561,6 +570,18 @@ test('a development run is refused unless every write target is the development 
         values,
       ),
     named,
+  );
+  // The same production project named as the development one is a label that disagrees with
+  // itself, so it is refused rather than compared.
+  assert.throws(
+    () =>
+      assertWriteTarget(direct, {
+        ...values,
+        DEV_SUPABASE_PROJECT_REF: prod,
+      }),
+    (error) =>
+      error.message.includes('production project') &&
+      error.message.includes(prod),
   );
   assert.throws(
     () =>
@@ -627,8 +648,8 @@ test('a development run is refused unless every write target is the development 
     /not configured \(EXPECTED_R2_ACCOUNT_ID\)/,
   );
   assert.throws(
-    () => assertWriteTarget(direct, { ...values, SGN_ENV: 'prod' }),
-    /development project only/,
+    () => assertWriteTarget(direct, { ...values, SGN_ENV: 'staging' }),
+    /SGN_ENV=dev or prod/,
   );
   assert.throws(
     () =>
@@ -646,9 +667,109 @@ test('a development run is refused unless every write target is the development 
     () =>
       assertWriteTarget(direct, {
         ...values,
-        PROD_SUPABASE_PROJECT_REF: dev,
+        PROD_SUPABASE_PROJECT_REF: 'b'.repeat(20),
       }),
-    /are both/,
+    /not the production project/,
+  );
+});
+
+test('a production run writes only the pinned production project, bucket, account and app', () => {
+  const dev = 'a'.repeat(20);
+  const pooled = `postgresql://postgres.${PRODUCTION_PROJECT_REF}:secret@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres`;
+  const values = {
+    SGN_ENV: 'prod',
+    DEV_SUPABASE_PROJECT_REF: dev,
+    NEXT_PUBLIC_SUPABASE_URL: `https://${PRODUCTION_PROJECT_REF}.supabase.co`,
+    NEXT_PUBLIC_APP_URL: PRODUCTION_APP_URL,
+    R2_BUCKET: PRODUCTION_R2_BUCKET,
+    EXPECTED_R2_BUCKET: PRODUCTION_R2_BUCKET,
+    R2_ACCOUNT_ID: PRODUCTION_R2_ACCOUNT_ID,
+    EXPECTED_R2_ACCOUNT_ID: PRODUCTION_R2_ACCOUNT_ID,
+  };
+  // The production reference is the one this importer pins, whatever the environment says.
+  assert.deepEqual(assertWriteTarget(pooled, values), {
+    stage: 'prod',
+    projectRef: PRODUCTION_PROJECT_REF,
+    bucket: PRODUCTION_R2_BUCKET,
+    account: PRODUCTION_R2_ACCOUNT_ID,
+  });
+  assert.deepEqual(
+    assertWriteTarget(pooled, { ...values, SGN_ENV: 'production' }),
+    {
+      stage: 'prod',
+      projectRef: PRODUCTION_PROJECT_REF,
+      bucket: PRODUCTION_R2_BUCKET,
+      account: PRODUCTION_R2_ACCOUNT_ID,
+    },
+  );
+  const namesProduction = (error) =>
+    error.message.includes(PRODUCTION_PROJECT_REF) &&
+    error.message.includes(dev);
+  // A production label on any other project is refused, before anything is written.
+  assert.throws(
+    () =>
+      assertWriteTarget(
+        `postgresql://postgres:secret@db.${dev}.supabase.co:5432/postgres`,
+        values,
+      ),
+    namesProduction,
+  );
+  assert.throws(
+    () =>
+      assertWriteTarget(pooled, {
+        ...values,
+        NEXT_PUBLIC_SUPABASE_URL: `https://${dev}.supabase.co`,
+      }),
+    namesProduction,
+  );
+  // The bucket and account the files go to are pinned for production, so an environment that
+  // declares another account's storage is refused instead of proving itself.
+  assert.throws(
+    () => assertWriteTarget(pooled, { ...values, R2_BUCKET: 'someone-elses' }),
+    (error) =>
+      error.message.includes('someone-elses') &&
+      error.message.includes(PRODUCTION_R2_BUCKET),
+  );
+  assert.throws(
+    () =>
+      assertWriteTarget(pooled, {
+        ...values,
+        R2_BUCKET: 'someone-elses',
+        EXPECTED_R2_BUCKET: 'someone-elses',
+      }),
+    (error) =>
+      error.message.includes('EXPECTED_R2_BUCKET names someone-elses') &&
+      error.message.includes(PRODUCTION_R2_BUCKET),
+  );
+  assert.throws(
+    () =>
+      assertWriteTarget(pooled, {
+        ...values,
+        R2_ACCOUNT_ID: 'someone-elses',
+        EXPECTED_R2_ACCOUNT_ID: 'someone-elses',
+      }),
+    (error) =>
+      error.message.includes('EXPECTED_R2_ACCOUNT_ID names someone-elses') &&
+      error.message.includes(PRODUCTION_R2_ACCOUNT_ID),
+  );
+  assert.throws(
+    () => assertWriteTarget(pooled, { ...values, EXPECTED_R2_BUCKET: '' }),
+    /production R2 bucket is not configured/,
+  );
+  // A production run whose invitations would point at another deployment is refused.
+  assert.throws(
+    () =>
+      assertWriteTarget(pooled, {
+        ...values,
+        NEXT_PUBLIC_APP_URL: `https://${dev}.supabase.co`,
+      }),
+    (error) =>
+      error.message.includes('NEXT_PUBLIC_APP_URL') &&
+      error.message.includes(PRODUCTION_APP_URL),
+  );
+  assert.throws(
+    () => assertWriteTarget(pooled, { ...values, NEXT_PUBLIC_APP_URL: '' }),
+    /NEXT_PUBLIC_APP_URL names \(nothing\)/,
   );
 });
 
@@ -679,6 +800,123 @@ test('a converted address the project has no unit for is counted and named by un
     { code: '01/00001', rows: 1 },
   ]);
   assert.deepEqual(convertedSkipped([]), { rows: 0, codes: [] });
+});
+
+test('an unreachable official reference keeps the legacy address instead of guessing a unit', async () => {
+  const source = {
+    city: 'Thành phố Hồ Chí Minh',
+    district: 'Quận 3',
+    ward: 'Phường 08',
+  };
+  const pairKey = `${adminNameKey(source.district)}|${adminNameKey(source.ward)}`;
+  const context = {
+    catalogue: { provinces: new Map(), communes: new Map() },
+    reference: { wardPairs: new Map([[pairKey, {}]]) },
+    legacyReference: false,
+    legacyTree: () => null,
+    convertLegacyWard: async () => {
+      throw new Error('the official reference must not be consulted');
+    },
+  };
+  const unavailable = await resolveAddress(source, context);
+  assert.equal(unavailable.status, 'official_reference_unavailable');
+  assert.equal(unavailable.target, undefined);
+  // The reasons the run can still establish without the reference are kept as they were.
+  assert.equal(
+    (
+      await resolveAddress(
+        { city: source.city, district: source.district },
+        context,
+      )
+    ).status,
+    'missing_ward',
+  );
+  // A province tree that failed is the same counted reason, while a city the reference simply
+  // does not name stays its own reason.
+  assert.equal(
+    (
+      await resolveAddress(source, {
+        ...context,
+        legacyReference: true,
+        legacyTreeFailure: () => 'socket hang up',
+      })
+    ).status,
+    'official_reference_unavailable',
+  );
+  assert.equal(
+    (await resolveAddress(source, { ...context, legacyReference: true }))
+      .status,
+    'unknown_city',
+  );
+  // With the reference available the same triple is consulted exactly as before.
+  const consulted = [];
+  const available = {
+    ...context,
+    legacyReference: true,
+    legacyTree: () => ({
+      districts: [
+        { name: 'Quận 3', wards: [{ name: 'Phường 08', code: '26734' }] },
+      ],
+    }),
+    convertLegacyWard: async (code) => {
+      consulted.push(code);
+      return [];
+    },
+  };
+  assert.equal(
+    (await resolveAddress(source, available)).status,
+    'no_current_ward',
+  );
+  assert.deepEqual(consulted, ['26734']);
+  // A ward conversion that failed degrades the same way instead of aborting the run.
+  assert.equal(
+    (
+      await resolveAddress(source, {
+        ...available,
+        convertLegacyWard: async () => null,
+      })
+    ).status,
+    'official_reference_unavailable',
+  );
+});
+
+test('a ward label that already names one current commune needs no official reference', async () => {
+  const source = {
+    city: 'Thành phố Hồ Chí Minh',
+    district: 'Quận 3',
+    ward: 'Phường 08',
+  };
+  const context = {
+    catalogue: {
+      provinces: new Map([
+        ['79', { code: '79', name: 'Thành phố Hồ Chí Minh' }],
+      ]),
+      communes: new Map([
+        ['26734|79', { code: '26734', name: 'Phường 08', province: '79' }],
+      ]),
+    },
+    reference: { wardPairs: new Map() },
+    legacyReference: false,
+    legacyTree: () => null,
+    convertLegacyWard: async () => {
+      throw new Error('the official reference must not be consulted');
+    },
+  };
+  const resolved = await resolveAddress(source, context);
+  assert.equal(resolved.status, 'current_name');
+  assert.deepEqual(resolved.target, [
+    {
+      code: '26734',
+      name: 'Phường 08',
+      provinceCode: '79',
+      provinceName: 'Thành phố Hồ Chí Minh',
+    },
+  ]);
+  // A different ward label is still refused rather than guessed.
+  assert.equal(
+    (await resolveAddress({ ...source, ward: 'Phường 09' }, context)).status,
+    'unlisted_legacy_pair',
+  );
 });
 
 test('a placeholder owner creates no contact row, a named owner does', () => {
@@ -1001,6 +1239,118 @@ test('attachments are planned only for the properties the run would create', () 
   ]);
 });
 
+test('the declared stage and the invitation origin are normalised once', () => {
+  assert.equal(declaredStage({ SGN_ENV: 'prod' }), 'prod');
+  assert.equal(declaredStage({ SGN_ENV: ' Production ' }), 'prod');
+  assert.equal(declaredStage({ SGN_ENV: 'local' }), 'dev');
+  assert.equal(declaredStage({ SGN_ENV: 'staging' }), null);
+  assert.equal(declaredStage({}), null);
+  assert.equal(
+    invitationOrigin('https://sgnewhouse.online/'),
+    'https://sgnewhouse.online',
+  );
+  assert.equal(
+    invitationOrigin(' http://localhost:3101 '),
+    'http://localhost:3101',
+  );
+  assert.equal(invitationOrigin(undefined), '');
+});
+
+test('each invitation renders what happened to it and whether it is recorded', () => {
+  const sends = [
+    {
+      email: 'accepted@example.com',
+      outcome: 'accepted',
+      recorded: true,
+      detail: null,
+    },
+    {
+      email: 'refused-send@example.com',
+      outcome: 'failed',
+      recorded: true,
+      detail: 'provider refused',
+    },
+    {
+      email: 'ambiguous@example.com',
+      outcome: 'ambiguous',
+      recorded: true,
+      detail: 'no identity',
+    },
+    {
+      email: 'unwritten@example.com',
+      outcome: 'accepted',
+      recorded: false,
+      detail: '409',
+    },
+  ];
+  const invitations = [
+    ...sends.map((send) => ({
+      email: send.email,
+      role: 'sales',
+      stated: true,
+      state: 'pending',
+      detail: null,
+    })),
+    {
+      email: 'already@example.com',
+      role: 'admin',
+      stated: true,
+      state: 'recorded',
+      detail: null,
+    },
+    {
+      email: 'not-stated@example.com',
+      role: 'staff',
+      stated: false,
+      state: null,
+      detail: '409 conflict',
+    },
+    {
+      email: 'never-sent@example.com',
+      role: 'manager',
+      stated: true,
+      state: 'pending',
+      detail: null,
+    },
+  ];
+  const recipients = invitationRecipients(invitations, sends);
+  assert.deepEqual(
+    recipients.map((entry) => [
+      entry.email,
+      entry.role,
+      entry.outcome,
+      entry.recorded,
+    ]),
+    [
+      ['accepted@example.com', 'sales', 'accepted', true],
+      // A recorded outcome write does not make a refused or ambiguous send a recorded invitation.
+      ['refused-send@example.com', 'sales', 'failed', false],
+      ['ambiguous@example.com', 'sales', 'ambiguous', false],
+      ['unwritten@example.com', 'sales', 'accepted', false],
+      ['already@example.com', 'admin', 'already_recorded', true],
+      ['not-stated@example.com', 'staff', 'refused', false],
+      ['never-sent@example.com', 'manager', 'not_sent', false],
+    ],
+  );
+  assert.equal(
+    recipients.find((entry) => entry.email === 'refused-send@example.com')
+      .detail,
+    'provider refused',
+  );
+  assert.equal(
+    recipients.find((entry) => entry.email === 'not-stated@example.com').detail,
+    '409 conflict',
+  );
+  // The per-invitation flags are the same predicate the recorded count uses.
+  const emailed = recipients.filter((entry) =>
+    sends.some((send) => send.email === entry.email),
+  );
+  assert.equal(
+    emailed.filter((entry) => entry.recorded).length,
+    recordedInvitations(sends),
+  );
+});
+
 test('only an accepted provider outcome counts as a recorded invitation', () => {
   const sends = [
     { email: 'a@example.com', outcome: 'accepted', recorded: true },
@@ -1222,4 +1572,235 @@ test('the roster position is read by header, not by where a credential column le
     { name: 'Lan', email: 'lan@example.com', position: 'Thư ký' },
     { name: 'Minh', email: 'minh@example.com', position: 'Admin' },
   ]);
+});
+
+test('an invitation phase that dies partway still names every address it reached', async () => {
+  const invitation = (email, role, index) => ({
+    email,
+    role,
+    stated: true,
+    state: 'pending',
+    detail: null,
+    invitation_id: `0000000${index}-0000-4000-8000-00000000000${index}`,
+    revision: 1,
+  });
+  const invitations = [
+    invitation('reached@example.com', 'sales', 1),
+    invitation('dropped@example.com', 'manager', 2),
+    invitation('never@example.com', 'staff', 3),
+  ];
+  const saved = {};
+  for (const key of [
+    'NEXT_PUBLIC_SUPABASE_URL',
+    'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
+    'SUPABASE_SERVICE_ROLE_KEY',
+    'NEXT_PUBLIC_APP_URL',
+  ]) {
+    saved[key] = process.env[key];
+  }
+  Object.assign(process.env, {
+    NEXT_PUBLIC_SUPABASE_URL: 'https://project.supabase.co',
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'publishable',
+    SUPABASE_SERVICE_ROLE_KEY: 'service',
+    NEXT_PUBLIC_APP_URL: 'https://sgnewhouse.online',
+  });
+  const jsonResponse = (status, body) => ({
+    ok: status < 400,
+    status,
+    text: async () => JSON.stringify(body),
+  });
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    if (String(url).endsWith('/auth/v1/invite')) {
+      const { email } = JSON.parse(options.body);
+      if (email === 'dropped@example.com') throw new TypeError('fetch failed');
+      return jsonResponse(200, {
+        id: '3f4a1c2e-5b6d-4e7f-8a9b-0c1d2e3f4a5b',
+        email,
+      });
+    }
+    return jsonResponse(200, null);
+  };
+  const invitationsSent = [];
+  let summary;
+  try {
+    await assert.rejects(
+      sendInvitations({
+        invitations,
+        actorId: null,
+        outcomes: invitationsSent,
+        log: () => {},
+      }),
+      /fetch failed/,
+    );
+    summary = invitationSummary(invitations, invitationsSent);
+  } finally {
+    globalThis.fetch = original;
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+
+  // The address whose connection dropped keeps the attempt, so the run never loses who it emailed.
+  assert.deepEqual(
+    invitationsSent.map((entry) => [
+      entry.email,
+      entry.outcome,
+      entry.recorded,
+    ]),
+    [
+      ['reached@example.com', 'accepted', true],
+      ['dropped@example.com', 'attempted', false],
+    ],
+  );
+  const invitationsReported = invitationRecipients(
+    invitations,
+    invitationsSent,
+  );
+  assert.deepEqual(
+    invitationsReported.map((entry) => [
+      entry.email,
+      entry.outcome,
+      entry.recorded,
+    ]),
+    [
+      ['reached@example.com', 'accepted', true],
+      ['dropped@example.com', 'attempted', false],
+      ['never@example.com', 'not_sent', false],
+    ],
+  );
+  // A failed write keeps the same list in the report instead of dropping it with the write.
+  assert.equal(summary.recorded, 1);
+  assert.equal(summary.origin, 'https://sgnewhouse.online');
+  assert.deepEqual(
+    summary.failures.map((entry) => entry.outcome),
+    ['attempted'],
+  );
+  const rendered = renderReport({
+    generated_at: '2026-10-18T00:00:00Z',
+    spreadsheet_id: 'sheet',
+    spreadsheet_title: 'title',
+    drive_folder_id: 'folder',
+    service_account: 'sa@example.com',
+    digest: 'abc',
+    out_dir: '/tmp/out',
+    stage: 'prod',
+    stage_proven: true,
+    write_outcome: { state: 'failed', reason: 'the connection dropped' },
+    counts: {
+      total_rows: 1,
+      empty_rows: 0,
+      missing_id_rows: 0,
+      distinct_keys: 1,
+      duplicate_keys: 0,
+      ready_rows: 1,
+      review_rows: 0,
+      quarantined_rows: 0,
+      excluded_rows: 0,
+      buckets: [],
+    },
+    prices: {
+      missing: 0,
+      ceiling: 0,
+      on_application: 0,
+      rental_only: 0,
+      unparseable: 0,
+      rent_unparseable: 0,
+      on_application_samples: [],
+    },
+    statuses: { rows: 0, values: [], samples: [] },
+    samples: {},
+    addresses: {
+      legacy_reference_unavailable: null,
+      legacy_reference_failures: [],
+      legacy_reference_rows: 0,
+      sources: [],
+      vietmap: {
+        distinct_addresses: 0,
+        cached_resolved: 0,
+        cached_empty: 0,
+        unique_queries: 0,
+        api_calls: 0,
+        cache_hits: 0,
+        migrate_type_2_calls: 0,
+        failed: 0,
+      },
+      vietmap_statuses: [],
+      outcomes: [],
+      converted_rows: 0,
+      refused_rows: 0,
+      crosswalk_note: 'note',
+      disagreements: [],
+      disagreement_rows: 0,
+      unresolved_units: [],
+      split_units: [],
+      refused_examples: [],
+    },
+    duplicates: {
+      property_keys: [],
+      property_key_rows: 0,
+      phone_repeats: 0,
+      phone_repeat_rows: 0,
+      multi_commune_rows: 0,
+      examples: [],
+    },
+    contacts: {
+      distinct: 0,
+      rows_with_owner: 0,
+      shared: 0,
+      rows_without_owner: 0,
+      placeholder_owner_rows: 0,
+      examples: [],
+    },
+    staff: {
+      creator_emails: 0,
+      creator_rows: 0,
+      editor_emails: 0,
+      editor_rows: 0,
+    },
+    staff_plan: {
+      addresses: 0,
+      from_roster: 0,
+      by_role: [],
+      accounts: [],
+      silent_admin: null,
+      roster_positions: [],
+    },
+    attachments: {
+      folders: [],
+      rows: 0,
+      matched_files: 0,
+      downloadable_bytes: 0,
+      unreferenced_files: 0,
+      dropped: [],
+    },
+    children: [],
+    issues: [],
+    columns: [],
+    dropped_tabs: [],
+    skipped_tabs: [],
+    excluded: [],
+    examples: [],
+    invitations: summary,
+  });
+  const lines = rendered.split('\n');
+  const heading = lines.findIndex((line) =>
+    line.startsWith('## 12. Invitations this run attempted'),
+  );
+  assert.notEqual(heading, -1);
+  const end = lines.findIndex(
+    (line, index) => index > heading && line.startsWith('## '),
+  );
+  const section = lines.slice(heading, end).join('\n');
+  for (const email of [
+    'reached@example.com',
+    'dropped@example.com',
+    'never@example.com',
+  ]) {
+    assert.match(section, new RegExp(email));
+  }
+  assert.match(section, /attempted/);
+  // The limits section keeps its number after the invitations section.
+  assert.match(rendered, /^## 13\. Limits of this run$/m);
 });

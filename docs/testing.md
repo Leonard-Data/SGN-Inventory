@@ -196,6 +196,106 @@ change. Property, address and contact rows were written over the administrative 
 connection, so row level security was not exercised for them; attachments went through the
 application RPCs as the importing admin and were subject to the shipped limits.
 
+### Executed legacy import into the production project (19 October 2026)
+
+`scripts/import-legacy-sheet.mjs --write` imported the same snapshot
+(`3feb6537…c04c`, batch `0c4bde05…7997`, status `promoted`) into the production Supabase project
+under the captain's approval and the rules already settled above — unchanged, including the
+narrow duplicate-address rule, the price quarantine set, the placeholder-owner rule, the exact
+`PropertyID` child join and the silent admin with no invitation. The stage guard resolved the
+production project reference `zckhbxpatjmdqpnqphgy` from the connection string the run held and
+refused every other project; the project held zero properties before the run. The run report and
+its figures are written outside Git.
+
+- Master: 20,148 data rows — 18,801 imported with `record_review_status = pending` and none
+  archived, 485 quarantined or excluded (292 above the price ceiling, 160 with no sale price, 23
+  with no PropertyID, 6 unreadable, 2 duplicated keys, 2 rental-only), 862 empty. 131 rows with a
+  sale price of exactly 0 imported as `negotiating` with no numeric price; no imported property
+  carries a price above 200 billion, and every recorded price is whole thousands of dong.
+- Addresses: 18,801 untouched legacy addresses and 18,510 converted current addresses; **291**
+  imported properties keep the legacy address only and need review. The development run's 286 and
+  this run's 291 differ because the official three-tier reference was unreachable for this run
+  (below), not because of a rule change.
+- Reference outage. `provinces.open-api.vn` timed out on every request from this environment, so
+  the importer recorded that and continued on VietMap and the project's own catalogue: an address
+  whose fallback could not be consulted keeps its legacy row and is counted as
+  `official_reference_unavailable` (266 rows in that run); a ward label that already equals exactly
+  one current commune is converted from the catalogue alone for a pair the workbook's own ward list
+  does not name, and nothing is guessed. That run's rule also suppressed that catalogue-only name
+  match, so its 266 count is the blanket figure; the run that follows returns the status only where
+  the official reference is actually needed.
+  What the missing fallback would have added is not measured by this run: in the development run
+  that reference converted 5 rows, and it settled the comparison for the 27 rows where the two
+  sources disagreed, which this run therefore does not report.
+- Duplicate addresses: the import creates one property per accepted row and never merges, so it
+  collapsed 0 groups. Over the imported data, 213 groups of properties share one normalised
+  legacy address (431 properties): 75 groups (151 properties) have every member agreeing on sale
+  price and floor area and are the only groups the narrow rule would ever fold, and 138 groups
+  (280 properties) disagree on price and stay separate. Floor area is unrecorded on these rows, so
+  agreement is on the values the workbook records.
+- Contacts: 8,078 distinct owner contacts over 8,444 links, 0 of them placeholder rows;
+  8,444 imported properties carry a contact and 10,357 name no usable owner.
+- Child tabs: Historical 18,587 rows archived in `private.staging_rows` and linked to their
+  property, 277 dropped (no exact `PropertyID`); Attachments 2,220 rows promoted, 191 dropped (no
+  Drive file) and 61 dropped (property not imported); Contracts and clicks excluded exactly as in
+  development.
+- Attachments: all 2,220 planned files are `upload_status = 'ready'` with sha256, byte size and a
+  validated object identity (587 MiB over 1,034 properties), stored through the application's own
+  registration and completion RPCs into the private R2 bucket, so the shipped per-property class
+  limits were enforced by the database. Two transport faults shaped the run and were recovered by
+  resuming, never by a reset: the link reset nearly half of the first pass's attempts (`socket
+  hang up`, while probes of the endpoint answered), so each file transfer now gets eight attempts
+  instead of three; and the second pass lost 326 downloads to an expired Drive token. The third
+  pass stored those 326 over 1,894 already ready, with 0 failures.
+- Staff: 35 employees — the 3 that existed before this run plus the 32 it created (3 + 32 = 35).
+  Before it: 2 active, linked admins and 1 active, linked staff member. Created by it: the single
+  silent admin (active and linked, created through the Auth admin API with no invitation by
+  design), 2 managers (`TPKD`), 1 staff (`Thư ký`) and 28 sales, whose accounts stay inactive and
+  unlinked until they accept. Roles across all 35 are 3 admin, 2 manager, 2 staff and 28 sales. The
+  run began 31 invitations, sent them through the provider with the captain's account as the actor
+  and waited out its 30-an-hour cap rather than failing, so all 31 are recorded; with the 2 recorded
+  earlier on pre-existing accounts the project holds 33. Who was emailed, with role and outcome, is
+  named in the private run report below rather than in this repository.
+- Silently provisioned credentials were written only to a mode-0600 private file beside the run
+  (path, not contents, in the run report) and are not printed, logged or stored in the database.
+- Read back: 18,801 properties (all `pending`), 18,801 legacy addresses, 18,510 current addresses,
+  8,078 contacts, 8,444 links, 2,220 ready files, 18,587 archived historical rows, 35 employees,
+  33 recorded invitations, batch `promoted`, and every imported row traceable through
+  `private.property_source_map` to its workbook row.
+
+#### Invitations sent
+
+Every invitation link pointed at `https://sgnewhouse.online/auth/invite`: the provider's
+`redirect_to` is built from the run's `NEXT_PUBLIC_APP_URL`, which was `https://sgnewhouse.online`
+in the operator environment for this run and is the production origin the stage proof now pins.
+
+33 invitations are recorded in the production database and every one of them carries
+`state = recorded` with `provider_outcome = accepted`:
+
+| Group | Count | Roles | Outcome |
+| --- | ---: | --- | --- |
+| Sent by this run | 31 | 2 managers, 1 staff, 28 sales | accepted by the provider, outcome write accepted |
+| Recorded earlier, on accounts that pre-dated the run | 2 | 1 admin, 1 staff | accepted by the provider, outcome write accepted |
+
+Two accounts were deliberately not invited: the pre-existing active admin, which already had a
+working sign-in, and the silent admin, which receives none by design.
+
+The named list — each recipient with its role, its outcome and the origin its link pointed at — is
+retained in the private run report under the task's data directory, which is gitignored, because
+those are real people's personal addresses and this repository is public. It is enumerated from
+`public.employee_invitations` in the production database, where every row carries the recipient,
+the role recorded at send time and the outcome.
+
+File-attestation key: one key is in use for both stages today, because the production database had
+no `private.file_validation_keys` row and file completion failed closed there. The production row
+holds the value the production deployment already signs with and the development row is untouched,
+so a key held for development produces attestations production accepts. Independent per-stage keys
+are the intended end state; separating them needs a fresh key, its matching database row and a
+production redeploy, which stays a deliberate later decision and has not been executed.
+
+Not executed: no schema migration, no RLS or policy change, no merge of any duplicate-address
+group, no property approved or verified, no deployment.
+
 ## Required staging gates
 
 | Test | Expected result |

@@ -15,7 +15,8 @@
 // importing admin, so the shipped per-file and per-property limits decide what may be stored.
 //
 // Nothing here reads the Nhân viên password columns, the Login tab, or writes to the sheet or
-// Drive. It refuses to run against a project that is not the development project.
+// Drive. It refuses to run against a project, bucket, account or application that is not the one
+// the stage it declares resolves to.
 import { createHash, createHmac } from 'node:crypto';
 import {
   PutObjectCommand,
@@ -262,9 +263,13 @@ function http() {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // The link to Drive and R2 drops connections, and a dropped connection otherwise waits forever:
-// each transfer carries its own deadline and is retried a bounded number of times.
+// each transfer carries its own deadline and is retried a bounded number of times. The file
+// transfers get a wider budget than a provider call because that link resets single requests
+// sporadically: one observed run lost nearly half its first attempts with `socket hang up`,
+// which three attempts cannot ride out, while every one of them succeeded on a later attempt.
 const DOWNLOAD_TIMEOUT_MS = 120000;
 const UPLOAD_TIMEOUT_MS = 180000;
+const TRANSFER_ATTEMPTS = 8;
 
 // The link to the provider is long and occasionally drops a connection. A transport failure is
 // retried a bounded number of times; a refusal is never retried.
@@ -390,6 +395,12 @@ async function findAuthUser({ supabaseUrl, serviceRoleKey }, email) {
 
 // The provider's own invitation request, with the fixed application destination the admin
 // form uses and no company data in editable metadata.
+/** The origin an invitation link points at: the application URL without a trailing slash. */
+export const invitationOrigin = (appUrl) =>
+  String(appUrl ?? '')
+    .trim()
+    .replace(/\/$/, '');
+
 async function inviteByEmail({ supabaseUrl, serviceRoleKey, appUrl }, email) {
   const response = await fetch(`${supabaseUrl}/auth/v1/invite`, {
     method: 'POST',
@@ -401,7 +412,7 @@ async function inviteByEmail({ supabaseUrl, serviceRoleKey, appUrl }, email) {
     body: JSON.stringify({
       email,
       data: {},
-      redirect_to: `${appUrl.replace(/\/$/, '')}/auth/invite`,
+      redirect_to: `${invitationOrigin(appUrl)}/auth/invite`,
     }),
   });
   return { status: response.status, body: await readJson(response) };
@@ -442,6 +453,26 @@ export function isRateLimitResponse({ status }) {
 // ---------------------------------------------------------------- database steps
 
 const DEV_STAGES = new Set(['dev', 'development', 'local']);
+const PRODUCTION_STAGES = new Set(['prod', 'production']);
+
+/** The stage a run declares, normalised; null when it declares none this path supports. */
+export function declaredStage(values = process.env) {
+  const stage = (values.SGN_ENV ?? '').trim().toLowerCase();
+  if (PRODUCTION_STAGES.has(stage)) return 'prod';
+  if (DEV_STAGES.has(stage)) return 'dev';
+  return null;
+}
+
+/**
+ * Every target a production-labelled run may write: the project, the private bucket, the
+ * Cloudflare account holding it and the application invitations point at. They are pinned here
+ * rather than read from the environment, so no environment file can relabel another project,
+ * another account's storage or another deployment as production.
+ */
+export const PRODUCTION_PROJECT_REF = 'zckhbxpatjmdqpnqphgy';
+export const PRODUCTION_R2_BUCKET = 'sgn';
+export const PRODUCTION_R2_ACCOUNT_ID = '88a4769b865b803f85c3f687187b7246';
+export const PRODUCTION_APP_URL = 'https://sgnewhouse.online';
 
 /** The buckets whose rows the write path imports. */
 export const importableBucket = (bucket) =>
@@ -496,14 +527,19 @@ export function projectRefFromSupabaseUrl(supabaseUrl) {
 
 /**
  * The declared stage is a claim every write target has to prove: the run is refused unless the
- * database, the Supabase API that creates Auth users and invitations, and the file bucket all
- * belong to the development stage, before anything is written.
+ * database, the Supabase API that creates Auth users and invitations, the file bucket, its
+ * account and the application the invitations redirect to all belong to the stage the run
+ * declares, before anything is written. A development label on a production target and a
+ * production label on any other target are both refused, so the label and the targets it points
+ * at are checked against each other rather than trusted.
  */
 export function assertWriteTarget(databaseUrl, values = process.env) {
   const stage = (values.SGN_ENV ?? '').trim().toLowerCase();
-  if (!DEV_STAGES.has(stage))
+  const declared = declaredStage(values);
+  const production = declared === 'prod';
+  if (!declared)
     throw new Error(
-      `this task writes to the development project only; SGN_ENV is "${stage || '(unset)'}"`,
+      `a write run needs SGN_ENV=dev or prod; it is "${stage || '(unset)'}"`,
     );
   const dev = (
     values.DEV_SUPABASE_PROJECT_REF ??
@@ -512,33 +548,66 @@ export function assertWriteTarget(databaseUrl, values = process.env) {
   )
     .trim()
     .toLowerCase();
-  const prod = (values.PROD_SUPABASE_PROJECT_REF ?? '').trim().toLowerCase();
-  if (!/^[a-z]{20}$/.test(dev))
+  if (!production && !/^[a-z]{20}$/.test(dev))
     throw new Error(
       'the development project reference is not configured (DEV_SUPABASE_PROJECT_REF or EXPECTED_SUPABASE_PROJECT_REF)',
     );
-  if (prod && prod === dev)
+  if (!production && dev === PRODUCTION_PROJECT_REF)
     throw new Error(
-      `DEV_SUPABASE_PROJECT_REF and PROD_SUPABASE_PROJECT_REF are both ${dev}`,
+      `the run is labelled "${stage}" and its expected project is the production project ${PRODUCTION_PROJECT_REF}; both references name ${dev}`,
     );
+  const configuredProd = (values.PROD_SUPABASE_PROJECT_REF ?? '')
+    .trim()
+    .toLowerCase();
+  if (configuredProd && configuredProd !== PRODUCTION_PROJECT_REF)
+    throw new Error(
+      `PROD_SUPABASE_PROJECT_REF names ${configuredProd}, not the production project ${PRODUCTION_PROJECT_REF}`,
+    );
+  const expectedRef = production ? PRODUCTION_PROJECT_REF : dev;
+  const target = production ? 'production' : 'development';
   const bucket = (values.R2_BUCKET ?? '').trim();
   const expectedBucket = (values.EXPECTED_R2_BUCKET ?? '').trim();
   if (!expectedBucket)
     throw new Error(
-      'the development R2 bucket is not configured (EXPECTED_R2_BUCKET)',
+      `the ${target} R2 bucket is not configured (EXPECTED_R2_BUCKET)`,
+    );
+  if (production && expectedBucket !== PRODUCTION_R2_BUCKET)
+    throw new Error(
+      `EXPECTED_R2_BUCKET names ${expectedBucket}, not the production R2 bucket ${PRODUCTION_R2_BUCKET}`,
     );
   const account = (values.R2_ACCOUNT_ID ?? '').trim();
   const expectedAccount = (values.EXPECTED_R2_ACCOUNT_ID ?? '').trim();
   if (!expectedAccount)
     throw new Error(
-      'the development R2 account is not configured (EXPECTED_R2_ACCOUNT_ID)',
+      `the ${target} R2 account is not configured (EXPECTED_R2_ACCOUNT_ID)`,
     );
+  if (production && expectedAccount !== PRODUCTION_R2_ACCOUNT_ID)
+    throw new Error(
+      `EXPECTED_R2_ACCOUNT_ID names ${expectedAccount}, not the production R2 account ${PRODUCTION_R2_ACCOUNT_ID}`,
+    );
+  if (production) {
+    const appUrl = (values.NEXT_PUBLIC_APP_URL ?? '').trim();
+    let origin = null;
+    try {
+      origin = new URL(appUrl).origin;
+    } catch {
+      origin = null;
+    }
+    if (origin !== PRODUCTION_APP_URL)
+      throw new Error(
+        `NEXT_PUBLIC_APP_URL names ${appUrl || '(nothing)'}, not the production application ${PRODUCTION_APP_URL} for stage "${stage}"`,
+      );
+  }
   const targets = [
-    ['IMPORT_DATABASE_URL', projectRefFromDatabaseUrl(databaseUrl), dev],
+    [
+      'IMPORT_DATABASE_URL',
+      projectRefFromDatabaseUrl(databaseUrl),
+      expectedRef,
+    ],
     [
       'NEXT_PUBLIC_SUPABASE_URL',
       projectRefFromSupabaseUrl(values.NEXT_PUBLIC_SUPABASE_URL),
-      dev,
+      expectedRef,
     ],
     ['R2_BUCKET', bucket || null, expectedBucket],
     ['R2_ACCOUNT_ID', account || null, expectedAccount],
@@ -546,14 +615,19 @@ export function assertWriteTarget(databaseUrl, values = process.env) {
   for (const [name, resolved, expected] of targets) {
     if (!resolved)
       throw new Error(
-        `${name} names no target to check; the development target is ${expected}`,
+        `${name} names no target to check; the ${target} target is ${expected}`,
       );
     if (resolved !== expected)
       throw new Error(
-        `${name} names ${resolved}${resolved === prod ? ' (the production project)' : ''}, not the development target ${expected} for stage "${stage}"`,
+        `${name} names ${resolved}${resolved === dev ? ' (the development project)' : ''}, not the ${target} target ${expected} for stage "${stage}"`,
       );
   }
-  return { stage: 'dev', projectRef: dev, bucket, account };
+  return {
+    stage: declared,
+    projectRef: expectedRef,
+    bucket,
+    account,
+  };
 }
 
 export async function connect(databaseUrl) {
@@ -1071,6 +1145,9 @@ export async function beginInvitations(
  * Send each open invitation through the provider and record exactly one outcome per row.
  * The provider allows 30 messages an hour, so a refusal for rate is waited out and retried;
  * the invitation keeps its open state while it waits and nothing is claimed until recorded.
+ * Each address is listed the moment its attempt starts, in the caller's own array, so a phase
+ * that dies partway still names who was reached: `attempted` means the attempt began and no
+ * provider outcome was confirmed for it.
  */
 export async function sendInvitations({
   invitations,
@@ -1078,14 +1155,21 @@ export async function sendInvitations({
   waitSeconds = 300,
   maxWaits = 48,
   log = () => {},
+  outcomes = [],
 }) {
   const config = http();
   const open = invitations.filter(
     (entry) =>
       entry.stated && entry.invitation_id && entry.state !== 'recorded',
   );
-  const outcomes = [];
   for (const entry of open) {
+    const attempt = {
+      email: entry.email,
+      outcome: 'attempted',
+      recorded: false,
+      detail: null,
+    };
+    outcomes.push(attempt);
     let attempts = 0;
     let settled = null;
     while (!settled) {
@@ -1137,8 +1221,7 @@ export async function sendInvitations({
       },
     );
     const body = await readJson(response);
-    outcomes.push({
-      email: entry.email,
+    Object.assign(attempt, {
       outcome: settled.outcome,
       recorded: response.ok,
       detail: response.ok
@@ -1159,6 +1242,33 @@ export async function sendInvitations({
 export const recordedInvitations = (sends) =>
   sends.filter((entry) => entry.recorded && entry.outcome === 'accepted')
     .length;
+
+/**
+ * Every invitation with the role it was begun for and what became of it: the provider outcome
+ * when it was emailed, `attempted` for one whose attempt began without a confirmed outcome,
+ * `already_recorded` for one settled before the run, `refused` for one the invitation RPC
+ * refused, and `not_sent` for one that was never emailed. `recorded` is the same predicate as
+ * `recordedInvitations`.
+ */
+export const invitationRecipients = (invitations, sends) =>
+  invitations.map((entry) => {
+    const send = sends.find((candidate) => candidate.email === entry.email);
+    return {
+      email: entry.email,
+      role: entry.role,
+      outcome: !entry.stated
+        ? 'refused'
+        : (send?.outcome ??
+          (entry.state === 'recorded' ? 'already_recorded' : 'not_sent')),
+      recorded: Boolean(
+        entry.stated &&
+        (send
+          ? send.recorded && send.outcome === 'accepted'
+          : entry.state === 'recorded'),
+      ),
+      detail: entry.stated ? (send?.detail ?? null) : entry.detail,
+    };
+  });
 
 // ---------------------------------------------------------------- attachments
 
@@ -1239,7 +1349,7 @@ export async function importAttachments(
       );
       if (!response.ok) return { ok: false, detail: String(response.status) };
       return { ok: true, bytes: Buffer.from(await response.arrayBuffer()) };
-    }).catch((error) => ({
+    }, TRANSFER_ATTEMPTS).catch((error) => ({
       ok: false,
       detail: `network: ${error?.message ?? error}`,
     }));
@@ -1298,11 +1408,14 @@ export async function importAttachments(
             return { ETag: null };
           throw error;
         }
-      });
+      }, TRANSFER_ATTEMPTS);
       if (put) {
         const objectId = put.ETag
           ? objectIdentity(put.ETag)
-          : await headIdentity(storage, objectPath);
+          : await withRetry(
+              () => headIdentity(storage, objectPath),
+              TRANSFER_ATTEMPTS,
+            );
         if (!objectId)
           throw new Error('the stored object has no identity to record');
         const payload = [
