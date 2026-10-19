@@ -35,6 +35,8 @@ import type {
   FileRegistrationResult,
 } from '@/features/property-files/types';
 import { DetailActionDialog } from './detail-dialog';
+import { StatusControl } from '@/features/property-status/status';
+import { statusText } from '@/features/property-status/messages';
 import {
   formatDecimal,
   formatVnd,
@@ -70,6 +72,7 @@ export function PropertyDrawer({
   opener,
   onClose,
   onDenied,
+  onStatusChanged,
 }: {
   property: PropertySummary | null;
   locale: Locale;
@@ -79,6 +82,7 @@ export function PropertyDrawer({
   opener: HTMLElement | null;
   onClose: () => void;
   onDenied: (status: number) => void;
+  onStatusChanged: (status: string) => void;
 }) {
   const text = messages[locale];
   return (
@@ -102,6 +106,7 @@ export function PropertyDrawer({
           resultLocation={resultLocation}
           showEntry={showEntry}
           onDenied={onDenied}
+          onStatusChanged={onStatusChanged}
         />
       ) : null}
     </DetailActionDialog>
@@ -114,14 +119,17 @@ function QuickView({
   resultLocation,
   showEntry,
   onDenied,
+  onStatusChanged,
 }: {
   property: PropertySummary;
   locale: Locale;
   resultLocation: string;
   showEntry: boolean;
   onDenied: (status: number) => void;
+  onStatusChanged: (status: string) => void;
 }) {
   const text = messages[locale];
+  const statusCopy = statusText(locale);
   const fileText = fileMessages[locale];
   const factsText = detailMessages[locale];
   const notify = useToast();
@@ -129,6 +137,7 @@ function QuickView({
   const ownersId = useId();
   const uploadId = useId();
   const draftId = useId();
+  const statusId = useId();
   const hintId = useId();
   // null while the newest comments are still being read; an empty list is a real answer.
   const [comments, setComments] = useState<QuickComment[] | null>(null);
@@ -461,6 +470,22 @@ function QuickView({
           ) : null}
         </p>
       </div>
+      {/* The status a salesperson learns on the phone is recorded here without leaving the list.
+          An applied change moves the row; a sold or rented request waits for a manager decision. */}
+      <section
+        className="quick-view-section"
+        aria-labelledby={statusId}
+        data-od-id="quick-view-status"
+      >
+        <h3 id={statusId}>{statusCopy.changeStatus}</h3>
+        <StatusControl
+          propertyId={propertyId}
+          status={property.status}
+          locale={locale}
+          onDenied={onDenied}
+          onChanged={(change) => onStatusChanged(change.to_status)}
+        />
+      </section>
       <section className="quick-view-section" aria-labelledby={factsId}>
         <h3 id={factsId}>{factsText.facts}</h3>
         <dl className="facts">

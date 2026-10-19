@@ -25,6 +25,8 @@ import { Maintenance } from '@/features/property-maintenance/workspace';
 import { maintenanceText } from '@/features/property-maintenance/messages';
 import { History } from '@/features/property-maintenance/history';
 import { PriceHistory } from '@/features/property-maintenance/price-history';
+import { StatusControl, StatusTrail } from '@/features/property-status/status';
+import { statusText } from '@/features/property-status/messages';
 import {
   CorrectionQueue,
   CorrectionReport,
@@ -50,7 +52,7 @@ import { PropertyVendors } from '@/features/vendors/property-vendors';
 const RECORD_TABS = ['overview', 'docs', 'comments'] as const;
 type RecordTab = (typeof RECORD_TABS)[number];
 type RecordAction = {
-  id: 'sale' | 'reservation' | 'edit' | 'correction' | 'requests';
+  id: 'sale' | 'reservation' | 'edit' | 'correction' | 'requests' | 'status';
   label: string;
 };
 
@@ -240,7 +242,13 @@ export function Detail({
   const text = messages[locale];
   const [tab, setTab] = useState<RecordTab>('overview');
   const [actionDialog, setActionDialog] = useState<
-    'sale' | 'reservation' | 'edit' | 'correction' | 'requests' | null
+    | 'sale'
+    | 'reservation'
+    | 'edit'
+    | 'correction'
+    | 'requests'
+    | 'status'
+    | null
   >(null);
   // Roving tabindex: the arrow keys move both focus and selection across the three tabs.
   function onTabKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>) {
@@ -418,6 +426,7 @@ export function Detail({
   );
   const dt = detailMessages[locale];
   const mt = maintenanceText(locale);
+  const st = statusText(locale);
   return (
     <div lang={locale}>
       <p>
@@ -454,6 +463,7 @@ export function Detail({
                     },
                   ]
                 : []),
+              { id: 'status' as const, label: st.changeStatus },
               { id: 'reservation' as const, label: text.reservations },
               { id: 'edit' as const, label: mt.editFacts },
               { id: 'correction' as const, label: text.navCorrections },
@@ -802,6 +812,15 @@ export function Detail({
                   <PriceHistory
                     key={
                       'prices' + property.id + property.revision + refreshTick
+                    }
+                    propertyId={property.id}
+                    locale={locale}
+                  />
+
+                  {/* recorded status changes, separate from the price series */}
+                  <StatusTrail
+                    key={
+                      'status' + property.id + property.revision + refreshTick
                     }
                     propertyId={property.id}
                     locale={locale}
@@ -1207,6 +1226,21 @@ export function Detail({
                     />
                   </DetailActionDialog>
                 ) : null}
+                <DetailActionDialog
+                  open={actionDialog === 'status'}
+                  onClose={() => setActionDialog(null)}
+                  title={st.changeStatus}
+                  closeLabel={text.close}
+                >
+                  <StatusControl
+                    key={'status' + property.id}
+                    propertyId={property.id}
+                    status={property.status}
+                    locale={locale}
+                    onDenied={denyFiles}
+                    onChanged={() => void savedAndClosed()}
+                  />
+                </DetailActionDialog>
                 <DetailActionDialog
                   open={actionDialog === 'reservation'}
                   onClose={() => setActionDialog(null)}

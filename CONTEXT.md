@@ -157,8 +157,20 @@ A separately attributed addition to an open Correction request's explanation, pr
 _Avoid_: Replacement request, edited original
 
 **Property change history**:
-The record of who changed a Property's asking price, when, and its before/after values. Only recorded asking-price changes add rows; creation, address, contact, link, note and status changes are not recorded here — they are attributed instead in the private audit trail with the actor, time and before/after values, subject to that trail's own 90-day retention window, deliberately not the permanent record this history would have been — and rows recorded before this rule was applied are retained and stay readable.
+The record of who changed a Property's asking price, when, and its before/after values. Only recorded asking-price changes add rows; creation, address, contact, link, note and status changes are not recorded here — every non-price change is attributed in the private audit trail with the actor, time and before/after values, subject to that trail's own 90-day retention window, deliberately not the permanent record this history would have been — and rows recorded before this rule was applied are retained and stay readable. A status change has its own retained trail beside this one.
 _Avoid_: Approval queue, page-view history
+
+**Status change trail**:
+A property's own retained record of every inventory-status change: who made it, the status it left and reached, the Vietnam time and the optional note that person typed. It is separate from the asking-price history and from the private audit trail, it names a decider for a request that needed one, and no status change creates a completed sale.
+_Avoid_: Price history, approval queue, sale completion
+
+**Direct status change**:
+An inventory-status change an active employee applies without a reviewer: draft, available, negotiating and withdrawn at any time, and sold or rented when a manager or admin makes it. The change and its trail row are written in one transaction.
+_Avoid_: Requested change, sale completion
+
+**Status change request**:
+A sold or rented change raised by an employee who is not a manager or admin. It changes no status while it waits, at most one waits on a property at a time, and a manager or admin other than the requester applies or rejects it with a reason. The decided request is retained in the same trail, naming the requester, the decider and the time.
+_Avoid_: Reservation, approval queue entry, pending sale
 
 **Asking-price history**:
 A property's recorded sale asking prices and monthly asking rents, presented as separate newest-first series with the actor, Vietnam time and before/after whole-VND values of each saved change. An unknown value is a gap and a recorded zero stays zero; an untouched amount never appears as a change. Achieved sale prices, contractual rent, monthly dues and receipts are not part of either series, and no earlier price is invented.

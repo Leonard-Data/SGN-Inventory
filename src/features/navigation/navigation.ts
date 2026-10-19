@@ -16,6 +16,9 @@ export type NavGroup = { label: MessageKey; items: NavItem[] };
 const ALL_ROLES: Role[] = ['sales', 'staff', 'manager', 'admin'];
 // The company activity report is an admin/manager read (its API checks the live role).
 const REPORT_ROLES: Role[] = ['manager', 'admin'];
+// The status change queue (#174) is a reviewer surface: sold and rented are a manager or admin
+// decision, and both the route and the database refuse anyone else.
+const REVIEW_ROLES: Role[] = ['manager', 'admin'];
 // The employee list is an admin read (its API and route guard check the live role).
 const ADMIN_ROLES: Role[] = ['admin'];
 
@@ -54,6 +57,15 @@ export const NAV_GROUPS: NavGroup[] = [
         href: '/reviews/corrections',
         icon: 'inbox',
         roles: ALL_ROLES,
+      },
+      {
+        // Sold and rented are decided by a manager or admin (#174); the queue route and the
+        // database refuse every other role.
+        id: 'status-requests',
+        label: 'navStatusRequests',
+        href: '/reviews/status-requests',
+        icon: 'inbox',
+        roles: REVIEW_ROLES,
       },
     ],
   },
