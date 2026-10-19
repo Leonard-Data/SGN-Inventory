@@ -78,9 +78,10 @@ or account is written.
   reference is optional: when it cannot be reached, for the province list, one province tree or one
   ward conversion, the run degrades instead of stopping, records the failure and continues on
   VietMap and the project's own catalogue. An address whose fallback could not be consulted keeps
-  its legacy row, counted as `official_reference_unavailable`, and nothing is guessed in its place;
-  a ward label that already equals exactly one current commune still converts, because that match
-  reads only the project catalogue. The limitation and every counted row are reported.
+  its legacy row, counted as `official_reference_unavailable`, and nothing is guessed in its place.
+  A district and ward pair the workbook's own ward list does not name needs no reference at all: a
+  ward label that equals exactly one current commune converts from the project catalogue alone.
+  The limitation and every counted row are reported.
 - **Review.** Every imported property starts with `record_review_status = pending`; nothing is
   approved, verified or given a final status by the import. The listing mode comes from the row's
   own sale and rent prices, with the `Loại Hình` label as the fallback. The status comes from the
@@ -125,15 +126,16 @@ or account is written.
   invitation email: its Auth user is created through the admin API and its generated password is
   written only to a private file for the captain (`/home/sam/agent-orchestrator/config/
   sgn-manager-account.env`, or `SGN_MANAGER_ACCOUNT_FILE` when the run keeps it with its own task;
-  mode 0600) — never printed, never logged, never stored in the database. Every other address that is not already an employee receives a real invitation
-  through the application flow (`begin_employee_invitation`, the provider call, then
-  `record_employee_invitation_result`), with the captain's account as the actor. The provider
-  allows 30 messages an hour, so the send loop waits and retries instead of failing. An invitation
-  counts as recorded by the run only when the provider accepted the address and the outcome write
-  was accepted; a refused or ambiguous provider attempt leaves the invitation state
-  `provider_failed` and is listed in the report with its provider outcome, never counted as
-  recorded. The report keeps the per-address list whether the sending phase finishes or dies
-  partway, so a run that emailed some people and then failed still names each address it reached:
+  mode 0600) — never printed, never logged, never stored in the database. Every other address that
+  is not already an employee receives a real invitation through the application flow
+  (`begin_employee_invitation`, the provider call, then `record_employee_invitation_result`), with
+  the captain's account as the actor. The provider allows 30 messages an hour, so the send loop
+  waits and retries instead of failing. An invitation counts as recorded by the run only when the
+  provider accepted the address and the outcome write was accepted; a refused or ambiguous provider
+  attempt leaves the invitation state `provider_failed` and is listed in the report with its
+  provider outcome, never counted as recorded. The report keeps the per-address list whether the
+  sending phase finishes or dies partway, so a run that emailed some people and then failed still
+  names each address it reached:
   `attempted` marks an address whose attempt began without a confirmed outcome, and `not_sent` one
   that was never emailed. A project-wide recorded-invitation total is labelled as project-wide, so
   a resumed run cannot present earlier invitations as its own.

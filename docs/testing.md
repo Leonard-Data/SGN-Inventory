@@ -220,9 +220,10 @@ its figures are written outside Git.
   the importer recorded that and continued on VietMap and the project's own catalogue: an address
   whose fallback could not be consulted keeps its legacy row and is counted as
   `official_reference_unavailable` (266 rows in that run); a ward label that already equals exactly
-  one current commune is converted from the catalogue alone, and nothing is guessed. That run's
-  rule also suppressed that catalogue-only name match, so its 266 count is the blanket figure; the
-  run that follows returns the status only where the official reference is actually needed.
+  one current commune is converted from the catalogue alone for a pair the workbook's own ward list
+  does not name, and nothing is guessed. That run's rule also suppressed that catalogue-only name
+  match, so its 266 count is the blanket figure; the run that follows returns the status only where
+  the official reference is actually needed.
   What the missing fallback would have added is not measured by this run: in the development run
   that reference converted 5 rows, and it settled the comparison for the 27 rows where the two
   sources disagreed, which this run therefore does not report.
