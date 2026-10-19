@@ -452,6 +452,29 @@ const vi = {
     'Máy chủ chưa có cấu hình gửi lời mời. Yêu cầu đã được ghi nhận; hãy thử lại sau khi cấu hình được khôi phục.',
   employeeInviteLoadFailed: 'Không thể tải trạng thái lời mời.',
   employeeInviteOpen: 'Ghi nhận lời mời',
+  // Sending a recorded invitation again (expired or lost links).
+  employeeInviteResendOpen: 'Gửi lại lời mời',
+  employeeInviteResendConfirm: 'Gửi lại lời mời',
+  employeeInviteResendCountLabel: 'Số lần đã gửi lại',
+  employeeInviteResendLast: 'Lần gửi lại gần nhất',
+  employeeInviteResendNever: 'Chưa gửi lại lần nào',
+  employeeInviteResendSentLabel: 'Đã gửi',
+  employeeInviteResendFailedLabel: 'Bị từ chối',
+  employeeInviteResendUnconfirmedLabel: 'Chưa xác nhận',
+  employeeInviteResendNote:
+    'Gửi lại sẽ tạo một liên kết mới cho đúng địa chỉ đã ghi nhận; liên kết cũ từ lời mời trước có thể không còn dùng được. Lời mời vẫn ở trạng thái đã ghi nhận và mỗi lần gửi lại được ghi nhận riêng.',
+  employeeInviteResendRoleNote:
+    'Vai trò đã ghi nhận được giữ nguyên; lần gửi lại không thay đổi vai trò hay người được mời.',
+  employeeInviteResendSuccess:
+    'Nhà cung cấp đã nhận lần gửi lại; trạng thái đã ghi nhận và thời điểm gửi được hiển thị bên dưới.',
+  employeeInviteResendFailed:
+    'Nhà cung cấp từ chối lần gửi lại nên không có liên kết mới nào được gửi. Trạng thái đã ghi nhận trước đó vẫn giữ nguyên.',
+  employeeInviteResendUnconfirmed:
+    'Chưa xác nhận được lần gửi lại. Trạng thái đã ghi nhận trước đó vẫn giữ nguyên; hãy thử lại.',
+  employeeInviteResendNotRecorded:
+    'Chưa có lời mời nào được nhà cung cấp xác nhận cho người này, nên không có gì để gửi lại.',
+  employeeInviteAlreadyAccepted:
+    'Người này đã chấp nhận lời mời hoặc tài khoản đã hoạt động; không thể gửi lại lời mời.',
   // Employee profile edit and the signed-in person's own profile.
   employeeBio: 'Tiểu sử',
   employeeBioNone: 'Chưa có tiểu sử',
@@ -1206,6 +1229,29 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
       'The server has no invitation configuration. The request is recorded; retry after configuration is restored.',
     employeeInviteLoadFailed: 'The invitation state did not load.',
     employeeInviteOpen: 'Record an invitation',
+    // Sending a recorded invitation again (expired or lost links).
+    employeeInviteResendOpen: 'Send the invitation again',
+    employeeInviteResendConfirm: 'Send the invitation again',
+    employeeInviteResendCountLabel: 'Further sends recorded',
+    employeeInviteResendLast: 'Last further send',
+    employeeInviteResendNever: 'Not sent again yet',
+    employeeInviteResendSentLabel: 'Sent',
+    employeeInviteResendFailedLabel: 'Refused',
+    employeeInviteResendUnconfirmedLabel: 'Unconfirmed',
+    employeeInviteResendNote:
+      'Sending it again creates a fresh link for exactly the recorded address; an earlier link from that invitation may stop working. The invitation stays recorded and each further send is recorded on its own.',
+    employeeInviteResendRoleNote:
+      'The recorded role stays as it is; sending it again changes neither the role nor the person.',
+    employeeInviteResendSuccess:
+      'The provider accepted the further send; the recorded state and the time it was sent are shown below.',
+    employeeInviteResendFailed:
+      'The provider refused the further send, so no new link was sent. The earlier recorded state is unchanged.',
+    employeeInviteResendUnconfirmed:
+      'The further send is not confirmed. The earlier recorded state is unchanged; retry when you are ready.',
+    employeeInviteResendNotRecorded:
+      'No invitation is recorded as accepted by the provider for this person, so there is nothing to send again.',
+    employeeInviteAlreadyAccepted:
+      'This person already accepted the invitation or their account is active; the invitation cannot be sent again.',
     // Employee profile edit and the signed-in person's own profile.
     employeeBio: 'Bio',
     employeeBioNone: 'No bio yet',
