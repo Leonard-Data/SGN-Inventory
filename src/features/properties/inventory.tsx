@@ -773,6 +773,7 @@ export function Inventory({
       </section>
 
       <PropertyDrawer
+        employee={employee}
         property={opened?.record ?? null}
         locale={locale}
         open={opened !== null}

@@ -1,6 +1,7 @@
 'use client';
 import {
   useEffect,
+  useCallback,
   useId,
   useMemo,
   useRef,
@@ -9,6 +10,7 @@ import {
   type FormEvent,
 } from 'react';
 import Link from 'next/link';
+import type { Employee } from '@/features/employees/types';
 import { api, RequestError } from '@/features/employees/api';
 import { EyeIcon } from '@/features/employees/auth-ui';
 import { messages, label, type Locale } from '@/i18n/messages';
@@ -46,7 +48,7 @@ import {
 import { wholeVnd, squareMetres } from './filters';
 import { detailMessages } from './messages';
 import { statusTone } from './property-card';
-import { MISSING_VALUE, rowPrice, totalAreaM2 } from './table';
+import { MISSING_VALUE, totalAreaM2 } from './table';
 import type { OwnerContactDisclosure, PropertySummary } from './types';
 
 // How many of the most recent comments the quick view repeats; the full record holds the rest.
@@ -65,6 +67,7 @@ type UploadRow = {
 // focus back when it closes.
 export function PropertyDrawer({
   property,
+  employee,
   locale,
   open,
   resultLocation,
@@ -75,6 +78,7 @@ export function PropertyDrawer({
   onStatusChanged,
 }: {
   property: PropertySummary | null;
+  employee: Employee | null;
   locale: Locale;
   open: boolean;
   resultLocation: string;
@@ -85,10 +89,59 @@ export function PropertyDrawer({
   onStatusChanged: (status: string) => void;
 }) {
   const text = messages[locale];
+  const [editable, setEditable] = useState<string | null>(null);
+  const permission = useCallback(
+    (id: string, creator: string | null, archived: boolean) => {
+      setEditable(
+        employee &&
+          !archived &&
+          (employee.id === creator ||
+            ['staff', 'manager', 'admin'].includes(employee.role))
+          ? id
+          : null,
+      );
+    },
+    [employee],
+  );
+  const recordHref = property
+    ? '/properties/' +
+      property.id +
+      '?' +
+      new URLSearchParams({ returnTo: resultLocation })
+    : '';
   return (
     <DetailActionDialog
       size="drawer"
-      title={text.quickView}
+      title={property?.propertyCode ?? text.quickView}
+      heading={
+        property ? (
+          <>
+            <p className="quick-view-address" translate="no">
+              {property.addresses[0]?.addressText || text.unknown}
+            </p>
+            <span className="badge" data-tone={statusTone(property.status)}>
+              {label(locale, property.status)}
+            </span>
+          </>
+        ) : null
+      }
+      footer={
+        property ? (
+          <>
+            <Link className="btn btn-primary btn-sm" href={recordHref}>
+              {text.fullRecord}
+            </Link>
+            {editable === property.id ? (
+              <Link
+                className="btn btn-secondary btn-sm"
+                href={recordHref + '#edit-property'}
+              >
+                {text.editProperty}
+              </Link>
+            ) : null}
+          </>
+        ) : null
+      }
       closeLabel={text.close}
       open={open && property !== null}
       onClose={onClose}
@@ -103,10 +156,10 @@ export function PropertyDrawer({
           key={property.id}
           property={property}
           locale={locale}
-          resultLocation={resultLocation}
           showEntry={showEntry}
           onDenied={onDenied}
           onStatusChanged={onStatusChanged}
+          onPermission={permission}
         />
       ) : null}
     </DetailActionDialog>
@@ -116,17 +169,17 @@ export function PropertyDrawer({
 function QuickView({
   property,
   locale,
-  resultLocation,
   showEntry,
   onDenied,
   onStatusChanged,
+  onPermission,
 }: {
   property: PropertySummary;
   locale: Locale;
-  resultLocation: string;
   showEntry: boolean;
   onDenied: (status: number) => void;
   onStatusChanged: (status: string) => void;
+  onPermission: (id: string, creator: string | null, archived: boolean) => void;
 }) {
   const text = messages[locale];
   const statusCopy = statusText(locale);
@@ -193,6 +246,11 @@ function QuickView({
     void loadPropertyDetail(propertyId, abort.signal)
       .then((detail) => {
         if (abort.signal.aborted) return;
+        onPermission(
+          propertyId,
+          detail.property.created_by,
+          !!detail.property.archived_at,
+        );
         setOwners(
           contactRows(detail.contacts).filter(
             (row) => row.relation === 'owner',
@@ -206,7 +264,7 @@ function QuickView({
         else setOwnersFailed(true);
       });
     return () => abort.abort();
-  }, [propertyId, onDenied]);
+  }, [propertyId, onDenied, onPermission]);
 
   const phone = ownerPhoneView(disclosure);
 
@@ -383,8 +441,6 @@ function QuickView({
     return state === 'done' ? 'ready' : state;
   }
 
-  const address = property.addresses[0] ?? null;
-  const price = rowPrice(property);
   const area = totalAreaM2(property);
   const entryDate = property.entryOn ? vietnamDate(property.entryOn) : null;
   const created = vietnamDate(property.createdAt);
@@ -410,18 +466,6 @@ function QuickView({
       value: label(locale, property.propertyType),
       known: Boolean(property.propertyType),
     },
-    { label: text.status, value: label(locale, property.status), known: true },
-    {
-      label: text.salePrice,
-      ...recorded(property.salePriceVnd ? vnd(property.salePriceVnd) : null),
-    },
-    {
-      label: text.monthlyRent,
-      ...recorded(
-        property.monthlyRentVnd ? vnd(property.monthlyRentVnd) : null,
-      ),
-    },
-    { label: text.columnTotalArea, ...recorded(area ? m2(area) : null) },
     {
       label: text.landArea,
       ...recorded(property.landAreaM2 ? m2(property.landAreaM2) : null),
@@ -447,29 +491,24 @@ function QuickView({
     });
   return (
     <div className="quick-view">
-      <div className="quick-view-head">
-        <p className="card-meta">{property.propertyCode}</p>
-        <p className="quick-view-address" translate="no">
-          {address?.addressText || label(locale, null)}
-        </p>
-        <p className="quick-view-line">
-          <span className="badge" data-tone={statusTone(property.status)}>
-            {label(locale, property.status)}
-          </span>
-          {price ? (
-            <b className="num">
-              {/* The value without its unit, exactly as the table's own price cell draws it; the
-                  unit is named once, in the smaller note beside it. */}
-              {formatDecimal(price.value, locale)}
-              <small className="inventory-note">
-                {price.unit === 'monthly'
-                  ? text.priceUnitMonthly
-                  : text.priceUnitVnd}
-              </small>
-            </b>
-          ) : null}
-        </p>
-      </div>
+      <dl className="quick-view-summary facts">
+        {property.salePriceVnd !== null ? (
+          <div className="fact span-all">
+            <dt>{text.salePrice}</dt>
+            <dd className="num">{vnd(property.salePriceVnd)}</dd>
+          </div>
+        ) : null}
+        {property.monthlyRentVnd !== null ? (
+          <div className="fact span-all">
+            <dt>{text.monthlyRent}</dt>
+            <dd className="num">{vnd(property.monthlyRentVnd)}</dd>
+          </div>
+        ) : null}
+        <div className="fact">
+          <dt>{text.columnTotalArea}</dt>
+          <dd className="num">{area ? m2(area) : MISSING_VALUE}</dd>
+        </div>
+      </dl>
       {/* The status a salesperson learns on the phone is recorded here without leaving the list.
           An applied change moves the row; a sold or rented request waits for a manager decision. */}
       <section
@@ -490,7 +529,14 @@ function QuickView({
         <h3 id={factsId}>{factsText.facts}</h3>
         <dl className="facts">
           {facts.map((entry, index) => (
-            <div className="fact" key={`${entry.label}-${index}`}>
+            <div
+              className={
+                entry.label === text.createdBy || entry.label === text.updated
+                  ? 'fact span-all'
+                  : 'fact'
+              }
+              key={`${entry.label}-${index}`}
+            >
               <dt>{entry.label}</dt>
               <dd className={entry.known ? undefined : 'is-unknown'}>
                 {entry.value}
@@ -662,19 +708,6 @@ function QuickView({
           </div>
         </form>
       </section>
-      <div className="quick-view-actions">
-        <Link
-          className="btn btn-secondary"
-          href={
-            '/properties/' +
-            property.id +
-            '?' +
-            new URLSearchParams({ returnTo: resultLocation })
-          }
-        >
-          {text.fullRecord}
-        </Link>
-      </div>
     </div>
   );
 }

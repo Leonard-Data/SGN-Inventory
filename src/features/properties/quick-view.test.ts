@@ -31,16 +31,25 @@ test('the quick view opens as a panel at the right edge, not a centred dialog', 
   assert.match(panel, /margin: 0/);
   assert.doesNotMatch(panel, /margin: auto/);
   assert.match(panel, /height: 100dvh/);
-  // A narrow desktop keeps a column of the list beside the panel instead of covering the row.
-  const narrow = surfaces.indexOf('@media (min-width: 641px)');
-  assert.ok(narrow > 0, 'the narrow-desktop rule exists');
+  assert.match(panel, /width: min\(540px, 100vw\)/);
+  assert.doesNotMatch(surfaces, /100vw - 320px/);
   assert.match(
-    surfaces.slice(narrow, surfaces.indexOf('@media', narrow + 1)),
-    /dialog\.sgn-dialog\[data-size='drawer'\][\s\S]*width: min\(460px, calc\(100vw - 320px\)\)/,
+    surfaces,
+    /@media \(max-width: 640px\) \{\s*dialog\.sgn-dialog\[data-size='drawer'\] \{\s*width: 100vw/,
   );
   assert.match(
     rule("dialog.sgn-dialog[data-size='drawer']::backdrop"),
     /background: transparent/,
+  );
+});
+
+test('the full-record action sits in a persistent footer outside the scrolling body', () => {
+  assert.match(drawer, /footer=\{/);
+  assert.match(drawer, /heading=\{/);
+  assert.match(dialog, /className="sgn-dialog-foot"/);
+  assert.ok(
+    dialog.indexOf('className="sgn-dialog-foot"') >
+      dialog.indexOf('className="sgn-dialog-body"'),
   );
 });
 

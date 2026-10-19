@@ -402,7 +402,7 @@
 dialog.sgn-dialog[data-size='drawer'] {
   inset: 0 0 0 auto;
   margin: 0;
-  width: min(460px, 100vw);
+  width: min(540px, 100vw);
   height: 100dvh;
   max-height: none;
   overflow: clip;
@@ -411,11 +411,9 @@ dialog.sgn-dialog[data-size='drawer']::backdrop {
   background: transparent;
   backdrop-filter: none;
 }
-/* A narrow desktop keeps a working column of the list beside the panel: the panel gives up width
-   before it covers the row that opened it. */
-@media (min-width: 641px) {
+@media (max-width: 640px) {
   dialog.sgn-dialog[data-size='drawer'] {
-    width: min(460px, calc(100vw - 320px));
+    width: 100vw;
   }
 }
 .sgn-dialog[data-size='drawer'] .sgn-dialog-panel {
@@ -478,10 +476,22 @@ dialog.sgn-dialog[data-size='drawer']::backdrop {
   font-weight: 600;
   color: var(--fg);
 }
-/* The facts rail is one column here: the drawer is narrower than the detail
-   page and a long recorded number must not be squeezed into half of it. */
+/* Long source values get the full line; compact facts can share a row. */
 .quick-view .facts {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 var(--space-5);
+}
+.quick-view .span-all {
+  grid-column: 1 / -1;
+}
+.quick-view-summary dd {
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+@media (max-width: 420px) {
+  .quick-view .facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .quick-view-uploads,
 .quick-view-comments {
@@ -599,8 +609,4 @@ dialog.sgn-dialog[data-size='drawer']::backdrop {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-}
-.quick-view-actions {
-  padding-top: var(--space-5);
-  border-top: 1px solid var(--border-soft);
 }

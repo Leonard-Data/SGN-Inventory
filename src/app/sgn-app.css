@@ -606,12 +606,14 @@ dialog.sgn-dialog::backdrop { background: color-mix(in oklab, var(--fg) 46%, tra
   overflow: hidden; background: var(--surface); border-radius: var(--radius-lg);
 }
 .sgn-dialog[data-size="wide"] .sgn-dialog-panel { width: min(1040px, calc(100vw - 32px)); }
-.sgn-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-5) var(--space-6); border-bottom: 1px solid var(--border-soft); }
+.sgn-dialog-heading { min-width: 0; overflow-wrap: anywhere; }
+.sgn-dialog-heading > * + * { margin-top: var(--space-2); }
+.sgn-dialog-head { flex-shrink: 0; max-height: 40dvh; overflow-y: auto; display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-5) var(--space-6); border-bottom: 1px solid var(--border-soft); }
 .sgn-dialog-head h2 { font-family: var(--font-body); font-size: var(--text-lg); font-weight: 600; line-height: 1.3; }
 .sgn-dialog-close { width: var(--btn-h-sm); height: var(--btn-h-sm); display: grid; place-items: center; flex: 0 0 auto; margin-left: auto; background: transparent; border: 1px solid transparent; border-radius: var(--radius-md); color: var(--muted); }
 .sgn-dialog-close:hover { background: var(--surface-warm); color: var(--fg); border-color: var(--border); }
-.sgn-dialog-body { flex: 1; overflow-y: auto; padding: var(--space-5) var(--space-6) var(--space-6); }
-.sgn-dialog-foot { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); padding: var(--space-5) var(--space-6); border-top: 1px solid var(--border-soft); background: var(--surface); }
+.sgn-dialog-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; overflow-wrap: anywhere; padding: var(--space-5) var(--space-6) var(--space-6); }
+.sgn-dialog-foot { flex-shrink: 0; flex-wrap: wrap; display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); padding: var(--space-5) var(--space-6); border-top: 1px solid var(--border-soft); background: var(--surface); }
 .sgn-dialog-foot .foot-lead { margin-right: auto; font-size: var(--text-xs); color: var(--muted); }
 /* Search-island adaptation: the filter panel is a form whose Clear/Apply pair wraps
    instead of overflowing when both localized labels cannot share a narrow dialog foot. */

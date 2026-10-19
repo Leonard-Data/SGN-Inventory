@@ -8,6 +8,8 @@ export function DetailActionDialog({
   title,
   closeLabel,
   children,
+  heading,
+  footer,
   open,
   onClose,
   onClosed,
@@ -16,6 +18,8 @@ export function DetailActionDialog({
   title: string;
   closeLabel: string;
   children: ReactNode;
+  heading?: ReactNode;
+  footer?: ReactNode;
   open: boolean;
   onClose: () => void;
   // Runs after the dialog has actually closed, so a surface can hand focus back to the control
@@ -37,16 +41,19 @@ export function DetailActionDialog({
       ref={dialogRef}
       className="sgn-dialog"
       data-size={size}
-      onClose={() => {
+      onClose={onClosed}
+      onCancel={(event) => {
+        event.preventDefault();
         onClose();
-        onClosed?.();
       }}
-      onCancel={onClose}
       aria-label={title}
     >
       <div className="sgn-dialog-panel">
         <div className="sgn-dialog-head">
-          <h2>{title}</h2>
+          <div className="sgn-dialog-heading">
+            <h2>{title}</h2>
+            {heading}
+          </div>
           <button
             className="sgn-dialog-close"
             type="button"
@@ -57,6 +64,7 @@ export function DetailActionDialog({
           </button>
         </div>
         <div className="sgn-dialog-body">{open ? children : null}</div>
+        {footer ? <div className="sgn-dialog-foot">{footer}</div> : null}
       </div>
     </dialog>
   );
