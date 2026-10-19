@@ -6,8 +6,7 @@ export default async function Properties({
 }: {
   searchParams: Promise<{
     query?: string;
-    page?: string;
-    pageSize?: string;
+    view?: string;
     sort?: string;
     status?: string;
     mode?: string;
@@ -32,11 +31,12 @@ export default async function Properties({
     <Inventory
       initialLocale={locale}
       initialQuery={params.query ?? ''}
-      // The supplied ordering, page and filters pass through unchanged so the read rejects an
-      // unknown or non-numeric value instead of silently browsing a different page of inventory.
+      // The supplied view, ordering and filters pass through unchanged so the read rejects an
+      // unknown or non-numeric value instead of silently serving a different result set. The list
+      // is one stream: a retired page number in a stale address names no window of it, so the
+      // stream opens at its first rows.
+      view={params.view ?? null}
       sort={params.sort ?? null}
-      page={params.page ?? null}
-      pageSize={params.pageSize ?? null}
       filters={inventoryFilters(search)}
     />
   );

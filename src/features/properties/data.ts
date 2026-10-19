@@ -1,6 +1,7 @@
 import 'server-only';
 import { ApiError, type RouteContext } from '@/lib/supabase/route';
-import type { AddressSummary, PropertyPage } from './types';
+import type { Database } from '@/types/database';
+import type { AddressSummary, PropertyStream } from './types';
 import { propertyCreators } from './creator';
 import {
   catalogUnitsMatch,
@@ -11,14 +12,29 @@ import {
 } from './filters';
 import {
   isInventoryOrder,
-  parseInventoryPaging,
+  parseStreamOffset,
+  STREAM_PAGE_SIZE,
   type InventoryOrder,
-} from './paging';
+} from './stream';
+
+// One row of the stream read. The counting row a past-the-end or empty window answers with carries
+// null window columns, so a row names a property exactly when it has an id; when it does, the four
+// fields the summary requires are present because they are NOT NULL on the table the window was
+// sliced from, and the left join cannot null a row it did not join.
+type StreamRow =
+  Database['public']['Functions']['stream_inventory']['Returns'][number];
+type StreamRecord = StreamRow & {
+  id: string;
+  property_code: string;
+  listing_mode: string;
+  status: string;
+  property_type: string;
+};
 
 export async function browseProperties(
   context: RouteContext,
   params: URLSearchParams,
-): Promise<PropertyPage> {
+): Promise<PropertyStream> {
   const query = params.get('query') ?? '';
   const sort = params.get('sort');
   if ([...query].length > 120) throw new ApiError(400, 'query-too-long');
@@ -28,14 +44,16 @@ export async function browseProperties(
   // different inventory than the one the address describes.
   const filters = parseInventoryFilters(params);
   if (!filters.ok) throw new ApiError(400, 'invalid-input');
-  // The page number is read the same way: a mangled, zero or unsupported value is refused rather
-  // than quietly served as a different page than the address states.
-  const paging = parseInventoryPaging(params);
-  if (!paging.ok) throw new ApiError(400, 'invalid-input');
+  // The window offset is read the same way: a mangled or negative value is refused rather than
+  // quietly served as a different window than the caller asked for.
+  const window = parseStreamOffset(params);
+  if (!window.ok) throw new ApiError(400, 'invalid-input');
+  // The retired page number and page size are not parameters of the stream: a caller that still
+  // sends them is refused instead of being answered with a different window of inventory, and the
+  // window offset is the stream's own parameter.
   const allowed = [
     'query',
-    'page',
-    'pageSize',
+    'offset',
     ...(sort === null ? [] : ['sort']),
     ...INVENTORY_FILTER_KEYS,
   ];
@@ -49,29 +67,34 @@ export async function browseProperties(
   // identifier is refused rather than applied as a contact with no linked property.
   await assertContact(context, filters.filters);
   const order: InventoryOrder | null = sort;
-  // One filtered read returns the matching total beside this page of rows. The ordering is the
-  // argument, so the ordinary browse and the eligible chronology share one predicate: a count
-  // that could include a row this page would not show is not expressible here.
+  // One filtered read returns the matching total beside this window of rows, at the window's own
+  // offset in the stream's total order. The ordering is the argument, so the ordinary browse and
+  // the eligible chronology share one predicate: a count that could include a row this window
+  // would not show is not expressible here.
   const { data: rows, error } = await context.client
-    .rpc('page_inventory', {
+    .rpc('stream_inventory', {
       p_order: order,
       p_query: query,
-      p_page: paging.paging.page,
-      p_page_size: paging.paging.pageSize,
+      p_offset: window.offset,
+      p_limit: STREAM_PAGE_SIZE,
       ...filterRpcArgs(filters.filters),
     })
     .select(
-      'total_count,page_number,id,property_code,listing_mode,status,cover_file_id,frontage_m,depth_m,land_area_m2,floor_area_m2,floors,direction,access_type,entry_on,entry_source,age_days',
+      'total_count,id,property_code,listing_mode,status,property_type,cover_file_id,frontage_m,depth_m,land_area_m2,floor_area_m2,floors,direction,access_type,entry_on,entry_source,age_days,created_at,updated_at,sale_price_vnd,monthly_rent_vnd',
     );
   if (error) throw accessError(error.code);
-  // The read answers every page of a non-empty result set, so no rows means the filtered set is
-  // empty: the total is zero and the pager states page one of one.
+  // Every read states the total: a window past the end answers with the counting row alone, so
+  // the header count stays true even when the window it asked for has no rows.
   const total = rows?.length ? rows[0]!.total_count : 0;
-  const page = rows?.length ? rows[0]!.page_number : 1;
-  const summary = { total, page, order };
-  if (!rows?.length) return { ...summary, properties: [] };
-  const ids = rows.map((row) => row.id);
-  // Both reads depend only on the page of rows, so they run together: the addresses the cards
+  const summary = { total, offset: window.offset, order };
+  // The counting row a past-the-end or empty window answers with carries no record: the rest of
+  // this read only makes sense for rows that name a property.
+  const records = (rows ?? []).filter(
+    (row): row is StreamRecord => row.id !== null,
+  );
+  if (!records.length) return { ...summary, properties: [] };
+  const ids = records.map((row) => row.id);
+  // Both reads depend only on the window of rows, so they run together: the addresses the rows
   // draw, and the display name of each record's creator.
   const [addresses, creators] = await Promise.all([
     addressSummaries(context, ids, query),
@@ -79,11 +102,16 @@ export async function browseProperties(
   ]);
   return {
     ...summary,
-    properties: rows.map((row) => ({
+    properties: records.map((row) => ({
       id: row.id,
       propertyCode: row.property_code,
       listingMode: row.listing_mode,
       status: row.status,
+      propertyType: row.property_type,
+      salePriceVnd: row.sale_price_vnd ?? null,
+      monthlyRentVnd: row.monthly_rent_vnd ?? null,
+      createdAt: row.created_at ?? null,
+      updatedAt: row.updated_at ?? null,
       coverFileId: row.cover_file_id ?? null,
       // Kept as the database returned them; the plate coerces for the drawing.
       frontageM: row.frontage_m ?? null,
@@ -187,7 +215,7 @@ async function addressSummaries(
   const { data: addresses, error } = await context.client
     .from('property_addresses')
     .select(
-      'id,property_id,format,address_text,mapping_status,is_primary,search_text',
+      'id,property_id,format,address_text,mapping_status,is_primary,house_number,street,commune_text,district_text,search_text',
     )
     .in('property_id', ids)
     .order('is_primary', { ascending: false })
@@ -207,6 +235,12 @@ async function addressSummaries(
       addressText: address.address_text,
       mappingStatus: address.mapping_status,
       isPrimary: address.is_primary,
+      // The recorded address text is preserved as entered; these parts are what the table's own
+      // columns state, and an absent part stays absent instead of being parsed out of the text.
+      houseNumber: address.house_number,
+      street: address.street,
+      commune: address.commune_text,
+      district: address.district_text,
     };
     const group = byProperty.get(address.property_id) ?? [];
     group.push(summary);

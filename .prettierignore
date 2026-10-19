@@ -4,6 +4,8 @@ node_modules/
 # Preserve installed upstream skills and agent links.
 .agents/skills/
 .claude/skills/
+# Local agent-harness tooling (session state and plugins); not package source.
+.opencode/
 package-lock.json
 next-env.d.ts
 supabase/migrations/

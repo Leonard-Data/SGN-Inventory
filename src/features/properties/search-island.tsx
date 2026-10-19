@@ -13,17 +13,18 @@ import {
   type UnitOption,
 } from '@/features/property-maintenance/units';
 import {
-  filterParams,
   INVENTORY_FILTER_KEYS,
   INVENTORY_LISTING_MODES,
   INVENTORY_PROPERTY_TYPES,
   INVENTORY_STATUSES,
+  noInventoryFilters,
   parseInventoryFilters,
   squareMetres,
   wholeVnd,
   type InventoryFilterKey,
   type InventoryFilters,
 } from './filters';
+import { inventoryHref, type InventoryView } from './view';
 
 // The official catalog rows the province/ward pickers read. Names are source data and are never
 // translated, so a language switch keeps the same unit name.
@@ -37,6 +38,7 @@ export function SearchIsland({
   locale,
   query,
   sort,
+  view,
   filters,
   open,
   onOpen,
@@ -45,6 +47,8 @@ export function SearchIsland({
   locale: Locale;
   query: string;
   sort: string | null;
+  // The view the address states: applying or removing a filter keeps the person's chosen view.
+  view: InventoryView;
   filters: InventoryFilters;
   open: boolean;
   onOpen: (open: boolean) => void;
@@ -192,8 +196,8 @@ export function SearchIsland({
       });
     return () => abort.abort();
   }, [appliedContact, onDenied]);
-  // Applying starts a new page-one journey with the stated filters, so a page number from the
-  // previous result set can never be replayed against this one.
+  // Applying starts the stream over with the stated filters, so a window of the previous result
+  // set can never be replayed against this one.
   function apply(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const submitted = new URLSearchParams();
@@ -205,14 +209,7 @@ export function SearchIsland({
       return;
     }
     dismiss();
-    router.push(
-      '/properties?' +
-        new URLSearchParams({
-          query,
-          ...(sort ? { sort } : {}),
-          ...filterParams(parsed.filters),
-        }),
-    );
+    router.push(inventoryHref({ query, sort, view, filters: parsed.filters }));
   }
   const vnd = (value: string) =>
     wholeVnd(value) ? formatVnd(value, locale) : value;
@@ -292,17 +289,14 @@ export function SearchIsland({
       key === 'province'
         ? { ...filters, province: null, ward: null }
         : { ...filters, [key]: null };
-    router.push(
-      '/properties?' +
-        new URLSearchParams({
-          query,
-          ...(sort ? { sort } : {}),
-          ...filterParams(next),
-        }),
-    );
+    router.push(inventoryHref({ query, sort, view, filters: next }));
   }
-  const clearHref =
-    '/properties?' + new URLSearchParams({ query, ...(sort ? { sort } : {}) });
+  const clearHref = inventoryHref({
+    query,
+    sort,
+    view,
+    filters: noInventoryFilters,
+  });
   const provinceLabels = unitOptionLabels(provinces);
   const wardLabels = unitOptionLabels(wards);
   const select = (

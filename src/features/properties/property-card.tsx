@@ -6,8 +6,9 @@ import { CoverImage } from '@/features/property-files/cover-image';
 import { Plate } from './plate';
 import { formatInteger, vietnamDate } from './format';
 
-/* Tone helper: maps an inventory status to a badge tone. */
-function statusTone(status: string): string {
+/* Tone helper: maps an inventory status to a badge tone. Shared with the quick view, so a status
+   reads the same everywhere it appears. */
+export function statusTone(status: string): string {
   if (status === 'available' || status === 'verified') return 'success';
   if (
     status === 'sold' ||
@@ -29,12 +30,16 @@ export const PropertyCard = memo(function PropertyCard({
   locale,
   resultLocation,
   onDenied,
+  onQuickView,
   showEntry = false,
 }: {
   record: PropertySummary;
   locale: Locale;
   resultLocation: string;
   onDenied: (status: number) => void;
+  // Opening the record's quick view in place. The control that was pressed travels with the
+  // call, so closing the quick view returns focus to that same control.
+  onQuickView?: (record: PropertySummary, opener: HTMLElement | null) => void;
   showEntry?: boolean;
 }) {
   // The chronological views carry the recorded original entry date and the database's Vietnam
@@ -125,7 +130,17 @@ export const PropertyCard = memo(function PropertyCard({
           <span className="badge" data-tone={statusTone(record.status)}>
             {label(locale, record.status)}
           </span>
-          <div className="card-actions" />
+          <div className="card-actions">
+            {onQuickView ? (
+              <button
+                className="btn btn-secondary btn-sm"
+                type="button"
+                onClick={(event) => onQuickView(record, event.currentTarget)}
+              >
+                {label(locale, 'quickView')}
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
     </article>

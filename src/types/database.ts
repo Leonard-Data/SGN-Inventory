@@ -2375,6 +2375,49 @@ export type Database = {
           age_days: number | null;
         }[];
       };
+      stream_inventory: {
+        Args: {
+          p_order?: string | null;
+          p_query?: string;
+          p_offset?: number;
+          p_limit?: number;
+          p_status?: string;
+          p_mode?: string;
+          p_type?: string;
+          p_price_min?: string;
+          p_price_max?: string;
+          p_area_min?: number;
+          p_area_max?: number;
+          p_area_id?: string;
+          p_contact_id?: string;
+        };
+        // One window of the stream beside the matching total. A window past the end, or a filter
+        // that matches nothing, answers one row whose window columns are null, so the total is
+        // stated by every read.
+        Returns: {
+          total_count: number;
+          id: string | null;
+          property_code: string | null;
+          listing_mode: string | null;
+          status: string | null;
+          property_type: string | null;
+          cover_file_id: string | null;
+          frontage_m: string | null;
+          depth_m: string | null;
+          land_area_m2: string | null;
+          floor_area_m2: string | null;
+          floors: number | null;
+          direction: string | null;
+          access_type: string | null;
+          entry_on: string | null;
+          entry_source: string | null;
+          age_days: number | null;
+          created_at: string | null;
+          updated_at: string | null;
+          sale_price_vnd: string | null;
+          monthly_rent_vnd: string | null;
+        }[];
+      };
       set_file_category: {
         Args: {
           p_category_id: string;

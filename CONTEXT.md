@@ -180,6 +180,18 @@ _Avoid_: Listing age, update age
 The optional conditions used to narrow inventory by status, listing mode, property type, price, land or floor area in square metres, the administrative area of an address (province/city and its dependent commune/ward; the narrower ward governs when both are selected), or a recorded contact linked to a property. Without a selected listing mode, a price range uses each listing's own asking price; with a selected mode, it uses only that mode's asking price. A contact condition matches through the recorded property↔contact link and applies the same unarchived boundary as the contact directory's linked-property count, so the two never disagree.
 _Avoid_: Fixed sale-price basis; "area" for province/ward
 
+**Inventory stream**:
+The properties list as one result set ordered by the server (newest created first by default, or the eligible entry-date chronology in either direction), read as consecutive windows of about a hundred rows with the matching total stated by every read. The browser reserves the whole stream's estimated height and keeps only the rows near the viewport in the page. It has no page numbers, no page size and no cursor trail; the count and the rows always come from the same filtered read, so they cannot describe different inventories.
+_Avoid_: Numbered page, page-size setting, cursor, partial result set
+
+**Inventory result view**:
+The presentation choice for the inventory stream — cards or table — carried in the properties address beside the search, the ordering and the filters, so switching it or applying a filter keeps the narrowed result set and never changes the read. The ten-column table is not offered at phone width, where cards are the list.
+_Avoid_: Second result set, paged view
+
+**Property quick view**:
+The right-hand panel a list row opens without leaving the list: the record's key metadata, a comment composer, one attachment through the existing upload path and its limits, and a link into the full detail page for everything else. The row is a real keyboard-reachable control; Escape closes the panel and focus returns to the row that opened it. It is not an edit form and grants no authority the full record does not have.
+_Avoid_: Detail page, inline edit, side form
+
 ### Vendors
 
 **Vendor**:
