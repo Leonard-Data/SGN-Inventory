@@ -266,6 +266,12 @@ export function Detail({
     await reload();
     setRefreshTick((value) => value + 1);
   }
+  // A committed save closes the dialog it was recorded from, so the confirmation follows the
+  // person onto the record instead of staying inside the surface they are leaving.
+  async function savedAndClosed() {
+    setActionDialog(null);
+    await changed();
+  }
   const [activity, setActivity] = useState<{
     detail: PropertyDetail;
     viewError: boolean;
@@ -1197,7 +1203,7 @@ export function Detail({
                       locale={locale}
                       employeeId={employee.id}
                       onDenied={denyFiles}
-                      onSaved={changed}
+                      onSaved={savedAndClosed}
                     />
                   </DetailActionDialog>
                 ) : null}
@@ -1216,6 +1222,7 @@ export function Detail({
                     archived={!!property.archived_at}
                     employeeId={employee.id}
                     onDenied={denyFiles}
+                    onCommitted={() => void savedAndClosed()}
                   />
                 </DetailActionDialog>
                 <DetailActionDialog
@@ -1229,7 +1236,7 @@ export function Detail({
                     detail={data}
                     employee={employee}
                     locale={locale}
-                    onSaved={changed}
+                    onSaved={savedAndClosed}
                     onDenied={denyFiles}
                   />
                 </DetailActionDialog>
@@ -1245,7 +1252,7 @@ export function Detail({
                     locale={locale}
                     role={employee.role}
                     onDenied={denyFiles}
-                    onSaved={changed}
+                    onSaved={savedAndClosed}
                   />
                 </DetailActionDialog>
                 <DetailActionDialog
@@ -1259,7 +1266,7 @@ export function Detail({
                     propertyId={property.id}
                     locale={locale}
                     onDenied={denyFiles}
-                    onChanged={() => void changed()}
+                    onChanged={() => void savedAndClosed()}
                   />
                 </DetailActionDialog>
               </>

@@ -7,6 +7,7 @@ import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { label, messages, type Locale } from '@/i18n/messages';
 import { api, RequestError } from '@/features/employees/api';
 import type { Employee } from '@/features/employees/types';
+import { ToastProvider } from '@/features/toasts/toast-host';
 import { visibleNavGroups } from './navigation';
 
 const ICONS: Record<string, ReactNode> = {
@@ -324,120 +325,124 @@ export function AppShell({
   else if (pathname.startsWith('/people')) crumbs.push({ label: text.people });
 
   return (
-    <div className={sidebarCollapsed ? 'sgn-app is-collapsed' : 'sgn-app'}>
-      <a className="sgn-skip" href="#main-content">
-        {text.skipToContent}
-      </a>
-      <aside
-        id="sgn-sidebar"
-        ref={aside}
-        className={drawer ? 'sgn-sidebar is-open' : 'sgn-sidebar'}
-      >
-        <div className="sgn-lockup">
-          <span className="logo-tile">
-            <Image src="/brand/logo.png" alt="" width={192} height={165} />
-          </span>
-          <span className="sgn-brand-name">
-            Saigon New House
-            <span>{text.brandRole}</span>
-          </span>
-        </div>
-        <nav className="sgn-nav" aria-label={text.title}>
-          {groups.map((group) => (
-            <div className="sgn-nav-group" key={group.label}>
-              <p className="sgn-nav-label">{text[group.label]}</p>
-              {group.items.map((item) => (
-                <Link
-                  key={item.id}
-                  href={item.href}
-                  className="sgn-nav-item"
-                  onClick={() => setDrawer(false)}
-                  aria-current={
-                    pathname === item.href ||
-                    (!exactNavPath && pathname.startsWith(`${item.href}/`))
-                      ? 'page'
-                      : undefined
-                  }
-                >
-                  {ICONS[item.icon]}
-                  <span>{text[item.label]}</span>
-                </Link>
-              ))}
-            </div>
-          ))}
-        </nav>
-        <p className="sgn-sidebar-foot">{text.footNote}</p>
-      </aside>
-      {drawer ? (
-        <button
-          type="button"
-          className="sgn-scrim"
-          aria-label={text.close}
-          onClick={() => setDrawer(false)}
-        />
-      ) : null}
-      <div className="sgn-main">
-        <header className="sgn-topbar">
-          <button
-            ref={menuButton}
-            className="sgn-menu-btn"
-            type="button"
-            aria-expanded={drawer ? 'true' : 'false'}
-            aria-controls="sgn-sidebar"
-            aria-label={drawer ? text.close : text.openMenu}
-            onClick={() => {
-              if (window.matchMedia('(max-width: 1039px)').matches) {
-                setDrawer(!drawer);
-              } else {
-                setSidebarCollapsed(!sidebarCollapsed);
-              }
-            }}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              width="22"
-              height="22"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              aria-hidden="true"
-            >
-              <path d="M4 7h16M4 12h16M4 17h16" />
-            </svg>
-          </button>
-          <nav className="sgn-crumbs" aria-label={text.breadcrumb}>
-            {crumbs.map((crumb, index) => (
-              <Fragment key={crumb.label}>
-                {'href' in crumb && crumb.href ? (
-                  <Link href={crumb.href}>{crumb.label}</Link>
-                ) : (
-                  <span aria-current="page">{crumb.label}</span>
-                )}
-                {index < crumbs.length - 1 ? (
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    aria-hidden="true"
+    <ToastProvider locale={locale}>
+      <div className={sidebarCollapsed ? 'sgn-app is-collapsed' : 'sgn-app'}>
+        <a className="sgn-skip" href="#main-content">
+          {text.skipToContent}
+        </a>
+        <aside
+          id="sgn-sidebar"
+          ref={aside}
+          className={drawer ? 'sgn-sidebar is-open' : 'sgn-sidebar'}
+        >
+          <div className="sgn-lockup">
+            <span className="logo-tile">
+              <Image src="/brand/logo.png" alt="" width={192} height={165} />
+            </span>
+            <span className="sgn-brand-name">
+              Saigon New House
+              <span>{text.brandRole}</span>
+            </span>
+          </div>
+          <nav className="sgn-nav" aria-label={text.title}>
+            {groups.map((group) => (
+              <div className="sgn-nav-group" key={group.label}>
+                <p className="sgn-nav-label">{text[group.label]}</p>
+                {group.items.map((item) => (
+                  <Link
+                    key={item.id}
+                    href={item.href}
+                    className="sgn-nav-item"
+                    onClick={() => setDrawer(false)}
+                    aria-current={
+                      pathname === item.href ||
+                      (!exactNavPath && pathname.startsWith(`${item.href}/`))
+                        ? 'page'
+                        : undefined
+                    }
                   >
-                    <path d="M9 5l7 7-7 7" />
-                  </svg>
-                ) : null}
-              </Fragment>
+                    {ICONS[item.icon]}
+                    <span>{text[item.label]}</span>
+                  </Link>
+                ))}
+              </div>
             ))}
           </nav>
-          <div className="sgn-topbar-right">
-            <LanguageSwitch locale={locale} />
-            {employee ? <UserMenu locale={locale} employee={employee} /> : null}
-          </div>
-        </header>
-        <main className="sgn-content" id="main-content" tabIndex={-1}>
-          {children}
-        </main>
+          <p className="sgn-sidebar-foot">{text.footNote}</p>
+        </aside>
+        {drawer ? (
+          <button
+            type="button"
+            className="sgn-scrim"
+            aria-label={text.close}
+            onClick={() => setDrawer(false)}
+          />
+        ) : null}
+        <div className="sgn-main">
+          <header className="sgn-topbar">
+            <button
+              ref={menuButton}
+              className="sgn-menu-btn"
+              type="button"
+              aria-expanded={drawer ? 'true' : 'false'}
+              aria-controls="sgn-sidebar"
+              aria-label={drawer ? text.close : text.openMenu}
+              onClick={() => {
+                if (window.matchMedia('(max-width: 1039px)').matches) {
+                  setDrawer(!drawer);
+                } else {
+                  setSidebarCollapsed(!sidebarCollapsed);
+                }
+              }}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="22"
+                height="22"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                aria-hidden="true"
+              >
+                <path d="M4 7h16M4 12h16M4 17h16" />
+              </svg>
+            </button>
+            <nav className="sgn-crumbs" aria-label={text.breadcrumb}>
+              {crumbs.map((crumb, index) => (
+                <Fragment key={crumb.label}>
+                  {'href' in crumb && crumb.href ? (
+                    <Link href={crumb.href}>{crumb.label}</Link>
+                  ) : (
+                    <span aria-current="page">{crumb.label}</span>
+                  )}
+                  {index < crumbs.length - 1 ? (
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M9 5l7 7-7 7" />
+                    </svg>
+                  ) : null}
+                </Fragment>
+              ))}
+            </nav>
+            <div className="sgn-topbar-right">
+              <LanguageSwitch locale={locale} />
+              {employee ? (
+                <UserMenu locale={locale} employee={employee} />
+              ) : null}
+            </div>
+          </header>
+          <main className="sgn-content" id="main-content" tabIndex={-1}>
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
+    </ToastProvider>
   );
 }

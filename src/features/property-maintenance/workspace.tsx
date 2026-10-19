@@ -12,6 +12,7 @@ import { targetFields, type Target, type Changes } from './fields';
 import { maintenanceError, maintenanceText, optionLabel } from './messages';
 import { ContactPicker } from './contact-picker';
 import { failureRoute } from './refusal-rules';
+import { useToast } from '@/features/toasts/toast-host';
 import { useNarrowSections } from './narrow-view';
 import {
   SECTIONS,
@@ -55,8 +56,16 @@ export function Maintenance({
     [editor, setEditor] = useState<Editor | null>(null),
     [selected, setSelected] = useState(''),
     [contactBusy, setContactBusy] = useState(false),
-    [contactError, setContactError] = useState<string | null>(null),
-    [notice, setNotice] = useState(false);
+    [contactError, setContactError] = useState<string | null>(null);
+  const notify = useToast();
+  // The dialog closes on a committed save, so the confirmation names the target it recorded.
+  const targetSaved: Record<Target, string> = {
+    property: text.propertySaved,
+    address: text.addressSaved,
+    mapping: text.addressSaved,
+    contact: text.contactSaved,
+    link: text.linkSaved,
+  };
   const controller = useRef<AbortController | null>(null),
     [facts, setFacts] = useState(property),
     [factsSavedRevision, setFactsSavedRevision] = useState<string | null>(null);
@@ -97,7 +106,6 @@ export function Maintenance({
       values,
     });
     setSelected(typeof values.contact_id === 'string' ? values.contact_id : '');
-    setNotice(false);
   }
   async function contact(id: string) {
     controller.current?.abort();
@@ -147,8 +155,9 @@ export function Maintenance({
     });
   }
   async function saved() {
+    if (!editor) return;
     setEditor((current) => (current === editor ? null : current));
-    setNotice(true);
+    notify({ saved: true, message: targetSaved[editor.target] });
     await onSaved();
   }
   async function saveFacts(changes: Changes, explanation?: string) {
@@ -164,7 +173,7 @@ export function Maintenance({
     return result;
   }
   async function savedFacts() {
-    setNotice(true);
+    notify({ saved: true, message: text.propertySaved });
     await onSaved();
   }
   const sectionLabel: Record<Section, string> = {
@@ -176,7 +185,6 @@ export function Maintenance({
     <section className="panel" aria-label={text.editFacts}>
       <div className="panel-body">
         <p>{text.immediate}</p>
-        {notice ? <p role="status">{text.saved}</p> : null}
         {narrow ? (
           <div className="field">
             <label className="field-label" htmlFor="maintenance-section">
@@ -458,7 +466,7 @@ export function Maintenance({
                       api<{ id: string }>('/api/contacts', { changes })
                     }
                     onSaved={async () => {
-                      setNotice(true);
+                      notify({ saved: true, message: text.contactSaved });
                       await onSaved();
                     }}
                     onDenied={onDenied}

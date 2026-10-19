@@ -11,6 +11,7 @@ import { label, messages, type Locale } from '@/i18n/messages';
 import { api, RequestError } from '@/features/employees/api';
 import { LoadingSkeleton } from '@/features/skeleton';
 import { vietnamDate, vietnamTimestamp } from '@/features/properties/format';
+import { useToast } from '@/features/toasts/toast-host';
 import { SALE_REFERENCE_MAX } from './rules';
 import type { SaleCompletionState } from './types';
 
@@ -42,6 +43,7 @@ export function SaleCompletion({
     dateId = useId(),
     referenceId = useId(),
     helpId = useId();
+  const notify = useToast();
   const [state, setState] = useState<SaleCompletionState | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -51,7 +53,6 @@ export function SaleCompletion({
   const [reference, setReference] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const inFlight = useRef<AbortController | null>(null);
   const generation = useRef(0);
   // One client-chosen key per draft, so an interrupted or ambiguous confirmation retries the
@@ -102,7 +103,6 @@ export function SaleCompletion({
     key.current ||= crypto.randomUUID();
     setSaving(true);
     setError(null);
-    setNotice(null);
     try {
       const next = await api<SaleCompletionState>(
         '/api/properties/' + propertyId + '/sale-completion',
@@ -118,7 +118,7 @@ export function SaleCompletion({
       setReference('');
       dateTouched.current = false;
       key.current = '';
-      setNotice(text.completedSaleRecorded);
+      notify({ saved: true, message: text.completedSaleRecorded });
       onSaved();
     } catch (problem) {
       if (
@@ -304,9 +304,6 @@ export function SaleCompletion({
           </button>
         </form>
       ) : null}
-      <p role="status" aria-live="polite">
-        {notice}
-      </p>
       <p className="field-hint">{text.completedSaleNote}</p>
     </section>
   );
