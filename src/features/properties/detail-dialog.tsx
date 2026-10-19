@@ -10,6 +10,7 @@ export function DetailActionDialog({
   children,
   open,
   onClose,
+  onClosed,
   size = 'wide',
 }: {
   title: string;
@@ -17,7 +18,10 @@ export function DetailActionDialog({
   children: ReactNode;
   open: boolean;
   onClose: () => void;
-  size?: 'default' | 'wide';
+  // Runs after the dialog has actually closed, so a surface can hand focus back to the control
+  // that opened it once this one has given that focus up.
+  onClosed?: () => void;
+  size?: 'default' | 'wide' | 'drawer';
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -33,7 +37,10 @@ export function DetailActionDialog({
       ref={dialogRef}
       className="sgn-dialog"
       data-size={size}
-      onClose={onClose}
+      onClose={() => {
+        onClose();
+        onClosed?.();
+      }}
       onCancel={onClose}
       aria-label={title}
     >

@@ -18,6 +18,7 @@ import { priceHistoryContract } from './price-history-contract.mjs';
 import { inventoryAgeContract } from './inventory-age-contract.mjs';
 import { inventoryFilterContract } from './inventory-filter-contract.mjs';
 import { inventoryPagingContract } from './inventory-paging-contract.mjs';
+import { inventoryStreamContract } from './inventory-stream-contract.mjs';
 import { vendorContract } from './vendor-contract.mjs';
 import { contactDirectoryContract } from './contact-directory-contract.mjs';
 import { propertyVendorLinkContract } from './property-vendor-links-contract.mjs';
@@ -782,6 +783,8 @@ await inventoryAgeContract({db,asUser,check,fails,employees});
 await inventoryFilterContract({db,asUser,check,fails,employees});
 // Ticket #140: the counted, offset-paged inventory read that replaced the cursor walks.
 await inventoryPagingContract({db,asUser,check,fails,employees});
+// Ticket #154: the newest-created-first stream that replaced the numbered pager on the page.
+await inventoryStreamContract({db,asUser,check,fails,employees});
 // Seeded Vietnamese province/city and ward/commune reference catalogue.
 await referenceCatalogContract({db,asUser,check,fails,employees,root});
 // Ticket #35: reviewer-only province activity grouped by latest verified primary province.

@@ -333,6 +333,13 @@ group, no property approved or verified, no deployment.
 | Retry one comment submission with the same employee submission key | One original comment identity; no duplicate; conflicting property or text reuse rejected |
 | Read and post archived-property discussion by role | Reviewer reads; ordinary employees do not; posting denied for every role |
 | Two live sessions post and archive the same property | Serialized on the parent property; no comment commits after the archive commits |
+| Scroll one filtered stream past several window boundaries | The DOM holds only the rows near the viewport (record the deepest scroll point and the DOM row count); consecutive windows neither repeat nor skip a record; the header count and the rows come from the same filtered read |
+| Call the properties read with a retired `page`, `pageSize` or cursor parameter | `400/invalid-input`; a stale `page=` address opens the stream at the top rather than a different window |
+| Switch Cards ↔ Table, and apply or remove a filter or an ordering | The switch keeps the search, the ordering and the filters (the view travels in the address) and never changes the read; below 641px the switch is not offered and a `view=table` address renders cards |
+| Reach a table row by keyboard (Tab to the row control, then Enter or Space) | The row's own button is focused, the quick view opens; Escape closes it and focus returns to the originating row |
+| Post a comment from the quick view | The comment appears in the panel without a reload; replaying the same key does not duplicate it |
+| Quick-upload a photo and a PDF from the quick view | The existing register → PUT → recovery → complete path runs with the per-class limits and refusals; a lost completion answer is re-checked rather than assumed |
+| Follow the quick view's full-record link | The full detail page opens; going back returns to the list with the same stream position and view |
 | Production recovery rehearsal | New user writes preserved; backup/import map available |
 
 Use Supabase CLI advisors and the real local/staging database when available. Inspect the current command's `--help` rather than assuming old flags. Run the SQL pgTAP structural checks in `supabase/tests/` on the local stack.
