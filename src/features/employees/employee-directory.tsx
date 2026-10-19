@@ -193,7 +193,7 @@ export function EmployeeDirectory({
                   <h3>{text.employeeDirectoryEmpty}</h3>
                 </div>
               ) : (
-                <div className="table-wrap">
+                <div className="table-wrap employee-table-wrap">
                   <table className="data-table stackable">
                     <thead>
                       <tr>

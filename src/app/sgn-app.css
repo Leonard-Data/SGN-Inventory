@@ -575,7 +575,14 @@ button.sgn-nav-item { width: 100%; background: transparent; border: 0; text-alig
 }
 
 /* ── data table ─────────────────────────────────────────────────────────── */
-.table-wrap { overflow-x: auto; }
+  .table-wrap { overflow-x: auto; }
+  .employee-table-wrap { overflow: visible; }
+  .employee-table-wrap .data-table { overflow: visible; }
+  .employee-table-wrap tbody tr:has(.action-popover) { position: relative; z-index: 2; }
+  @media (max-width: 719px) {
+    .employee-table-wrap { overflow-x: auto; overflow-y: visible; }
+  }
+
 .data-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
 .data-table caption { text-align: left; padding: 0 0 var(--space-3); color: var(--muted); font-size: var(--text-xs); }
 .data-table th {
