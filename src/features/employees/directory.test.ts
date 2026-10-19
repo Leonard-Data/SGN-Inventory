@@ -18,7 +18,9 @@ function row(index: number, patch: Partial<DirectoryRow> = {}): DirectoryRow {
     id: `${String(index).padStart(8, '0')}-0000-4000-8000-000000000000`,
     display_name: `Fixture ${index}`,
     email: `fixture${index}@example.test`,
+    phone: null,
     role: 'sales',
+    bio: null,
     auth_user_id: `${String(index).padStart(8, '0')}-0000-4000-8000-0000000000ff`,
     is_active: true,
     account_deleted_at: null,
@@ -81,12 +83,26 @@ test('a page is bounded and keeps the database ordering', () => {
     id: rows[0]!.id,
     displayName: rows[0]!.display_name,
     email: rows[0]!.email,
+    phone: null,
+    bio: null,
     role: rows[0]!.role,
     access: 'active',
     deactivation: null,
     deletion: null,
     invitation: null,
   });
+});
+
+// The admin directory is the one read that carries the editable recorded fields, so the edit
+// panel opens on the values that are actually recorded.
+test('the directory entry carries the recorded bio and phone for the admin edit', () => {
+  const page = directoryPage([
+    row(1, { bio: 'Phụ trách Quận 3.', phone: '0909 111 222' }),
+  ]);
+  assert.equal(page.employees[0]!.bio, 'Phụ trách Quận 3.');
+  assert.equal(page.employees[0]!.phone, '0909 111 222');
+  // An employee with no recorded bio reports its own absence rather than an empty value.
+  assert.equal(directoryPage([row(2)]).employees[0]!.bio, null);
 });
 
 test('the recorded administration state is attached to its employee', () => {

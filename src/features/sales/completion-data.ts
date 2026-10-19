@@ -61,11 +61,7 @@ export async function saleCompletionState(
       .select('id,status,archived_at')
       .eq('id', id)
       .maybeSingle(),
-    context.client
-      .from('employees')
-      .select('id,display_name,auth_user_id,is_active,account_deleted_at')
-      .order('display_name')
-      .order('id'),
+    context.client.rpc('list_employee_credit_options'),
     context.client
       .from('sale_completions')
       .select(completionColumns)

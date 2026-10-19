@@ -6,8 +6,8 @@ import { listEmployees } from '@/features/employees/directory-data';
 
 export function GET(request: NextRequest) {
   return runRoute(request, async (context) => {
-    // Live membership first, then the live role: the employee list is an admin surface
-    // even though the attribution read stays open to every active employee.
+    // Live membership first, then the live role: the employee list is an admin surface, and
+    // the database row read behind it is the live admin's full employee read.
     const employee = await activeEmployee(context);
     if (!mayReadDirectory(employee.role))
       throw new ApiError(403, 'access-denied');

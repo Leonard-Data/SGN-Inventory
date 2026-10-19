@@ -34,6 +34,18 @@ _Avoid_: Deleted employee row, anonymized person, re-invitable account
 The employee's preferred Vietnamese or English interface language. It is independent of the language of addresses, source records and signed documents.
 _Avoid_: Record language
 
+**Employee bio**:
+One optional plain-text line about themselves, at most 280 characters, stored on the employee record without markup or a link. The person writes it on their own profile page and an admin may edit it with the rest of their details; it is shown on the employee's entry in the admin employee directory, which stays admin-only.
+_Avoid_: About text, rich profile, description field
+
+**My profile**:
+The signed-in employee's own display name and bio, reached from the account menu. It acts only on the person signed in and offers no phone, role, email or access change; phone and role stay admin-edited from the employee directory.
+_Avoid_: Account settings, employee edit page
+
+**Employee profile edit**:
+The admin edit of one recorded employee's display name, phone, role and bio on the employees page, saved as one deliberate action that reports what changed. The sign-in email is not an editable field, a deactivated or account-deleted employee is refused, and a role change is recorded with the admin who made it.
+_Avoid_: Employee update, direct table write
+
 **Employee deactivation**:
 The controlled disabling of a linked employee's company inventory access, completed only after the exact sign-in block is confirmed by the sign-in provider. Membership is disabled first and an unconfirmed provider result stays a reconciliation state, not a completed deactivation.
 _Avoid_: Access patching, account deletion

@@ -124,10 +124,10 @@ async function creatorNames(
     ),
   ];
   if (!creatorIds.length) return new Map();
-  const { data: employees, error: employeeError } = await context.client
-    .from('employees')
-    .select('id,display_name')
-    .in('id', creatorIds);
+  const { data: employees, error: employeeError } = await context.client.rpc(
+    'list_employee_names',
+    { p_ids: creatorIds },
+  );
   if (employeeError) throw accessError(employeeError.code);
   return propertyCreators(records ?? [], employees ?? []);
 }

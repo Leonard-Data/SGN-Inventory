@@ -32,6 +32,7 @@ import { contactLinksConcurrency } from './contact-links-concurrency.mjs';
 import { employeeInvitationContract } from './employee-invitation-contract.mjs';
 import { employeeInvitationConcurrency } from './employee-invitation-concurrency.mjs';
 import { employeeInvitationAcceptanceContract } from './employee-invitation-acceptance-contract.mjs';
+import { employeeProfileContract } from './employee-profile-contract.mjs';
 import { applyEmbeddedSchema } from './embedded-schema.mjs';
 import { provinceActivityContract } from './province-activity-contract.mjs';
 import { addressDuplicateMergeContract } from './address-duplicate-merge-contract.mjs';
@@ -83,9 +84,15 @@ await check('accent insensitive legacy address search',async()=>assert.equal((aw
 await check('salesperson cannot bypass revision RPC for another creator property',()=>fails("update public.properties set notes='change' where id=$1 returning id",[other],'42501'));
 await check('salesperson cannot mark property sold',()=>fails("update public.properties set status='sold' where id=$1",[property],'42501'));
 await check('salesperson cannot grant admin role',async()=>assert.equal((await db.query("update public.employees set role='admin' where id=$1 returning id",[employees[0]])).rows.length,0));
-// The admin employee list is an application-level surface; the employee rows stay readable to
-// every active employee because reservation, comment and history attribution read them.
-await check('active employee keeps the directory read used for business attribution',async()=>assert.equal((await db.query('select id from public.employees')).rows.length,employees.length + 1));
+// An employee's own record is the only employee row the table read returns; colleague identity
+// for business attribution comes from the sanctioned name projection, which carries no personal
+// field.
+await check('an active employee reads only their own employee row',async()=>assert.deepEqual((await db.query('select id from public.employees')).rows.map((row)=>row.id),[employees[0]]));
+await check('the sanctioned name projection resolves colleagues without a personal field',async()=>{
+  const rows=(await db.query('select * from public.list_employee_names($1)',[employees])).rows;
+  assert.deepEqual(rows.map((row)=>row.id),employees);
+  assert.deepEqual(Object.keys(rows[0]).sort(),['display_name','id']);
+});
 // An access revision advances only when a recorded access fact changes, and it is assigned on
 // every update so no client can choose it; a protected read compares it with the session it
 // authorized on. Fixture 5 is restored to staff, active and its original locale at the end.
@@ -118,7 +125,19 @@ await check('colleague cannot read private employee activity',async()=>assert.eq
 const competing=(await db.query('select public.request_property_lock($1,$2) as id',[property,'Another pending employee claim for same property'])).rows[0].id;
 await asUser(2);
 await db.query('select public.decide_property_lock($1,true,$2)',[lock,'Agreement verified independently by manager']);
-await check('manager approval creates one effective reservation',async()=>assert.equal((await db.query('select * from public.v_effective_property_locks')).rows.length,1));
+await check('manager approval creates one effective reservation',async()=>{
+  const rows=(await db.query('select requested_by,employee_name from public.v_effective_property_locks')).rows;
+  assert.equal(rows.length,1);
+  assert.equal(rows[0].requested_by,employees[0]);
+  // The claimant's name resolves through the sanctioned projection, not a colleague row read.
+  assert.equal(rows[0].employee_name,'Fixture 0');
+});
+await check('manager lock summary still covers every employee',async()=>{
+  const rows=(await db.query('select employee_id,display_name,effective_lock_count::int as count from public.v_admin_locks_by_employee')).rows;
+  assert.equal(rows.length,employees.length + 1);
+  const claimant=rows.find((row)=>row.employee_id===employees[0]);
+  assert.deepEqual({displayName:claimant?.display_name,count:claimant?.count},{displayName:'Fixture 0',count:1});
+});
 await check('second approval fails exclusivity constraint',()=>fails('select public.decide_property_lock($1,true,$2)',[competing,'Another agreement reviewed by manager'],'23505'));
 const own=(await db.query('select public.request_property_lock($1,$2) as id',[other,'Manager own customer agreement pending review'])).rows[0].id;
 await check('manager self approval forbidden',()=>fails('select public.decide_property_lock($1,true,$2)',[own,'Attempting self approval is forbidden'],'42501'));
@@ -782,6 +801,9 @@ await employeeInvitationContract({db,asUser,check,fails});
 await employeeInvitationConcurrency({root,check});
 // Issue #69: accepting the recorded invitation, linking and activating the exact invitee.
 await employeeInvitationAcceptanceContract({db,asUser,check,fails});
+// Employee profile edit: the admin edit, the person's own name and bio, the last-active-admin
+// rule, the deactivated/deleted refusal and the bio limit.
+await employeeProfileContract({db,asUser,check,fails});
 // Ticket #73: the vendor directory authority, validation, retry and paging rules.
 await vendorContract({db,asUser,check,fails,employees});
 // Ticket #74: property-to-vendor links, their correction and the recorded link row as the trail;

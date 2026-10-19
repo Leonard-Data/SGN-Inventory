@@ -452,6 +452,46 @@ const vi = {
     'Máy chủ chưa có cấu hình gửi lời mời. Yêu cầu đã được ghi nhận; hãy thử lại sau khi cấu hình được khôi phục.',
   employeeInviteLoadFailed: 'Không thể tải trạng thái lời mời.',
   employeeInviteOpen: 'Ghi nhận lời mời',
+  // Employee profile edit and the signed-in person's own profile.
+  employeeBio: 'Tiểu sử',
+  employeeBioNone: 'Chưa có tiểu sử',
+  employeePhone: 'Số điện thoại',
+  employeeEdit: 'Sửa thông tin',
+  employeeEditNote:
+    'Sửa họ tên, số điện thoại, vai trò và tiểu sử đã ghi nhận. Email đăng nhập không đổi được ở đây; thao tác chỉ được lưu khi bấm lưu và báo lại những gì đã thay đổi.',
+  employeeEditEmailNote:
+    'Email đăng nhập không phải trường sửa được; hãy dùng quy trình tài khoản riêng nếu địa chỉ sai.',
+  employeeEditPhoneHint: 'Không bắt buộc. Giữ nguyên dạng số đã ghi nhận.',
+  employeeEditRoleHint:
+    'Vai trò được ghi vào hồ sơ nhân viên; mọi lần đổi vai trò đều được ghi lại.',
+  employeeEditBioHint:
+    'Văn bản thường, tối đa 280 ký tự, không có liên kết. Hiện trên mục của người này trong danh sách nhân viên.',
+  employeeEditSaved: 'Đã lưu thay đổi: {fields}.',
+  employeeEditNotEditable:
+    'Không sửa được: nhân viên đã bị tắt quyền truy cập hoặc tài khoản đăng nhập đã bị xóa.',
+  employeeEditLastAdmin:
+    'Không thể lưu: phải còn ít nhất một quản trị viên đang hoạt động.',
+  employeeEditNotFound: 'Không tìm thấy nhân viên này.',
+  employeeProfileTitle: 'Thông tin của tôi',
+  employeeProfileIntro:
+    'Bạn tự sửa họ tên và tiểu sử của mình. Số điện thoại, vai trò và email đăng nhập do quản trị viên quản lý.',
+  employeeProfileNameHint:
+    'Tên hiển thị của bạn trong ứng dụng. Văn bản thường, tối đa 120 ký tự.',
+  employeeProfileBioHint:
+    'Văn bản thường, tối đa 280 ký tự, không có liên kết. Người xem danh sách nhân viên sẽ đọc tiểu sử này trên mục của bạn.',
+  employeeProfileEmailNote:
+    'Email đăng nhập không thay đổi ở đây và không phải trường của biểu mẫu này.',
+  employeeProfileSave: 'Lưu thông tin',
+  employeeProfileSaved: 'Đã lưu họ tên và tiểu sử của bạn.',
+  employeeProfileUnchanged: 'Không có thay đổi nào để lưu.',
+  employeeProfileNameRequired: 'Hãy nhập họ tên.',
+  employeeProfileNameTooLong: 'Họ tên tối đa 120 ký tự.',
+  employeeProfilePhoneTooLong: 'Số điện thoại tối đa 40 ký tự.',
+  employeeProfileBioTooLong: 'Tiểu sử tối đa 280 ký tự.',
+  employeeProfilePlainText:
+    'Chỉ dùng văn bản thường: không có mã định dạng và không có liên kết.',
+  employeeProfileLoadFailed: 'Không thể tải thông tin của bạn.',
+  employeeProfileFailed: 'Không thể lưu thông tin của bạn.',
   // The invitation destination is now the acceptance journey (issue #69): the delivered link
   // is verified, the invitee sets a name and password, and activates immediately on success.
   inviteTitle: 'Thiết lập tài khoản',
@@ -1166,6 +1206,46 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
       'The server has no invitation configuration. The request is recorded; retry after configuration is restored.',
     employeeInviteLoadFailed: 'The invitation state did not load.',
     employeeInviteOpen: 'Record an invitation',
+    // Employee profile edit and the signed-in person's own profile.
+    employeeBio: 'Bio',
+    employeeBioNone: 'No bio yet',
+    employeePhone: 'Phone',
+    employeeEdit: 'Edit details',
+    employeeEditNote:
+      'Edit the recorded name, phone, role and bio. The sign-in email cannot be changed here; the save is one deliberate action and reports what changed.',
+    employeeEditEmailNote:
+      'The sign-in email is not an editable field; use the separate account process if the address is wrong.',
+    employeeEditPhoneHint: 'Optional. Keep the digits as recorded.',
+    employeeEditRoleHint:
+      'The role is recorded on the employee row; every role change is recorded with who made it.',
+    employeeEditBioHint:
+      'Plain text, at most 280 characters, no links. It appears on this person’s entry in the employee list.',
+    employeeEditSaved: 'Saved changes: {fields}.',
+    employeeEditNotEditable:
+      'Not editable: this employee is deactivated or their sign-in account is deleted.',
+    employeeEditLastAdmin:
+      'Cannot save: at least one active admin must remain.',
+    employeeEditNotFound: 'This employee could not be found.',
+    employeeProfileTitle: 'My profile',
+    employeeProfileIntro:
+      'You edit your own name and bio. Phone, role and the sign-in email are managed by an admin.',
+    employeeProfileNameHint:
+      'The name shown for you in the app. Plain text, at most 120 characters.',
+    employeeProfileBioHint:
+      'Plain text, at most 280 characters, no links. Anyone who opens the employee list reads this bio on your entry.',
+    employeeProfileEmailNote:
+      'The sign-in email is not changed here and is not a field of this form.',
+    employeeProfileSave: 'Save profile',
+    employeeProfileSaved: 'Your name and bio were saved.',
+    employeeProfileUnchanged: 'Nothing changed.',
+    employeeProfileNameRequired: 'Enter a name.',
+    employeeProfileNameTooLong: 'The name is at most 120 characters.',
+    employeeProfilePhoneTooLong: 'The phone is at most 40 characters.',
+    employeeProfileBioTooLong: 'The bio is at most 280 characters.',
+    employeeProfilePlainText:
+      'Plain text only: no formatting markup and no links.',
+    employeeProfileLoadFailed: 'Your profile could not be loaded.',
+    employeeProfileFailed: 'Your profile could not be saved.',
     // The invitation destination is now the acceptance journey (issue #69): the delivered link
     // is verified, the invitee sets a name and password, and activates immediately on success.
     inviteTitle: 'Set up your account',

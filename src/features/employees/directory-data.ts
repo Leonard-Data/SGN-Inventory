@@ -29,7 +29,7 @@ export async function listEmployees(
   let request = context.client
     .from('employees')
     .select(
-      'id,display_name,email,role,auth_user_id,is_active,account_deleted_at',
+      'id,display_name,email,phone,role,bio,auth_user_id,is_active,account_deleted_at',
     )
     .order('id')
     .limit(DIRECTORY_PAGE_SIZE + 1);

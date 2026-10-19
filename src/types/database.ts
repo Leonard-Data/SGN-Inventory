@@ -428,6 +428,7 @@ export type Database = {
           access_revision: number;
           account_deleted_at: string | null;
           auth_user_id: string | null;
+          bio: string | null;
           created_at: string;
           display_name: string;
           email: string;
@@ -441,6 +442,7 @@ export type Database = {
           access_revision?: number;
           account_deleted_at?: string | null;
           auth_user_id?: string | null;
+          bio?: string | null;
           created_at?: string;
           display_name: string;
           email: string;
@@ -454,6 +456,7 @@ export type Database = {
           access_revision?: number;
           account_deleted_at?: string | null;
           auth_user_id?: string | null;
+          bio?: string | null;
           created_at?: string;
           display_name?: string;
           email?: string;
@@ -2149,6 +2152,20 @@ export type Database = {
           version: number | null;
         }[];
       };
+      list_employee_names: {
+        Args: { p_ids: string[] };
+        Returns: { display_name: string; id: string }[];
+      };
+      list_employee_credit_options: {
+        Args: never;
+        Returns: {
+          account_deleted_at: string | null;
+          auth_user_id: string | null;
+          display_name: string;
+          id: string;
+          is_active: boolean;
+        }[];
+      };
       list_vendors: {
         Args: {
           p_before_created_at?: string;
@@ -2367,6 +2384,20 @@ export type Database = {
         Returns: undefined;
       };
       set_my_locale: { Args: { p_locale: string }; Returns: undefined };
+      update_employee_profile: {
+        Args: {
+          p_employee_id: string;
+          p_display_name: string;
+          p_phone: string;
+          p_role: string;
+          p_bio: string;
+        };
+        Returns: Json;
+      };
+      update_my_profile: {
+        Args: { p_display_name: string; p_bio: string };
+        Returns: Json;
+      };
       set_property_cover: {
         Args: { p_file_id?: string; p_property_id: string };
         Returns: undefined;

@@ -12,7 +12,9 @@ export type DirectoryRow = {
   id: string;
   display_name: string;
   email: string;
+  phone: string | null;
   role: string;
+  bio: string | null;
   auth_user_id: string | null;
   is_active: boolean;
   account_deleted_at: string | null;
@@ -49,6 +51,10 @@ export type DirectoryEntry = {
   id: string;
   displayName: string;
   email: string;
+  // The editable recorded fields the admin edit reads back: this read is admin-only, so the
+  // phone and bio here are never reachable from the ordinary employee row read.
+  phone: string | null;
+  bio: string | null;
   role: string;
   access: EmployeeAccess;
   // The recorded administration state for this employee, or null when no operation exists.
@@ -198,6 +204,8 @@ export function directoryPage(
       id: row.id,
       displayName: row.display_name,
       email: row.email,
+      phone: row.phone,
+      bio: row.bio,
       role: row.role,
       access: accessState(row),
       deactivation: operations.deactivation?.get(row.id) ?? null,
