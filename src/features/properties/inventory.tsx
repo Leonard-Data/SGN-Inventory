@@ -37,7 +37,6 @@ import {
 } from './view';
 import {
   isInventoryOrder,
-  reversedOrder,
   STREAM_CHUNK_ROWS,
   STREAM_ESTIMATE_PX,
   streamBand,
@@ -48,7 +47,7 @@ import {
   streamWindows,
   type InventoryOrder,
 } from './stream';
-import { TABLE_COLUMNS } from './table';
+import { SUMMARY_TABLE_COLUMNS } from './table';
 import type { PropertySummary } from './types';
 
 const NO_MEASURED: ReadonlyMap<number, number> = new Map();
@@ -219,8 +218,10 @@ export function Inventory({
     const measure = () => {
       pending = 0;
       const rect = node.getBoundingClientRect();
-      const top = Math.max(0, -rect.top);
-      const height = window.innerHeight;
+      const top =
+        shownView === 'table' ? node.scrollTop : Math.max(0, -rect.top);
+      const height =
+        shownView === 'table' ? node.clientHeight : window.innerHeight;
       setViewport((current) =>
         current.top === top && current.height === height
           ? current
@@ -232,12 +233,14 @@ export function Inventory({
     };
     measure();
     window.addEventListener('scroll', schedule, { passive: true });
+    node.addEventListener('scroll', schedule, { passive: true });
     window.addEventListener('resize', schedule);
     const observer = new ResizeObserver(schedule);
     observer.observe(node);
     return () => {
       if (pending) cancelAnimationFrame(pending);
       window.removeEventListener('scroll', schedule);
+      node.removeEventListener('scroll', schedule);
       window.removeEventListener('resize', schedule);
       observer.disconnect();
     };
@@ -337,9 +340,10 @@ export function Inventory({
   const orders: { value: InventoryOrder | null; label: string }[] = [
     { value: null, label: text.sortDefault },
     { value: 'oldest', label: text.sortOldest },
-    { value: 'newest', label: text.sortNewest },
+    ...(activeOrder === 'newest'
+      ? [{ value: 'newest' as const, label: text.sortNewest }]
+      : []),
   ];
-  const reversed = reversedOrder(activeOrder);
   const filterCount = activeFilterCount(filters);
   const failureMessage = (code: string) =>
     code === 'query-too-long'
@@ -355,9 +359,15 @@ export function Inventory({
     <>
       <div className="page-head">
         <div className="page-intro">
-          <p className="example">{text.title}</p>
           <h1>{text.inventory}</h1>
-          <p className="intro-copy">{text.searchHint}</p>
+          {ready ? (
+            <p className="intro-copy" role="status">
+              {text.inventoryMatchCount.replace(
+                '{total}',
+                numberFormat.format(total),
+              )}
+            </p>
+          ) : null}
         </div>
         <div className="page-actions">
           <Link
@@ -368,15 +378,6 @@ export function Inventory({
             <span aria-hidden="true">＋</span>
             {text.navNewProperty}
           </Link>
-          {employee?.role === 'manager' || employee?.role === 'admin' ? (
-            <Link
-              className="btn btn-ghost"
-              href="/activity/company"
-              prefetch={false}
-            >
-              {text.companyActivityLink}
-            </Link>
-          ) : null}
         </div>
       </div>
 
@@ -460,55 +461,12 @@ export function Inventory({
                 <option
                   key={order.value ?? 'default'}
                   value={order.value ?? ''}
+                  hidden={order.value === 'newest'}
                 >
                   {order.label}
                 </option>
               ))}
             </select>
-            {reversed ? (
-              <Link
-                className="btn btn-secondary btn-sm toolbar-dir"
-                href={orderHref(reversed)}
-                prefetch={false}
-                title={`${text.orderReverse}: ${reversed === 'oldest' ? text.sortOldest : text.sortNewest}`}
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M8 20V6M8 6 5 9M8 6l3 3" />
-                  <path d="M16 4v14M16 18l3-3M16 18l-3-3" />
-                </svg>
-                {reversed === 'oldest' ? text.sortOldest : text.sortNewest}
-              </Link>
-            ) : (
-              <button
-                className="btn btn-secondary btn-sm toolbar-dir"
-                type="button"
-                disabled
-                title={text.orderReverseHint}
-                aria-label={`${text.orderReverse}: ${text.orderReverseHint}`}
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M8 20V6M8 6 5 9M8 6l3 3" />
-                  <path d="M16 4v14M16 18l3-3M16 18l-3-3" />
-                </svg>
-                {text.orderReverse}
-              </button>
-            )}
             <button
               className="btn btn-secondary btn-sm"
               type="button"
@@ -606,7 +564,13 @@ export function Inventory({
             onOpen={setFiltersOpen}
             onDenied={denyFiles}
           />
-          <p className="search-hint">{text.searchHint}</p>
+          <div className="inventory-search-help">
+            <p className="search-hint">{text.inventorySearchHint}</p>
+            <details>
+              <summary>{text.searchHelp}</summary>
+              <p>{text.inventorySearchHelp}</p>
+            </details>
+          </div>
           {sort ? <p className="search-hint">{text.ageHint}</p> : null}
           {searchError ? (
             <p className="search-hint" role="alert">
@@ -710,16 +674,6 @@ export function Inventory({
           ) : null}
           {ready && total > 0 ? (
             <>
-              <div className="row-between">
-                <p className="result-line">
-                  <b>
-                    {text.inventoryMatchCount.replace(
-                      '{total}',
-                      numberFormat.format(total),
-                    )}
-                  </b>
-                </p>
-              </div>
               {streamError ? (
                 <p className="search-hint" role="alert">
                   {text.streamPartialFailed}{' '}
@@ -736,6 +690,9 @@ export function Inventory({
                 className="inventory-stream"
                 ref={container}
                 data-view={shownView}
+                tabIndex={shownView === 'table' ? 0 : undefined}
+                role={shownView === 'table' ? 'region' : undefined}
+                aria-label={text.inventory}
               >
                 {shownView === 'table' ? (
                   <table
@@ -749,7 +706,7 @@ export function Inventory({
                           className="inventory-gap"
                           style={{ height: band.top }}
                         >
-                          <td colSpan={TABLE_COLUMNS.length} />
+                          <td colSpan={SUMMARY_TABLE_COLUMNS.length} />
                         </tr>
                       </tbody>
                     ) : null}
@@ -761,6 +718,7 @@ export function Inventory({
                         count={Math.min(chunkRows, total - index * chunkRows)}
                         reserved={heights[index] ?? STREAM_ESTIMATE_PX}
                         locale={locale}
+                        resultLocation={resultLocation}
                         onOpen={openDrawer}
                         onMeasured={reportHeight}
                       />
@@ -771,7 +729,7 @@ export function Inventory({
                           className="inventory-gap"
                           style={{ height: band.bottom }}
                         >
-                          <td colSpan={TABLE_COLUMNS.length} />
+                          <td colSpan={SUMMARY_TABLE_COLUMNS.length} />
                         </tr>
                       </tbody>
                     ) : null}
@@ -816,6 +774,7 @@ export function Inventory({
       </section>
 
       <PropertyDrawer
+        employee={employee}
         property={opened?.record ?? null}
         locale={locale}
         open={opened !== null}

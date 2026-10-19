@@ -242,6 +242,7 @@ export function EmployeeDirectory({
   const [open, setOpen] = useState<{
     id: string;
     panel: 'deactivate' | 'delete' | 'profile' | 'resend';
+    opener: HTMLElement | null;
   } | null>(null);
   const [invitationOpen, setInvitationOpen] = useState(false);
   const invitationDialogRef = useRef<HTMLDialogElement>(null);
@@ -257,7 +258,13 @@ export function EmployeeDirectory({
   const toggle = (
     id: string,
     panel: 'deactivate' | 'delete' | 'profile' | 'resend',
-  ) => setOpen(open?.id === id && open.panel === panel ? null : { id, panel });
+  ) => {
+    setOpen(
+      open?.id === id && open.panel === panel
+        ? null
+        : { id, panel, opener: document.activeElement as HTMLElement },
+    );
+  };
   // The sgn-locale cookie is the rendered locale; the shell keeps it equal to the saved
   // preference.
   const locale = initialLocale;
@@ -302,11 +309,14 @@ export function EmployeeDirectory({
     provider_failed: text.employeeInviteReconciliationLabel,
     recorded: text.employeeInviteRecordedLabel,
   };
-  const invitationTone: Record<DirectoryInvitation['state'], string> = {
-    provider_pending: 'muted',
-    provider_failed: 'danger',
-    recorded: 'success',
-  };
+  // The record the profile drawer edits: the rows the stream has loaded, since only a drawn row
+  // can open the drawer.
+  const editing =
+    open?.panel === 'profile'
+      ? ([...stream.windows.values()]
+          .flat()
+          .find((entry) => entry.id === open.id) ?? null)
+      : null;
 
   // One employee and, when it is open, the panel below it. The panel is part of the chunk that
   // holds the row, so the chunk measures its rows' real height: the stream keeps its scroll
@@ -326,7 +336,6 @@ export function EmployeeDirectory({
     const deactivationOpen =
       open?.id === employee.id && open.panel === 'deactivate';
     const deletionOpen = open?.id === employee.id && open.panel === 'delete';
-    const profileOpen = open?.id === employee.id && open.panel === 'profile';
     const resendOpen = open?.id === employee.id && open.panel === 'resend';
     // Which actions this row offers, and their copy: the conditions are
     // named once in action-menu.ts and are the ones the row has offered
@@ -352,7 +361,12 @@ export function EmployeeDirectory({
       <Fragment key={employee.id}>
         <tr>
           <th scope="row" data-label={text.employeeName}>
-            {employee.displayName}
+            <b translate="no">
+              {employee.displayName.trim() || text.employeeUnnamed}
+            </b>
+            {!employee.displayName.trim() ? (
+              <small translate="no">{employee.email}</small>
+            ) : null}
           </th>
           <td data-label={text.email}>{employee.email}</td>
           <td data-label={text.employeeRole}>{label(locale, employee.role)}</td>
@@ -378,12 +392,10 @@ export function EmployeeDirectory({
               </span>
             ) : null}
             {employee.invitation ? (
-              <span
-                className="badge"
-                data-tone={invitationTone[employee.invitation.state]}
-              >
+              <small className="employee-invitation-history">
+                {text.employeeInvitationHistory}:{' '}
                 {invitationLabel[employee.invitation.state]}
-              </span>
+              </small>
             ) : null}
           </td>
           <td data-label={text.employeeActions}>
@@ -395,19 +407,6 @@ export function EmployeeDirectory({
             />
           </td>
         </tr>
-        {profileOpen ? (
-          <tr>
-            <td colSpan={COLUMNS}>
-              <EmployeeProfilePanel
-                employee={employee}
-                locale={locale}
-                onChanged={refresh}
-                onDenied={denied}
-                onClose={() => setOpen(null)}
-              />
-            </td>
-          </tr>
-        ) : null}
         {deactivationOpen ? (
           <tr>
             <td colSpan={COLUMNS}>
@@ -513,21 +512,25 @@ export function EmployeeDirectory({
         />
       ) : null}
 
+      <div className="page-head">
+        <div className="page-intro">
+          <h1 id="employees">{text.employeeDirectory}</h1>
+          <p className="intro-copy">{text.employeeDirectoryNote}</p>
+        </div>
+        {mayAdministerEmployees(actor?.role ?? '') ? (
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => setInvitationOpen(true)}
+          >
+            {text.employeeInviteOpen}
+          </button>
+        ) : null}
+      </div>
+
       <div ref={surface} hidden={!actor || busy}>
         <section className="panel page-section" aria-labelledby="employees">
-          <div className="panel-head">
-            <h2 id="employees">{text.employeesLink}</h2>
-          </div>
           <div className="panel-body">
-            {mayAdministerEmployees(actor?.role ?? '') ? (
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => setInvitationOpen(true)}
-              >
-                {text.employeeInviteOpen}
-              </button>
-            ) : null}
             {!ready && !failure ? (
               <LoadingSkeleton
                 label={text.loading}
@@ -603,6 +606,23 @@ export function EmployeeDirectory({
           ) : null}
         </section>
       </div>
+      {editing && !busy ? (
+        <EmployeeProfilePanel
+          key={editing.id}
+          employee={editing}
+          locale={locale}
+          opener={open?.opener ?? null}
+          onChanged={async () => {
+            const opener = open?.opener;
+            refresh();
+            requestAnimationFrame(() => {
+              if (opener?.isConnected) opener.focus();
+            });
+          }}
+          onDenied={denied}
+          onClose={() => setOpen(null)}
+        />
+      ) : null}
       <dialog
         ref={invitationDialogRef}
         className="sgn-dialog"

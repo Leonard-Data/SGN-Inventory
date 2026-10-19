@@ -3,7 +3,14 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  Fragment,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 import { label, messages, type Locale } from '@/i18n/messages';
 import { api, RequestError } from '@/features/employees/api';
 import type { Employee } from '@/features/employees/types';
@@ -81,6 +88,15 @@ const ICONS: Record<string, ReactNode> = {
     </svg>
   ),
 };
+
+const DESKTOP_QUERY = '(min-width: 1040px)';
+function subscribeDesktop(onChange: () => void) {
+  const query = window.matchMedia(DESKTOP_QUERY);
+  query.addEventListener('change', onChange);
+  return () => query.removeEventListener('change', onChange);
+}
+const desktopSnapshot = () => window.matchMedia(DESKTOP_QUERY).matches;
+const serverDesktop = () => false;
 
 function initials(name: string) {
   return name
@@ -285,6 +301,12 @@ export function AppShell({
   const [employee, setEmployee] = useState<Employee | null>(given ?? null);
   const [drawer, setDrawer] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const desktop = useSyncExternalStore(
+    subscribeDesktop,
+    desktopSnapshot,
+    serverDesktop,
+  );
+  const sidebarExpanded = desktop ? !sidebarCollapsed : drawer;
   const aside = useRef<HTMLElement>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
 
@@ -315,7 +337,7 @@ export function AppShell({
   }, []);
 
   useEffect(() => {
-    if (!drawer) return;
+    if (!drawer || desktop) return;
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         setDrawer(false);
@@ -341,7 +363,7 @@ export function AppShell({
     document.addEventListener('keydown', onKeyDown);
     aside.current?.querySelector<HTMLElement>('a[href]')?.focus();
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [drawer]);
+  }, [drawer, desktop]);
 
   const groups = employee ? visibleNavGroups(employee.role) : [];
   // A nested destination matches its own rail item exactly; the section item keeps
@@ -363,6 +385,7 @@ export function AppShell({
         </a>
         <aside
           id="sgn-sidebar"
+          inert={!sidebarExpanded}
           ref={aside}
           className={drawer ? 'sgn-sidebar is-open' : 'sgn-sidebar'}
         >
@@ -401,12 +424,15 @@ export function AppShell({
           </nav>
           <p className="sgn-sidebar-foot">{text.footNote}</p>
         </aside>
-        {drawer ? (
+        {drawer && !desktop ? (
           <button
             type="button"
             className="sgn-scrim"
             aria-label={text.close}
-            onClick={() => setDrawer(false)}
+            onClick={() => {
+              setDrawer(false);
+              menuButton.current?.focus();
+            }}
           />
         ) : null}
         <div className="sgn-main">
@@ -415,11 +441,11 @@ export function AppShell({
               ref={menuButton}
               className="sgn-menu-btn"
               type="button"
-              aria-expanded={drawer ? 'true' : 'false'}
+              aria-expanded={sidebarExpanded}
               aria-controls="sgn-sidebar"
-              aria-label={drawer ? text.close : text.openMenu}
+              aria-label={sidebarExpanded ? text.close : text.openMenu}
               onClick={() => {
-                if (window.matchMedia('(max-width: 1039px)').matches) {
+                if (!desktop) {
                   setDrawer(!drawer);
                 } else {
                   setSidebarCollapsed(!sidebarCollapsed);
@@ -469,7 +495,18 @@ export function AppShell({
               ) : null}
             </div>
           </header>
-          <main className="sgn-content" id="main-content" tabIndex={-1}>
+          <main
+            className="sgn-content"
+            data-layout={
+              pathname === '/properties' || /^\/people\/[^/]+$/.test(pathname)
+                ? 'wide'
+                : pathname === '/properties/new' || pathname === '/profile'
+                  ? 'form'
+                  : 'default'
+            }
+            id="main-content"
+            tabIndex={-1}
+          >
             {children}
           </main>
         </div>

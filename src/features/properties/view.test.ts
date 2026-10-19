@@ -167,9 +167,9 @@ test('the table sits inside one rounded, bordered surface', () => {
   assert.match(rule, /border: 1px solid var\(--border\)/);
   assert.match(rule, /border-radius: var\(--radius-lg\)/);
   assert.match(rule, /background: var\(--surface\)/);
-  // The frame encloses the table it holds; the ten columns keep their own width and the page is
-  // what scrolls sideways when they do not fit.
-  assert.match(rule, /width: fit-content/);
+  // The surface, not the whole page, contains a table wider than its available space.
+  assert.match(rule, /width: 100%/);
+  assert.match(rule, /overflow: auto/);
   // The corners of the first and last rows follow the frame.
   for (const corner of [
     'thead th:first-child',
@@ -189,16 +189,15 @@ test('the table sits inside one rounded, bordered surface', () => {
   assert.match(table.slice(0, table.indexOf('}')), /border-collapse: separate/);
 });
 
-// Exactly one scroll container scrolls the list: the page. Nothing inside the stream adds a
-// scrollbar of its own, so a wheel over the rows never scrolls a nested box instead.
-test('the list surface adds no scroll container of its own', () => {
+// One bounded table scrollport keeps sticky headings working while containing both axes.
+test('the table surface owns its scrollport and the virtual band measures it', () => {
   const start = surfaces.indexOf(".inventory-stream[data-view='table'] {");
   assert.ok(start > 0, 'the table surface is defined');
-  // A surface that named a height or an overflow would be a second scrollport beside the page.
-  assert.doesNotMatch(
-    surfaces.slice(start, surfaces.indexOf('}', start)),
-    /overflow|height:/,
-  );
+  const frame = surfaces.slice(start, surfaces.indexOf('}', start));
+  assert.match(frame, /overflow: auto/);
+  assert.match(frame, /max-height: calc\(100dvh/);
+  assert.match(inventory, /node\.scrollTop/);
+  assert.match(inventory, /node\.clientHeight/);
   const table = surfaces.slice(surfaces.indexOf('.inventory-table {'));
   assert.doesNotMatch(table.slice(0, table.indexOf('}')), /overflow|height:/);
 });

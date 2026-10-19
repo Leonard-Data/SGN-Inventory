@@ -16,6 +16,28 @@ export function formatVnd(value: string, locale: Locale): string {
     throw new Error('Whole VND decimal string required');
   return numberFormats[locale].format(BigInt(value)) + ' VND';
 }
+// Scale decimal strings exactly: compact labels must not round away a recorded dong.
+export function compactVnd(value: string, locale: Locale): string {
+  if (!/^\d+$/.test(value))
+    throw new Error('Whole VND decimal string required');
+  const amount = BigInt(value);
+  const digits = amount >= 1_000_000_000n ? 9 : amount >= 1_000_000n ? 6 : 0;
+  if (!digits) return formatDecimal(value, locale) + ' ₫';
+  const scale = 10n ** BigInt(digits);
+  const fraction = (amount % scale)
+    .toString()
+    .padStart(digits, '0')
+    .replace(/0+$/, '');
+  const whole = formatDecimal((amount / scale).toString(), locale);
+  const number =
+    whole + (fraction ? (locale === 'vi' ? ',' : '.') + fraction : '');
+  return (
+    number +
+    (digits === 9 ? messages[locale].vndBillion : messages[locale].vndMillion) +
+    ' ₫'
+  );
+}
+
 // A whole count the database derived (an inventory age in days) is never parsed from text,
 // so no locale number string can turn it into a different day count.
 export function formatInteger(value: number, locale: Locale): string {

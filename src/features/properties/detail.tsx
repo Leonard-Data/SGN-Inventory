@@ -402,6 +402,12 @@ export function Detail({
     !property.archived_at &&
     (employee.id === property.created_by ||
       ['staff', 'manager', 'admin'].includes(employee.role));
+  useEffect(() => {
+    if (canEdit && window.location.hash === '#edit-property') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- an authorized quick-view edit link opens the existing editor
+      setActionDialog('edit');
+    }
+  }, [canEdit]);
   const coverFileId = property?.cover_file_id ?? null;
   const canLinkVendor =
     !!employee &&

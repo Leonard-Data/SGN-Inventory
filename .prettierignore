@@ -19,8 +19,7 @@ docs/**
 !docs/setup.md
 !docs/development.md
 *.tsbuildinfo
-# Verbatim ports of the OpenDesign design-system package (tokens + app layer).
-# The package requires its values and formatting be copied, not tidied; updates
-# are whole-file replacements, so do not reformat them here.
+# Preserve the established compact formatting of tokens and shared vocabulary;
+# edit these styles in place rather than adding unrelated formatting churn.
 src/app/app.css
 src/app/sgn-app.css

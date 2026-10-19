@@ -166,17 +166,24 @@
    surface rather than meeting the page squarely: the border and radius are drawn
    by the stream, and the first and last rows are rounded with it so no square
    corner of a row shows through the frame. Separate borders keep the sticky
-   header's own border attached to it while it scrolls. The frame is as wide as
-   the table it holds: the ten columns have a min-content width of their own and
-   the page, not the frame, is what scrolls sideways when they do not fit. */
+   header's own border attached to it while it scrolls. This bounded scrollport owns
+   both axes: a horizontal-only overflow would also capture sticky positioning, so
+   the stream measures this scrollport for its virtual band rather than the page. */
 .inventory-stream[data-view='table'] {
-  width: fit-content;
+  width: 100%;
+  max-width: 100%;
+  max-height: calc(100dvh - var(--topbar-h) - var(--space-6));
+  overflow: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-gutter: stable;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
 }
 .inventory-table {
   width: 100%;
+  min-width: 1120px;
+  table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
   font-size: var(--text-sm);
@@ -199,27 +206,106 @@
 }
 .inventory-table thead th {
   position: sticky;
-  top: var(--topbar-h);
+  top: 0;
   z-index: 1;
   padding: var(--space-3);
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   text-align: left;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
   color: var(--muted);
   white-space: nowrap;
 }
 .inventory-cell {
-  padding: var(--space-3);
+  padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--border-soft);
   text-align: left;
   font-weight: 400;
-  vertical-align: top;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
   color: var(--fg-2);
+}
+.inventory-table [data-column='property'] {
+  width: 150px;
+}
+.inventory-table [data-column='address'] {
+  width: 26%;
+}
+.inventory-table [data-column='price'] {
+  width: 210px;
+  text-align: right;
+}
+.inventory-table [data-column='totalArea'] {
+  width: 105px;
+  text-align: right;
+}
+.inventory-table [data-column='status'] {
+  width: 125px;
+}
+.inventory-table [data-column='modifiedTime'] {
+  width: 135px;
+}
+.inventory-table [data-column='actions'] {
+  width: 160px;
+}
+.inventory-secondary {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+.inventory-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.inventory-actions .btn {
+  padding-inline: var(--space-2);
+}
+.inventory-menu {
+  position: relative;
+}
+.inventory-menu summary {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 44px;
+  cursor: pointer;
+  list-style: none;
+  border-radius: var(--radius-sm);
+}
+.inventory-menu summary::-webkit-details-marker {
+  display: none;
+}
+.inventory-menu[open] > div {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 2;
+  width: 190px;
+  padding: var(--space-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-raise);
+}
+.inventory-search-help {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+.inventory-search-help summary {
+  cursor: pointer;
+  min-height: 32px;
+}
+.inventory-search-help details p {
+  max-width: 65ch;
+  padding-block: var(--space-2);
 }
 .inventory-row:hover .inventory-cell {
   background: var(--surface-warm);
@@ -244,7 +330,7 @@
 /* The price is the value people scan the row for: the strongest type in it, in
    the monospaced tabular figures a column of numbers lines up in. */
 .inventory-price {
-  font-size: var(--text-base);
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--fg);
 }
@@ -316,7 +402,7 @@
 dialog.sgn-dialog[data-size='drawer'] {
   inset: 0 0 0 auto;
   margin: 0;
-  width: min(460px, 100vw);
+  width: min(540px, 100vw);
   height: 100dvh;
   max-height: none;
   overflow: clip;
@@ -325,11 +411,9 @@ dialog.sgn-dialog[data-size='drawer']::backdrop {
   background: transparent;
   backdrop-filter: none;
 }
-/* A narrow desktop keeps a working column of the list beside the panel: the panel gives up width
-   before it covers the row that opened it. */
-@media (min-width: 641px) {
+@media (max-width: 640px) {
   dialog.sgn-dialog[data-size='drawer'] {
-    width: min(460px, calc(100vw - 320px));
+    width: 100vw;
   }
 }
 .sgn-dialog[data-size='drawer'] .sgn-dialog-panel {
@@ -392,10 +476,22 @@ dialog.sgn-dialog[data-size='drawer']::backdrop {
   font-weight: 600;
   color: var(--fg);
 }
-/* The facts rail is one column here: the drawer is narrower than the detail
-   page and a long recorded number must not be squeezed into half of it. */
+/* Long source values get the full line; compact facts can share a row. */
 .quick-view .facts {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 var(--space-5);
+}
+.quick-view .span-all {
+  grid-column: 1 / -1;
+}
+.quick-view-summary dd {
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+@media (max-width: 420px) {
+  .quick-view .facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .quick-view-uploads,
 .quick-view-comments {
@@ -451,6 +547,79 @@ dialog.sgn-dialog[data-size='drawer']::backdrop {
   width: 20px;
   height: 20px;
 }
+/* Editor forms own one scrollable content region and a persistent action footer. */
+.sgn-dialog-body.editor-body {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+.editor-form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+}
+.editor-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  padding: var(--space-5) var(--space-6);
+}
+.editor-scroll > * + * {
+  margin-top: var(--space-4);
+}
+.editor-save-context {
+  flex-basis: 100%;
+  max-height: 24dvh;
+  overflow-y: auto;
+}
+.editor-save-context .check {
+  align-items: flex-start;
+}
+.editor-save-context .check input {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.contact-editor-fields {
+  display: grid;
+  gap: var(--space-4);
+}
+.contact-linked-properties {
+  margin-top: var(--space-6);
+}
+.contact-linked-properties h3 {
+  font-size: var(--text-base);
+  margin-bottom: var(--space-2);
+}
+.contact-linked-properties .table-wrap {
+  margin-top: var(--space-3);
+}
+.contact-linked-properties .data-table {
+  table-layout: fixed;
+}
+.contact-linked-properties .data-table td {
+  overflow-wrap: anywhere;
+}
+.editor-form .field {
+  min-width: 0;
+}
+.editor-form .summary-row {
+  flex-wrap: wrap;
+}
+.editor-form .summary-row dd {
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.data-table td .employee-invitation-history {
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  margin-top: var(--space-2);
+  white-space: normal;
+}
+
 /* The quick attachment is one picker: the native file control stays in the page for the platform's
    own chooser and keyboard behaviour but is visually replaced by a named button and the chosen
    file's name beside it. */
@@ -513,8 +682,4 @@ dialog.sgn-dialog[data-size='drawer']::backdrop {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-}
-.quick-view-actions {
-  padding-top: var(--space-5);
-  border-top: 1px solid var(--border-soft);
 }
