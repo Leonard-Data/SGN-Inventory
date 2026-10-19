@@ -6,7 +6,7 @@ import { LoadingSkeleton } from '@/features/skeleton';
 import { SUMMARY_TABLE_COLUMNS, propertyTableRow, rowPrice } from './table';
 import { compactVnd, formatVnd } from './format';
 import { statusTone } from './property-card';
-import { useMeasuredHeight } from './use-measured';
+import { useMeasuredHeight } from '@/features/stream/use-measured';
 import { useRelativeNow } from './use-relative-now';
 import type { PropertySummary } from './types';
 
