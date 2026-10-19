@@ -4,10 +4,9 @@
    The reusable token layer of the design system: one palette, one type scale,
    one spacing scale, one set of radii, one motion curve.
 
-   Origin: the :root block below is byte-identical to the token block in
-   assets/sgn-app.css (the app layer that ships the six prototype screens), so
-   the prototype and any new surface share exactly one palette. Values are
-   copied, not paraphrased — do not "tidy" them.
+   Canonical token and base-rule owner for auth and application surfaces.
+   The palette originates in the design package; sgn-app.css consumes these
+   tokens and owns only shared component rules and scoped app variants.
 
    Colour rule: one accent, used at most twice per screen. --brand-deep is the
    accent mixed 58% toward black and covers the whole navigation rail, so the
@@ -15,8 +14,7 @@
    Type rule: two families, two jobs. Inter carries every heading, label and
    body line (600 headings, 400 body); IBM Plex Mono carries codes, figures,
    units and every uppercase micro-label. Figures are tabular.
-   Fonts are served from Google Fonts (see provenance: no font binaries exist
-   in the source evidence, so no fonts/ directory ships with this package).
+   Fonts are self-hosted with next/font, including Vietnamese subsets.
    ════════════════════════════════════════════════════════════════════════════ */
 
 /* The package loads these families from Google Fonts at runtime. This
@@ -68,7 +66,7 @@
   --text-lg: 18px;
   /* One heading scale, close to body size: a page title and a section title
      read as levels of the same voice rather than two different faces. */
-  --text-h1: clamp(22px, 1.9vw, 28px);
+  --text-h1: clamp(24px, 1.9vw, 28px);
   --text-h2: clamp(18px, 1.5vw, 21px);
 
   --leading-body: 1.55;

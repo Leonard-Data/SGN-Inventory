@@ -7,8 +7,8 @@ import { fontVariables } from './fonts';
 import { Analytics } from '@vercel/analytics/next';
 // Import order is the cascade: legacy global rules first, then the design-system
 // token layer, then the app layer that owns the shared vocabulary, then the
-// scoped auth sheet. globals.css shrinks to the classes the app layer does not
-// define; app.css and sgn-app.css are verbatim ports of the design package.
+// stream/drawer extensions, and scoped auth sheet. app.css is the sole token
+// and base owner; sgn-app.css consumes it rather than redeclaring the palette.
 import './globals.css';
 import './app.css';
 import './sgn-app.css';

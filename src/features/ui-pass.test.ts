@@ -5,6 +5,16 @@ import test from 'node:test';
 const source = (path: string) =>
   readFileSync(new URL(path, import.meta.url), 'utf8');
 
+test('app.css alone owns design tokens and base typography', () => {
+  const tokens = source('../app/app.css');
+  const vocabulary = source('../app/sgn-app.css');
+  assert.match(tokens, /:root \{/);
+  assert.doesNotMatch(
+    vocabulary,
+    /:root \{|^body \{|^h1, h2, \.type-display \{/m,
+  );
+});
+
 test('content has explicit wide and form variants with compact app controls', () => {
   const css = source('../app/sgn-app.css');
   const shell = source('./navigation/app-shell.tsx');

@@ -77,10 +77,10 @@ test('the skeleton region announces once and hides its shapes', () => {
 // The shimmer is an animation like every other, so the global reduced-motion rule stops it
 // instead of leaving a surface that keeps moving for a user who asked it not to.
 test('the skeleton stops animating under prefers-reduced-motion', () => {
-  const block = appLayer.slice(
-    appLayer.indexOf('@media (prefers-reduced-motion: reduce)'),
+  const block = appCss.slice(
+    appCss.indexOf('@media (prefers-reduced-motion: reduce)'),
   );
-  assert.ok(block, 'sgn-app.css has no reduced-motion block');
+  assert.ok(block, 'app.css has no reduced-motion block');
   const rules = block.slice(0, block.indexOf('}', block.indexOf('{')) + 1);
   assert.match(rules, /\*, \*::before, \*::after/);
   assert.match(rules, /animation-duration: \.01ms !important/);
@@ -90,7 +90,7 @@ test('the skeleton stops animating under prefers-reduced-motion', () => {
 
 // Headings and body share one sans family; codes, figures and prices keep the mono face.
 test('the type scale resolves to a single sans family', () => {
-  for (const css of [appCss, appLayer]) {
+  for (const css of [appCss]) {
     assert.ok(!css.includes('--font-display'), 'the display token survives');
     assert.ok(
       !css.includes('--sgn-font-display'),
