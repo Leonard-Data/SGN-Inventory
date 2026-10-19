@@ -571,6 +571,38 @@ dialog.sgn-dialog[data-size='drawer']::backdrop {
 .editor-scroll > * + * {
   margin-top: var(--space-4);
 }
+.editor-save-context {
+  flex-basis: 100%;
+  max-height: 24dvh;
+  overflow-y: auto;
+}
+.editor-save-context .check {
+  align-items: flex-start;
+}
+.editor-save-context .check input {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.contact-editor-fields {
+  display: grid;
+  gap: var(--space-4);
+}
+.contact-linked-properties {
+  margin-top: var(--space-6);
+}
+.contact-linked-properties h3 {
+  font-size: var(--text-base);
+  margin-bottom: var(--space-2);
+}
+.contact-linked-properties .table-wrap {
+  margin-top: var(--space-3);
+}
+.contact-linked-properties .data-table {
+  table-layout: fixed;
+}
+.contact-linked-properties .data-table td {
+  overflow-wrap: anywhere;
+}
 .editor-form .field {
   min-width: 0;
 }

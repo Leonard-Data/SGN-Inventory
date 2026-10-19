@@ -163,7 +163,7 @@ export const fields: Record<string, Field> = {
     en: 'Phones (one source string per line)',
     kind: 'phones',
   },
-  raw_phone_text: { vi: 'Điện thoại theo nguồn', en: 'Original phone text' },
+  raw_phone_text: { vi: 'Số điện thoại ban đầu', en: 'Original phone number' },
   contact_type: {
     vi: 'Loại người liên hệ',
     en: 'Contact classification',

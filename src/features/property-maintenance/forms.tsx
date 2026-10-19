@@ -2,6 +2,7 @@
 import {
   useEffect,
   useId,
+  useRef,
   useState,
   type FormEvent,
   type ReactNode,
@@ -22,6 +23,9 @@ export function MutationForm({
   onSaved,
   onDenied,
   explanation = false,
+  onCancel,
+  onStateChange,
+  saveContext,
   children,
 }: {
   locale: Locale;
@@ -32,11 +36,30 @@ export function MutationForm({
   onDenied: (status: number) => void;
   // The optional correction note only reaches the API when the form offers it.
   explanation?: boolean;
+  onCancel?: () => void;
+  onStateChange?: (state: { dirty: boolean; busy: boolean }) => void;
+  saveContext?: ReactNode;
   children: ReactNode;
 }) {
   const text = maintenanceText(locale);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState<string | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    onStateChange?.({ dirty, busy });
+  }, [dirty, busy, onStateChange]);
+  function draftChanged(event: FormEvent<HTMLFormElement>) {
+    try {
+      setDirty(
+        Object.keys(
+          formChanges(target, new FormData(event.currentTarget), values),
+        ).length > 0,
+      );
+    } catch {
+      setDirty(true);
+    }
+  }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
@@ -46,6 +69,7 @@ export function MutationForm({
     try {
       const changes = formChanges(target, form, values);
       if (Object.keys(changes).length === 0) {
+        requestAnimationFrame(() => errorRef.current?.focus());
         setError('noChange');
         return;
       }
@@ -62,6 +86,7 @@ export function MutationForm({
         onDenied(failure.status);
         return;
       }
+      requestAnimationFrame(() => errorRef.current?.focus());
       setError(
         failure instanceof RequestError ? failure.code : 'invalid-input',
       );
@@ -71,12 +96,39 @@ export function MutationForm({
   }
   const message = maintenanceError(locale, error);
   return (
-    <form onSubmit={submit}>
-      <fieldset disabled={busy}>{children}</fieldset>
-      {error ? <p role="alert">{message}</p> : null}
-      <button className="btn btn-sm btn-primary" disabled={busy}>
-        {busy ? text.saving : text.save}
-      </button>
+    <form
+      className={onCancel ? 'editor-form' : undefined}
+      onSubmit={submit}
+      onChange={draftChanged}
+    >
+      <div className={onCancel ? 'editor-scroll' : undefined}>
+        <fieldset disabled={busy}>{children}</fieldset>
+        {error ? (
+          <p className="field-error" ref={errorRef} tabIndex={-1} role="alert">
+            {message}
+          </p>
+        ) : null}
+      </div>
+      <div className={onCancel ? 'sgn-dialog-foot' : undefined}>
+        {saveContext ? (
+          <fieldset className="editor-save-context" disabled={busy}>
+            {saveContext}
+          </fieldset>
+        ) : null}
+        <button className="btn btn-sm btn-primary" disabled={busy}>
+          {busy ? text.saving : text.save}
+        </button>
+        {onCancel ? (
+          <button
+            type="button"
+            className="btn btn-sm btn-ghost"
+            disabled={busy}
+            onClick={onCancel}
+          >
+            {text.cancel}
+          </button>
+        ) : null}
+      </div>
     </form>
   );
 }

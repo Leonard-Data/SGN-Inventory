@@ -660,7 +660,7 @@ const vi = {
     'Tìm theo tên đã ghi; chỉ tên, không tìm số điện thoại. % và _ là ký tự thường. Tối đa 120 ký tự.',
   contactColumnName: 'Người liên hệ',
   contactColumnRelation: 'Quan hệ trên bất động sản',
-  contactColumnPhone: 'Số điện thoại đã ghi',
+  contactColumnPhone: 'Số điện thoại',
   contactPrimaryLink: 'Liên hệ chính',
   contactColumnProperties: 'Bất động sản liên quan',
   contactColumnActions: 'Thao tác',
@@ -682,10 +682,12 @@ const vi = {
   contactLinkedPropertiesNote:
     'Quan hệ được ghi theo từng bất động sản: cùng một người có thể là chủ nhà ở nơi này và môi giới ở nơi khác. Mọi bất động sản nêu trên đều nhận thay đổi và hiển thị thông tin mới ở lần đọc kế tiếp; thay đổi người liên hệ dùng chung không ghi vào lịch sử bất động sản.',
   contactClassifiedAs: 'Phân loại chung',
-  contactRawPhoneText: 'Văn bản điện thoại gốc',
-  contactEditorTitle: 'Đính chính người liên hệ dùng chung',
+  contactRawPhoneText: 'Số điện thoại ban đầu',
+  contactEditorTitle: 'Cập nhật thông tin liên hệ',
+  contactOptional:
+    'Để trống thông tin chưa biết. Giữ số điện thoại và nội dung theo nguồn đã ghi.',
   contactSharedIdentityNote:
-    'Đây là người liên hệ dùng chung: đính chính sẽ áp dụng cho mọi bất động sản đang gắn với người này.',
+    'Thay đổi này áp dụng cho tất cả bất động sản liên kết với người liên hệ.',
   saving: 'Đang lưu…',
   notes: 'Ghi chú',
   languageName: 'Ngôn ngữ / Language',
@@ -1473,7 +1475,7 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
       'Matches the recorded name only, never a phone number. % and _ are ordinary characters. At most 120 characters.',
     contactColumnName: 'Contact',
     contactColumnRelation: 'Property relationship',
-    contactColumnPhone: 'Recorded phone',
+    contactColumnPhone: 'Phone',
     contactPrimaryLink: 'Primary contact',
     contactColumnProperties: 'Linked properties',
     contactColumnActions: 'Actions',
@@ -1495,10 +1497,12 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     contactLinkedPropertiesNote:
       'The relationship is recorded per property: the same person may be an owner on one and a broker on another. Every property listed above receives the change and shows the new details on its next read; a shared-contact correction is not recorded in property history.',
     contactClassifiedAs: 'General classification',
-    contactRawPhoneText: 'Original phone text',
-    contactEditorTitle: 'Correct the shared contact',
+    contactRawPhoneText: 'Original phone number',
+    contactEditorTitle: 'Update contact details',
+    contactOptional:
+      'Leave unknown details blank. Preserve phone numbers and recorded source text.',
     contactSharedIdentityNote:
-      'This is the shared contact: a correction applies to every property linked to it.',
+      'This change applies to every property linked to this contact.',
     saving: 'Saving…',
     notes: 'Notes',
     signInHelp:

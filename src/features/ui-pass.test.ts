@@ -5,6 +5,18 @@ import test from 'node:test';
 const source = (path: string) =>
   readFileSync(new URL(path, import.meta.url), 'utf8');
 
+test('contact editing uses the same drawer with contact copy and a required save acknowledgement', () => {
+  const directory = source('./contacts/directory-view.tsx');
+  assert.doesNotMatch(directory, /className="row-detail"|copy\.optional/);
+  assert.match(directory, /<ContactEditorDrawer/);
+  const editor = source('./contacts/editor-drawer.tsx');
+  assert.match(editor, /<EditDrawer/);
+  assert.match(editor, /type="checkbox" required/);
+  assert.match(editor, /saveContext=/);
+  assert.match(editor, /revision: editor\.impact\.revision/);
+  assert.match(editor, /contactOptional/);
+});
+
 test('employee edits use the shared guarded drawer and retain field validation', () => {
   const directory = source('./employees/employee-directory.tsx');
   const panel = source('./employees/employee-profile-panel.tsx');
