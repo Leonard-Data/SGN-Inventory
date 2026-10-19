@@ -18,10 +18,14 @@ import {
   providerIdentityPage,
   providerIdentityScan,
   providerInviteResult,
+  resendBody,
+  resendInvitation,
+  resendableInvitation,
   settleInvitationSend,
   type EmployeeInvitation,
   type InvitationGateway,
   type InvitationProviderResult,
+  type InvitationResendGateway,
   type InvitationSender,
 } from './invitation.ts';
 
@@ -49,6 +53,10 @@ function invitation(
     providerAttemptedAt: null,
     requestedAt: '2026-10-15T09:00:00+07:00',
     recordedAt: null,
+    resendCount: 0,
+    resendOutcome: null,
+    resendDetail: null,
+    resendAttemptedAt: null,
     ...patch,
   };
 }
@@ -194,6 +202,10 @@ test('a database row is read back through the same boundary rules', () => {
     provider_attempted_at: '2026-10-15T09:04:00+07:00',
     requested_at: '2026-10-15T09:00:00+07:00',
     recorded_at: '2026-10-15T09:05:00+07:00',
+    resend_count: 0,
+    resend_outcome: null,
+    resend_detail: null,
+    resend_attempted_at: null,
   };
   assert.deepEqual(
     invitationFromRow(row),
@@ -683,4 +695,244 @@ test('only a definitively refused action stops reconciling', () => {
     invitationProblemAfterLoad({ code: 'unavailable', ambiguous: true }),
     null,
   );
+});
+
+// The recorded invitation is sent again (production links expired after one hour).
+test('a further send names only the recorded address', () => {
+  assert.deepEqual(resendBody({ email: ' Invitee@Example.Test ' }), {
+    email: 'invitee@example.test',
+  });
+  // A role, an actor or any other field in the request is refused, so no choice in the
+  // interface can reach the recorded invitation through this path.
+  for (const body of [
+    {},
+    { email: 'invitee@example.test', role: 'admin' },
+    { email: 'invitee@example.test', key },
+    { email: 'invitee@example.test', actorId },
+    { email: 'not-an-email' },
+    { email: 42 },
+  ])
+    assert.equal(resendBody(body as Record<string, unknown>), null);
+});
+
+test('only a recorded invitation for an unlinked person can be sent again', () => {
+  const recorded = { state: 'recorded' as const };
+  assert.equal(resendableInvitation(recorded, 'unlinked'), true);
+  // An accepted invitation, an active, deactivated or deleted account, and the provider steps
+  // that have not been accepted yet are all refused.
+  for (const access of ['active', 'inactive', 'account_deleted'] as const)
+    assert.equal(resendableInvitation(recorded, access), false);
+  for (const state of ['provider_pending', 'provider_failed'] as const)
+    assert.equal(resendableInvitation({ state }, 'unlinked'), false);
+  assert.equal(resendableInvitation(null, 'unlinked'), false);
+});
+
+test('the recorded invitation is sent to its recorded address and the attempt is recorded', async () => {
+  const sent: string[] = [];
+  const lookups: string[] = [];
+  const recorded: { resendCount: number; result: InvitationProviderResult }[] =
+    [];
+  const gatewayRecorded: InvitationResendGateway = {
+    async recordResend(request) {
+      recorded.push({
+        resendCount: request.resendCount,
+        result: request.result,
+      });
+      assert.equal(request.invitationId, invitationId);
+      return invitation({
+        state: 'recorded',
+        providerOutcome: 'accepted',
+        revision: 2,
+        providerAttemptedAt: '2026-10-15T09:05:00Z',
+        recordedAt: '2026-10-15T09:05:00Z',
+        resendCount: 1,
+        resendOutcome: 'accepted',
+        resendAttemptedAt: '2026-10-20T10:00:00Z',
+      });
+    },
+  };
+  const sender: InvitationSender = {
+    async send(request) {
+      sent.push(request.email);
+      return { outcome: 'accepted', providerUserId };
+    },
+    async identity(email) {
+      lookups.push(email);
+      return { outcome: 'found', providerUserId };
+    },
+  };
+  const current = invitation({
+    state: 'recorded',
+    providerOutcome: 'accepted',
+    revision: 2,
+    providerAttemptedAt: '2026-10-15T09:05:00Z',
+    recordedAt: '2026-10-15T09:05:00Z',
+  });
+  const outcome = await resendInvitation(gatewayRecorded, sender, current);
+  // The recorded address is the destination even though the caller never supplied one, the
+  // recorded role is not an input at all, and the identity lookup of the first send never runs
+  // — for this address it would read any refusal as an accepted send.
+  assert.deepEqual(sent, ['invitee@example.test']);
+  assert.deepEqual(lookups, []);
+  assert.deepEqual(recorded, [
+    { resendCount: 0, result: { outcome: 'accepted', providerUserId } },
+  ]);
+  assert.equal(outcome.invitation.resendCount, 1);
+  assert.equal(outcome.invitation.role, 'sales');
+  assert.equal(outcome.result.outcome, 'accepted');
+});
+
+test('a refused further send is recorded as a refusal and never as an accepted send', async () => {
+  const results: InvitationProviderResult[] = [];
+  const gateway: InvitationResendGateway = {
+    async recordResend(request) {
+      results.push(request.result);
+      return invitation({
+        state: 'recorded',
+        providerOutcome: 'accepted',
+        recordedAt: '2026-10-15T09:05:00Z',
+        resendCount: 1,
+        resendOutcome: 'failed',
+        resendDetail: 'rate limit exceeded',
+        resendAttemptedAt: '2026-10-20T10:00:00Z',
+      });
+    },
+  };
+  const refused: InvitationSender = {
+    async send() {
+      return { outcome: 'failed', detail: 'rate limit exceeded' };
+    },
+    async identity() {
+      // The recorded address always holds an identity, so this lookup would rewrite a refusal
+      // into an accepted send; the further send must not consult it.
+      return { outcome: 'found', providerUserId };
+    },
+  };
+  const current = invitation({
+    state: 'recorded',
+    providerOutcome: 'accepted',
+    recordedAt: '2026-10-15T09:05:00Z',
+  });
+  const outcome = await resendInvitation(gateway, refused, current);
+  assert.deepEqual(results, [
+    { outcome: 'failed', detail: 'rate limit exceeded' },
+  ]);
+  assert.equal(outcome.invitation.resendOutcome, 'failed');
+  // The recorded acceptance of the first send and the recorded role stay readable.
+  assert.equal(outcome.invitation.state, 'recorded');
+  assert.equal(outcome.invitation.providerOutcome, 'accepted');
+  assert.equal(outcome.invitation.role, 'sales');
+});
+
+test('a further send the provider did not answer is ambiguous', async () => {
+  const results: InvitationProviderResult[] = [];
+  const gateway: InvitationResendGateway = {
+    async recordResend(request) {
+      results.push(request.result);
+      return invitation({
+        state: 'recorded',
+        recordedAt: '2026-10-15T09:05:00Z',
+      });
+    },
+  };
+  const unreachable: InvitationSender = {
+    async send() {
+      throw new Error('admin api unreachable');
+    },
+    async identity() {
+      return { outcome: 'absent' };
+    },
+  };
+  const outcome = await resendInvitation(
+    gateway,
+    unreachable,
+    invitation({
+      state: 'recorded',
+      providerOutcome: 'accepted',
+      recordedAt: '2026-10-15T09:05:00Z',
+    }),
+  );
+  assert.deepEqual(results, [
+    { outcome: 'ambiguous', detail: 'admin api unreachable' },
+  ]);
+  assert.equal(outcome.result.outcome, 'ambiguous');
+});
+
+test('the recorded further send is validated at the boundary', () => {
+  const recorded = {
+    id: invitationId,
+    employeeId,
+    actorId,
+    email: 'invitee@example.test',
+    role: 'sales',
+    state: 'recorded',
+    revision: 2,
+    providerOutcome: 'accepted',
+    providerDetail: null,
+    providerAttemptedAt: '2026-10-15T09:05:00Z',
+    requestedAt: '2026-10-15T09:00:00Z',
+    recordedAt: '2026-10-15T09:05:00Z',
+    resendCount: 1,
+    resendOutcome: 'failed',
+    resendDetail: 'rate limit exceeded',
+    resendAttemptedAt: '2026-10-20T10:00:00Z',
+  };
+  const parsed = parseInvitation(recorded);
+  assert.equal(parsed?.resendCount, 1);
+  assert.equal(parsed?.resendOutcome, 'failed');
+  assert.equal(parsed?.resendDetail, 'rate limit exceeded');
+  assert.equal(parsed?.resendAttemptedAt, '2026-10-20T10:00:00Z');
+  assert.equal(
+    invitationFromRow({
+      id: invitationId,
+      employee_id: employeeId,
+      actor_id: actorId,
+      email: 'invitee@example.test',
+      role: 'sales',
+      state: 'recorded',
+      revision: 2,
+      provider_outcome: 'accepted',
+      provider_detail: null,
+      provider_attempted_at: '2026-10-15T09:05:00Z',
+      requested_at: '2026-10-15T09:00:00Z',
+      recorded_at: '2026-10-15T09:05:00Z',
+      resend_count: 0,
+      resend_outcome: null,
+      resend_detail: null,
+      resend_attempted_at: null,
+    })?.resendCount,
+    0,
+  );
+  // A count, a time and an outcome are recorded together, only on a recorded invitation.
+  const never = {
+    ...recorded,
+    resendCount: 0,
+    resendOutcome: null,
+    resendDetail: null,
+    resendAttemptedAt: null,
+  };
+  for (const patch of [
+    { ...never, resendCount: 1 },
+    { ...never, resendAttemptedAt: '2026-10-20T10:00:00Z' },
+    { ...never, resendOutcome: 'failed' },
+    { ...never, resendCount: 1, resendOutcome: 'failed' },
+    { ...never, resendCount: 1, resendAttemptedAt: '2026-10-20T10:00:00Z' },
+    { ...never, resendCount: -1 },
+    {
+      ...never,
+      resendCount: 1.5,
+      resendOutcome: 'failed',
+      resendAttemptedAt: '2026-10-20T10:00:00Z',
+    },
+    {
+      ...never,
+      state: 'provider_failed',
+      providerOutcome: 'failed',
+      recordedAt: null,
+      resendCount: 1,
+      resendOutcome: 'failed',
+      resendAttemptedAt: '2026-10-20T10:00:00Z',
+    },
+  ])
+    assert.equal(parseInvitation(patch), null);
 });

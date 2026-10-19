@@ -6,8 +6,10 @@ import { LoadingSkeleton } from '@/features/skeleton';
 import { EmployeeDeactivationPanel } from './employee-deactivation';
 import { EmployeeAccountDeletionPanel } from './employee-account-deletion';
 import { EmployeeInvitationForm } from './employee-invitation';
+import { EmployeeInvitationResendPanel } from './employee-invitation-resend';
 import { EmployeeProfilePanel } from './employee-profile-panel';
 import { mayAdministerEmployees } from './deactivation';
+import { resendableInvitation } from './invitation';
 import { profileEditable } from './profile';
 import {
   deletionResumable,
@@ -51,7 +53,7 @@ export function EmployeeDirectory({
   } = useProtectedData<DirectoryPage>(endpoint);
   const [open, setOpen] = useState<{
     id: string;
-    panel: 'deactivate' | 'delete' | 'profile';
+    panel: 'deactivate' | 'delete' | 'profile' | 'resend';
   } | null>(null);
   const [invitationOpen, setInvitationOpen] = useState(false);
   const invitationDialogRef = useRef<HTMLDialogElement>(null);
@@ -64,8 +66,10 @@ export function EmployeeDirectory({
   }, [invitationOpen]);
 
   // At most one lifecycle confirmation is open at a time.
-  const toggle = (id: string, panel: 'deactivate' | 'delete' | 'profile') =>
-    setOpen(open?.id === id && open.panel === panel ? null : { id, panel });
+  const toggle = (
+    id: string,
+    panel: 'deactivate' | 'delete' | 'profile' | 'resend',
+  ) => setOpen(open?.id === id && open.panel === panel ? null : { id, panel });
   // The sgn-locale cookie is the rendered locale; the shell keeps it equal to the saved
   // preference.
   const locale = initialLocale;
@@ -226,6 +230,18 @@ export function EmployeeDirectory({
                           open?.id === employee.id && open.panel === 'delete';
                         const profileOpen =
                           open?.id === employee.id && open.panel === 'profile';
+                        const resendOpen =
+                          open?.id === employee.id && open.panel === 'resend';
+                        // A recorded invitation that was never accepted is the only one that
+                        // can be sent again: an accepted invitation, an active or deleted
+                        // account and a person with no invitation are excluded by the rule, and
+                        // the action stays admin-only like every other control on this page.
+                        const resendable =
+                          mayAdministerEmployees(actor?.role ?? '') &&
+                          resendableInvitation(
+                            employee.invitation,
+                            employee.access,
+                          );
                         return (
                           <Fragment key={employee.id}>
                             <tr>
@@ -303,6 +319,31 @@ export function EmployeeDirectory({
                                       >
                                         <path d="M4 20h4l10-10a2.8 2.8 0 0 0-4-4L4 16v4z" />
                                         <path d="M13.5 6.5l4 4" />
+                                      </svg>
+                                    </button>
+                                  ) : null}
+                                  {resendable ? (
+                                    <button
+                                      type="button"
+                                      className="icon-btn"
+                                      aria-label={text.employeeInviteResendOpen}
+                                      title={text.employeeInviteResendOpen}
+                                      aria-expanded={resendOpen}
+                                      onClick={() =>
+                                        toggle(employee.id, 'resend')
+                                      }
+                                    >
+                                      <svg
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="1.8"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        aria-hidden="true"
+                                      >
+                                        <path d="M20 12a8 8 0 1 1-2.4-5.7" />
+                                        <path d="M20 4v5h-5" />
                                       </svg>
                                     </button>
                                   ) : null}
@@ -407,6 +448,20 @@ export function EmployeeDirectory({
                               <tr>
                                 <td colSpan={6}>
                                   <EmployeeAccountDeletionPanel
+                                    employee={employee}
+                                    actorRole={actor?.role ?? ''}
+                                    locale={locale}
+                                    onChanged={reload}
+                                    onDenied={redirectDenied}
+                                    onClose={() => setOpen(null)}
+                                  />
+                                </td>
+                              </tr>
+                            ) : null}
+                            {resendOpen ? (
+                              <tr>
+                                <td colSpan={6}>
+                                  <EmployeeInvitationResendPanel
                                     employee={employee}
                                     actorRole={actor?.role ?? ''}
                                     locale={locale}

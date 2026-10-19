@@ -10,6 +10,10 @@ One company's shared property inventory, employee access, contacts, reservations
 An offer to join the company's internal inventory, recorded against the intended employee and address. Acceptance by that intended invitee links and activates the retained employee immediately, with no separate approval.
 _Avoid_: Access approval
 
+**Resent invitation**:
+A further send of the same recorded invitation to the same recorded address, for a link that expired or was lost. It keeps the recorded role and the recorded acceptance, creates no second invitation, and is never available once the invitation was accepted or the account is linked or active.
+_Avoid_: Re-invite, new invitation
+
 **Linked employee**:
 An employee whose sign-in identity has been confirmed as belonging to that employee.
 _Avoid_: Email match

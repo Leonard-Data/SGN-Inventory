@@ -32,6 +32,7 @@ import { contactLinksConcurrency } from './contact-links-concurrency.mjs';
 import { employeeInvitationContract } from './employee-invitation-contract.mjs';
 import { employeeInvitationConcurrency } from './employee-invitation-concurrency.mjs';
 import { employeeInvitationAcceptanceContract } from './employee-invitation-acceptance-contract.mjs';
+import { employeeInvitationResendContract } from './employee-invitation-resend-contract.mjs';
 import { employeeProfileContract } from './employee-profile-contract.mjs';
 import { applyEmbeddedSchema } from './embedded-schema.mjs';
 import { provinceActivityContract } from './province-activity-contract.mjs';
@@ -801,6 +802,9 @@ await employeeInvitationContract({db,asUser,check,fails});
 await employeeInvitationConcurrency({root,check});
 // Issue #69: accepting the recorded invitation, linking and activating the exact invitee.
 await employeeInvitationAcceptanceContract({db,asUser,check,fails});
+// Sending a recorded, still unaccepted invitation again: one more recorded attempt, no second
+// invitation row, and no resend for an accepted, active or deletion-in-flight person.
+await employeeInvitationResendContract({db,asUser,check,fails});
 // Employee profile edit: the admin edit, the person's own name and bio, the last-active-admin
 // rule, the deactivated/deleted refusal and the bio limit.
 await employeeProfileContract({db,asUser,check,fails});
