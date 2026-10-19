@@ -98,6 +98,32 @@ test('the panel slides in at a calmer pace than the package default', () => {
   );
 });
 
+test('the quick attachment is one labelled picker, not a bare file input', () => {
+  // The native control stays in the page for the platform's own chooser and keyboard behaviour,
+  // but the visible picker is its label: one control, named by what a person reads.
+  assert.match(
+    drawer,
+    /className="quick-upload-input"[\s\S]{0,200}id=\{uploadId\}/,
+  );
+  assert.match(
+    drawer,
+    /<label className="quick-upload-picker" htmlFor=\{uploadId\}>/,
+  );
+  // The chosen file's name is stated, with the catalogue's own words while nothing is chosen.
+  assert.match(drawer, /\{selectedFileName \?\? fileText\.noFiles\}/);
+  assert.match(
+    drawer,
+    /\{uploading \? fileText\.uploading : fileText\.selectFiles\}/,
+  );
+  // Clipped rather than removed, so it still takes focus and opens the chooser while painting
+  // nothing, and the focus ring lands on the picker a person can see.
+  assert.match(rule('.quick-upload-input {'), /clip-path: inset\(50%\)/);
+  assert.match(
+    surfaces,
+    /\.quick-upload-input:focus-visible \+ \.quick-upload-picker \{[^}]*outline: 2px solid var\(--accent\)/,
+  );
+});
+
 test('every new label and the reveal control carry both languages', () => {
   const keys = ['ownerContact', 'showOwnerPhone', 'hideOwnerPhone'] as const;
   for (const locale of ['vi', 'en'] as const)
