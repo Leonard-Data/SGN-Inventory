@@ -367,6 +367,9 @@ export function SearchIsland({
     <>
       {applied.length ? (
         <div className="chips">
+          <Link className="link" href={clearHref} prefetch={false}>
+            {text.filtersClear}
+          </Link>
           {applied.map((condition) => (
             <span className="chip" key={condition.key}>
               {condition.label}

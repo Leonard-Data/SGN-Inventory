@@ -5,6 +5,23 @@ import test from 'node:test';
 const source = (path: string) =>
   readFileSync(new URL(path, import.meta.url), 'utf8');
 
+test('the inventory summary scrolls inside its surface and measures that scrollport', () => {
+  const css = source('../app/sgn-surfaces.css');
+  const inventory = source('./properties/inventory.tsx');
+  assert.match(
+    css,
+    /\.inventory-stream\[data-view='table'\] \{[^}]*overflow: auto/,
+  );
+  assert.match(css, /\.inventory-table thead th \{[^}]*top: 0/);
+  assert.match(inventory, /node\.scrollTop/);
+  assert.match(inventory, /node\.addEventListener\('scroll'/);
+  assert.doesNotMatch(
+    inventory,
+    /className="btn btn-secondary btn-sm toolbar-dir"/,
+  );
+  assert.equal((inventory.match(/text\.searchHint/g) ?? []).length, 0);
+});
+
 test('app.css alone owns design tokens and base typography', () => {
   const tokens = source('../app/app.css');
   const vocabulary = source('../app/sgn-app.css');

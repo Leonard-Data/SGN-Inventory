@@ -166,17 +166,24 @@
    surface rather than meeting the page squarely: the border and radius are drawn
    by the stream, and the first and last rows are rounded with it so no square
    corner of a row shows through the frame. Separate borders keep the sticky
-   header's own border attached to it while it scrolls. The frame is as wide as
-   the table it holds: the ten columns have a min-content width of their own and
-   the page, not the frame, is what scrolls sideways when they do not fit. */
+   header's own border attached to it while it scrolls. This bounded scrollport owns
+   both axes: a horizontal-only overflow would also capture sticky positioning, so
+   the stream measures this scrollport for its virtual band rather than the page. */
 .inventory-stream[data-view='table'] {
-  width: fit-content;
+  width: 100%;
+  max-width: 100%;
+  max-height: calc(100dvh - var(--topbar-h) - var(--space-6));
+  overflow: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-gutter: stable;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
 }
 .inventory-table {
   width: 100%;
+  min-width: 1120px;
+  table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
   font-size: var(--text-sm);
@@ -199,17 +206,15 @@
 }
 .inventory-table thead th {
   position: sticky;
-  top: var(--topbar-h);
+  top: 0;
   z-index: 1;
   padding: var(--space-3);
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   text-align: left;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
   color: var(--muted);
   white-space: nowrap;
 }
@@ -218,8 +223,89 @@
   border-bottom: 1px solid var(--border-soft);
   text-align: left;
   font-weight: 400;
-  vertical-align: top;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
   color: var(--fg-2);
+}
+.inventory-table [data-column='property'] {
+  width: 150px;
+}
+.inventory-table [data-column='address'] {
+  width: 26%;
+}
+.inventory-table [data-column='price'] {
+  width: 210px;
+  text-align: right;
+}
+.inventory-table [data-column='totalArea'] {
+  width: 105px;
+  text-align: right;
+}
+.inventory-table [data-column='status'] {
+  width: 125px;
+}
+.inventory-table [data-column='modifiedTime'] {
+  width: 135px;
+}
+.inventory-table [data-column='actions'] {
+  width: 160px;
+}
+.inventory-secondary {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+.inventory-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.inventory-actions .btn {
+  padding-inline: var(--space-2);
+}
+.inventory-menu {
+  position: relative;
+}
+.inventory-menu summary {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 44px;
+  cursor: pointer;
+  list-style: none;
+  border-radius: var(--radius-sm);
+}
+.inventory-menu summary::-webkit-details-marker {
+  display: none;
+}
+.inventory-menu[open] > div {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  z-index: 2;
+  width: 190px;
+  padding: var(--space-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-raise);
+}
+.inventory-search-help {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+.inventory-search-help summary {
+  cursor: pointer;
+  min-height: 32px;
+}
+.inventory-search-help details p {
+  max-width: 65ch;
+  padding-block: var(--space-2);
 }
 .inventory-row:hover .inventory-cell {
   background: var(--surface-warm);
@@ -244,7 +330,7 @@
 /* The price is the value people scan the row for: the strongest type in it, in
    the monospaced tabular figures a column of numbers lines up in. */
 .inventory-price {
-  font-size: var(--text-base);
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--fg);
 }

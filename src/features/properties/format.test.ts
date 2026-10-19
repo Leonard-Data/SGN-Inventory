@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   formatVnd,
+  compactVnd,
   formatDecimal,
   formatInteger,
   RELATIVE_DAYS,
@@ -10,6 +11,15 @@ import {
   vietnamTimestamp,
   dialableNumber,
 } from './format.ts';
+
+test('compact VND retains every digit and localizes only the presentation', () => {
+  assert.equal(compactVnd('25000000000', 'vi'), '25 tỷ ₫');
+  assert.equal(compactVnd('25000000001', 'vi'), '25,000000001 tỷ ₫');
+  assert.equal(compactVnd('1250000', 'en'), '1.25m ₫');
+  assert.equal(compactVnd('0', 'vi'), '0 ₫');
+  assert.equal(compactVnd('9007199254740993', 'en'), '9,007,199.254740993bn ₫');
+  assert.throws(() => compactVnd('1e9', 'vi'));
+});
 
 test('whole VND remains exact beyond JavaScript safe integer precision', () => {
   assert.equal(

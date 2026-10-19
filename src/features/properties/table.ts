@@ -25,6 +25,17 @@ export const TABLE_COLUMNS = [
 ] as const;
 export type TableColumn = (typeof TABLE_COLUMNS)[number];
 
+// The summary groups the existing facts; the full record still exposes every source field.
+export const SUMMARY_TABLE_COLUMNS = [
+  'property',
+  'address',
+  'price',
+  'totalArea',
+  'status',
+  'modifiedTime',
+  'actions',
+] as const;
+
 // The heading each column is announced and labelled with.
 export const COLUMN_HEADINGS: Record<TableColumn, MessageKey> = {
   propertyId: 'columnPropertyId',
