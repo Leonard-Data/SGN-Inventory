@@ -6,6 +6,10 @@ import { filterParams, type InventoryFilters } from './filters.ts';
 
 export type InventoryView = 'cards' | 'table';
 
+// The view a visitor lands on when the address states none: the table, because the list opens as
+// the scannable result set, and the cards stay one click away.
+export const DEFAULT_INVENTORY_VIEW: InventoryView = 'table';
+
 // Phone width: a ten-column table cannot be operated there, so it is not offered at all — the
 // same 640px the shell already treats as one column. The page watches this boundary through the
 // equivalent browser query rather than by asking for a width, so the switch follows the viewport
@@ -41,13 +45,27 @@ export type InventoryViewParse =
   { ok: true; view: InventoryView } | { ok: false };
 
 // The address states the view plainly: `cards` or `table`. An absent or empty value is the
-// default cards; anything else is refused rather than quietly served as a different view than
+// default view; anything else is refused rather than quietly served as a different view than
 // the address names.
 export function parseInventoryView(value: string | null): InventoryViewParse {
-  if (value === null || value.trim() === '' || value === 'cards')
-    return { ok: true, view: 'cards' };
-  if (value === 'table') return { ok: true, view: 'table' };
+  if (value === null || value.trim() === '')
+    return { ok: true, view: DEFAULT_INVENTORY_VIEW };
+  if (value === 'cards' || value === 'table') return { ok: true, view: value };
   return { ok: false };
+}
+
+// The view a visitor actually sees: a phone is answered with cards whatever the address asks for,
+// because the ten-column table cannot be operated there and is not offered at all.
+export function shownInventoryView(
+  requested: InventoryView,
+  wide: boolean,
+): InventoryView {
+  return wide ? requested : 'cards';
+}
+
+// The address states a view only when it is not the default, so the ordinary address stays short.
+export function inventoryViewParam(view: InventoryView): string | null {
+  return view === DEFAULT_INVENTORY_VIEW ? null : view;
 }
 
 // The address of one result set: the search, the ordering, the filters and the view, in one
@@ -66,7 +84,8 @@ export function inventoryHref({
 }): string {
   const params = new URLSearchParams({ query });
   if (sort) params.set('sort', sort);
-  if (view === 'table') params.set('view', 'table');
+  const stated = inventoryViewParam(view);
+  if (stated) params.set('view', stated);
   for (const [name, value] of Object.entries(filterParams(filters)))
     params.set(name, value);
   return '/properties?' + params;

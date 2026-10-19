@@ -5,20 +5,36 @@ import {
   CARD_CHUNK_ROWS,
   cardChunkRows,
   cardColumns,
+  DEFAULT_INVENTORY_VIEW,
   inventoryHref,
+  inventoryViewParam,
   parseInventoryView,
   PHONE_MAX_WIDTH_PX,
+  shownInventoryView,
 } from './view.ts';
 
 const view = (value: string | null) => parseInventoryView(value);
 
-test('the view the address states is cards, table, or a refusal', () => {
-  assert.deepEqual(view(null), { ok: true, view: 'cards' });
-  assert.deepEqual(view(''), { ok: true, view: 'cards' });
+test('a visit with no view in the address lands on the table', () => {
+  assert.equal(DEFAULT_INVENTORY_VIEW, 'table');
+  assert.deepEqual(view(null), { ok: true, view: 'table' });
+  assert.deepEqual(view(''), { ok: true, view: 'table' });
   assert.deepEqual(view('cards'), { ok: true, view: 'cards' });
   assert.deepEqual(view('table'), { ok: true, view: 'table' });
   for (const value of ['Table', 'TABLE', 'grid', 'list', 'table ', ' cards'])
     assert.deepEqual(view(value), { ok: false }, `view=${value}`);
+});
+
+// The card view is one click away on the table, and a phone is never put on a table it cannot
+// operate: the viewport decides, not the address alone.
+test('a phone-width visit resolves to cards whatever the address asks for', () => {
+  assert.equal(shownInventoryView('table', true), 'table');
+  assert.equal(shownInventoryView('cards', true), 'cards');
+  assert.equal(shownInventoryView('table', false), 'cards');
+  assert.equal(shownInventoryView('cards', false), 'cards');
+  // Only the view that differs from the default is written into the address.
+  assert.equal(inventoryViewParam('table'), null);
+  assert.equal(inventoryViewParam('cards'), 'cards');
 });
 
 test('switching the view keeps the search, the ordering and the filters', () => {
@@ -44,26 +60,30 @@ test('switching the view keeps the search, the ordering and the filters', () => 
       ['query', 'le loi'],
       ['sort', 'newest'],
       ['status', 'available'],
-      ['view', 'table'],
     ],
   );
-  // Back to cards: the same result set, and the default view leaves the address short.
+  // One click to cards: the same result set, and the non-default view is stated in the address.
   const cards = inventoryHref({
     query: 'le loi',
     sort: 'newest',
     view: 'cards',
     filters,
   });
-  assert.equal(cards.includes('view='), false);
   assert.deepEqual(
     [...new URLSearchParams(cards.split('?')[1]).keys()].sort(),
-    ['mode', 'priceMin', 'province', 'query', 'sort', 'status'],
+    ['mode', 'priceMin', 'province', 'query', 'sort', 'status', 'view'],
   );
-  // The default ordering leaves its own parameter out too, exactly as before.
+  assert.deepEqual(
+    [...new URLSearchParams(cards.split('?')[1]).entries()].find(
+      ([name]) => name === 'view',
+    ),
+    ['view', 'cards'],
+  );
+  // The default ordering and the default view both leave their own parameter out.
   const plain = inventoryHref({
     query: '',
     sort: null,
-    view: 'cards',
+    view: 'table',
     filters: noInventoryFilters,
   });
   assert.equal(plain, '/properties?query=');

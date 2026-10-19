@@ -1,8 +1,10 @@
 'use client';
 import { memo } from 'react';
-import type { Locale } from '@/i18n/messages';
+import { messages, type Locale } from '@/i18n/messages';
+import { SkeletonCards } from '@/features/skeleton';
 import { PropertyCard } from './property-card';
 import { useMeasuredHeight } from './use-measured';
+import { CARD_CHUNK_ROWS } from './view';
 import type { PropertySummary } from './types';
 
 // One mounted chunk of the card view: whole rows of the measured grid, or the space reserved for
@@ -45,7 +47,16 @@ export const CardChunk = memo(function CardChunk({
       // the page's layout describe the same rows.
       style={{ height: rows === null ? reserved : undefined }}
     >
-      {rows === null ? null : (
+      {rows === null ? (
+        // The reserved box holds the skeleton of the cards that will replace it, so the grid
+        // does not jump when the window arrives.
+        <div className="inventory-window">
+          <SkeletonCards
+            label={messages[locale].loading}
+            count={columns * CARD_CHUNK_ROWS}
+          />
+        </div>
+      ) : (
         <div
           className="property-list"
           data-view="cards"

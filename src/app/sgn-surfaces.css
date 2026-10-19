@@ -238,6 +238,17 @@
   border: 0;
 }
 
+/* The skeleton a still-fetching window stands in as: it fills the height the chunk already
+   reserved, so the rows that replace it land on the same space and the scroll position holds. */
+.inventory-window {
+  padding: 0;
+  border-bottom: 0;
+  overflow: hidden;
+}
+.inventory-window > .skeleton-region {
+  padding: var(--space-4);
+}
+
 /* The view switch is a pair of same-page links rather than toggle buttons, so
    the current view is marked with aria-current="page" and given the package's
    own selected treatment. */
@@ -252,16 +263,40 @@
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
-   The quick view: the record's facts, a comment, one quick attachment and the
-   way into the full record, in a drawer that comes in from the right.
+   The quick view: the record's facts, its owner contact, a comment, one quick
+   attachment and the way into the full record, in a side panel at the right edge.
    ════════════════════════════════════════════════════════════════════════════ */
 
-.sgn-dialog[data-size='drawer'] .sgn-dialog-panel {
+/* The panel is a side panel, not a centred dialog. A modal <dialog> is centred by the browser's
+   own `margin: auto`, so the dialog box itself is pinned here: the list stays beside the panel
+   instead of ending up behind a dialog in the middle of the page, and Escape, the focus trap and
+   the focus return stay the platform's own. The backdrop paints nothing, so the list remains
+   visible while the panel is open. */
+dialog.sgn-dialog[data-size='drawer'] {
+  inset: 0 0 0 auto;
+  margin: 0;
   width: min(460px, 100vw);
   height: 100dvh;
   max-height: none;
-  margin: 0 0 0 auto;
+}
+dialog.sgn-dialog[data-size='drawer']::backdrop {
+  background: transparent;
+  backdrop-filter: none;
+}
+/* A narrow desktop keeps a working column of the list beside the panel: the panel gives up width
+   before it covers the row that opened it. */
+@media (min-width: 641px) {
+  dialog.sgn-dialog[data-size='drawer'] {
+    width: min(460px, calc(100vw - 320px));
+  }
+}
+.sgn-dialog[data-size='drawer'] .sgn-dialog-panel {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  margin: 0;
   border-radius: 0;
+  box-shadow: -1px 0 24px color-mix(in oklab, var(--fg) 12%, transparent);
 }
 @media (prefers-reduced-motion: no-preference) {
   .sgn-dialog[data-size='drawer'] .sgn-dialog-panel {
@@ -270,12 +305,10 @@
 }
 @keyframes sgn-drawer-in {
   from {
-    transform: translateX(24px);
-    opacity: 0.5;
+    transform: translateX(100%);
   }
   to {
     transform: none;
-    opacity: 1;
   }
 }
 
@@ -327,6 +360,51 @@
   margin: 0;
   padding: 0;
   list-style: none;
+}
+/* The recorded owner names, in the order the full record lists them: one line each, no marker. */
+.quick-view-owners {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-weight: 600;
+  color: var(--fg);
+}
+/* The owner phone line: the masked value or the revealed name and number, and the eye that
+   changes it. The number is only ever in this line while it is revealed. */
+.quick-view-owner-phone {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  color: var(--fg-2);
+  overflow-wrap: anywhere;
+}
+.quick-view-reveal {
+  width: var(--btn-h-sm);
+  height: var(--btn-h-sm);
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--muted);
+}
+.quick-view-reveal:hover {
+  background: var(--surface-warm);
+  border-color: var(--border);
+  color: var(--fg);
+}
+.quick-view-reveal[aria-pressed='true'] {
+  color: var(--accent);
+}
+.quick-view-reveal svg {
+  width: 20px;
+  height: 20px;
 }
 .quick-view-uploads li {
   font-size: var(--text-sm);
