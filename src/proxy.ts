@@ -13,7 +13,13 @@ export async function proxy(request: NextRequest) {
     context = createRouteContext(request);
     await context.client.auth.getClaims();
     const path = request.nextUrl.pathname;
-    if (path.startsWith('/properties') || path.startsWith('/people')) {
+    // The profile page is the one people destination every active employee reaches, so it gets
+    // the same live-membership and locale treatment as inventory and the directory.
+    if (
+      path.startsWith('/properties') ||
+      path.startsWith('/people') ||
+      path === '/profile'
+    ) {
       try {
         const employee = await activeEmployee(context);
         // People is not one authority boundary. The employee list is admin-only in the
@@ -62,6 +68,7 @@ export const config = {
   matcher: [
     '/properties/:path*',
     '/people/:path*',
+    '/profile',
     '/login',
     '/access-denied',
     '/recover',

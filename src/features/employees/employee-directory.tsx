@@ -6,7 +6,9 @@ import { LoadingSkeleton } from '@/features/skeleton';
 import { EmployeeDeactivationPanel } from './employee-deactivation';
 import { EmployeeAccountDeletionPanel } from './employee-account-deletion';
 import { EmployeeInvitationForm } from './employee-invitation';
+import { EmployeeProfilePanel } from './employee-profile-panel';
 import { mayAdministerEmployees } from './deactivation';
+import { profileEditable } from './profile';
 import {
   deletionResumable,
   deletionStatus,
@@ -49,7 +51,7 @@ export function EmployeeDirectory({
   } = useProtectedData<DirectoryPage>(endpoint);
   const [open, setOpen] = useState<{
     id: string;
-    panel: 'deactivate' | 'delete';
+    panel: 'deactivate' | 'delete' | 'profile';
   } | null>(null);
   const [invitationOpen, setInvitationOpen] = useState(false);
   const invitationDialogRef = useRef<HTMLDialogElement>(null);
@@ -62,7 +64,7 @@ export function EmployeeDirectory({
   }, [invitationOpen]);
 
   // At most one lifecycle confirmation is open at a time.
-  const toggle = (id: string, panel: 'deactivate' | 'delete') =>
+  const toggle = (id: string, panel: 'deactivate' | 'delete' | 'profile') =>
     setOpen(open?.id === id && open.panel === panel ? null : { id, panel });
   // The sgn-locale cookie is the rendered locale; the shell keeps it equal to the saved
   // preference.
@@ -161,7 +163,7 @@ export function EmployeeDirectory({
           className="panel page-section"
           shape="table"
           rows={6}
-          columns={5}
+          columns={6}
         />
       ) : null}
 
@@ -193,6 +195,7 @@ export function EmployeeDirectory({
                         <th scope="col">{text.employeeName}</th>
                         <th scope="col">{text.email}</th>
                         <th scope="col">{text.employeeRole}</th>
+                        <th scope="col">{text.employeeBio}</th>
                         <th scope="col">{text.employeeAccess}</th>
                         <th scope="col">{text.employeeActions}</th>
                       </tr>
@@ -221,6 +224,8 @@ export function EmployeeDirectory({
                           open.panel === 'deactivate';
                         const deletionOpen =
                           open?.id === employee.id && open.panel === 'delete';
+                        const profileOpen =
+                          open?.id === employee.id && open.panel === 'profile';
                         return (
                           <Fragment key={employee.id}>
                             <tr>
@@ -230,6 +235,15 @@ export function EmployeeDirectory({
                               <td data-label={text.email}>{employee.email}</td>
                               <td data-label={text.employeeRole}>
                                 {label(locale, employee.role)}
+                              </td>
+                              <td data-label={text.employeeBio}>
+                                {employee.bio ? (
+                                  <span translate="no">{employee.bio}</span>
+                                ) : (
+                                  <span className="field-hint">
+                                    {text.employeeBioNone}
+                                  </span>
+                                )}
                               </td>
                               <td data-label={text.employeeAccess}>
                                 <span
@@ -267,6 +281,31 @@ export function EmployeeDirectory({
                               </td>
                               <td data-label={text.employeeActions}>
                                 <div className="cell-actions">
+                                  {profileEditable(employee.access) ? (
+                                    <button
+                                      type="button"
+                                      className="icon-btn"
+                                      aria-label={text.employeeEdit}
+                                      title={text.employeeEdit}
+                                      aria-expanded={profileOpen}
+                                      onClick={() =>
+                                        toggle(employee.id, 'profile')
+                                      }
+                                    >
+                                      <svg
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="1.8"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        aria-hidden="true"
+                                      >
+                                        <path d="M4 20h4l10-10a2.8 2.8 0 0 0-4-4L4 16v4z" />
+                                        <path d="M13.5 6.5l4 4" />
+                                      </svg>
+                                    </button>
+                                  ) : null}
                                   {employee.access === 'active' || resumable ? (
                                     <button
                                       type="button"
@@ -337,9 +376,22 @@ export function EmployeeDirectory({
                                 </div>
                               </td>
                             </tr>
+                            {profileOpen ? (
+                              <tr>
+                                <td colSpan={6}>
+                                  <EmployeeProfilePanel
+                                    employee={employee}
+                                    locale={locale}
+                                    onChanged={reload}
+                                    onDenied={redirectDenied}
+                                    onClose={() => setOpen(null)}
+                                  />
+                                </td>
+                              </tr>
+                            ) : null}
                             {deactivationOpen ? (
                               <tr>
-                                <td colSpan={5}>
+                                <td colSpan={6}>
                                   <EmployeeDeactivationPanel
                                     employee={employee}
                                     actorRole={actor?.role ?? ''}
@@ -353,7 +405,7 @@ export function EmployeeDirectory({
                             ) : null}
                             {deletionOpen ? (
                               <tr>
-                                <td colSpan={5}>
+                                <td colSpan={6}>
                                   <EmployeeAccountDeletionPanel
                                     employee={employee}
                                     actorRole={actor?.role ?? ''}

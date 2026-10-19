@@ -233,6 +233,22 @@ function UserMenu({
               {text.signOutFailed}
             </p>
           ) : null}
+          <Link href="/profile" onClick={() => setOpen(false)}>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="8" r="3.5" />
+              <path d="M5 20c0-3.3 3.1-5.5 7-5.5s7 2.2 7 5.5" />
+            </svg>
+            <span>{text.employeeProfileTitle}</span>
+          </Link>
+          <hr />
           <button type="button" disabled={busy} onClick={() => void signOut()}>
             <svg
               viewBox="0 0 24 24"
@@ -281,6 +297,21 @@ export function AppShell({
       .catch(() => {});
     return () => abort.abort();
   }, [given]);
+
+  // The profile page reports the name it saved, so the menu shows the recorded name without a
+  // second session read of its own.
+  useEffect(() => {
+    function onProfile(event: Event) {
+      const detail = (event as CustomEvent<{ displayName?: unknown }>).detail;
+      const name = detail?.displayName;
+      if (typeof name !== 'string' || !name.trim()) return;
+      setEmployee((current) =>
+        current ? { ...current, displayName: name } : current,
+      );
+    }
+    window.addEventListener('sgn-profile', onProfile);
+    return () => window.removeEventListener('sgn-profile', onProfile);
+  }, []);
 
   useEffect(() => {
     if (!drawer) return;

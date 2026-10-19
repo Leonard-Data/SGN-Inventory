@@ -32,6 +32,7 @@ import { contactLinksConcurrency } from './contact-links-concurrency.mjs';
 import { employeeInvitationContract } from './employee-invitation-contract.mjs';
 import { employeeInvitationConcurrency } from './employee-invitation-concurrency.mjs';
 import { employeeInvitationAcceptanceContract } from './employee-invitation-acceptance-contract.mjs';
+import { employeeProfileContract } from './employee-profile-contract.mjs';
 import { applyEmbeddedSchema } from './embedded-schema.mjs';
 import { provinceActivityContract } from './province-activity-contract.mjs';
 import { addressDuplicateMergeContract } from './address-duplicate-merge-contract.mjs';
@@ -782,6 +783,9 @@ await employeeInvitationContract({db,asUser,check,fails});
 await employeeInvitationConcurrency({root,check});
 // Issue #69: accepting the recorded invitation, linking and activating the exact invitee.
 await employeeInvitationAcceptanceContract({db,asUser,check,fails});
+// Employee profile edit: the admin edit, the person's own name and bio, the last-active-admin
+// rule, the deactivated/deleted refusal and the bio limit.
+await employeeProfileContract({db,asUser,check,fails});
 // Ticket #73: the vendor directory authority, validation, retry and paging rules.
 await vendorContract({db,asUser,check,fails,employees});
 // Ticket #74: property-to-vendor links, their correction and the recorded link row as the trail;
