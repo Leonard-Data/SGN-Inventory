@@ -97,10 +97,9 @@ export async function reservationState(
   ];
   const names = new Map<string, string>();
   if (ids.length) {
-    const { data, error } = await context.client
-      .from('employees')
-      .select('id,display_name')
-      .in('id', ids);
+    const { data, error } = await context.client.rpc('list_employee_names', {
+      p_ids: ids,
+    });
     if (error) throw databaseError(error);
     for (const row of data ?? []) names.set(row.id, row.display_name);
   }

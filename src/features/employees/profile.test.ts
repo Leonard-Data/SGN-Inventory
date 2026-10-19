@@ -11,7 +11,6 @@ import {
   profileBody,
   profileEditable,
   profileProblems,
-  profileText,
   textProblem,
 } from './profile.ts';
 
@@ -21,11 +20,6 @@ const admin = {
   role: 'staff',
   bio: 'Phụ trách khu vực Quận 3.',
 };
-
-test('a blank field is not a recorded value and surrounding space is trimmed', () => {
-  assert.equal(profileText('   '), null);
-  assert.equal(profileText('  An  '), 'An');
-});
 
 test('the documented length limits are the ones enforced', () => {
   assert.equal(EMPLOYEE_NAME_MAX_LENGTH, 120);

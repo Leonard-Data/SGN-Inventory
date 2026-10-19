@@ -64,10 +64,7 @@ export async function correctionPage(
     ]),
   ];
   const actors = actorIds.length
-    ? await context.client
-        .from('employees')
-        .select('id,display_name')
-        .in('id', actorIds)
+    ? await context.client.rpc('list_employee_names', { p_ids: actorIds })
     : { data: [], error: null };
   databaseError(actors.error);
   return {
@@ -222,10 +219,7 @@ export async function amendmentPage(
   const amendments = (data ?? []).slice(0, 20),
     actorIds = [...new Set(amendments.map((a) => a.actor_id))];
   const actors = actorIds.length
-    ? await context.client
-        .from('employees')
-        .select('id,display_name')
-        .in('id', actorIds)
+    ? await context.client.rpc('list_employee_names', { p_ids: actorIds })
     : { data: [], error: null };
   databaseError(actors.error);
   return {

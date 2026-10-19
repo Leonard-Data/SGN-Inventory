@@ -36,13 +36,6 @@ export type ProfileProblem = {
 
 const linkPattern = /(https?:\/\/|www\.)/i;
 
-// The same normalization the guarded functions apply: surrounding whitespace is trimmed and a
-// blank value means "not written", never an empty recorded value.
-export function profileText(value: string): string | null {
-  const text = value.trim();
-  return text.length ? text : null;
-}
-
 export function textProblem(
   field: ProfileProblem['field'],
   value: string,

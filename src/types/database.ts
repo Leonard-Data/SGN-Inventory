@@ -2152,6 +2152,20 @@ export type Database = {
           version: number | null;
         }[];
       };
+      list_employee_names: {
+        Args: { p_ids: string[] };
+        Returns: { display_name: string; id: string }[];
+      };
+      list_employee_credit_options: {
+        Args: never;
+        Returns: {
+          account_deleted_at: string | null;
+          auth_user_id: string | null;
+          display_name: string;
+          id: string;
+          is_active: boolean;
+        }[];
+      };
       list_vendors: {
         Args: {
           p_before_created_at?: string;

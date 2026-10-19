@@ -4,9 +4,11 @@ import { randomUUID } from 'node:crypto';
 // Employee profile edit, embedded regressions: an admin edits a colleague's display name,
 // phone, role and bio; every active employee edits their own name and bio; the recorded email
 // is not editable anywhere; a non-admin cannot reach another employee through either path; the
-// last-active-admin rule and the deactivated/deleted refusal hold; and the bio limit and its
-// plain-text rule are enforced by the column as well as by the guarded functions. Live Data
-// API RLS, HTTP and browser acceptance stay a separately authorized staging gate.
+// employee row read returns only the caller's own row, so no colleague's bio or phone is
+// reachable through the table or the sanctioned name projection; the last-active-admin rule and
+// the deactivated/deleted refusal hold; and the bio limit and its plain-text rule are enforced
+// by the column as well as by the guarded functions. Live Data API RLS, HTTP and browser
+// acceptance stay a separately authorized staging gate.
 export async function employeeProfileContract({ db, asUser, check, fails }) {
   const asActor = async (userId) => {
     await db.exec('reset role');
@@ -64,6 +66,11 @@ export async function employeeProfileContract({ db, asUser, check, fails }) {
         [employeeId],
       )
     ).rows[0];
+  // The admin fixture carries the personal fields an ordinary employee must never read.
+  await db.query(
+    "update public.employees set phone='0901 222 333', bio='Quản trị viên của công ty.' where id=$1",
+    [ids.admin],
+  );
   const updateProfileSql =
     'select public.update_employee_profile($1,$2,$3,$4,$5) as result';
   const updateProfile = async (employeeId, name, phone, role, bio) =>
@@ -267,7 +274,6 @@ export async function employeeProfileContract({ db, asUser, check, fails }) {
       [ids.admin, 'Bị đổi tên', '', 'sales', ''],
       '42501',
     );
-    assert.equal((await row(ids.admin)).display_name, 'Profile Admin Fixture');
     // The same write through the table is refused by the row policy as well.
     assert.equal(
       (
@@ -278,8 +284,60 @@ export async function employeeProfileContract({ db, asUser, check, fails }) {
       ).rows.length,
       0,
     );
+    await asActor(ids.adminUser);
+    assert.equal((await row(ids.admin)).display_name, 'Profile Admin Fixture');
+  });
+  await check('an employee reads only their own employee row', async () => {
+    await asActor(ids.personUser);
+    const visible = (
+      await db.query('select id,email,phone,bio from public.employees')
+    ).rows;
+    assert.deepEqual(
+      visible.map((entry) => entry.id),
+      [ids.person],
+    );
+    // Naming a colleague returns no row, so their bio, phone and email stay unreachable.
+    assert.equal(
+      (
+        await db.query(
+          'select id,phone,bio from public.employees where id=$1',
+          [ids.admin],
+        )
+      ).rows.length,
+      0,
+    );
+    // The sanctioned projection resolves names for the ids a surface references, and the
+    // reviewer-only credited-closer read is not a second door for an ordinary employee.
+    const names = (
+      await db.query('select * from public.list_employee_names($1)', [
+        [ids.person, ids.admin],
+      ])
+    ).rows;
+    assert.deepEqual(
+      names.map((entry) => entry.id).sort(),
+      [ids.admin, ids.person].sort(),
+    );
+    assert.deepEqual(Object.keys(names[0]).sort(), ['display_name', 'id']);
+    assert.equal(
+      (await db.query('select * from public.list_employee_credit_options()'))
+        .rows.length,
+      0,
+    );
+    await asActor(ids.adminUser);
+    const options = (
+      await db.query('select * from public.list_employee_credit_options()')
+    ).rows;
+    assert.ok(options.some((entry) => entry.id === ids.admin));
+    assert.deepEqual(Object.keys(options[0]).sort(), [
+      'account_deleted_at',
+      'auth_user_id',
+      'display_name',
+      'id',
+      'is_active',
+    ]);
   });
   await check('a person edits their own recorded name and bio', async () => {
+    await asActor(ids.personUser);
     const result = await updateMine(
       'Trần Văn Bình',
       'Môi giới nhà phố Quận 7.',
@@ -309,12 +367,14 @@ export async function employeeProfileContract({ db, asUser, check, fails }) {
       [ids.person, 'Tự đổi vai trò', '', 'admin', ''],
       '42501',
     );
+    await asActor(ids.adminUser);
     assert.equal((await row(ids.admin)).display_name, 'Profile Admin Fixture');
     assert.equal((await row(ids.person)).role, 'staff');
   });
   await check(
     'the self path refuses an over-long bio and a blank name',
     async () => {
+      await asActor(ids.personUser);
       await fails(updateMineSql, ['Tên', 'a'.repeat(281)], '23514');
       await fails(updateMineSql, ['   ', ''], '23514');
       assert.equal((await row(ids.person)).display_name, 'Trần Văn Bình');
