@@ -10,6 +10,7 @@ export function DetailActionDialog({
   children,
   heading,
   footer,
+  bodyClassName = '',
   open,
   onClose,
   onClosed,
@@ -20,6 +21,7 @@ export function DetailActionDialog({
   children: ReactNode;
   heading?: ReactNode;
   footer?: ReactNode;
+  bodyClassName?: string;
   open: boolean;
   onClose: () => void;
   // Runs after the dialog has actually closed, so a surface can hand focus back to the control
@@ -34,6 +36,9 @@ export function DetailActionDialog({
     if (!dialog) return;
     if (open && !dialog.open) dialog.showModal();
     if (!open && dialog.open) dialog.close();
+    return () => {
+      if (dialog.open) dialog.close();
+    };
   }, [open]);
 
   return (
@@ -63,7 +68,9 @@ export function DetailActionDialog({
             ×
           </button>
         </div>
-        <div className="sgn-dialog-body">{open ? children : null}</div>
+        <div className={`sgn-dialog-body ${bodyClassName}`}>
+          {open ? children : null}
+        </div>
         {footer ? <div className="sgn-dialog-foot">{footer}</div> : null}
       </div>
     </dialog>

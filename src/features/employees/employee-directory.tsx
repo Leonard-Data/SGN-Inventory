@@ -177,6 +177,7 @@ export function EmployeeDirectory({
   const [open, setOpen] = useState<{
     id: string;
     panel: 'deactivate' | 'delete' | 'profile' | 'resend';
+    opener: HTMLElement | null;
   } | null>(null);
   const [invitationOpen, setInvitationOpen] = useState(false);
   const invitationDialogRef = useRef<HTMLDialogElement>(null);
@@ -192,7 +193,13 @@ export function EmployeeDirectory({
   const toggle = (
     id: string,
     panel: 'deactivate' | 'delete' | 'profile' | 'resend',
-  ) => setOpen(open?.id === id && open.panel === panel ? null : { id, panel });
+  ) => {
+    setOpen(
+      open?.id === id && open.panel === panel
+        ? null
+        : { id, panel, opener: document.activeElement as HTMLElement },
+    );
+  };
   // The sgn-locale cookie is the rendered locale; the shell keeps it equal to the saved
   // preference.
   const locale = initialLocale;
@@ -237,19 +244,33 @@ export function EmployeeDirectory({
     provider_failed: text.employeeInviteReconciliationLabel,
     recorded: text.employeeInviteRecordedLabel,
   };
-  const invitationTone: Record<DirectoryInvitation['state'], string> = {
-    provider_pending: 'muted',
-    provider_failed: 'danger',
-    recorded: 'success',
-  };
+  const editing =
+    open?.panel === 'profile'
+      ? data?.employees.find((entry) => entry.id === open.id)
+      : null;
   return (
     <>
       <div className="page-head">
         <div className="page-intro">
-          <p className="example">{text.people}</p>
-          <h1>{text.employeeDirectory}</h1>
-          <p className="intro-copy">{text.employeeDirectoryNote}</p>
+          <h1 id="employees">{text.employeeDirectory}</h1>
+          <p className="intro-copy">
+            {data
+              ? text.employeePageInfo.replace(
+                  '{n}',
+                  String(data.employees.length),
+                )
+              : text.employeeDirectoryNote}
+          </p>
         </div>
+        {mayAdministerEmployees(actor?.role ?? '') ? (
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => setInvitationOpen(true)}
+          >
+            {text.employeeInviteOpen}
+          </button>
+        ) : null}
       </div>
 
       {error ? (
@@ -297,19 +318,7 @@ export function EmployeeDirectory({
       <div ref={surface} hidden={!data || busy}>
         {data ? (
           <section className="panel page-section" aria-labelledby="employees">
-            <div className="panel-head">
-              <h2 id="employees">{text.employeesLink}</h2>
-            </div>
             <div className="panel-body">
-              {mayAdministerEmployees(actor?.role ?? '') ? (
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => setInvitationOpen(true)}
-                >
-                  {text.employeeInviteOpen}
-                </button>
-              ) : null}
               {data.employees.length === 0 ? (
                 <div className="state-panel">
                   <h3>{text.employeeDirectoryEmpty}</h3>
@@ -346,8 +355,6 @@ export function EmployeeDirectory({
                           open.panel === 'deactivate';
                         const deletionOpen =
                           open?.id === employee.id && open.panel === 'delete';
-                        const profileOpen =
-                          open?.id === employee.id && open.panel === 'profile';
                         const resendOpen =
                           open?.id === employee.id && open.panel === 'resend';
                         // Which actions this row offers, and their copy: the conditions are
@@ -374,7 +381,13 @@ export function EmployeeDirectory({
                           <Fragment key={employee.id}>
                             <tr>
                               <th scope="row" data-label={text.employeeName}>
-                                {employee.displayName}
+                                <b translate="no">
+                                  {employee.displayName.trim() ||
+                                    text.employeeUnnamed}
+                                </b>
+                                {!employee.displayName.trim() ? (
+                                  <small translate="no">{employee.email}</small>
+                                ) : null}
                               </th>
                               <td data-label={text.email}>{employee.email}</td>
                               <td data-label={text.employeeRole}>
@@ -416,14 +429,10 @@ export function EmployeeDirectory({
                                   </span>
                                 ) : null}
                                 {employee.invitation ? (
-                                  <span
-                                    className="badge"
-                                    data-tone={
-                                      invitationTone[employee.invitation.state]
-                                    }
-                                  >
+                                  <small className="employee-invitation-history">
+                                    {text.employeeInvitationHistory}:{' '}
                                     {invitationLabel[employee.invitation.state]}
-                                  </span>
+                                  </small>
                                 ) : null}
                               </td>
                               <td data-label={text.employeeActions}>
@@ -437,19 +446,6 @@ export function EmployeeDirectory({
                                 />
                               </td>
                             </tr>
-                            {profileOpen ? (
-                              <tr>
-                                <td colSpan={6}>
-                                  <EmployeeProfilePanel
-                                    employee={employee}
-                                    locale={locale}
-                                    onChanged={reload}
-                                    onDenied={redirectDenied}
-                                    onClose={() => setOpen(null)}
-                                  />
-                                </td>
-                              </tr>
-                            ) : null}
                             {deactivationOpen ? (
                               <tr>
                                 <td colSpan={6}>
@@ -533,6 +529,17 @@ export function EmployeeDirectory({
           </section>
         ) : null}
       </div>
+      {editing && !busy ? (
+        <EmployeeProfilePanel
+          key={editing.id}
+          employee={editing}
+          locale={locale}
+          opener={open?.opener ?? null}
+          onChanged={reload}
+          onDenied={redirectDenied}
+          onClose={() => setOpen(null)}
+        />
+      ) : null}
       <dialog
         ref={invitationDialogRef}
         className="sgn-dialog"

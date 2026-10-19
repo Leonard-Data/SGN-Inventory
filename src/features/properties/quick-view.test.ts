@@ -49,7 +49,7 @@ test('the full-record action sits in a persistent footer outside the scrolling b
   assert.match(dialog, /className="sgn-dialog-foot"/);
   assert.ok(
     dialog.indexOf('className="sgn-dialog-foot"') >
-      dialog.indexOf('className="sgn-dialog-body"'),
+      dialog.indexOf('className={`sgn-dialog-body'),
   );
 });
 

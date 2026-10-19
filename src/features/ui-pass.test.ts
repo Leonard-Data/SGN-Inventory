@@ -5,6 +5,16 @@ import test from 'node:test';
 const source = (path: string) =>
   readFileSync(new URL(path, import.meta.url), 'utf8');
 
+test('employee edits use the shared guarded drawer and retain field validation', () => {
+  const directory = source('./employees/employee-directory.tsx');
+  const panel = source('./employees/employee-profile-panel.tsx');
+  assert.doesNotMatch(directory, /\{profileOpen \? \(/);
+  assert.match(panel, /<EditDrawer/);
+  assert.match(panel, /profileProblems\(/);
+  assert.match(panel, /elements\.namedItem\(\s*found\[0\]/);
+  assert.match(panel, /disabled=\{busy\}/);
+});
+
 test('the inventory summary scrolls inside its surface and measures that scrollport', () => {
   const css = source('../app/sgn-surfaces.css');
   const inventory = source('./properties/inventory.tsx');
