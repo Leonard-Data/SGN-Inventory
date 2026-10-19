@@ -39,6 +39,7 @@ import { applyEmbeddedSchema } from './embedded-schema.mjs';
 import { provinceActivityContract } from './province-activity-contract.mjs';
 import { addressDuplicateMergeContract } from './address-duplicate-merge-contract.mjs';
 import { statusTrailContract } from './status-trail-contract.mjs';
+import { statusRequestContract } from './status-request-contract.mjs';
 const root = process.env.SGN_PROJECT_ROOT || process.cwd();
 const db = new PGlite({extensions:{unaccent,pg_trgm,pgcrypto}});
 await applyEmbeddedSchema({root,exec:(sql)=>db.exec(sql)});
@@ -826,6 +827,8 @@ await contactDirectoryContract({db,asUser,check,fails,employees});
 await addressDuplicateMergeContract({db,asUser,check,fails,employees,validationKey});
 // Ticket #173: the property status trail and direct non-final status changes.
 await statusTrailContract({db,asUser,check,fails,employees});
+// Ticket #174: sold and rented as a reviewer decision recorded on the same trail.
+await statusRequestContract({db,asUser,check,fails,employees});
 const report={checked_at:new Date().toISOString(),engine:'PGlite embedded PostgreSQL plus an embedded real PostgreSQL engine for the two-connection last-admin, property-vendor-link and contact-link races; mocked auth/storage schemas',passed,
  limitations:['Not a live Supabase integration test','HTTP Auth, presigned R2 URLs, Vercel and browser flows not exercised','Hosted/staging independent-session contention at production load remains an acceptance gate']};
 await fs.writeFile(path.join(root,'docs/validation-results.json'),JSON.stringify(report,null,2)+'\n');

@@ -63,3 +63,19 @@ test('the contact directory destination is offered to every role', () => {
     assert.ok(hrefs.includes('/people/contacts'), `${role}: no contacts`);
   }
 });
+
+// The status change queue (#174) is a reviewer surface: sold and rented are a manager or admin
+// decision, so the rail offers the queue to those roles only.
+test('the status change queue is offered to managers and admins alone', () => {
+  const roles = ['sales', 'staff', 'manager', 'admin'] as const;
+  for (const role of roles) {
+    const hrefs = visibleNavGroups(role).flatMap((group) =>
+      group.items.map((item) => item.href),
+    );
+    assert.equal(
+      hrefs.includes('/reviews/status-requests'),
+      role === 'manager' || role === 'admin',
+      `${role}: status change queue visibility`,
+    );
+  }
+});
