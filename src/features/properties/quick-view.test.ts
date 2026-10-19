@@ -9,6 +9,7 @@ const source = (path: string) =>
 const drawer = source('./property-drawer.tsx');
 const dialog = source('./detail-dialog.tsx');
 const surfaces = source('../../app/sgn-surfaces.css');
+const appLayer = source('../../app/app.css');
 
 function rule(from: string): string {
   const start = surfaces.indexOf(from);
@@ -70,6 +71,31 @@ test('the owner phone is absent while hidden and rendered only after a reveal', 
   );
   // Hiding drops the value instead of masking it, so the number leaves the DOM with it.
   assert.match(drawer, /setDisclosure\(null\)/);
+});
+
+test('the panel slides in at a calmer pace than the package default', () => {
+  // The drawer states its own duration and easing instead of taking the package's base motion:
+  // the panel has to read as sliding in and settling, not as appearing.
+  const motion = surfaces.slice(
+    surfaces.indexOf('@media (prefers-reduced-motion: no-preference)'),
+    surfaces.indexOf('@keyframes sgn-drawer-in'),
+  );
+  const declared =
+    /\.sgn-dialog\[data-size='drawer'\] \.sgn-dialog-panel \{\s*animation: sgn-drawer-in (\d+)ms (cubic-bezier\([^)]*\))/.exec(
+      motion,
+    );
+  assert.ok(declared, 'the drawer states its own duration and easing');
+  // 230ms is the package's base motion, which arrived almost instantly.
+  assert.ok(
+    Number(declared[1]) > 230,
+    `the drawer is slower than the 230ms base (${declared[1]}ms)`,
+  );
+  // A reduced-motion user gets the panel without any movement: the animation lives inside the
+  // no-preference query, and the app layer stops anything that would still apply.
+  assert.match(
+    appLayer,
+    /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation-duration: \.01ms !important/,
+  );
 });
 
 test('every new label and the reveal control carry both languages', () => {
