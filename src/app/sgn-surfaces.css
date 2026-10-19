@@ -262,7 +262,11 @@
   box-shadow: var(--shadow-raise);
 }
 .seg a.seg-btn:has(.seg-icon) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: var(--btn-h-sm);
+  min-width: var(--btn-h-sm);
   padding-inline: 0;
 }
 .seg-icon {
