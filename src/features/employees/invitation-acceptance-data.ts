@@ -125,10 +125,13 @@ export async function invitationSessionStatus(
   const user = await invitationUser(context);
   const admin = createEmployeeAdminClient(context.environment);
   if (!admin) throw new ApiError(503, 'provider-unavailable');
+  // The row must carry every column the invitation parser requires, including the resend
+  // attempt; an omitted one makes the read look like a malformed invitation and refuses a
+  // real invitee after their session was already established.
   const { data, error } = await admin
     .from('employee_invitations')
     .select(
-      'id,employee_id,actor_id,email,role,state,revision,provider_outcome,provider_detail,provider_attempted_at,requested_at,recorded_at',
+      'id,employee_id,actor_id,email,role,state,revision,provider_outcome,provider_detail,provider_attempted_at,requested_at,recorded_at,resend_count,resend_outcome,resend_detail,resend_attempted_at',
     )
     .eq('provider_user_id', user.id)
     .order('requested_at', { ascending: false })

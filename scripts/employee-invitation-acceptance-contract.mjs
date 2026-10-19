@@ -361,4 +361,39 @@ export async function employeeInvitationAcceptanceContract({
       '42501',
     ),
   );
+
+  // --- The acceptance session path's own read stays permitted ------------------------------
+  // `invitationSessionStatus` reads the recorded invitation and the retained employee's
+  // administrative operations through the server-only admin client, because the invitee is
+  // nobody's admin yet. Losing that read refuses a real invitation link with 42501 before the
+  // setup step, so it is asserted here rather than left to the call site.
+  await check(
+    'the trusted server can read the recorded invitation for the acceptance session path',
+    async () => {
+      const rows = await db.query(
+        'select id,employee_id,actor_id,email,role,state,revision,provider_outcome,provider_detail,provider_attempted_at,requested_at,recorded_at,resend_count,resend_outcome,resend_detail,resend_attempted_at from public.employee_invitations where provider_user_id is not null order by requested_at desc, id desc limit 1',
+      );
+      assert.ok(rows.rows.length >= 1);
+    },
+  );
+  await check(
+    'the trusted server can read the administrative operations it checks before setup',
+    async () => {
+      await db.query(
+        "select id from public.employee_admin_operations where kind = 'delete' and state <> 'completed' limit 1",
+      );
+    },
+  );
+  await check('neither read is opened to a browser-facing role', async () => {
+    await db.exec('reset role');
+    await db.exec('set role anon');
+    await fails('select id from public.employee_invitations', [], '42501');
+    await fails('select id from public.employee_admin_operations', [], '42501');
+    // An ordinary signed-in person still sees nothing: the read policy stays live-admin only.
+    await asActor('77000000-0000-4000-8000-0000000000b2');
+    const visible = await db.query(
+      'select id from public.employee_invitations',
+    );
+    assert.equal(visible.rows.length, 0);
+  });
 }
