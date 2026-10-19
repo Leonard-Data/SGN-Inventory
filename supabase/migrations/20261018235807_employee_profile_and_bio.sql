@@ -9,10 +9,12 @@ begin;
 -- 1. Bio: one short line a person writes about themselves. It is stored trimmed, bounded and
 --    link-free, so nothing here can become rich text, a link or an unbounded profile field.
 --    NULL means "not written"; an empty submission is normalized to NULL by the guarded RPCs.
+--    The trim set is the whitespace the client validator trims, so a tab, a line break or a
+--    Unicode space cannot be stored as an edge of a recorded value or pass as a blank one.
 alter table public.employees add column bio text;
 alter table public.employees add constraint employees_bio_check check (
   bio is null or (
-    bio = btrim(bio)
+    bio = btrim(bio, E' \t\n\r\f\u000b\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff')
     and length(bio) between 1 and 280
     and bio !~ '[<>]'
     and bio !~* '(https?://|www\.)'
@@ -26,7 +28,7 @@ comment on column public.employees.bio is 'Optional plain-text self-description 
 create function private.employee_profile_text(p_value text, p_max integer, p_label text)
 returns text language plpgsql immutable security invoker set search_path = '' as $$
 declare
-  v text := nullif(btrim(coalesce(p_value, '')), '');
+  v text := nullif(btrim(coalesce(p_value, ''), E' \t\n\r\f\u000b\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff'), '');
 begin
   if v is null then return null; end if;
   if length(v) > p_max then

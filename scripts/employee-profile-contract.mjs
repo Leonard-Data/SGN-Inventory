@@ -173,37 +173,58 @@ export async function employeeProfileContract({ db, asUser, check, fails }) {
     },
   );
   await check(
-    'a blank bio is stored as no bio, never an empty value',
+    'a blank submission of any whitespace is stored as no bio, never a recorded value',
     async () => {
+      for (const blank of ['   ', '\t', '\n', '\r\n\t ', '\u00a0\u2003']) {
+        await updateProfile(
+          ids.person,
+          'Nguyễn Thị An',
+          '0909 111 222',
+          'staff',
+          blank,
+        );
+        assert.equal((await row(ids.person)).bio, null);
+      }
+      // The same whitespace set is trimmed from a recorded value, not stored at its edges.
+      await updateProfile(
+        ids.person,
+        '\t Nguyễn Thị An \n',
+        '0909 111 222',
+        'staff',
+        '\u00a0 Quận 3 \t',
+      );
+      assert.deepEqual(
+        [(await row(ids.person)).display_name, (await row(ids.person)).bio],
+        ['Nguyễn Thị An', 'Quận 3'],
+      );
       await updateProfile(
         ids.person,
         'Nguyễn Thị An',
         '0909 111 222',
         'staff',
-        '   ',
+        '',
       );
       assert.equal((await row(ids.person)).bio, null);
     },
   );
   await check(
-    'the column itself refuses an over-long or linked bio',
+    'the column itself refuses an over-long, linked or whitespace-edged bio',
     async () => {
       await asOwner();
-      await fails(
-        'update public.employees set bio=$2 where id=$1',
-        [ids.person, 'a'.repeat(281)],
-        '23514',
-      );
-      await fails(
-        'update public.employees set bio=$2 where id=$1',
-        [ids.person, 'Xem https://example.test'],
-        '23514',
-      );
-      await fails(
-        'update public.employees set bio=$2 where id=$1',
-        [ids.person, '  chưa cắt khoảng trắng'],
-        '23514',
-      );
+      for (const bio of [
+        'a'.repeat(281),
+        'Xem https://example.test',
+        '  chưa cắt khoảng trắng',
+        '\tchưa cắt',
+        'chưa cắt\n',
+        '\u00a0chưa cắt',
+        '\t\n',
+      ])
+        await fails(
+          'update public.employees set bio=$2 where id=$1',
+          [ids.person, bio],
+          '23514',
+        );
       await asActor(ids.adminUser);
       assert.equal((await row(ids.person)).bio, null);
     },
@@ -339,8 +360,8 @@ export async function employeeProfileContract({ db, asUser, check, fails }) {
   await check('a person edits their own recorded name and bio', async () => {
     await asActor(ids.personUser);
     const result = await updateMine(
-      'Trần Văn Bình',
-      'Môi giới nhà phố Quận 7.',
+      '\t Trần Văn Bình \n',
+      '\u00a0 Môi giới nhà phố Quận 7. \t',
     );
     assert.deepEqual(result, {
       displayName: 'Trần Văn Bình',
@@ -376,7 +397,8 @@ export async function employeeProfileContract({ db, asUser, check, fails }) {
     async () => {
       await asActor(ids.personUser);
       await fails(updateMineSql, ['Tên', 'a'.repeat(281)], '23514');
-      await fails(updateMineSql, ['   ', ''], '23514');
+      for (const name of ['   ', '\t\n', '\u00a0\u2003'])
+        await fails(updateMineSql, [name, ''], '23514');
       assert.equal((await row(ids.person)).display_name, 'Trần Văn Bình');
     },
   );
