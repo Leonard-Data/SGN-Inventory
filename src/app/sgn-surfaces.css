@@ -417,6 +417,55 @@ dialog.sgn-dialog[data-size='drawer']::backdrop {
   width: 20px;
   height: 20px;
 }
+/* The quick attachment is one picker: the native file control stays in the page for the platform's
+   own chooser and keyboard behaviour but is visually replaced by a named button and the chosen
+   file's name beside it. */
+.quick-upload-control {
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-warm);
+}
+.quick-upload-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+.quick-upload-picker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  cursor: pointer;
+}
+.quick-upload-picker-button {
+  flex: 0 0 auto;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--fg);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.quick-upload-file-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.quick-upload-input:focus-visible + .quick-upload-picker {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
 .quick-view-uploads li {
   font-size: var(--text-sm);
   color: var(--fg-2);

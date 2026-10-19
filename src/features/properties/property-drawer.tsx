@@ -152,6 +152,9 @@ function QuickView({
   const [postError, setPostError] = useState<string | null>(null);
   const [uploads, setUploads] = useState<UploadRow[]>([]);
   const [uploading, setUploading] = useState(false);
+  // The chosen file's name, kept beside the picker so the choice is visible after the native
+  // control has been cleared and the upload has started.
+  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const propertyId = property.id;
 
   useEffect(() => {
@@ -321,6 +324,7 @@ function QuickView({
     // The control is cleared straight away, so choosing the same file again is its own selection.
     event.target.value = '';
     if (!file || uploading) return;
+    setSelectedFileName(file.name);
     const id = crypto.randomUUID();
     setUploads((rows) => [
       { id, name: file.name, state: 'registering' },
@@ -524,18 +528,23 @@ function QuickView({
       </section>
       <section className="quick-view-section">
         <h3>{text.quickUpload}</h3>
-        <div className="field">
-          <label className="field-label" htmlFor={uploadId}>
-            {fileText.selectFiles}
-          </label>
+        <div className="quick-upload-control">
           <input
-            className="input"
+            className="quick-upload-input"
             id={uploadId}
             type="file"
             accept="application/pdf,image/jpeg,image/png,image/webp"
             onChange={(event) => void selectFile(event)}
             disabled={uploading}
           />
+          <label className="quick-upload-picker" htmlFor={uploadId}>
+            <span className="quick-upload-picker-button">
+              {uploading ? fileText.uploading : fileText.selectFiles}
+            </span>
+            <span className="quick-upload-file-name" translate="no">
+              {selectedFileName ?? fileText.noFiles}
+            </span>
+          </label>
         </div>
         <p className="field-hint">{fileText.uploadNote}</p>
         {uploads.length ? (
