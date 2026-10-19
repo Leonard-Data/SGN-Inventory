@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { messages, type Locale } from '@/i18n/messages';
 import { api, RequestError } from '@/features/employees/api';
+import { useToast } from '@/features/toasts/toast-host';
 import { LoadingSkeleton } from '@/features/skeleton';
 import {
   RESERVATION_DAYS_DEFAULT,
@@ -177,6 +178,7 @@ export function Reservation({
   archived,
   employeeId,
   onDenied,
+  onCommitted,
 }: {
   propertyId: string;
   locale: Locale;
@@ -184,10 +186,14 @@ export function Reservation({
   archived: boolean;
   employeeId: string;
   onDenied: (status: number) => void;
+  // A committed reservation closes the dialog it was recorded from; the confirmation then
+  // follows the person onto the page.
+  onCommitted: () => void;
 }) {
   const text = messages[locale],
     requestReasonId = useId(),
     requestHelpId = useId();
+  const notify = useToast();
   const [state, setState] = useState<ReservationState | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -200,7 +206,6 @@ export function Reservation({
     id: string;
     code: string;
   } | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [releasing, setReleasing] = useState(false);
   const [releaseError, setReleaseError] = useState<string | null>(null);
   const inFlight = useRef<AbortController | null>(null);
@@ -258,7 +263,6 @@ export function Reservation({
     if (posting) return;
     setPosting(true);
     setPostError(null);
-    setNotice(null);
     try {
       const next = await api<ReservationState>(
         '/api/properties/' + propertyId + '/reservations',
@@ -266,7 +270,8 @@ export function Reservation({
       );
       apply(next);
       setDraft('');
-      setNotice(text.reservationRequested);
+      notify({ saved: true, message: text.reservationRequested });
+      onCommitted();
     } catch (problem) {
       if (
         problem instanceof RequestError &&
@@ -297,7 +302,6 @@ export function Reservation({
     const data = new FormData(form);
     setDeciding(lockId);
     setDecisionError(null);
-    setNotice(null);
     try {
       const next = await api<ReservationState>(
         '/api/properties/' + propertyId + '/reservations/decision',
@@ -309,7 +313,11 @@ export function Reservation({
         },
       );
       apply(next);
-      setNotice(approve ? text.reservationApproved : text.reservationRejected);
+      notify({
+        saved: true,
+        message: approve ? text.reservationApproved : text.reservationRejected,
+      });
+      onCommitted();
     } catch (problem) {
       if (
         problem instanceof RequestError &&
@@ -352,14 +360,14 @@ export function Reservation({
     const data = new FormData(form);
     setReleasing(true);
     setReleaseError(null);
-    setNotice(null);
     try {
       const next = await api<ReservationState>(
         '/api/properties/' + propertyId + '/reservations/release',
         { lockId, reason: data.get('reason') },
       );
       apply(next);
-      setNotice(text.reservationReleased);
+      notify({ saved: true, message: text.reservationReleased });
+      onCommitted();
     } catch (problem) {
       if (
         problem instanceof RequestError &&
@@ -555,9 +563,6 @@ export function Reservation({
           ) : null}
         </>
       ) : null}
-      <p role="status" aria-live="polite">
-        {notice}
-      </p>
       <p className="field-hint">{text.reservationNote}</p>
     </section>
   );

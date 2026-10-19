@@ -757,6 +757,11 @@ const vi = {
     'Bất động sản đã bán chưa có người được ghi nhận (tính đến {date}): {n} — hiển thị riêng, không gán cho nhân viên nào.',
   completedSalesFailed: 'Không tải được xếp hạng bán thành công.',
   rank: 'Hạng',
+  // Save confirmations. Each one names what was recorded, never a generic "saved".
+  toastDismiss: 'Đóng thông báo',
+  vendorCreated: 'Đã ghi nhận nhà cung cấp.',
+  vendorLinked: 'Đã liên kết nhà cung cấp.',
+  vendorUnlinked: 'Đã gỡ liên kết nhà cung cấp.',
 };
 export type MessageKey = keyof typeof vi;
 
@@ -1526,6 +1531,11 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
       'Sold properties with no recorded closer (as of {date}): {n} — shown separately, never assigned to an employee.',
     completedSalesFailed: 'The completed-sales ranking did not load.',
     rank: 'Rank',
+    // Save confirmations. Each one names what was recorded, never a generic "saved".
+    toastDismiss: 'Dismiss notification',
+    vendorCreated: 'Vendor recorded.',
+    vendorLinked: 'Vendor linked.',
+    vendorUnlinked: 'Vendor unlinked.',
   },
 };
 export function label(
