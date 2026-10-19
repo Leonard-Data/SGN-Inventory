@@ -212,6 +212,17 @@ export function retainedWindows({
   return [...keepSet].sort((left, right) => left - right);
 }
 
+// The kept windows a publication can draw: only the offsets whose rows have actually been read.
+// A window the band needs but whose read is still in flight stays out of the page, so the set
+// published before a read settles differs from the set published after it, and the arriving rows
+// are drawn. Naming an unread window as published instead would make the stream skip it.
+export function loadedWindows<T>(
+  kept: readonly number[],
+  stored: ReadonlyMap<number, readonly T[]>,
+): number[] {
+  return kept.filter((offset) => stored.has(offset));
+}
+
 // The rows of one chunk as the windows on hand hold them. null means a window this chunk needs
 // has not been read yet, so the chunk reserves its space instead of drawing a partial set; a
 // window that has run out ends the chunk early, which is the stream's own end.

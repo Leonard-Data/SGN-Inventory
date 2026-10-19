@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   isInventoryOrder,
+  loadedWindows,
   parseStreamOffset,
   retainedWindows,
   reversedOrder,
@@ -315,6 +316,27 @@ test('a chunk that crosses a read boundary takes its rows from both windows', ()
   // A window this chunk needs that has not been read yet reserves its space — null, never a
   // partial chunk that would draw a shorter list than the stream really has.
   assert.equal(streamChunkRows(windows, 200), null);
+});
+
+test('only loaded windows are drawn, so a window arriving later still republishes', () => {
+  const cache = new Map<number, readonly string[]>([
+    [0, ['a', 'b']],
+    [100, ['c', 'd']],
+  ]);
+  // The band has scrolled to window 300 and window 100 is still stored, but 300 has not been read
+  // yet: only 0 and 100 can be drawn, so 300 is not published ahead of its rows.
+  const kept = retainedWindows({
+    stored: [...cache.keys()],
+    needed: [300],
+    position: 300,
+    keep: 4,
+  });
+  assert.deepEqual(kept, [0, 100, 300]);
+  assert.deepEqual(loadedWindows(kept, cache), [0, 100]);
+  // The read settles: the same plan now draws 300, so the published set changes and the page
+  // redraws. A plan published as though it were drawn would compare equal and never republish.
+  cache.set(300, ['e', 'f']);
+  assert.deepEqual(loadedWindows(kept, cache), [0, 100, 300]);
 });
 
 test('a window that runs out ends the chunk at the stream’s own end', () => {

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, RequestError } from '@/features/employees/api';
 import {
+  loadedWindows,
   retainedWindows,
   STREAM_WINDOWS_KEPT,
   streamWindowUrl,
@@ -70,18 +71,22 @@ export function useInventoryStream({
       position: position.current,
       keep: STREAM_WINDOWS_KEPT,
     });
+    // Only the windows whose rows are here can be drawn now. A window still being read is kept in
+    // the plan but not published: when its rows arrive the published set changes and the page
+    // redraws, instead of matching a set that named rows the page never had.
+    const offsets = loadedWindows(kept, cache.current);
     if (
-      kept.length === published.current.length &&
-      kept.every((offset, index) => offset === published.current[index])
+      offsets.length === published.current.length &&
+      offsets.every((offset, index) => offset === published.current[index])
     )
       return;
     const next = new Map<number, PropertySummary[]>();
-    for (const offset of kept) {
+    for (const offset of offsets) {
       const rows = cache.current.get(offset);
       if (rows) next.set(offset, rows);
     }
     cache.current = next;
-    published.current = kept;
+    published.current = offsets;
     setWindows(next);
   }, []);
 
