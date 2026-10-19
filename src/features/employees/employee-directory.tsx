@@ -6,8 +6,10 @@ import { LoadingSkeleton } from '@/features/skeleton';
 import { EmployeeDeactivationPanel } from './employee-deactivation';
 import { EmployeeAccountDeletionPanel } from './employee-account-deletion';
 import { EmployeeInvitationForm } from './employee-invitation';
+import { EmployeeInvitationResendPanel } from './employee-invitation-resend';
 import { EmployeeProfilePanel } from './employee-profile-panel';
 import { mayAdministerEmployees } from './deactivation';
+import { resendableInvitation } from './invitation';
 import { profileEditable } from './profile';
 import {
   deletionResumable,
@@ -51,9 +53,10 @@ export function EmployeeDirectory({
   } = useProtectedData<DirectoryPage>(endpoint);
   const [open, setOpen] = useState<{
     id: string;
-    panel: 'deactivate' | 'delete' | 'profile';
+    panel: 'deactivate' | 'delete' | 'profile' | 'resend';
   } | null>(null);
   const [invitationOpen, setInvitationOpen] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState<string | null>(null);
   const invitationDialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -64,8 +67,10 @@ export function EmployeeDirectory({
   }, [invitationOpen]);
 
   // At most one lifecycle confirmation is open at a time.
-  const toggle = (id: string, panel: 'deactivate' | 'delete' | 'profile') =>
-    setOpen(open?.id === id && open.panel === panel ? null : { id, panel });
+  const toggle = (
+    id: string,
+    panel: 'deactivate' | 'delete' | 'profile' | 'resend',
+  ) => setOpen(open?.id === id && open.panel === panel ? null : { id, panel });
   // The sgn-locale cookie is the rendered locale; the shell keeps it equal to the saved
   // preference.
   const locale = initialLocale;
@@ -188,7 +193,7 @@ export function EmployeeDirectory({
                   <h3>{text.employeeDirectoryEmpty}</h3>
                 </div>
               ) : (
-                <div className="table-wrap">
+                <div className="table-wrap employee-table-wrap">
                   <table className="data-table stackable">
                     <thead>
                       <tr>
@@ -226,6 +231,18 @@ export function EmployeeDirectory({
                           open?.id === employee.id && open.panel === 'delete';
                         const profileOpen =
                           open?.id === employee.id && open.panel === 'profile';
+                        const resendOpen =
+                          open?.id === employee.id && open.panel === 'resend';
+                        // A recorded invitation that was never accepted is the only one that
+                        // can be sent again: an accepted invitation, an active or deleted
+                        // account and a person with no invitation are excluded by the rule, and
+                        // the action stays admin-only like every other control on this page.
+                        const resendable =
+                          mayAdministerEmployees(actor?.role ?? '') &&
+                          resendableInvitation(
+                            employee.invitation,
+                            employee.access,
+                          );
                         return (
                           <Fragment key={employee.id}>
                             <tr>
@@ -245,7 +262,10 @@ export function EmployeeDirectory({
                                   </span>
                                 )}
                               </td>
-                              <td data-label={text.employeeAccess}>
+                              <td
+                                className="status-cell"
+                                data-label={text.employeeAccess}
+                              >
                                 <span
                                   className="badge"
                                   data-tone={accessTone[employee.access]}
@@ -280,98 +300,88 @@ export function EmployeeDirectory({
                                 ) : null}
                               </td>
                               <td data-label={text.employeeActions}>
-                                <div className="cell-actions">
-                                  {profileEditable(employee.access) ? (
-                                    <button
-                                      type="button"
-                                      className="icon-btn"
-                                      aria-label={text.employeeEdit}
-                                      title={text.employeeEdit}
-                                      aria-expanded={profileOpen}
-                                      onClick={() =>
-                                        toggle(employee.id, 'profile')
-                                      }
+                                <div className="cell-actions action-popover-wrap">
+                                  <button
+                                    type="button"
+                                    className="icon-btn"
+                                    aria-label={text.employeeActions}
+                                    aria-expanded={actionsOpen === employee.id}
+                                    onClick={() =>
+                                      setActionsOpen((current) =>
+                                        current === employee.id
+                                          ? null
+                                          : employee.id,
+                                      )
+                                    }
+                                  >
+                                    <svg
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                      aria-hidden="true"
                                     >
-                                      <svg
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="1.8"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        aria-hidden="true"
-                                      >
-                                        <path d="M4 20h4l10-10a2.8 2.8 0 0 0-4-4L4 16v4z" />
-                                        <path d="M13.5 6.5l4 4" />
-                                      </svg>
-                                    </button>
-                                  ) : null}
-                                  {employee.access === 'active' || resumable ? (
-                                    <button
-                                      type="button"
-                                      className="icon-btn"
-                                      aria-label={
-                                        resumable
-                                          ? text.employeeDeactivateReconcile
-                                          : text.employeeDeactivate
-                                      }
-                                      title={
-                                        resumable
-                                          ? text.employeeDeactivateReconcile
-                                          : text.employeeDeactivate
-                                      }
-                                      aria-expanded={deactivationOpen}
-                                      onClick={() =>
-                                        toggle(employee.id, 'deactivate')
-                                      }
-                                    >
-                                      <svg
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="1.8"
-                                        strokeLinecap="round"
-                                        aria-hidden="true"
-                                      >
-                                        <path d="M12 3v10" />
-                                        <path d="M6.6 6.6a8 8 0 1 0 10.8 0" />
-                                      </svg>
-                                    </button>
-                                  ) : null}
-                                  {deletable || resumingDeletion ? (
-                                    <button
-                                      type="button"
-                                      className="icon-btn"
-                                      aria-label={
-                                        resumingDeletion
-                                          ? text.employeeDeleteReconcile
-                                          : text.employeeDelete
-                                      }
-                                      title={
-                                        resumingDeletion
-                                          ? text.employeeDeleteReconcile
-                                          : text.employeeDelete
-                                      }
-                                      aria-expanded={deletionOpen}
-                                      onClick={() =>
-                                        toggle(employee.id, 'delete')
-                                      }
-                                    >
-                                      <svg
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="1.8"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        aria-hidden="true"
-                                      >
-                                        <path d="M4 7h16" />
-                                        <path d="M10 11v6M14 11v6" />
-                                        <path d="M6 7l1 13h10l1-13" />
-                                        <path d="M9 7V4h6v3" />
-                                      </svg>
-                                    </button>
+                                      <circle cx="5" cy="12" r="1" />
+                                      <circle cx="12" cy="12" r="1" />
+                                      <circle cx="19" cy="12" r="1" />
+                                    </svg>
+                                  </button>
+                                  {actionsOpen === employee.id ? (
+                                    <div className="action-popover" role="menu">
+                                      {profileEditable(employee.access) ? (
+                                        <button
+                                          type="button"
+                                          role="menuitem"
+                                          onClick={() => {
+                                            toggle(employee.id, 'profile');
+                                            setActionsOpen(null);
+                                          }}
+                                        >
+                                          {text.employeeEdit}
+                                        </button>
+                                      ) : null}
+                                      {resendable ? (
+                                        <button
+                                          type="button"
+                                          role="menuitem"
+                                          onClick={() => {
+                                            toggle(employee.id, 'resend');
+                                            setActionsOpen(null);
+                                          }}
+                                        >
+                                          {text.employeeInviteResendOpen}
+                                        </button>
+                                      ) : null}
+                                      {employee.access === 'active' ||
+                                      resumable ? (
+                                        <button
+                                          type="button"
+                                          role="menuitem"
+                                          onClick={() => {
+                                            toggle(employee.id, 'deactivate');
+                                            setActionsOpen(null);
+                                          }}
+                                        >
+                                          {resumable
+                                            ? text.employeeDeactivateReconcile
+                                            : text.employeeDeactivate}
+                                        </button>
+                                      ) : null}
+                                      {deletable || resumingDeletion ? (
+                                        <button
+                                          type="button"
+                                          role="menuitem"
+                                          onClick={() => {
+                                            toggle(employee.id, 'delete');
+                                            setActionsOpen(null);
+                                          }}
+                                        >
+                                          {resumingDeletion
+                                            ? text.employeeDeleteReconcile
+                                            : text.employeeDelete}
+                                        </button>
+                                      ) : null}
+                                    </div>
                                   ) : null}
                                 </div>
                               </td>
@@ -407,6 +417,20 @@ export function EmployeeDirectory({
                               <tr>
                                 <td colSpan={6}>
                                   <EmployeeAccountDeletionPanel
+                                    employee={employee}
+                                    actorRole={actor?.role ?? ''}
+                                    locale={locale}
+                                    onChanged={reload}
+                                    onDenied={redirectDenied}
+                                    onClose={() => setOpen(null)}
+                                  />
+                                </td>
+                              </tr>
+                            ) : null}
+                            {resendOpen ? (
+                              <tr>
+                                <td colSpan={6}>
+                                  <EmployeeInvitationResendPanel
                                     employee={employee}
                                     actorRole={actor?.role ?? ''}
                                     locale={locale}

@@ -561,6 +561,11 @@ export type Database = {
           provider_user_id: string | null;
           recorded_at: string | null;
           requested_at: string;
+          resend_actor_id: string | null;
+          resend_attempted_at: string | null;
+          resend_count: number;
+          resend_detail: string | null;
+          resend_outcome: string | null;
           revision: number;
           role: string;
           state: string;
@@ -1893,6 +1898,16 @@ export type Database = {
           p_outcome: string;
           p_provider_user_id?: string | null;
           p_detail?: string | null;
+        };
+        Returns: Json;
+      };
+      resend_employee_invitation: {
+        Args: {
+          p_invitation_id: string;
+          p_resend_count: number;
+          p_outcome: string;
+          p_detail?: string | null;
+          p_provider_user_id?: string | null;
         };
         Returns: Json;
       };
