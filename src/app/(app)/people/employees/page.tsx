@@ -1,17 +1,10 @@
 import { cookies } from 'next/headers';
 import { EmployeeDirectory } from '@/features/employees/employee-directory';
 
-export default async function PeopleEmployees({
-  searchParams,
-}: {
-  searchParams: Promise<{ after?: string }>;
-}) {
-  const params = await searchParams;
+export default async function PeopleEmployees() {
   const locale =
     (await cookies()).get('sgn-locale')?.value === 'en' ? 'en' : 'vi';
-  // The cursor passes through unchanged: the read rejects a malformed one rather than
-  // silently showing the first page.
-  return (
-    <EmployeeDirectory initialLocale={locale} after={params.after ?? null} />
-  );
+  // The directory is one stream of windows now, so the address names no page and no cursor: the
+  // rows are read as the person scrolls, from the same admin-only read as before.
+  return <EmployeeDirectory initialLocale={locale} />;
 }

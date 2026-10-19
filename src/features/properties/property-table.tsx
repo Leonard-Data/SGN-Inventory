@@ -3,7 +3,7 @@ import { memo } from 'react';
 import { messages, type Locale } from '@/i18n/messages';
 import { LoadingSkeleton } from '@/features/skeleton';
 import { COLUMN_HEADINGS, propertyTableRow, TABLE_COLUMNS } from './table';
-import { useMeasuredHeight } from './use-measured';
+import { useMeasuredHeight } from '@/features/stream/use-measured';
 import { useRelativeNow } from './use-relative-now';
 import type { PropertySummary } from './types';
 
