@@ -4,6 +4,7 @@ import { messages, type Locale } from '@/i18n/messages';
 import { LoadingSkeleton } from '@/features/skeleton';
 import { COLUMN_HEADINGS, propertyTableRow, TABLE_COLUMNS } from './table';
 import { useMeasuredHeight } from './use-measured';
+import { useRelativeNow } from './use-relative-now';
 import type { PropertySummary } from './types';
 
 // One mounted chunk of the table: the rows a window has answered with, or the space reserved for
@@ -33,6 +34,9 @@ export const TableChunk = memo(function TableChunk({
     active: rows !== null,
     report: onMeasured,
   });
+  // The modified cell says how long ago the record changed; the clock behind that phrase is the
+  // browser's, so no row states a time the server and the browser disagree about.
+  const now = useRelativeNow();
   if (rows === null) {
     // The row keeps the whole reserved height, so the skeleton fills the space the rows
     // themselves will take rather than moving the rest of the list when they arrive.
@@ -54,7 +58,7 @@ export const TableChunk = memo(function TableChunk({
   return (
     <tbody ref={element}>
       {rows.map((record) => {
-        const row = propertyTableRow(record, locale);
+        const row = propertyTableRow(record, locale, now);
         return (
           <tr
             key={record.id}
@@ -98,6 +102,7 @@ export const TableChunk = memo(function TableChunk({
                   key={cell.column}
                   className="inventory-cell"
                   data-column={cell.column}
+                  title={cell.title}
                 >
                   {cell.emphasis ? (
                     <b className="num inventory-price">{cell.text}</b>

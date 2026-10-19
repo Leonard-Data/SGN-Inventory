@@ -7,7 +7,7 @@ import {
   type Locale,
   type MessageKey,
 } from '../../i18n/messages.ts';
-import { formatDecimal, vietnamDate, vietnamTimestamp } from './format.ts';
+import { formatDecimal, relativeTime, vietnamDate } from './format.ts';
 import type { PropertySummary } from './types.ts';
 
 // Exactly the ten columns the captain asked for, in this order.
@@ -54,6 +54,9 @@ export type TableCell = {
   emphasis?: true;
   // The unit a value is stated in, drawn beside the value rather than counted as part of it.
   note?: string;
+  // The value behind a cell that states less on its face: the exact recorded instant, kept on the
+  // cell so the precise moment is never lost to the phrase that replaced it.
+  title?: string;
 };
 
 export type PropertyTableRow = {
@@ -96,15 +99,18 @@ export function rowPrice(
 }
 
 // One row of the table: every column, in the table's own order, with the value it holds or the
-// missing-value marker.
+// missing-value marker. `now` is the browser's clock for the modified phrase, and null means the
+// page has not hydrated yet: the cell then states the recorded timestamp itself.
 export function propertyTableRow(
   record: PropertySummary,
   locale: Locale,
+  now: number | null = null,
 ): PropertyTableRow {
   const text = messages[locale];
   const address = record.addresses[0] ?? null;
   const price = rowPrice(record);
   const area = totalAreaM2(record);
+  const modified = relativeTime(record.updatedAt, locale, now);
   const value = (text: string | null | undefined): string =>
     text && text.trim() ? text : MISSING_VALUE;
   const cells: TableCell[] = [
@@ -137,7 +143,8 @@ export function propertyTableRow(
       : { column: 'totalArea', text: MISSING_VALUE },
     {
       column: 'modifiedTime',
-      text: value(vietnamTimestamp(record.updatedAt, locale)),
+      text: modified ? modified.text : MISSING_VALUE,
+      ...(modified ? { title: modified.exact } : {}),
     },
   ];
   return {

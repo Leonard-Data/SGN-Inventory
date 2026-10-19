@@ -162,11 +162,40 @@
 
 /* The whole stream is one table: the header row is sticky under the top bar and
    each mounted chunk is its own tbody, so the ten columns align across chunk
-   boundaries and a reserved chunk is one full-height row. */
+   boundaries and a reserved chunk is one full-height row. The rows sit on one
+   surface rather than meeting the page squarely: the border and radius are drawn
+   by the stream, and the first and last rows are rounded with it so no square
+   corner of a row shows through the frame. Separate borders keep the sticky
+   header's own border attached to it while it scrolls. The frame is as wide as
+   the table it holds: the ten columns have a min-content width of their own and
+   the page, not the frame, is what scrolls sideways when they do not fit. */
+.inventory-stream[data-view='table'] {
+  width: fit-content;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
 .inventory-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: var(--text-sm);
+}
+.inventory-table thead th:first-child {
+  border-top-left-radius: var(--radius-lg);
+}
+.inventory-table thead th:last-child {
+  border-top-right-radius: var(--radius-lg);
+}
+.inventory-table tr:last-child > :first-child {
+  border-bottom-left-radius: var(--radius-lg);
+}
+.inventory-table tr:last-child > :last-child {
+  border-bottom-right-radius: var(--radius-lg);
+}
+/* The frame draws the last row's bottom edge, so the row does not draw a second one on top of it. */
+.inventory-table tr:last-child > * {
+  border-bottom: 0;
 }
 .inventory-table thead th {
   position: sticky;
@@ -279,13 +308,18 @@
    own `margin: auto`, so the dialog box itself is pinned here: the list stays beside the panel
    instead of ending up behind a dialog in the middle of the page, and Escape, the focus trap and
    the focus return stay the platform's own. The backdrop paints nothing, so the list remains
-   visible while the panel is open. */
+   visible while the panel is open. The box does not scroll: the panel body is the drawer's one
+   scroll container, so scrolling inside the panel never carries the panel itself off the screen
+   and the drawer adds no second scrollbar of its own. `clip` rather than `hidden`: a hidden box
+   can still be scrolled by a script or by focus moving into it, and the panel would leave the
+   screen with it. */
 dialog.sgn-dialog[data-size='drawer'] {
   inset: 0 0 0 auto;
   margin: 0;
   width: min(460px, 100vw);
   height: 100dvh;
   max-height: none;
+  overflow: clip;
 }
 dialog.sgn-dialog[data-size='drawer']::backdrop {
   background: transparent;

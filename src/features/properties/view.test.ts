@@ -155,3 +155,50 @@ test('the view switch is icon-only, with a hidden name and the state kept', () =
         `${locale}.${key} is missing`,
       );
 });
+
+// The rows are one surface: the list is framed by the package's own border and radius instead of
+// meeting the page squarely, and the first and last rows are rounded with the frame so no square
+// corner of a row paints over it.
+test('the table sits inside one rounded, bordered surface', () => {
+  const frame = surfaces.slice(
+    surfaces.indexOf(".inventory-stream[data-view='table'] {"),
+  );
+  const rule = frame.slice(0, frame.indexOf('}'));
+  assert.match(rule, /border: 1px solid var\(--border\)/);
+  assert.match(rule, /border-radius: var\(--radius-lg\)/);
+  assert.match(rule, /background: var\(--surface\)/);
+  // The frame encloses the table it holds; the ten columns keep their own width and the page is
+  // what scrolls sideways when they do not fit.
+  assert.match(rule, /width: fit-content/);
+  // The corners of the first and last rows follow the frame.
+  for (const corner of [
+    'thead th:first-child',
+    'thead th:last-child',
+    'tr:last-child > :first-child',
+    'tr:last-child > :last-child',
+  ]) {
+    const start = surfaces.indexOf(`.inventory-table ${corner} {`);
+    assert.ok(start > 0, `${corner} is rounded`);
+    assert.match(
+      surfaces.slice(start, surfaces.indexOf('}', start)),
+      /border-(top|bottom)-(left|right)-radius: var\(--radius-lg\)/,
+    );
+  }
+  // Separate borders keep the sticky header's own border attached to it while it scrolls.
+  const table = surfaces.slice(surfaces.indexOf('.inventory-table {'));
+  assert.match(table.slice(0, table.indexOf('}')), /border-collapse: separate/);
+});
+
+// Exactly one scroll container scrolls the list: the page. Nothing inside the stream adds a
+// scrollbar of its own, so a wheel over the rows never scrolls a nested box instead.
+test('the list surface adds no scroll container of its own', () => {
+  const start = surfaces.indexOf(".inventory-stream[data-view='table'] {");
+  assert.ok(start > 0, 'the table surface is defined');
+  // A surface that named a height or an overflow would be a second scrollport beside the page.
+  assert.doesNotMatch(
+    surfaces.slice(start, surfaces.indexOf('}', start)),
+    /overflow|height:/,
+  );
+  const table = surfaces.slice(surfaces.indexOf('.inventory-table {'));
+  assert.doesNotMatch(table.slice(0, table.indexOf('}')), /overflow|height:/);
+});

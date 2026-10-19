@@ -10,6 +10,7 @@ const drawer = source('./property-drawer.tsx');
 const dialog = source('./detail-dialog.tsx');
 const surfaces = source('../../app/sgn-surfaces.css');
 const appLayer = source('../../app/app.css');
+const packageLayer = source('../../app/sgn-app.css');
 
 function rule(from: string): string {
   const start = surfaces.indexOf(from);
@@ -135,4 +136,41 @@ test('every new label and the reveal control carry both languages', () => {
   assert.notEqual(messages.vi.ownerContact, messages.en.ownerContact);
   assert.notEqual(messages.vi.showOwnerPhone, messages.en.showOwnerPhone);
   assert.notEqual(messages.vi.hideOwnerPhone, messages.en.hideOwnerPhone);
+});
+
+// The panel arrives once: one motion, the slide. A shared dialog rule that also faded the panel
+// would give the drawer a slide over a fade, so one animation is the whole entrance.
+test('the drawer panel declares one animation, not a slide plus a fade', () => {
+  const declared = [
+    ...surfaces.matchAll(/animation:\s*([a-z-]+)\s/g),
+    ...appLayer.matchAll(
+      /\.sgn-dialog-panel[^{]*\{[^}]*animation:\s*([a-z-]+)/g,
+    ),
+    ...packageLayer.matchAll(
+      /\.sgn-dialog-panel[^{]*\{[^}]*animation:\s*([a-z-]+)/g,
+    ),
+  ].map((match) => match[1]);
+  assert.deepEqual(declared, ['sgn-drawer-in']);
+  // Nothing in the panel's own rule fades it in or out beside the slide.
+  const panel = rule(".sgn-dialog[data-size='drawer'] .sgn-dialog-panel {");
+  assert.doesNotMatch(panel, /animation|opacity/);
+});
+
+// The drawer box is pinned to the viewport and does not scroll: scrolling inside the panel leaves
+// the panel where it is, and the panel body is the drawer's one scroll container. Nothing is
+// unreachable, because the body scrolls its own content inside the panel.
+test('the drawer box does not scroll, so the panel holds the only scrollbar', () => {
+  const box = rule("dialog.sgn-dialog[data-size='drawer'] {");
+  assert.match(box, /height: 100dvh/);
+  // `clip` rather than `hidden`: a hidden box can still be scrolled by a script or by focus
+  // moving into it, and the panel would leave the screen with it.
+  assert.match(box, /overflow: clip/);
+  assert.doesNotMatch(box, /overflow: hidden/);
+  // The one scroll container: the panel body the shared dialog rules already give the surface.
+  assert.match(packageLayer, /\.sgn-dialog-body \{[^}]*overflow-y: auto/);
+  const drawerRules = surfaces
+    .split('}')
+    .filter((block) => block.includes("data-size='drawer'"));
+  for (const block of drawerRules)
+    assert.doesNotMatch(block, /overflow-y:\s*(auto|scroll)/, block);
 });
