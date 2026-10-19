@@ -480,26 +480,10 @@ function QuickView({
           </p>
         ) : owners === null ? null : owners.length ? (
           <>
-            <ul className="quick-view-owners">
-              {owners.map((owner) => (
-                <li key={owner.id} translate="no">
-                  {owner.name ?? text.unknown}
-                </li>
-              ))}
-            </ul>
             <p className="quick-view-owner-phone">
-              {phone.shown ? (
-                <>
-                  <span translate="no">{phone.name}</span>{' '}
-                  <span className="num" translate="no">
-                    {phone.phone}
-                  </span>
-                </>
-              ) : (
-                <span className="num" aria-hidden="true">
-                  {HIDDEN_PHONE}
-                </span>
-              )}
+              <span className="num" translate="no">
+                {phone.shown ? phone.phone : HIDDEN_PHONE}
+              </span>
               <button
                 className="quick-view-reveal"
                 type="button"
@@ -512,9 +496,6 @@ function QuickView({
                 onClick={() => void toggleOwnerPhone()}
               >
                 <EyeIcon />
-                <span className="quick-view-reveal-label">
-                  {phone.shown ? text.hideOwnerPhone : text.showOwnerPhone}
-                </span>
               </button>
             </p>
           </>

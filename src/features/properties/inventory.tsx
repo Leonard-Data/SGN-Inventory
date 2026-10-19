@@ -550,7 +550,20 @@ export function Inventory({
                   prefetch={false}
                   aria-current={requestedView === 'table' ? 'page' : undefined}
                 >
-                  {text.viewTable}
+                  <svg
+                    className="seg-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect x="3" y="4" width="18" height="16" rx="2" />
+                    <path d="M3 9h18M9 9v11" />
+                  </svg>
+                  <span className="sr-only">{text.viewTable}</span>
                 </Link>
               </div>
             ) : null}

@@ -261,6 +261,33 @@
   font-weight: 600;
   box-shadow: var(--shadow-raise);
 }
+.seg a.seg-btn:has(.seg-icon) {
+  width: var(--btn-h-sm);
+  padding-inline: 0;
+}
+.seg-icon {
+  width: 17px;
+  height: 17px;
+}
+
+.data-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+.data-table thead th {
+  background: var(--surface-warm);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.data-table tbody tr:last-child td {
+  border-bottom: 0;
+}
 
 /* ════════════════════════════════════════════════════════════════════════════
    The quick view: the record's facts, its owner contact, a comment, one quick
