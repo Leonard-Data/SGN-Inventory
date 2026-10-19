@@ -385,7 +385,13 @@ export function ContactDirectory({
           opener={opened?.opener ?? null}
           onClose={() => setOpened(null)}
           onDenied={denied}
-          onSaved={reload}
+          onSaved={async () => {
+            const opener = opened?.opener;
+            await reload();
+            requestAnimationFrame(() => {
+              if (opener?.isConnected) opener.focus();
+            });
+          }}
         />
       ) : null}
     </>

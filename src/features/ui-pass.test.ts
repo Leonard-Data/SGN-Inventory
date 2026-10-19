@@ -5,6 +5,16 @@ import test from 'node:test';
 const source = (path: string) =>
   readFileSync(new URL(path, import.meta.url), 'utf8');
 
+test('the sidebar expanded state follows the active desktop or mobile layout', () => {
+  const shell = source('./navigation/app-shell.tsx');
+  assert.match(
+    shell,
+    /const sidebarExpanded = desktop \? !sidebarCollapsed : drawer/,
+  );
+  assert.match(shell, /aria-expanded=\{sidebarExpanded\}/);
+  assert.match(shell, /inert=\{!sidebarExpanded\}/);
+});
+
 test('contact editing uses the same drawer with contact copy and a required save acknowledgement', () => {
   const directory = source('./contacts/directory-view.tsx');
   assert.doesNotMatch(directory, /className="row-detail"|copy\.optional/);

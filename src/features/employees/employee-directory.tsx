@@ -535,7 +535,13 @@ export function EmployeeDirectory({
           employee={editing}
           locale={locale}
           opener={open?.opener ?? null}
-          onChanged={reload}
+          onChanged={async () => {
+            const opener = open?.opener;
+            await reload();
+            requestAnimationFrame(() => {
+              if (opener?.isConnected) opener.focus();
+            });
+          }}
           onDenied={redirectDenied}
           onClose={() => setOpen(null)}
         />

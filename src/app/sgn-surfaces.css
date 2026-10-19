@@ -219,7 +219,7 @@
   white-space: nowrap;
 }
 .inventory-cell {
-  padding: var(--space-3);
+  padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--border-soft);
   text-align: left;
   font-weight: 400;
@@ -282,7 +282,7 @@
 .inventory-menu[open] > div {
   position: absolute;
   right: 0;
-  bottom: 100%;
+  top: 100%;
   z-index: 2;
   width: 190px;
   padding: var(--space-2);

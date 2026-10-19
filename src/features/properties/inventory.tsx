@@ -461,6 +461,7 @@ export function Inventory({
                 <option
                   key={order.value ?? 'default'}
                   value={order.value ?? ''}
+                  hidden={order.value === 'newest'}
                 >
                   {order.label}
                 </option>

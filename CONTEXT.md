@@ -201,7 +201,7 @@ The properties list as one result set ordered by the server (newest created firs
 _Avoid_: Numbered page, page-size setting, cursor, partial result set
 
 **Inventory result view**:
-The presentation choice for the inventory stream — cards or table — carried in the properties address beside the search, the ordering and the filters, so switching it or applying a filter keeps the narrowed result set and never changes the read. The ten-column table is not offered at phone width, where cards are the list.
+The presentation choice for the inventory stream — cards or table — carried in the properties address beside the search, the ordering and the filters, so switching it or applying a filter keeps the narrowed result set and never changes the read. The summary table groups the recorded facts into property, address, price, area, status, updated time and actions; the full record keeps every source field. The table is not offered at phone width, where cards are the list.
 _Avoid_: Second result set, paged view
 
 **Property quick view**:
