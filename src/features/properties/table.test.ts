@@ -9,6 +9,7 @@ import {
   TABLE_COLUMNS,
   totalAreaM2,
 } from './table.ts';
+import { vietnamTimestamp } from './format.ts';
 import type { PropertySummary } from './types.ts';
 
 function record(overrides: Partial<PropertySummary> = {}): PropertySummary {
@@ -221,4 +222,33 @@ test('the row price leads with the price the listing asks in, in its own unit', 
   );
   assert.equal(cell(rent, 'price').note, messages.en.priceUnitMonthly);
   assert.equal(cell(rent, 'price').text, '25,000,000');
+});
+
+test('the modified cell reads as how long ago, and keeps the exact recorded time', () => {
+  const updated = '2026-09-20T09:30:00Z';
+  const row = propertyTableRow(
+    record({ updatedAt: updated }),
+    'vi',
+    Date.parse(updated) + 5 * 60_000,
+  );
+  assert.equal(cell(row, 'modifiedTime').text, '5 phút trước');
+  // The precise moment is still on the cell, so the phrase never costs the recorded time.
+  assert.equal(
+    cell(row, 'modifiedTime').title,
+    vietnamTimestamp(updated, 'vi'),
+  );
+  // Before the browser's clock has answered, the cell states the recorded timestamp itself.
+  assert.equal(
+    cell(propertyTableRow(record({ updatedAt: updated }), 'en'), 'modifiedTime')
+      .text,
+    vietnamTimestamp(updated, 'en'),
+  );
+  // A record with no modified time is the missing-value marker, with no time to keep behind it.
+  const unknown = propertyTableRow(
+    record({ updatedAt: null }),
+    'vi',
+    Date.now(),
+  );
+  assert.equal(cell(unknown, 'modifiedTime').text, MISSING_VALUE);
+  assert.equal(cell(unknown, 'modifiedTime').title, undefined);
 });

@@ -4,6 +4,8 @@ import {
   formatVnd,
   formatDecimal,
   formatInteger,
+  RELATIVE_DAYS,
+  relativeTime,
   vietnamDate,
   vietnamTimestamp,
   dialableNumber,
@@ -60,4 +62,71 @@ test('only a single plausible recorded number becomes a Call link', () => {
   assert.equal(dialableNumber('0901234567 - 0341234567'), null);
   assert.equal(dialableNumber('+84900000291 / +84900000292'), null);
   assert.equal(dialableNumber(''), null);
+});
+// The modified column reads as how long ago a record changed. Each phrase owns one band, and
+// the band is entered at its own boundary, so the cell never says "60 minutes ago" on a record
+// that changed an hour ago.
+const changed = '2026-09-20T09:30:00Z';
+const at = Date.parse(changed);
+const ago = (ms: number, locale: 'vi' | 'en' = 'vi') =>
+  relativeTime(changed, locale, at + ms)!.text;
+const SECOND = 1000;
+const MINUTE = 60 * SECOND;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+
+test('each relative phrase starts and ends at its own boundary', () => {
+  assert.equal(ago(0), 'vừa xong');
+  assert.equal(ago(MINUTE - SECOND), 'vừa xong');
+  assert.equal(ago(MINUTE), '1 phút trước');
+  assert.equal(ago(2 * MINUTE), '2 phút trước');
+  assert.equal(ago(HOUR - SECOND), '59 phút trước');
+  assert.equal(ago(HOUR), '1 giờ trước');
+  assert.equal(ago(DAY - SECOND), '23 giờ trước');
+  assert.equal(ago(DAY), '1 ngày trước');
+  assert.equal(ago(2 * DAY), '2 ngày trước');
+  assert.equal(ago(RELATIVE_DAYS * DAY - SECOND), '6 ngày trước');
+});
+
+test('the same boundaries read in English, with one phrase for one unit', () => {
+  assert.equal(ago(0, 'en'), 'just now');
+  assert.equal(ago(MINUTE, 'en'), '1 minute ago');
+  assert.equal(ago(90 * MINUTE, 'en'), '1 hour ago');
+  assert.equal(ago(DAY, 'en'), '1 day ago');
+  assert.equal(ago(3 * DAY, 'en'), '3 days ago');
+});
+
+test('a value old enough to lose the phrase states its recorded date instead', () => {
+  // `RELATIVE_DAYS` is the threshold: a week of "ago" is still placeable, "9 days ago" is not.
+  assert.equal(RELATIVE_DAYS, 7);
+  assert.equal(ago(RELATIVE_DAYS * DAY), vietnamDate(changed));
+  assert.equal(ago(400 * DAY), vietnamDate(changed));
+  // A stamp recorded in the future is not "in 3 minutes": it states the recorded day.
+  assert.equal(ago(-MINUTE), vietnamDate(changed));
+});
+
+test('the exact recorded timestamp is kept whatever the cell reads', () => {
+  const exact = vietnamTimestamp(changed, 'vi')!;
+  // Both the phrase and the date fallback carry it.
+  assert.deepEqual(relativeTime(changed, 'vi', at + MINUTE), {
+    text: '1 phút trước',
+    exact,
+  });
+  assert.deepEqual(relativeTime(changed, 'vi', at + 40 * DAY), {
+    text: vietnamDate(changed),
+    exact,
+  });
+  // Before the page has hydrated there is no browser clock to phrase from, so the cell states
+  // the recorded timestamp itself instead of a phrase the server and the browser would disagree
+  // about.
+  assert.deepEqual(relativeTime(changed, 'vi', null), { text: exact, exact });
+  assert.deepEqual(relativeTime(changed, 'en', null), {
+    text: vietnamTimestamp(changed, 'en'),
+    exact: vietnamTimestamp(changed, 'en'),
+  });
+});
+
+test('an absent or unparseable modified time reports no value', () => {
+  for (const value of [null, undefined, '', 'not a date'])
+    assert.equal(relativeTime(value, 'vi', at), null);
 });
