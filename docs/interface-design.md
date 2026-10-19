@@ -4,7 +4,7 @@ Design record (2026-10-12). Status: **implemented** for the token layer, the app
 
 ## 1. Scope
 
-Covers the authenticated app shell, the shared component vocabulary, and the layout of every planned page: `/properties`, `/properties/[id]`, `/properties/new`, `/requests`, `/reviews/*`, `/rentals`, `/rentals/[id]`, `/people/employees`, `/people/contacts`, `/reports/activity`, `/reports/company`, `/admin/categories`, `/admin/units`. The auth pages (`/login`, `/recover`, `/reset-password`, `/access-denied` and the shell-free `/auth/invite` invitation destination) already exist; the shell never wraps them.
+Covers the authenticated app shell, the shared component vocabulary, and the layout of every planned page: `/properties`, `/properties/[id]`, `/properties/new`, `/requests`, `/reviews/*`, `/rentals`, `/rentals/[id]`, `/people/employees`, `/profile`, `/people/contacts`, `/reports/activity`, `/reports/company`, `/admin/categories`, `/admin/units`. The auth pages (`/login`, `/recover`, `/reset-password`, `/access-denied` and the shell-free `/auth/invite` invitation destination) already exist; the shell never wraps them.
 
 Reuse rule: the visual language is the *Saigon New House* design package, ported verbatim into `src/app/app.css` (tokens at `:root`) and `src/app/sgn-app.css` (the class vocabulary). **Those class names are the contract** — a screen composes them, it does not restyle them. Anything the package does not draw lives in `src/app/globals.css` (repo-only surfaces: maintenance disclosures, history comparison, owner contact, correction proposals, reservation states and the recorded employee administration blocks) and `src/app/sgn-surfaces.css` (extensions to package components); the repo-only record-surface controls join `.card-entry` in `sgn-app.css` (see §2). All three are valued on the same tokens, and none introduces a colour, radius or spacing value the token layer does not define. The auth surfaces keep their own `.sgn-auth` layout sheet over the same tokens.
 
@@ -61,7 +61,7 @@ The shell replaces the per-page `SessionHeader`. Locale switch and sign-out move
 | Inventory | Search (`/properties`); New property (`/properties/new`, shipped) | all |
 | Reservations & Reviews | My requests (`/requests`); Reviews hub (`/reviews/…`, corrections shipped) | all; queues per role |
 | Rentals | Agreements (`/rentals`) | staff, manager, admin |
-| People | Employees (`/people/employees`, shipped: list only, admin); Vendors (`/people/vendors`, shipped, all roles); Contacts (`/people/contacts`, shipped: directory, Owners view and shared-detail correction, all roles) | admin; all; all |
+| People | Employees (`/people/employees`, shipped: list with per-row recorded edit, admin); Vendors (`/people/vendors`, shipped, all roles); Contacts (`/people/contacts`, shipped: directory, Owners view and shared-detail correction, all roles) | admin; all; all |
 | Reports | My activity (`/activity/me`, shipped); Company (`/activity/company`, shipped); Provinces (`/activity/provinces`, shipped) | all; manager/admin; manager/admin |
 | Admin | Categories (`/admin/categories`); Units (`/admin/units`) | admin |
 
@@ -193,7 +193,7 @@ Routes: `/reviews/corrections` (shipped as **Correction requests**: page-intro p
 ```
 Master (agreement) + detail (months/payments), reusing `.details` grid.
 
-### 5.6 `/people/employees` (shipped: list, invitation, guarded deactivation and permanent account deletion, admin)
+### 5.6 `/people/employees` (shipped: list, per-row recorded edit, invitation, guarded deactivation and permanent account deletion, admin)
 
 ```
 page-intro (.example · h1 · .intro-copy)
@@ -201,8 +201,11 @@ panel Employees → details.maintenance [Record an invitation]
   email field + existing-role select → [Send invitation]
   recorded invitation summary: invited address · role · state badge (pending / reconciliation required / recorded / none recorded)
   provider-acceptance note (not delivery) · recorded provider failure detail · [Retry]
-  .data-table.stackable: name · email · role · access state · actions
+  .data-table.stackable: name · bio · email · role · access state · actions
   access badge + recorded invitation badge + recorded deactivation badge + recorded deletion badge
+  [Edit details] → .deactivation-panel
+    recorded email (fixed value, not a field) · display name · phone (optional) · role select · bio
+    .field-hint on each bound and on the bio's visibility · [Save profile] · saved-changes note
   [Deactivate access]/[Reconcile sign-in block] → .deactivation-panel
     target identity · recorded action state · outstanding reservations (effective/pending + expiry)
     release-or-expiry note · finite provider-ban note · [Confirm deactivation]/[Retry] · [Close]
@@ -219,7 +222,23 @@ Permanent account deletion is a second, separately recorded control on the same 
 
 A live admin also records an invitation from the `[Record an invitation]` disclosure: one validated normalized email and one existing company role, sent to that recorded address through the server-only adapter, with the recorded `provider_pending` / `provider_failed` / `recorded` state shown in the form and beside the row. A recorded invitation is described as the provider holding an identity for the recorded address, never as an accepted request, delivered mail or active access; a refused address (already a recorded employee), a conflicting role for an open invitation and a reused submission key each show their own message, and an ambiguous or failed send keeps the same recorded invitation and offers a retry. When the reconciliation read returns an employee with no invitation row, the summary says no invitation is recorded instead of leaving the state unknown.
 
-Still planned, not shipped: the last-activity column, the `[Activate]` and `[Change role]` row actions, and any per-employee route. The invitee's own account setup is not an admin row action: it lives at the fixed `/auth/invite` destination (issue #69, §6).
+A live admin edits one recorded employee from that row: one panel carries the display name, phone, role and bio, the sign-in email is shown as a fixed value and is not a field, and the save reports which recorded fields actually changed. The row shows each person's recorded bio in its own column. A deactivated or deleted employee offers the reason instead of a form, and a save that would leave no active admin is refused with its own message ([database contract](database-contract.md#employee-profile-edit-and-the-persons-own-profile)).
+
+Still planned, not shipped: the last-activity column, the `[Activate]` row action, and any per-employee route. The invitee's own account setup is not an admin row action: it lives at the fixed `/auth/invite` destination (issue #69, §6).
+
+### 5.6a `/profile` (shipped: the signed-in person's own name and bio)
+
+```
+page-intro (.example · h1 · .intro-copy)
+panel (.page-section): display name (required, ≤120) · bio (≤280, plain text)
+  .field-hint: the bio appears on this person's entry in the employee list
+  sign-in email is stated as not a field · [Save profile]
+  .panel-note[role=status]: saved / nothing changed
+summary-list: recorded role
+states: loading · .alert[data-tone=danger] (load or save failure) · denied keeps §6
+```
+
+Shipped: reached from the account menu, `/profile` sits in the proxy matcher and requires live membership. Both the read and the save resolve the person from the session, so the page carries no employee id and offers no phone, role or email field; the recorded role is shown, not edited. A saved name is handed back to the account menu so it needs no second session read. Vietnamese/default and English.
 
 ### 5.6b `/people/vendors` + `/people/vendors/[id]` (shipped, issue #73)
 
