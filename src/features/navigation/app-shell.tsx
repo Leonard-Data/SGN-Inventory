@@ -469,7 +469,18 @@ export function AppShell({
               ) : null}
             </div>
           </header>
-          <main className="sgn-content" id="main-content" tabIndex={-1}>
+          <main
+            className="sgn-content"
+            data-layout={
+              pathname === '/properties' || /^\/people\/[^/]+$/.test(pathname)
+                ? 'wide'
+                : pathname === '/properties/new' || pathname === '/profile'
+                  ? 'form'
+                  : 'default'
+            }
+            id="main-content"
+            tabIndex={-1}
+          >
             {children}
           </main>
         </div>

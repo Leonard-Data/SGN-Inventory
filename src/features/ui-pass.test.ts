@@ -5,6 +5,18 @@ import test from 'node:test';
 const source = (path: string) =>
   readFileSync(new URL(path, import.meta.url), 'utf8');
 
+test('content has explicit wide and form variants with compact app controls', () => {
+  const css = source('../app/sgn-app.css');
+  const shell = source('./navigation/app-shell.tsx');
+  assert.match(shell, /data-layout=/);
+  assert.match(
+    css,
+    /\.sgn-content\[data-layout="wide"\] \{[^}]*max-width: none/,
+  );
+  assert.match(css, /\.sgn-content\[data-layout="form"\]/);
+  assert.match(css, /--control-h: 44px/);
+});
+
 test('shared tables distinguish column headings from semantic row headers', () => {
   const css = source('../app/sgn-app.css');
   assert.doesNotMatch(css, /\.data-table th \{/);
