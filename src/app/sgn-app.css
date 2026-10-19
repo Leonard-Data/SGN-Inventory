@@ -585,7 +585,7 @@ button.sgn-nav-item { width: 100%; background: transparent; border: 0; text-alig
 
 .data-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
 .data-table caption { text-align: left; padding: 0 0 var(--space-3); color: var(--muted); font-size: var(--text-xs); }
-.data-table th {
+.data-table thead th {
   padding: var(--space-3) var(--space-4); text-align: left; white-space: nowrap;
   background: var(--surface); border-bottom: 1px solid var(--border);
   font-family: var(--font-mono); font-size: 11px; font-weight: 500;
@@ -596,18 +596,16 @@ button.sgn-nav-item { width: 100%; background: transparent; border: 0; text-alig
   .data-table .status-cell .badge { margin: 2px 4px 2px 0; }
 
 .data-table tbody tr:hover { background: var(--surface-warm); }
-.data-table tbody tr:last-child td { border-bottom: 0; }
+.data-table tbody tr:last-child > :is(td, th[scope="row"]) { border-bottom: 0; }
 .data-table [data-num] { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--fg); }
 .data-table td b { display: block; color: var(--fg); font-weight: 600; }
 .data-table td small { display: block; margin-top: 2px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
-/* A row header (th[scope="row"]) labels one record, not a column, so the column-heading
-   treatment above must not leak into it: the name cell keeps body type and a transparent
-   background so the row hover wash shows through. Scoped to the contacts table: the same
-   th[scope="row"] shape on the employees/report/ranking/vendor tables is out of this pass. */
-.data-table.contacts-table tbody th[scope="row"] {
+/* Row headers identify records, not columns: body type and the row's own hover surface. */
+.data-table tbody th[scope="row"] {
   padding: var(--space-4);
   text-align: left;
   white-space: normal;
+  overflow-wrap: anywhere;
   background: transparent;
   border-bottom: 1px solid var(--border-soft);
   font-family: var(--font-body);
@@ -618,8 +616,7 @@ button.sgn-nav-item { width: 100%; background: transparent; border: 0; text-alig
   color: var(--fg-2);
   vertical-align: middle;
 }
-.data-table.contacts-table tbody th[scope="row"] b { display: block; color: var(--fg); font-weight: 600; }
-.data-table.contacts-table tbody tr:last-child th[scope="row"] { border-bottom: 0; }
+.data-table tbody th[scope="row"] b { display: block; color: var(--fg); font-weight: 600; }
  .data-table .cell-actions { text-align: right; white-space: nowrap; }
   .action-popover-wrap { position: relative; display: inline-flex; }
   .action-popover { position: absolute; right: 0; top: calc(100% + 6px); z-index: 10; min-width: 190px; padding: var(--space-2); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: 0 8px 24px color-mix(in oklab, var(--fg) 14%, transparent); text-align: left; }
@@ -633,11 +630,9 @@ button.sgn-nav-item { width: 100%; background: transparent; border: 0; text-alig
   .data-table.stackable tbody tr:hover { background: transparent; }
   .data-table.stackable td { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); padding: 0; border: 0; text-align: left; }
   .data-table.stackable td::before { content: attr(data-label); font-family: var(--font-mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
-  /* The row header carries a data-label like every other cell, so it joins the stacked
-     label/value layout instead of reading as a bare column-heading fragment. Scoped to the
-     contacts table so the other stacked tables keep their existing row-header shape. */
-  .data-table.stackable.contacts-table tbody th[scope="row"] { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); padding: 0; border: 0; text-align: left; background: transparent; white-space: normal; }
-  .data-table.stackable.contacts-table tbody th[scope="row"]::before { content: attr(data-label); font-family: var(--font-mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  /* Semantic row headers join the same label/value layout as the other stacked cells. */
+  .data-table.stackable tbody th[scope="row"] { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); padding: 0; border: 0; text-align: left; background: transparent; white-space: normal; }
+  .data-table.stackable tbody th[scope="row"]::before { content: attr(data-label); font-family: var(--font-mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
   .data-table.stackable td[data-num] { text-align: right; }
   .data-table.stackable .cell-actions { text-align: left; padding-top: var(--space-2); }
   .data-table.stackable .cell-actions::before { display: none; }
