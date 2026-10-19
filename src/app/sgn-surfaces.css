@@ -251,9 +251,17 @@
 
 /* The view switch is a pair of same-page links rather than toggle buttons, so
    the current view is marked with aria-current="page" and given the package's
-   own selected treatment. */
+   own selected treatment. Each is icon-only, so it squares off to the package's
+   small control height and keeps the name in its visually hidden label. */
 .seg a.seg-btn {
+  justify-content: center;
+  width: var(--btn-h-sm);
+  padding-inline: 0;
   text-decoration: none;
+}
+.seg a.seg-btn svg {
+  width: 18px;
+  height: 18px;
 }
 .seg a.seg-btn[aria-current='page'] {
   background: var(--surface);
@@ -298,9 +306,12 @@ dialog.sgn-dialog[data-size='drawer']::backdrop {
   border-radius: 0;
   box-shadow: -1px 0 24px color-mix(in oklab, var(--fg) 12%, transparent);
 }
+/* The panel reads as sliding in rather than appearing: its own duration is calmer than the
+   package's base one, and the easing decelerates so the panel settles instead of stopping. It
+   moves by transform only, so it is fully opaque and interactive the whole way in. */
 @media (prefers-reduced-motion: no-preference) {
   .sgn-dialog[data-size='drawer'] .sgn-dialog-panel {
-    animation: sgn-drawer-in var(--motion-base) var(--ease-standard);
+    animation: sgn-drawer-in 460ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 }
 @keyframes sgn-drawer-in {

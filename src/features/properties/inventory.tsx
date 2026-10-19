@@ -525,6 +525,8 @@ export function Inventory({
               ) : null}
             </button>
             {wide ? (
+              // The switch is icon-only: each link's name lives in its visually hidden label, so
+              // the visible control is a grid and a table and nothing else.
               <div className="seg" role="group" aria-label={text.viewLabel}>
                 <Link
                   className="seg-btn"
@@ -537,7 +539,22 @@ export function Inventory({
                   prefetch={false}
                   aria-current={requestedView === 'cards' ? 'page' : undefined}
                 >
-                  {text.viewCards}
+                  <svg
+                    className="seg-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect x="3" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="3" width="7" height="7" rx="1" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                    <rect x="14" y="14" width="7" height="7" rx="1" />
+                  </svg>
+                  <span className="sr">{text.viewCards}</span>
                 </Link>
                 <Link
                   className="seg-btn"
@@ -550,7 +567,20 @@ export function Inventory({
                   prefetch={false}
                   aria-current={requestedView === 'table' ? 'page' : undefined}
                 >
-                  {text.viewTable}
+                  <svg
+                    className="seg-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect x="3" y="4" width="18" height="16" rx="2" />
+                    <path d="M3 9h18M9 9v11" />
+                  </svg>
+                  <span className="sr">{text.viewTable}</span>
                 </Link>
               </div>
             ) : null}

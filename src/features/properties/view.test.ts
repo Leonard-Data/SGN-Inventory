@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { messages } from '../../i18n/messages.ts';
 import { noInventoryFilters, type InventoryFilters } from './filters.ts';
 import {
   CARD_CHUNK_ROWS,
@@ -14,6 +16,12 @@ import {
 } from './view.ts';
 
 const view = (value: string | null) => parseInventoryView(value);
+
+const source = (path: string) =>
+  readFileSync(new URL(path, import.meta.url), 'utf8');
+
+const inventory = source('./inventory.tsx');
+const surfaces = source('../../app/sgn-surfaces.css');
 
 test('a visit with no view in the address lands on the table', () => {
   assert.equal(DEFAULT_INVENTORY_VIEW, 'table');
@@ -112,4 +120,38 @@ test('a card chunk is whole grid rows of the measured columns', () => {
   assert.equal(cardChunkRows(2.7), 6);
   assert.equal(cardChunkRows(0), CARD_CHUNK_ROWS);
   assert.equal(cardChunkRows(3, 0), 3);
+});
+
+// The switch is two icons — the grid and the table — instead of two words. Each link keeps its
+// name in the package's visually hidden label, so it is still announced in both languages, and
+// keeps aria-current as the state the stylesheet paints.
+test('the view switch is icon-only, with a hidden name and the state kept', () => {
+  const start = inventory.indexOf('<div className="seg" role="group"');
+  assert.ok(start > 0, 'the view switch is rendered');
+  const markup = inventory.slice(
+    start,
+    inventory.indexOf('<SearchIsland', start),
+  );
+  assert.match(markup, /aria-label=\{text\.viewLabel\}/);
+  assert.equal(markup.match(/className="seg-icon"/g)?.length, 2);
+  // The icons are decorative: the label beside each one is the name.
+  assert.equal(markup.match(/aria-hidden="true"/g)?.length, 2);
+  assert.match(markup, /<span className="sr">\{text\.viewCards\}<\/span>/);
+  assert.match(markup, /<span className="sr">\{text\.viewTable\}<\/span>/);
+  assert.equal(markup.match(/aria-current=\{requestedView/g)?.length, 2);
+  // Nothing is left to read once the hidden labels are taken out: no visible words at all.
+  assert.doesNotMatch(
+    markup
+      .replace(/<span className="sr">\{[^}]*\}<\/span>/g, '')
+      .replace(/aria-label=\{[^}]*\}/g, ''),
+    /\{text\./,
+  );
+  // Icon-only does not shrink the target: each link squares off to the package's control height.
+  assert.match(surfaces, /\.seg a\.seg-btn \{[^}]*width: var\(--btn-h-sm\)/);
+  for (const locale of ['vi', 'en'] as const)
+    for (const key of ['viewCards', 'viewTable'] as const)
+      assert.ok(
+        messages[locale][key].trim().length,
+        `${locale}.${key} is missing`,
+      );
 });
