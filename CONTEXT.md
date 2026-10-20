@@ -200,6 +200,10 @@ _Avoid_: Fixed sale-price basis; "area" for province/ward
 The properties list as one result set ordered by the server (newest created first by default, or the eligible entry-date chronology in either direction), read as consecutive windows of about a hundred rows with the matching total stated by every read. The browser reserves the whole stream's estimated height and keeps only the rows near the viewport in the page. It has no page numbers, no page size and no cursor trail; the count and the rows always come from the same filtered read, so they cannot describe different inventories.
 _Avoid_: Numbered page, page-size setting, cursor, partial result set
 
+**Property catalogue**:
+The browser's own browsing snapshot of the authorized inventory: a bounded page of property summaries in one stable identity order, read through the authenticated catalogue endpoint and held in browser memory, with each property's recorded address variants folded once so typing in the address box narrows them without reading the database. It is a browsing aid only — a lock, an approval or an edit always validates against current server state — and a list filtered from it states the loaded properties rather than the whole inventory.
+_Avoid_: Search cache, offline inventory, authoritative list
+
 **Inventory result view**:
 The presentation choice for the inventory stream — cards or table — carried in the properties address beside the search, the ordering and the filters, so switching it or applying a filter keeps the narrowed result set and never changes the read. The summary table groups the recorded facts into property, address, price, area, status, updated time and actions; the full record keeps every source field. The table is not offered at phone width, where cards are the list.
 _Avoid_: Second result set, paged view

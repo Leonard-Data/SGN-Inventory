@@ -271,6 +271,18 @@ export function streamChunkRows<T>(
   return rows;
 }
 
+// Rows a browser already holds, published as the windows a read would have answered with: a
+// window is a slice of the read length, so a result set that was filtered in the page stands in
+// for the stream without a read behind it.
+export function localStreamWindows<T>(
+  rows: readonly T[],
+): ReadonlyMap<number, T[]> {
+  const windows = new Map<number, T[]>();
+  for (let offset = 0; offset < rows.length; offset += STREAM_PAGE_SIZE)
+    windows.set(offset, rows.slice(offset, offset + STREAM_PAGE_SIZE));
+  return windows;
+}
+
 // The last chunk whose top is at or above a position: the chunk a position falls in.
 function chunkAt(
   offsets: readonly number[],

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
   cursorWindowUrl,
+  localStreamWindows,
   STREAM_CHUNK_ROWS,
   STREAM_OVERSCAN_PX,
   streamBand,
@@ -258,4 +259,38 @@ test('the cursor window address carries the search and the filter into every win
     cursorWindowUrl('/api/employees', 'cursor'),
     '/api/employees?after=cursor',
   );
+});
+
+test('rows the browser already holds are published as the windows a read would answer with', () => {
+  const rows = Array.from({ length: 250 }, (_, index) => `row-${index}`);
+  const windows = localStreamWindows(rows);
+  // A window is a slice of the read length, so the rows a page filtered locally stand in for the
+  // stream without a read behind them and every chunk still finds the rows it draws.
+  assert.deepEqual([...windows.keys()], [0, 100, 200]);
+  assert.equal(windows.get(0)?.length, 100);
+  assert.equal(windows.get(200)?.length, 50);
+  assert.equal(windows.get(0)?.[0], 'row-0');
+  assert.equal(windows.get(200)?.[49], 'row-249');
+  // An empty result set is no window at all, not a window holding nothing.
+  assert.equal(localStreamWindows([]).size, 0);
+});
+
+test('every local row renders in table and card chunks at exact window boundaries', () => {
+  for (const total of [100, 200]) {
+    const rows = Array.from({ length: total }, (_, index) => `row-${index}`);
+    const windows = localStreamWindows(rows);
+    for (const chunkRows of [3, 6, 9, 12, 15]) {
+      const rendered: string[] = [];
+      for (let start = 0; start < total; start += chunkRows) {
+        const chunk = streamChunkRows(windows, start, chunkRows, 100, total);
+        assert.notEqual(chunk, null, `total=${total}, start=${start}`);
+        rendered.push(...chunk!);
+      }
+      assert.deepEqual(
+        rendered,
+        rows,
+        `total=${total}, chunkRows=${chunkRows}`,
+      );
+    }
+  }
 });

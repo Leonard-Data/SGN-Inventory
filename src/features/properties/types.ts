@@ -49,6 +49,13 @@ export type PropertySummary = {
   // card renders as nothing rather than as a placeholder.
   createdBy: string | null;
 };
+// One page of the browser catalogue: the summaries this page carries and the cursor the page after
+// it starts after, or null when this page ended the traversal. The cursor is a position in one
+// stable ordering, never a grant of access to the rows it names.
+export type CataloguePage = {
+  properties: PropertySummary[];
+  nextCursor: string | null;
+};
 // One window of the stream: the rows this read answered with, the position they start at, and the
 // matching total that arrived on the same read, so the count and the rows cannot describe
 // different result sets.

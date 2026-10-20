@@ -35,17 +35,20 @@ export function refocusAction(
 // stops instead of reading again.
 export class AccessChangedError extends Error {}
 
+export type ProtectedSource<T> =
+  string | ((signal: AbortSignal, session: EmployeeSession) => Promise<T>);
+
 export async function loadProtected<T>(options: {
-  source: string | ((signal: AbortSignal) => Promise<T>);
+  source: ProtectedSource<T>;
   signal: AbortSignal;
   renderedFor: string | null;
   renderedAccessRevision: number | null;
   onIdentityChange: () => void;
 }) {
-  const readSource = () =>
+  const readSource = (session: EmployeeSession) =>
     typeof options.source === 'string'
       ? api<T>(options.source, undefined, options.signal)
-      : options.source(options.signal);
+      : options.source(options.signal, session);
   // The session read brackets the data read on both sides, so the data is only
   // accepted when the access it was authorized on did not move under it.
   let session = await api<EmployeeSession>(
@@ -64,7 +67,7 @@ export async function loadProtected<T>(options: {
     )
       options.onIdentityChange();
     options.signal.throwIfAborted();
-    const data = await readSource();
+    const data = await readSource(session);
     options.signal.throwIfAborted();
     const current = await api<EmployeeSession>(
       '/api/session',

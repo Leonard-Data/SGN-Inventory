@@ -8,11 +8,10 @@ import {
   refocusAction,
   renderedSession,
   sessionDiffers,
+  type ProtectedSource,
 } from './protected-load';
 
-export function useProtectedData<T>(
-  source: string | ((signal: AbortSignal) => Promise<T>),
-) {
+export function useProtectedData<T>(source: ProtectedSource<T>) {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);

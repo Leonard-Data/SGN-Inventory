@@ -60,6 +60,10 @@ scrolls, only the rows near the viewport are mounted, and the matching count com
 that answers each window. There are no page numbers, no page size and no cursor trail
 ([ADR 0002](docs/adr/0002-inventory-list-stream-and-table-view.md)).
 
+The address box narrows the catalogue page the browser already holds as a person types, so typing no
+longer reads the database; the search button still searches the whole inventory
+([ADR 0003](docs/adr/0003-browser-property-catalogue-and-local-address-search.md)).
+
 ### Review and decision queues
 
 | Route                      | Who                                        | What a user does there                                                                                                                                      |

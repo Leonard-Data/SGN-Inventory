@@ -242,6 +242,31 @@ test('a revision that never settles stops after three attempts without publishin
   assert.equal(sourceReads, 3);
 });
 
+test('a scoped source receives the authorization for each bracketed attempt', async (t) => {
+  let sessionReads = 0;
+  t.mock.method(globalThis, 'fetch', async () =>
+    sessionReads++ === 0
+      ? sessionResponse(manager, 1)
+      : sessionResponse(sales, 2),
+  );
+  const scopes: string[] = [];
+  const abort = new AbortController();
+  const result = await loadProtected({
+    source: async (signal, session) => {
+      assert.equal(signal, abort.signal);
+      scopes.push(`${session.employee.id}:${session.accessRevision}`);
+      return session.employee.id;
+    },
+    signal: abort.signal,
+    renderedFor: null,
+    renderedAccessRevision: null,
+    onIdentityChange: () => {},
+  });
+  assert.deepEqual(scopes, ['emp-manager:1', 'emp-sales:2']);
+  assert.equal(result.data, 'emp-sales');
+  assert.equal(result.accessRevision, 2);
+});
+
 test('a denied session rejects without publishing or concealing', async (t) => {
   t.mock.method(globalThis, 'fetch', async () =>
     Response.json({ error: 'access-denied' }, { status: 403 }),

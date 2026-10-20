@@ -7,6 +7,7 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
+import Link from 'next/link';
 import { label, messages, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { LoadingSkeleton, Skeleton } from '@/features/skeleton';
@@ -436,9 +437,9 @@ export function Detail({
   return (
     <div lang={locale}>
       <p>
-        <a className="link-quiet" href={returnTo}>
+        <Link className="link-quiet" href={returnTo} prefetch={false}>
           {dt.back}
-        </a>
+        </Link>
       </p>
 
       <div className="detail-head">
