@@ -114,7 +114,8 @@ Supabase project: **18,801 properties** (all `record_review_status = pending`), 
 legacy addresses and 18,510 converted current addresses, **8,078 distinct owner contacts** over 8,444
 recorded links, **2,220 ready files** (587 MiB over 1,034 properties) stored in the private R2 bucket
 through the application's own registration and completion RPCs, 18,587 `Historical` rows archived in
-the import's private staging table, and **35 employees** with **33 recorded invitations**.
+the import's private staging table (that table was pruned on 20 October; see the README), and **35
+employees** with **33 recorded invitations**.
 
 _Why it matters:_ the inventory is now real, with every imported row traceable through
 `private.property_source_map` to its workbook row, and nothing approved or finalised by the import:

@@ -207,7 +207,7 @@ and an administrative connection, and it is described in [docs/legacy-import.md]
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `supabase/migrations/`    | The physical schema authority — 74 forward migrations. Never rewritten once deployed; a new migration is created with the pinned CLI                                                                                                                                                                                       |
 | `public` schema           | The business tables the Data API exposes under explicit grants and RLS: properties, addresses, contacts and links, files, vendors, comments, history, status trail, reservations and locks, sale completions, rentals, employees and invitations, corrections, activity events, and the seeded administrative-unit catalog |
-| `private` schema          | Privileged internals with no client grants: the audit trail, the import staging archive and source maps, file-validation keys, invitation proofs, and the guarded business functions the public invoker RPCs wrap                                                                                                          |
+| `private` schema          | Privileged internals with no client grants: the audit trail, the import staging tables and source maps (the staging rows themselves are pruned — see below), file-validation keys, invitation proofs, and the guarded business functions the public invoker RPCs wrap                                                      |
 | Cloudflare R2             | The file bytes, keyed `<property uuid>/<file uuid>/content`, read only through short-lived presigned links after the `property_files` row is authorized                                                                                                                                                                    |
 | Supabase Storage (legacy) | The retired property-files bucket; `scripts/copy-property-files-to-r2.mjs` copies from it, deletes nothing, and has not been run against a hosted project                                                                                                                                                                  |
 
@@ -245,35 +245,43 @@ properties; the bucket total matching that count exactly is what the measurement
 
 ### Database
 
-**Not measured from this repository copy**: it holds no database credentials, and the Data API
-refuses an unauthenticated read (`401`, `42501`) by design, so no figures here were re-measured in
-this environment. The row counts below are the read-back of the executed production import of
-19 October 2026 and the operator-supplied size figures recorded in
-[docs/testing.md](docs/testing.md); the queries are given so an operator with an owner connection can
-re-measure rather than trust a figure that ages.
+**Measured on the production project by the operator on 20 October 2026** and relayed to this
+documentation change; the imported row counts are the production import's own read-back of
+19 October 2026. This repository copy holds no database credentials, and the Data API refuses an
+unauthenticated read (`401`, `42501`) by design, so no figure below was re-measured here — the
+queries are given so an operator with an owner connection can re-measure rather than trust a figure
+that ages.
 
-| Table                         | Rows (production, 19 October 2026) | Notes                                                         |
-| ----------------------------- | ---------------------------------: | ------------------------------------------------------------- |
-| `public.properties`           |                             18,801 | All imported `record_review_status = pending`                 |
-| `public.property_addresses`   |                             37,311 | 18,801 untouched legacy addresses + 18,510 converted current  |
-| `public.contacts`             |                              8,078 | Distinct owner identities; 10,357 properties name no owner    |
-| `public.property_contacts`    |                              8,444 | Recorded owner links                                          |
-| `public.property_files`       |                              2,220 | `upload_status = 'ready'`, bytes in R2                        |
-| `public.employees`            |                                 35 | 3 admin, 2 manager, 2 staff, 28 sales                         |
-| `public.employee_invitations` |                                 33 | All `state = recorded`                                        |
-| `private.staging_rows`        |                             18,587 | The import's `Historical` archive, linked to its properties   |
-| `private.property_source_map` |                             18,801 | One row per imported property, tracing it to its workbook row |
+| Table                         | Rows (production, 20 October 2026) | Notes                                                                                                 |
+| ----------------------------- | ---------------------------------: | ----------------------------------------------------------------------------------------------------- |
+| `public.properties`           |                             18,801 | All imported `record_review_status = pending`                                                         |
+| `public.property_addresses`   |                             37,311 | 18,801 untouched legacy addresses + 18,510 converted current                                          |
+| `public.contacts`             |                              8,078 | Distinct owner identities; 10,357 properties name no owner                                            |
+| `public.property_contacts`    |                              8,444 | Recorded owner links                                                                                  |
+| `public.property_files`       |                              2,220 | `upload_status = 'ready'`, bytes in R2                                                                |
+| `public.employees`            |                                 35 | 3 admin, 2 manager, 2 staff, 28 sales                                                                 |
+| `public.employee_invitations` |                                 33 | All `state = recorded`                                                                                |
+| `private.staging_rows`        |                                  0 | **Pruned 20 October 2026**: was 41,484 rows / 68 MB, now 16 kB. Archived outside the database (below) |
+| `private.import_entity_map`   |                                  0 | **Pruned with it**: was 39,608 rows / 7.7 MB, now 16 kB                                               |
+| `private.property_source_map` |                             18,801 | One row per imported property, tracing it to its workbook row                                         |
 
-Recorded size figures: the development project's `private.audit_events` measured 7,568 KB within a
-25 MB database total as an operator-supplied before figure. Every production size figure and any
-per-table breakdown have to be taken on the production project itself.
+**Total production database size: 154 MB**, down from 229 MB — the staging prune reclaimed 75 MB.
+On the development project, `private.audit_events` measured 7,568 KB within a 25 MB database total
+as an operator-supplied before figure; a production per-table size breakdown has to be taken on the
+production project itself.
 
-The bulk is where you would expect it. The **private audit trail** records an actor, time and
+The staging rows were archived before deletion rather than discarded:
+`data/sgn-legacy-import-run/staging-rows-archive.ndjson.gz` holds all 41,484 rows — 4.1 MiB gzipped
+(44.4 MB uncompressed), read back line by line when it was written. The archive carries more than the
+`Historical` sheet the import reported (its own records name the `attachments` sheet too), which is
+why the table's row count is larger than that read-back. That file is private to the operator's
+machine and lives outside this repository, so its path is named here rather than linked.
+
+The bulk of the database is now the **private audit trail**, which records an actor, time and
 before/after values for every guarded write, so it grows with editing rather than with inventory. The
-**import staging rows** (18,587 `Historical` rows plus the Attachments archive) are import scratch
-kept as the private source archive: the application never reads them, and pruning them is a
-deliberate, owner-authorized maintenance decision rather than a schema change. The business tables
-themselves are small: 18.8k properties with their addresses and links.
+business tables are small: 18.8k properties with their addresses and links. The **import staging rows**
+and the provenance map that pointed at them were the largest single consumers until the prune above;
+removing them changed no application behaviour, because the application never reads them.
 
 Re-measure with an owner (privileged) connection — these are read-only:
 
@@ -302,6 +310,7 @@ union all select 'property_files', count(*) from public.property_files
 union all select 'employees', count(*) from public.employees
 union all select 'employee_invitations', count(*) from public.employee_invitations
 union all select 'private.staging_rows', count(*) from private.staging_rows
+union all select 'private.import_entity_map', count(*) from private.import_entity_map
 union all select 'private.property_source_map', count(*) from private.property_source_map
 union all select 'private.audit_events', count(*) from private.audit_events
 order by table_name;
@@ -345,8 +354,8 @@ recorded owner-contact access.
 - Address conversion is partial: 291 imported properties (of 18,801) keep a legacy address only and
   need review, and one production run recorded 266 rows whose official reference could not be
   consulted at all. Nothing was inferred to fill those gaps.
-- The production database size was not measured in this environment (no credentials); only the
-  recorded figures above and the queries to reproduce them are given.
+- The production database figures are the operator's measurements of 20 October 2026, not this
+  machine's: this copy holds no database credentials. The queries above reproduce them.
 - Real Supabase RLS/Data API/Storage verification and staging acceptance must run on a hosted project
   before production; embedded Postgres and unit tests do not replace it.
 - Employee invitations and password recovery depend on the project's SMTP sender and its Redirect
