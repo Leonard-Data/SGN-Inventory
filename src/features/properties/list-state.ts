@@ -14,9 +14,11 @@ export type InventoryListState = {
   // the loaded catalogue is filtered locally.
   text: string;
   edited: boolean;
-  // Where the stream was scrolled, measured from the stream's own top rather than the page's, so
-  // the position names the same rows whatever the shell above the stream shows.
-  scroll: number;
+  // Where the stream was scrolled, on both axes, measured from the stream's own top and left rather
+  // than the page's, so the position names the same rows whatever the shell above the stream shows
+  // and a table wider than the stream comes back at the column the person was reading.
+  scrollTop: number;
+  scrollLeft: number;
 };
 
 // One entry per result-set address: the list a person left is the address they left it at, and a

@@ -180,8 +180,6 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
 }
-.inventory-stream[data-view='table'] {
-}
 .inventory-stream[data-view='cards'] {
   padding: var(--space-4);
 }

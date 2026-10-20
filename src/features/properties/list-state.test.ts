@@ -17,7 +17,8 @@ const other = '/properties?query=le+loi&view=cards&status=rented';
 const left: InventoryListState = {
   text: 'nguyen van thuong binh thanh',
   edited: true,
-  scroll: 4200,
+  scrollTop: 4200,
+  scrollLeft: 320,
 };
 
 // The carrier is bounded to the result set the person is at, which is the one the ticket needs: the
@@ -29,11 +30,17 @@ test('the carrier holds the list a person left, and only that one', () => {
   writeListState(carrier, address, left);
   assert.deepEqual(readListState(carrier, address), left);
   // The bound: one result set at a time, so the list the person is looking at is the one held.
-  writeListState(carrier, other, { text: '', edited: false, scroll: 0 });
+  writeListState(carrier, other, {
+    text: '',
+    edited: false,
+    scrollTop: 0,
+    scrollLeft: 0,
+  });
   assert.deepEqual(readListState(carrier, other), {
     text: '',
     edited: false,
-    scroll: 0,
+    scrollTop: 0,
+    scrollLeft: 0,
   });
   assert.equal(readListState(carrier, address), null);
 });
@@ -43,7 +50,8 @@ test('a list is written whole, so nothing reaches it after the write', () => {
   const state = { ...left };
   writeListState(carrier, address, state);
   state.text = 'something else';
-  state.scroll = 0;
+  state.scrollTop = 0;
+  state.scrollLeft = 0;
   assert.deepEqual(readListState(carrier, address), left);
 });
 

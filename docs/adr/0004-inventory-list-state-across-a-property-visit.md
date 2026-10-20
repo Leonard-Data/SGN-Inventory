@@ -14,10 +14,11 @@ in a carrier mounted once in the shared authenticated layout beside the catalogu
 opened position from the carrier and writes the list back as it is left, so a visit to a property
 and back restores the search text, the filters, the ordering, the scroll position and the result set
 without reading the catalogue again, and a reload of the application starts over. The scroll
-position is stored measured from the stream's own top rather than the page's, and it is applied
-once the results have rendered — after the read has stated the total the stream reserves its height
-from and after the measured column count has settled the chunk size — so the position lands on the
-rows it describes instead of being clamped onto a height that is not there yet.
+position is stored on both axes, measured from the stream's own top and left rather than the page's,
+and it is applied once the results have rendered — after the read has stated the total the stream
+reserves its height from and after the measured column count has settled the chunk size — and held
+until the browser's own scroll reaches it, so the position lands on the rows it describes instead of
+being clamped onto a height that is not there yet.
 
 ## Considered options
 
@@ -42,6 +43,6 @@ rows it describes instead of being clamped onto a height that is not there yet.
   search, which is what a reload and a first visit both do.
 - A later address inside one visit (another ordering, filter set or view) is a different result set
   and opens at its own first rows; the position applies once, to the list the person opened.
-- The restored position is as accurate as the stream's own height estimate: a chunk the browser has
-  not measured is reserved at the estimate, so a deep position lands near the rows it names and
-  settles as the rows around it are measured.
+- The restored position is held until the stream's reserved height reaches it, and that height is
+the stream's own estimate until the chunks around it are measured, so a deep position settles on
+the rows it names as the rows around it are measured rather than in the first frame.

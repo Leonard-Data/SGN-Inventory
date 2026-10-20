@@ -333,7 +333,23 @@ export function Inventory({
     streamNode.current = node;
     setContainer(node);
   }, []);
-  const [viewport, setViewport] = useState({ top: 0, height: 0 });
+  const [viewport, setViewport] = useState({ top: 0, left: 0, height: 0 });
+  // The stream's own two-axis scroll, read off the node that owns the scrollport: the band is
+  // measured from it and the carrier holds it, so both come from the same reading.
+  const syncViewport = useCallback((node: HTMLDivElement) => {
+    const next = {
+      top: node.scrollTop,
+      left: node.scrollLeft,
+      height: node.clientHeight,
+    };
+    setViewport((current) =>
+      current.top === next.top &&
+      current.left === next.left &&
+      current.height === next.height
+        ? current
+        : next,
+    );
+  }, []);
   const [width, setWidth] = useState(0);
   const total = matches !== null ? matches.length : (matching ?? 0);
   const ready = matches !== null || matching !== null;
@@ -374,21 +390,24 @@ export function Inventory({
     },
     [],
   );
-  // The position the list was opened at, and whether it is still waiting to be applied. Until it
-  // has been applied, what the stream measures is not where the person was, so it is not written
-  // back over the position being restored.
-  const opening = useRef<{ position: number | null; pending: boolean }>({
-    position: restored?.scroll ?? null,
-    pending: (restored?.scroll ?? null) !== null,
+  // The position the list was opened at, the address it belongs to, and whether it is still waiting
+  // to land. Until it has landed, what the stream measures is not where the person was, so it is not
+  // written back over the position being restored. A later address inside the same visit is a
+  // different result set, so the position recorded here is dropped rather than applied to its rows.
+  const opening = useRef<{
+    address: string;
+    pending: boolean;
+    top: number;
+    left: number;
+    short: number;
+  }>({
+    address: resultLocation,
+    pending:
+      restored !== null && (restored.scrollTop > 0 || restored.scrollLeft > 0),
+    top: restored?.scrollTop ?? 0,
+    left: restored?.scrollLeft ?? 0,
+    short: -1,
   });
-
-  // Reset pending opening position when result set changes so old positions are not applied to new results
-  useEffect(() => {
-    // Skip first run: initial restored position was already set in ref constructor
-    return () => {
-      opening.current = { position: null, pending: false };
-    };
-  }, [resultLocation]);
   // A new column count or a new result set relabels every chunk, so old measurements describe
   // rows the chunk no longer holds and are dropped; the mounted chunks measure themselves again.
   useEffect(() => {
@@ -431,13 +450,7 @@ export function Inventory({
     let pending = 0;
     const measure = () => {
       pending = 0;
-      const top = node.scrollTop;
-      const height = node.clientHeight;
-      setViewport((current) =>
-        current.top === top && current.height === height
-          ? current
-          : { top, height },
-      );
+      syncViewport(node);
     };
     const schedule = () => {
       if (!pending) pending = requestAnimationFrame(measure);
@@ -453,7 +466,7 @@ export function Inventory({
       window.removeEventListener('resize', schedule);
       observer.disconnect();
     };
-  }, [container, ready, busy]);
+  }, [container, ready, busy, syncViewport]);
   // The width the card grid is laid out in, so the column count is the browser's own answer.
   useEffect(() => {
     const node = container;
@@ -470,9 +483,13 @@ export function Inventory({
   // The position the person left is applied once the results have rendered: the stream has stated
   // the total it reserves its height from, and the measured column count has settled the chunk size
   // that height is reserved in. Applied any earlier, the position would be clamped onto a height
-  // that is not there yet and would land on rows the person never saw. A later address inside the
-  // same visit is a different result set and opens at its own first rows, which is why this applies
-  // once. The scroll this sets is measured by the stream itself, so the band follows it.
+  // that is not there yet and would land on rows the person never saw, so the target is held while
+  // the stream's reserved height is still growing toward it and the position published is the one
+  // the browser measured rather than the one asked for: each measurement retries, and a landing
+  // that has stopped getting closer is where the stream can actually put the person. A different
+  // result-set address is not this position's list at all, so the position is dropped and the new
+  // one opens at its own first rows. The scroll this sets is measured by the stream itself, so the
+  // band follows it.
   const restoreReady = positionReady({
     read: ready,
     total,
@@ -480,32 +497,63 @@ export function Inventory({
     width,
   });
   useLayoutEffect(() => {
+    const open = opening.current;
     const node = streamNode.current;
-    if (!opening.current.pending || !restoreReady || !node) return;
-    const target = opening.current.position ?? 0;
-    node.scrollTop = target;
-    opening.current.pending = false;
+    if (open.address !== resultLocation) {
+      opening.current = {
+        address: resultLocation,
+        pending: false,
+        top: 0,
+        left: 0,
+        short: -1,
+      };
+      if (!node) return;
+      node.scrollTop = 0;
+      node.scrollLeft = 0;
+      syncViewport(node);
+      return;
+    }
+    if (!open.pending || !restoreReady || !node) return;
+    node.scrollTop = open.top;
+    node.scrollLeft = open.left;
+    const landed = { top: node.scrollTop, left: node.scrollLeft };
+    const reached = landed.top === open.top && landed.left === open.left;
+    opening.current =
+      reached || landed.top === open.short
+        ? {
+            address: resultLocation,
+            pending: false,
+            top: 0,
+            left: 0,
+            short: -1,
+          }
+        : { ...open, short: landed.top };
     // The band is computed from what the stream measured, and the position just set is what it
     // measures next: stating it here keeps the stream from asking for the rows at the top of a list
     // the person is not looking at, and keeps the rows they are looking at from arriving a frame
     // after the space they sit in.
-    setViewport({
-      top: target,
-      height: node.clientHeight,
-    });
-  }, [container, restoreReady]);
+    setViewport((current) =>
+      current.top === landed.top &&
+      current.left === landed.left &&
+      current.height === node.clientHeight
+        ? current
+        : { top: landed.top, left: landed.left, height: node.clientHeight },
+    );
+  }, [container, resultLocation, restoreReady, offsets, syncViewport]);
 
   // The list is kept in the carrier as it is used, so the address the person is looking at already
   // holds it when they come back. Written on every position change so navigation while mounted
-  // always leaves the latest position behind.
+  // always leaves the latest position behind, and the position still being restored is what is
+  // written until it lands rather than the top of the stream it has not reached yet.
   useEffect(() => {
-    const opened = opening.current;
+    const open = opening.current;
     writeListState(carrier, resultLocation, {
       text: typed,
       edited: addressEdited,
-      scroll: opened.pending ? (opened.position ?? 0) : viewport.top,
+      scrollTop: open.pending ? open.top : viewport.top,
+      scrollLeft: open.pending ? open.left : viewport.left,
     });
-  }, [carrier, resultLocation, typed, addressEdited, viewport.top]);
+  }, [carrier, resultLocation, typed, addressEdited, viewport]);
 
   // The band asks the stream for the windows it would show, and tells it which row position it is
   // centred on, so a deep scroll keeps its own windows and drops the far ones. A locally filtered

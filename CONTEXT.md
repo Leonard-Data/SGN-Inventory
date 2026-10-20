@@ -210,7 +210,7 @@ The presentation choice for the inventory stream — cards or table — carried 
 _Avoid_: Second result set, paged view
 
 **Inventory list state**:
-What the properties list holds beyond the result set the address names: the text the address box holds (typed, and not necessarily submitted), whether the box was edited at all, and where the stream was scrolled, measured from the stream's own top rather than the page's. It is held in browser memory above the routes for the session, one entry per result-set address, so a visit to a property and back restores the list without reading the catalogue again, while a reload of the application starts over. The address still carries the result set itself — the search, the ordering, the filters and the view.
+What the properties list holds beyond the result set the address names: the text the address box holds (typed, and not necessarily submitted), whether the box was edited at all, and where the stream was scrolled, measured from the stream's own top and left rather than the page's. It is held in browser memory above the routes for the session, one entry per result-set address, so a visit to a property and back restores the list without reading the catalogue again, while a reload of the application starts over. The address still carries the result set itself — the search, the ordering, the filters and the view.
 _Avoid_: Second result set, address-carried page number or window offset, persisted list state
 
 **Property quick view**:
