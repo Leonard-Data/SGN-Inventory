@@ -351,7 +351,7 @@ export function Inventory({
   const openDrawer = useCallback(
     (record: PropertySummary, opener: HTMLElement | null) =>
       setOpened({ record, opener, scope: sessionKey }),
-    [sessionKey],
+    [sessionKey, setOpened],
   );
   const closeDrawer = useCallback(() => setOpened(null), [setOpened]);
   // The open row states the status the server just recorded, and the stream re-reads so the list
