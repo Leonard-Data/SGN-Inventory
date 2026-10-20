@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { CancelledError, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/features/employees/api';
 import { useWindowStream } from '@/features/stream/use-windows';
 import {
@@ -37,7 +37,6 @@ const NO_WINDOW = { rows: [] as PropertySummary[], total: null, more: false };
 
 export function useInventoryStream({
   source,
-  identity,
   scope,
   onDenied,
 }: {
@@ -47,11 +46,10 @@ export function useInventoryStream({
   // result set is the loaded catalogue, a chronological ordering or an advanced filter is not
   // stated, or the session is not usable. A null source reads nothing at all.
   source: string | null;
-  // Changes when the session's own authority changes, so a window read under the old session
-  // never fills the surface the new one is allowed to see.
-  identity: string;
-  // The authorized scope the advanced pages are cached under, with the criteria, ordering and
-  // page: another account or another access revision never reads these rows from the other's key.
+  // The authorized scope this stream belongs to - the employee identity, their role and the
+  // server-maintained access revision. It keys the ordering metadata and every cached page, so a
+  // window read under the old session never fills the surface the new one is allowed to see, and
+  // another account or access revision never reads these rows from the other's key.
   scope: string;
   onDenied: (status: number) => void;
 }): InventoryStream {
@@ -62,29 +60,41 @@ export function useInventoryStream({
     key: string;
     order: InventoryOrder | null;
   }>({ key: '', order: null });
-  const key = `${identity}\n${source ?? ''}`;
+  const key = `${scope}\n${source ?? ''}`;
   const readWindow = useCallback(
     async (offset: number, signal: AbortSignal) => {
       if (source === null) return NO_WINDOW;
-      const stream = await queryClient.fetchQuery({
-        // The address states the criteria, so a search is keyed by what it reads rather than by
-        // the object a render built for it.
-        queryKey: advancedSearchKey({
-          scope,
-          criteria: searchCriteria(source),
-          page: offset,
-        }),
-        // The query client owns the page in flight and cancels it when the scope is cleared; the
-        // window band's signal is composed with it so a superseded read - another submission, or a
-        // result the browser now answers locally - stops with the band that issued it.
-        queryFn: ({ signal: querySignal }) =>
-          api<PropertyStream>(
-            streamWindowUrl(source, offset),
-            undefined,
-            AbortSignal.any([signal, querySignal]),
-          ),
-        ...ADVANCED_SEARCH_QUERY_OPTIONS,
-      });
+      const readPage = () =>
+        queryClient.fetchQuery({
+          // The address states the criteria, so a search is keyed by what it reads rather than by
+          // the object a render built for it.
+          queryKey: advancedSearchKey({
+            scope,
+            criteria: searchCriteria(source),
+            page: offset,
+          }),
+          // The query client owns the page in flight and cancels it when the scope is cleared; the
+          // window band's signal is composed with it so a superseded read - another submission, or
+          // a result the browser now answers locally - stops with the band that issued it.
+          queryFn: ({ signal: querySignal }) =>
+            api<PropertyStream>(
+              streamWindowUrl(source, offset),
+              undefined,
+              AbortSignal.any([signal, querySignal]),
+            ),
+          ...ADVANCED_SEARCH_QUERY_OPTIONS,
+        });
+      let stream: PropertyStream;
+      try {
+        stream = await readPage();
+      } catch (problem) {
+        // A page the shared client drops while it is in flight - the catalogue loader clears it on
+        // a first load of a scope - is a cancelled read, not a search that failed: the page is read
+        // again rather than leaving the surface stating an unavailable search.
+        if (!(problem instanceof CancelledError) || signal.aborted)
+          throw problem;
+        stream = await readPage();
+      }
       // A read the band has already superseded states nothing: its ordering belongs to the search
       // that replaced it, and publishing it would hide the current search's entry chronology.
       if (!signal.aborted) setOrdered({ key, order: stream.order });
@@ -98,7 +108,7 @@ export function useInventoryStream({
   );
   const stream = useWindowStream<PropertySummary>({
     source,
-    identity,
+    identity: scope,
     readWindow,
     onDenied,
   });

@@ -247,7 +247,6 @@ export function Inventory({
     // A catalogue result names no endpoint at all, so the browser answers from the rows it holds
     // and no search-data request is made until the person runs an advanced search.
     source: employee && parsedView.ok && mode === 'advanced' ? endpoint : null,
-    identity: sessionKey ?? 'no-session',
     scope: sessionKey ?? 'no-session',
     onDenied: denyFiles,
   });
