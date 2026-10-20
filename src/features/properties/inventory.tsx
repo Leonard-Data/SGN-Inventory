@@ -219,10 +219,11 @@ export function Inventory({
   const [typed, setTyped] = useState(initialQuery);
   const [addressEdited, setAddressEdited] = useState(false);
   const catalogue = useCatalogue(session);
-  // The generation is part of the scope so a replacement catalogue restarts the advanced reader
-  // too: Refresh and Retry drop older windows instead of leaving rows of the replaced catalogue.
+  // The authorization scope: the employee, their role and the server-maintained access revision.
+  // A replacement catalogue is not a new authority, so it neither reopens a submitted search nor
+  // closes the quick view of a record that is still readable.
   const sessionKey = session
-    ? `${renderedSession(session.employee)}:${session.accessRevision}:${catalogue.progress.generationId}`
+    ? `${renderedSession(session.employee)}:${session.accessRevision}`
     : null;
   // Which result set the address describes: the filters, the ordering and the paging the loaded
   // catalogue can answer are computed in the browser, and a criterion the catalogue has no field
