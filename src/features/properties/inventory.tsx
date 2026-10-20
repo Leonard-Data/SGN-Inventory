@@ -953,6 +953,24 @@ export function Inventory({
                   </svg>
                 </span>
                 <h3>{emptyText}</h3>
+                {local && localQuery ? (
+                  <>
+                    <p className="search-hint">
+                      {text.catalogueSearchWholeNote}
+                    </p>
+                    <Link
+                      className="btn btn-secondary btn-sm"
+                      href={inventoryHref({
+                        query: localQuery,
+                        sort,
+                        view: requestedView,
+                        filters,
+                      })}
+                    >
+                      {text.catalogueSearchWhole}
+                    </Link>
+                  </>
+                ) : null}
               </div>
             </div>
           ) : null}

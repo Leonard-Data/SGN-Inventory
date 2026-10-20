@@ -587,7 +587,7 @@ export function SearchIsland({
                   </select>
                 </div>
               </div>
-              <p className="field-hint">{text.ageHint}</p>
+              {order ? <p className="field-hint">{text.ageHint}</p> : null}
               <p className="field-hint">{text.advancedSearchHint}</p>
             </div>
             {invalid ? (

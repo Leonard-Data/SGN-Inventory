@@ -1353,6 +1353,7 @@ Scope: the local-filter slice of [#186](https://github.com/Leonard-Data/SGN-Inve
 | Editing executes nothing | Changing any control in the filter panel — including the ordering — issues no `GET /api/properties` until the panel is run (the province select's own catalog read and the contact picker's bounded name search are the panel's controls, not the search) |
 | Advanced submission | The same advanced criteria submitted twice within the retention window reuse the cached page instead of reading again, and a different criterion, ordering, page or account reads its own entry |
 | Honest labelling | A partially loaded catalogue states that its matches are the loaded properties and that more may appear; no locally filtered result is ever labelled as a search of the entire inventory |
+| Empty local text | A typed text the loaded catalogue matches nothing for states that the browser matched only the property code and the address parts it holds, and offers the whole-inventory search for that text; using that control issues the one `GET /api/properties` for it, and typing itself issues none |
 | Submitted search survives presentation | Switching cards/table or refreshing the language over a submitted advanced search issues no `GET /api/properties` and keeps the window the person was on |
 | VI/EN | The two filter groups, their hints and the run action are equivalent in both languages |
 
