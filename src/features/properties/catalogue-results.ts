@@ -19,22 +19,6 @@ import {
 } from './filters.ts';
 import type { PropertySummary } from './types.ts';
 
-// The filters the catalogue's own summary fields answer:
-//   status            -> the recorded status
-//   mode              -> the recorded listing mode
-//   type              -> the recorded property type
-//   priceMin/Max      -> the recorded sale price or monthly rent
-//   areaMin/Max       -> the recorded land or floor area
-export const LOCAL_FILTER_KEYS = [
-  'status',
-  'mode',
-  'type',
-  'priceMin',
-  'priceMax',
-  'areaMin',
-  'areaMax',
-] as const;
-
 // The filters the summaries carry no field for: an official administrative-unit identity and a
 // recorded contact identity are names in the database's own catalog, not text the summary holds.
 export const ADVANCED_FILTER_KEYS = ['province', 'ward', 'contact'] as const;
@@ -57,10 +41,11 @@ export function advancedOrder(sort: string | null): boolean {
   return sort !== null && sort.trim() !== '';
 }
 
-// The filter-panel draft while it is being edited. The panel asks this which of the criteria it
-// is holding the loaded catalogue cannot answer, so its action can name the read it will perform
-// instead of promising a filter. Nothing here is a submission: the draft is only classified when
-// the panel is run, which is what keeps an edit from running a query.
+// The filter-panel draft while it is being edited, with the address's own submitted query. The panel
+// asks this which of the criteria it is holding the loaded catalogue cannot answer, so its action
+// can name the read it will perform instead of promising a filter. Nothing here is a submission:
+// the draft is only classified when the panel is run, which is what keeps an edit from running a
+// query.
 export type PanelDraft = {
   province: string;
   ward: string;
@@ -68,8 +53,19 @@ export type PanelDraft = {
   order: string;
 };
 
-export function draftNeedsAdvancedSearch(draft: PanelDraft): boolean {
-  return Boolean(draft.province || draft.ward || draft.contact || draft.order);
+// A draft run carries the address's query, so a stated query is an advanced criterion here exactly
+// as it is in `resultMode`.
+export function draftNeedsAdvancedSearch(
+  draft: PanelDraft,
+  query: string,
+): boolean {
+  return Boolean(
+    draft.province ||
+    draft.ward ||
+    draft.contact ||
+    draft.order ||
+    query.trim(),
+  );
 }
 
 export type ResultMode = 'catalogue' | 'advanced';

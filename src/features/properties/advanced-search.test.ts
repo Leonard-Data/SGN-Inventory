@@ -155,6 +155,9 @@ test('advanced results are retained for a bounded time, separate from the catalo
   // once they have gone.
   assert.notEqual(ADVANCED_SEARCH_QUERY_OPTIONS.gcTime, Infinity);
   assert.notEqual(ADVANCED_SEARCH_QUERY_OPTIONS.staleTime, Infinity);
+  // A refused page is answered as a refusal: the query client's default retries would hold the
+  // denial behind three more attempts.
+  assert.equal(ADVANCED_SEARCH_QUERY_OPTIONS.retry, false);
 });
 
 // The reader derives a window from the submitted address alone, so a search names the same window

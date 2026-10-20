@@ -134,6 +134,8 @@ const vi = {
   catalogueFiltersHeading: 'Bộ lọc trong danh mục đã tải',
   catalogueFiltersHint:
     'Các bộ lọc này chạy ngay trên danh mục đã tải trong trình duyệt và không gửi yêu cầu nào.',
+  catalogueFiltersQueryHint:
+    'Các bộ lọc này chạy trên danh mục đã tải trong trình duyệt, nhưng địa chỉ bạn đã tìm vẫn là một lần tìm toàn kho nên kết quả được đọc từ cơ sở dữ liệu.',
   advancedSearchHeading: 'Tìm kiếm toàn kho',
   advancedSearchHint:
     'Tỉnh/thành phố, xã/phường, người liên hệ và thứ tự theo ngày nhập kho không có trong danh mục đã tải, nên chúng chỉ được tìm khi bạn bấm nút bên dưới. Kết quả khi đó là câu trả lời của toàn kho, không phải của danh mục đã tải.',
@@ -1003,6 +1005,8 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     catalogueFiltersHeading: 'Filters in the loaded catalogue',
     catalogueFiltersHint:
       'These filters run on the loaded catalogue in the browser and send no request.',
+    catalogueFiltersQueryHint:
+      'These filters run on the loaded catalogue in the browser, but the address you submitted is still a whole-inventory search, so the result is read from the database.',
     advancedSearchHeading: 'Whole-inventory search',
     advancedSearchHint:
       'Province/city, commune/ward, contact and the inventory-entry order are not in the loaded catalogue, so they are searched only when you press the button below. Those results are the whole inventory, not the loaded catalogue.',

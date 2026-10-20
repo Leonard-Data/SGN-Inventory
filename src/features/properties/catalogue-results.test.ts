@@ -3,7 +3,6 @@ import test from 'node:test';
 import { buildAddressIndex } from './address-index.ts';
 import {
   ADVANCED_FILTER_KEYS,
-  LOCAL_FILTER_KEYS,
   advancedFilterKeys,
   advancedOrder,
   catalogueMatches,
@@ -79,10 +78,6 @@ test('every filter the catalogue carries a field for is offered locally, and no 
     areaMax: '90.5',
   };
   assert.deepEqual(advancedFilterKeys(stated), []);
-  assert.deepEqual(
-    LOCAL_FILTER_KEYS.filter((key) => stated[key] !== null),
-    [...LOCAL_FILTER_KEYS],
-  );
   // The criteria whose fields the summaries do not carry are named as advanced, so they are never
   // applied as if the loaded rows could answer them.
   for (const key of ADVANCED_FILTER_KEYS)
@@ -238,13 +233,26 @@ test('a submitted search states its criteria in one address and nothing else', (
 // What a submission then does is the address it builds, which `resultMode` classifies above.
 test('a draft is an advanced search only when it holds a criterion the catalogue cannot answer', () => {
   const localOnly = { province: '', ward: '', contact: '', order: '' };
-  assert.equal(draftNeedsAdvancedSearch(localOnly), false);
+  assert.equal(draftNeedsAdvancedSearch(localOnly, ''), false);
+  assert.equal(draftNeedsAdvancedSearch(localOnly, '   '), false);
   for (const key of ['province', 'ward', 'contact', 'order'] as const)
     assert.equal(
-      draftNeedsAdvancedSearch({ ...localOnly, [key]: 'chosen' }),
+      draftNeedsAdvancedSearch({ ...localOnly, [key]: 'chosen' }, ''),
       true,
       key,
     );
+  // The address's query travels with the panel's run, so a draft run carrying it is the same
+  // whole-inventory search the address itself states.
+  assert.equal(draftNeedsAdvancedSearch(localOnly, 'le loi'), true);
+  assert.equal(
+    resultMode({
+      query: 'le loi',
+      filters: noInventoryFilters,
+      sort: null,
+      typing: false,
+    }),
+    'advanced',
+  );
 });
 
 test('a local filter is applied to the recorded fields exactly as the database read applies it', () => {

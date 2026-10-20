@@ -245,16 +245,20 @@ export function SearchIsland({
       : selectedMode
         ? [text.priceUnitVnd]
         : [text.priceUnitVnd, text.priceUnitMonthly];
-  // Whether the panel is holding criteria the loaded catalogue cannot answer. Only these make the
-  // submission an advanced search, so the action names the read it will perform instead of
-  // promising a filter. It is asked of the draft, so an edit is still only an edit: nothing is
-  // submitted until the panel is run.
-  const advancedDraft = draftNeedsAdvancedSearch({
-    province,
-    ward,
-    contact,
-    order,
-  });
+  // Whether the panel is holding criteria the loaded catalogue cannot answer - the address's own
+  // submitted query included, because a run carries it. Only these make the submission an advanced
+  // search, so the action names the read it will perform instead of promising a filter. It is
+  // asked of the draft, so an edit is still only an edit: nothing is submitted until the panel is
+  // run.
+  const advancedDraft = draftNeedsAdvancedSearch(
+    {
+      province,
+      ward,
+      contact,
+      order,
+    },
+    query,
+  );
   // The current filter set stays visible as removable chips, and each chip removes exactly its
   // own condition, so the address is still the only place a filter lives.
   const applied: { key: InventoryFilterKey; label: string }[] = [];
@@ -478,7 +482,11 @@ export function SearchIsland({
                 </div>
                 <p className="field-hint">{text.areaFilterHint}</p>
               </div>
-              <p className="field-hint">{text.catalogueFiltersHint}</p>
+              <p className="field-hint">
+                {query.trim() === ''
+                  ? text.catalogueFiltersHint
+                  : text.catalogueFiltersQueryHint}
+              </p>
             </div>
             <div className="form-section">
               <div className="form-section-head">
