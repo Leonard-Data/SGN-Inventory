@@ -806,7 +806,7 @@ export function Inventory({
               <p>{text.inventorySearchHelp}</p>
             </details>
           </div>
-          {catalogue.scope ? (
+          {catalogue.scope || catalogueFailed ? (
             <div className="catalogue-progress" data-state={catalogue.status}>
               {/* A numeric value is exposed only when the load can state a determinate percentage;
                   the text label carries the count either way. It is not a live region, so a batch
