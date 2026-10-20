@@ -146,6 +146,7 @@ export async function readEveryCataloguePage(options: {
   for (;;) {
     options.signal.throwIfAborted();
     const page = await options.read(after, options.signal);
+    options.signal.throwIfAborted();
     options.onPage(page);
     if (page.nextCursor === null) return;
     after = page.nextCursor;

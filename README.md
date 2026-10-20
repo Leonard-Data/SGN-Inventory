@@ -61,7 +61,9 @@ that answers each window. There are no page numbers, no page size and no cursor 
 ([ADR 0002](docs/adr/0002-inventory-list-stream-and-table-view.md)).
 
 The address box narrows the catalogue page the browser already holds as a person types, so typing no
-longer reads the database; the search button still searches the whole inventory
+longer reads the database; the search button still searches the whole inventory, and the deliberate
+Refresh control rebuilds that catalogue in the background and swaps it in only once the replacement
+is complete
 ([ADR 0003](docs/adr/0003-browser-property-catalogue-and-local-address-search.md)).
 
 ### Review and decision queues

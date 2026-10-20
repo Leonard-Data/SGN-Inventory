@@ -88,6 +88,22 @@ test('every cursor is traversed and each batch is indexed as it arrives', async 
   assert.equal(load.lastSyncedAt, AT);
 });
 
+test('a late page cannot publish after its traversal was cancelled', async () => {
+  const controller = new AbortController();
+  const arriving = Promise.withResolvers<CataloguePage>();
+  const received: CataloguePage[] = [];
+  const pending = readEveryCataloguePage({
+    read: () => arriving.promise,
+    from: null,
+    signal: controller.signal,
+    onPage: (page) => received.push(page),
+  });
+  controller.abort();
+  arriving.resolve({ properties: [property('a')], nextCursor: null });
+  await assert.rejects(pending, { name: 'AbortError' });
+  assert.deepEqual(received, []);
+});
+
 test('a retried or duplicated row never inflates the loaded count', () => {
   const first = indexCataloguePage(
     startCatalogueLoad('generation-1'),

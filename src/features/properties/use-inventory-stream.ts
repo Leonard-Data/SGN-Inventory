@@ -50,6 +50,7 @@ export function useInventoryStream({
         undefined,
         signal,
       );
+      signal.throwIfAborted();
       setOrdered({ key, order: stream.order });
       return {
         rows: stream.properties,
