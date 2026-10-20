@@ -19,8 +19,8 @@ along with the document's own offset above the stream — the stream is a bounde
 page it sits in is the other half of what frames the rows — and it is applied once the results have
 rendered — after the read has stated the total the stream reserves its height from and after the
 measured column count has settled the chunk size — and held until the browser's own scroll reaches
-it, so the position lands on the rows it describes instead of being clamped onto a height that is
-not there yet.
+it and the stream's reserved height has grown past it, so the position lands on the rows it
+describes instead of being clamped onto a height that is not there yet.
 
 ## Considered options
 
