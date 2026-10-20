@@ -1,9 +1,24 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { QueryClient } from '@tanstack/react-query';
-import { loadProtected, renderedSession } from '../employees/protected-load.ts';
+import { QueryClient, QueryObserver } from '@tanstack/react-query';
+import {
+  AccessChangedError,
+  loadProtected,
+  renderedSession,
+} from '../employees/protected-load.ts';
+import { RequestError } from '../employees/api.ts';
 import type { EmployeeSession } from '../employees/types.ts';
-import { readCatalogue } from './catalogue-cache.ts';
+import {
+  catalogueCountQuery,
+  readCatalogue,
+  readCatalogueReplacement,
+} from './catalogue-cache.ts';
+import {
+  acceptReplacementPage,
+  beginRefresh,
+  commitReplacement,
+  NO_GENERATIONS,
+} from './catalogue-refresh.ts';
 import { indexCataloguePage, startCatalogueLoad } from './catalogue-load.ts';
 import type { CataloguePage, PropertySummary } from './types.ts';
 
@@ -160,6 +175,194 @@ test('authority changing during a catalogue read never publishes the earlier res
       .getAll()
       .map((query) => query.state.data),
     [publicLoad],
+  );
+});
+
+test('replacement promotion waits for the final authority check', async (t) => {
+  const checked = Promise.withResolvers<Response>();
+  let checks = 0;
+  t.mock.method(globalThis, 'fetch', async (path: string) => {
+    if (path === '/api/session')
+      return ++checks === 1 ? Response.json(reviewer) : checked.promise;
+    assert.equal(path, '/api/properties/catalogue');
+    return Response.json(publicPage);
+  });
+  let state = beginRefresh(
+    { ...NO_GENERATIONS, working: privateLoad },
+    'replacement',
+  );
+  const pending = readCatalogueReplacement(
+    new AbortController().signal,
+    reviewer,
+    state.staged!,
+    (page) => {
+      state = acceptReplacementPage(state, 'replacement', page, AT);
+    },
+  ).then(() => {
+    state = commitReplacement(state, 'replacement');
+  });
+  await flush();
+  assert.equal(state.working, privateLoad);
+  assert.equal(state.staged?.isComplete, true);
+  checked.resolve(Response.json(reviewer));
+  await pending;
+  assert.deepEqual(state.working?.index, []);
+  assert.equal(state.working?.generationId, 'replacement');
+});
+
+test('a replacement refuses changed identity, role or revision before promotion', async (t) => {
+  for (const current of [
+    sales,
+    { ...reviewer, employee: { ...reviewer.employee, role: 'sales' as const } },
+    { ...reviewer, accessRevision: 2 },
+  ]) {
+    let checks = 0;
+    t.mock.method(globalThis, 'fetch', async (path: string) =>
+      path === '/api/session'
+        ? Response.json(++checks === 1 ? reviewer : current)
+        : Response.json(publicPage),
+    );
+    let state = beginRefresh(
+      { ...NO_GENERATIONS, working: privateLoad },
+      'replacement',
+    );
+    await assert.rejects(
+      readCatalogueReplacement(
+        new AbortController().signal,
+        reviewer,
+        state.staged!,
+        (page) => {
+          state = acceptReplacementPage(state, 'replacement', page, AT);
+        },
+      ),
+      AccessChangedError,
+    );
+    assert.equal(state.working, privateLoad);
+  }
+});
+
+test('page and final-session denials end replacement loading', async (t) => {
+  for (const status of [401, 403]) {
+    for (const deniedAt of ['page', 'final-session']) {
+      let checks = 0;
+      const paths: string[] = [];
+      t.mock.method(globalThis, 'fetch', async (path: string) => {
+        paths.push(path);
+        if (path === '/api/session' && ++checks === 1)
+          return Response.json(reviewer);
+        if ((path === '/api/session') === (deniedAt === 'final-session'))
+          return Response.json(
+            { error: status === 401 ? 'unauthenticated' : 'access-denied' },
+            { status },
+          );
+        return Response.json(privatePage);
+      });
+      await assert.rejects(
+        readCatalogueReplacement(
+          new AbortController().signal,
+          reviewer,
+          startCatalogueLoad('replacement'),
+          () => {},
+        ),
+        (error: unknown) =>
+          error instanceof RequestError && error.status === status,
+      );
+      assert.equal(paths.length, deniedAt === 'page' ? 2 : 3);
+    }
+  }
+});
+
+test('a fully traversed retry rechecks authority without rereading rows', async (t) => {
+  const paths: string[] = [];
+  t.mock.method(globalThis, 'fetch', async (path: string) => {
+    paths.push(path);
+    assert.equal(path, '/api/session');
+    return Response.json(reviewer);
+  });
+  await readCatalogueReplacement(
+    new AbortController().signal,
+    reviewer,
+    privateLoad,
+    () => assert.fail('already indexed'),
+  );
+  assert.deepEqual(paths, ['/api/session', '/api/session']);
+});
+
+test('a generation keeps its authorized count during and after promotion', async (t) => {
+  const cache = client();
+  t.after(() => cache.clear());
+  const arriving = Promise.withResolvers<Response>();
+  let counts = 0;
+  t.mock.method(globalThis, 'fetch', async (path: string) => {
+    if (path === '/api/session') return Response.json(reviewer);
+    assert.equal(path, '/api/properties/catalogue/count');
+    counts++;
+    return counts === 1 ? arriving.promise : Response.json({ total: 3 });
+  });
+  const options = catalogueCountQuery(reviewer, 'replacement');
+  const staged = new QueryObserver(cache, options);
+  const stopStaged = staged.subscribe(() => {});
+  const working = new QueryObserver(cache, options);
+  const stopWorking = working.subscribe(() => {});
+  t.after(stopWorking);
+  stopStaged();
+  arriving.resolve(Response.json({ total: 42 }));
+  const count = await cache.fetchQuery(options);
+  assert.equal(count.total, 42);
+  assert.ok(count.capturedAt);
+  assert.deepEqual(working.getCurrentResult().data, count);
+  assert.deepEqual(await cache.fetchQuery(options), count);
+  assert.equal(counts, 1);
+  await cache.fetchQuery(catalogueCountQuery(reviewer, 'next-replacement'));
+  assert.equal(counts, 2);
+});
+
+test('count outages stay unknown for their generation but denials propagate', async (t) => {
+  for (const status of [503, 401, 403]) {
+    const cache = client();
+    t.after(() => cache.clear());
+    let counts = 0;
+    t.mock.method(globalThis, 'fetch', async (path: string) => {
+      if (path === '/api/session') return Response.json(reviewer);
+      counts++;
+      return Response.json(
+        { error: status === 503 ? 'unavailable' : 'access-denied' },
+        { status },
+      );
+    });
+    const options = catalogueCountQuery(reviewer, 'replacement');
+    if (status === 503) {
+      assert.deepEqual(await cache.fetchQuery(options), {
+        total: null,
+        capturedAt: null,
+      });
+      assert.deepEqual(await cache.fetchQuery(options), {
+        total: null,
+        capturedAt: null,
+      });
+      assert.equal(counts, 1);
+    } else {
+      await assert.rejects(
+        cache.fetchQuery(options),
+        (error: unknown) =>
+          error instanceof RequestError && error.status === status,
+      );
+    }
+  }
+});
+
+test('a count authorized on a changed scope is never captured', async (t) => {
+  const cache = client();
+  t.after(() => cache.clear());
+  let checks = 0;
+  t.mock.method(globalThis, 'fetch', async (path: string) =>
+    path === '/api/session'
+      ? Response.json(++checks === 1 ? reviewer : sales)
+      : Response.json({ total: 42 }),
+  );
+  await assert.rejects(
+    cache.fetchQuery(catalogueCountQuery(reviewer, 'replacement')),
+    AccessChangedError,
   );
 });
 

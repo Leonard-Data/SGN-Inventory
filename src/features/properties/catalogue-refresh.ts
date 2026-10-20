@@ -13,12 +13,8 @@ import {
 } from './catalogue-load.ts';
 import type { CataloguePage } from './types.ts';
 
-// A replacement stopped before it could be swapped in. `resumable` states the two honest outcomes
-// of Retry: the staged rows were kept, so it continues the same traversal from its own cursor, or
-// they were discarded, so Retry starts a new generation with its progress reset.
 export type CatalogueRefreshFailure = {
   code: string;
-  resumable: boolean;
 };
 
 // The two catalogues one browser session holds. `working` is the catalogue the list searches and
@@ -86,10 +82,6 @@ export function beginRefresh(
   };
 }
 
-// Fold one received replacement batch. The batch that ends the traversal swaps the replacement in:
-// every cursor has been traversed and every received row is indexed, so records that were deleted
-// or became inaccessible are gone with the catalogue they were in. A batch from a generation that
-// is not the running one changes nothing.
 export function acceptReplacementPage(
   generations: CatalogueGenerations,
   generationId: string,
@@ -99,16 +91,23 @@ export function acceptReplacementPage(
   const { staged } = generations;
   if (!refreshing(generations) || staged?.generationId !== generationId)
     return generations;
-  const indexed = indexCataloguePage(staged, page, syncedAt);
-  return indexed.isComplete
-    ? { working: indexed, staged: null, resumed: false, failure: null }
-    : { ...generations, staged: indexed };
+  return { ...generations, staged: indexCataloguePage(staged, page, syncedAt) };
 }
 
-// The replacement stopped. A failure whose authority is intact keeps the staged rows, so Retry
-// continues the same traversal from its own cursor; one that ends the authority discards them, so
-// Retry starts over. Either way the working catalogue and its synchronization time are never
-// touched, and a failure reported for a generation that is not the running one changes nothing.
+export function commitReplacement(
+  generations: CatalogueGenerations,
+  generationId: string,
+): CatalogueGenerations {
+  const { staged } = generations;
+  if (
+    !refreshing(generations) ||
+    staged?.generationId !== generationId ||
+    !staged.isComplete
+  )
+    return generations;
+  return { working: staged, staged: null, resumed: false, failure: null };
+}
+
 export function failReplacement(
   generations: CatalogueGenerations,
   generationId: string,
@@ -119,27 +118,19 @@ export function failReplacement(
     generations.staged?.generationId !== generationId
   )
     return generations;
-  const resumable = refreshResumes(code);
+  if (
+    code === 'access-denied' ||
+    code === 'unauthenticated' ||
+    code === 'access-changed'
+  )
+    return NO_GENERATIONS;
   return {
     ...generations,
-    staged: resumable ? generations.staged : null,
     resumed: false,
-    failure: { code, resumable },
+    failure: { code },
   };
 }
 
-// Whether a stopped replacement may continue from its own cursor. An authorization refusal ends
-// that traversal's authority, so its staged rows are discarded rather than resumed; every other
-// failure keeps them, and Retry continues instead of reading the whole inventory again.
-export function refreshResumes(code: string): boolean {
-  return code !== 'access-denied';
-}
-
-// What the refresh line states, kept separate from the working catalogue's own progress. A
-// refreshing state describes the replacement being loaded - never the catalogue the user is
-// searching, and never as a completed load, which a staged replacement cannot be: the batch that
-// finishes it is swapped in on arrival. A failed state states how much was loaded and which of the
-// two things Retry will do.
 export type CatalogueRefreshView =
   | { status: 'idle' }
   | {
@@ -151,7 +142,7 @@ export type CatalogueRefreshView =
       totalCount: number | null;
       progressPercent: number | null;
     }
-  | { status: 'failed'; resumable: boolean; loadedCount: number };
+  | { status: 'failed'; loadedCount: number };
 
 export function catalogueRefreshView(
   generations: CatalogueGenerations,
@@ -161,7 +152,6 @@ export function catalogueRefreshView(
   if (failure)
     return {
       status: 'failed',
-      resumable: failure.resumable,
       loadedCount: staged?.loadedCount ?? 0,
     };
   if (!staged) return { status: 'idle' };

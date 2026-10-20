@@ -144,11 +144,10 @@ function refreshStatusText(
     case 'idle':
       return '';
     case 'failed':
-      return (
-        view.resumable
-          ? text.catalogueRefreshStopped
-          : text.catalogueRefreshFailed
-      ).replace('{loaded}', numberFormat.format(view.loadedCount));
+      return text.catalogueRefreshStopped.replace(
+        '{loaded}',
+        numberFormat.format(view.loadedCount),
+      );
     case 'refreshing': {
       const { loadedCount, totalCount, progressPercent, resumed } = view;
       if (totalCount === null || progressPercent === null)
@@ -223,6 +222,10 @@ export function Inventory({
     },
     [clear],
   );
+  const catalogue = useCatalogue(session);
+  const sessionKey = session
+    ? `${renderedSession(session.employee)}:${session.accessRevision}:${catalogue.progress.generationId}`
+    : null;
   const {
     windows,
     total: matching,
@@ -232,13 +235,12 @@ export function Inventory({
     retry,
   } = useInventoryStream({
     source: employee && parsedView.ok ? endpoint : null,
-    identity: employee ? renderedSession(employee) : 'no-session',
+    identity: sessionKey ?? 'no-session',
     onDenied: denyFiles,
   });
   const [searchError, setSearchError] = useState(false);
   const [typed, setTyped] = useState(initialQuery);
   const [addressEdited, setAddressEdited] = useState(false);
-  const catalogue = useCatalogue(session);
   // The text the box is filtering the loaded catalogue with, or null when it is not filtering at
   // all: the rule lives in `address-index.ts` so it is tested without a browser. Local filtering is
   // offered for the ordinary browse only, because a chronological ordering or a filter set names a
@@ -283,9 +285,6 @@ export function Inventory({
     [matches, localQuery],
   );
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const sessionKey = session
-    ? `${renderedSession(session.employee)}:${session.accessRevision}`
-    : null;
   const [opened, setOpened] = useState<{
     record: PropertySummary;
     opener: HTMLElement | null;
@@ -347,7 +346,7 @@ export function Inventory({
     measuredRef.current = new Map();
     // eslint-disable-next-line react-hooks/set-state-in-effect -- the chunk layout changed, so previous measurements describe different rows
     setMeasured(NO_MEASURED);
-  }, [chunkRows, endpoint]);
+  }, [chunkRows, endpoint, sessionKey]);
   const heights = useMemo(
     () => streamChunkHeights(measured, chunkCount),
     [measured, chunkCount],

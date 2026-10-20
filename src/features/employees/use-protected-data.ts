@@ -11,7 +11,10 @@ import {
   type ProtectedSource,
 } from './protected-load';
 
-export function useProtectedData<T>(source: ProtectedSource<T>) {
+export function useProtectedData<T>(
+  source: ProtectedSource<T>,
+  onClear?: () => void,
+) {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -38,11 +41,12 @@ export function useProtectedData<T>(source: ProtectedSource<T>) {
   }, [invalidate]);
   const clear = useCallback(() => {
     conceal();
+    onClear?.();
     renderedFor.current = null;
     renderedAccessRevision.current = null;
     setData(null);
     setEmployee(null);
-  }, [conceal]);
+  }, [conceal, onClear]);
   const load = useCallback(async () => {
     invalidate();
     setBusy(true);
@@ -86,11 +90,13 @@ export function useProtectedData<T>(source: ProtectedSource<T>) {
         failure instanceof RequestError &&
         (failure.status === 401 || failure.status === 403)
       ) {
+        onClear?.();
         window.location.replace(
           failure.status === 403 ? '/access-denied' : '/login',
         );
         return;
       }
+      if (failure instanceof AccessChangedError) onClear?.();
       setError(
         failure instanceof AccessChangedError
           ? 'access-changed'
@@ -104,7 +110,7 @@ export function useProtectedData<T>(source: ProtectedSource<T>) {
         setBusy(false);
       }
     }
-  }, [source, invalidate]);
+  }, [source, invalidate, onClear]);
   const reload = useCallback(() => {
     setBusy(true);
     setError(null);

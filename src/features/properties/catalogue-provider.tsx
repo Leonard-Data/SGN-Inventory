@@ -12,25 +12,27 @@ import {
 import {
   QueryClient,
   QueryClientProvider,
+  useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
-import { api, RequestError } from '@/features/employees/api';
+import { RequestError } from '@/features/employees/api';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import {
+  AccessChangedError,
   renderedSession,
   sessionDiffers,
 } from '@/features/employees/protected-load';
 import type { EmployeeSession } from '@/features/employees/types';
 import type { CatalogueIndexEntry } from './address-index';
 import {
+  catalogueCountQuery,
   catalogueQueryKey,
   readCatalogue,
-  readCataloguePage,
+  readCatalogueReplacement,
   type ScopedCatalogue,
 } from './catalogue-cache';
 import {
   catalogueProgress,
-  readEveryCataloguePage,
   startCatalogueLoad,
   type CatalogueCount,
   type CatalogueLoadState,
@@ -41,6 +43,7 @@ import {
   acceptWorking,
   beginRefresh,
   catalogueRefreshView,
+  commitReplacement,
   failReplacement,
   NO_GENERATIONS,
   startWorking,
@@ -111,40 +114,16 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// The authorized total, counted once per generation on its own request: a slow or failed count
-// leaves the total unknown, never delays a batch and never decides where a traversal stops.
 function useCatalogueCount(
-  sessionIdentity: string | null,
+  scope: EmployeeSession | null,
   generationId: string,
+  onAuthorityFailure: (failure: unknown, scope: EmployeeSession) => void,
 ): CatalogueCount {
-  // A count belongs to one generation: a new generation has none until its own request answers, and
-  // a resumed generation keeps the count it already captured instead of counting again.
-  const [counted, setCounted] = useState<{
-    generationId: string;
-    count: CatalogueCount;
-  }>({ generationId: '', count: NO_COUNT });
+  const { data, error } = useQuery(catalogueCountQuery(scope, generationId));
   useEffect(() => {
-    if (!sessionIdentity || !generationId) return;
-    const controller = new AbortController();
-    void api<{ total?: unknown }>(
-      '/api/properties/catalogue/count',
-      undefined,
-      controller.signal,
-    )
-      .then((answer) => {
-        const total = Number(answer?.total);
-        if (!Number.isInteger(total) || total < 0) return;
-        setCounted({
-          generationId,
-          count: { total, capturedAt: new Date().toISOString() },
-        });
-      })
-      .catch(() => {});
-    return () => controller.abort();
-  }, [sessionIdentity, generationId]);
-  return generationId !== '' && counted.generationId === generationId
-    ? counted.count
-    : NO_COUNT;
+    if (error && scope) onAuthorityFailure(error, scope);
+  }, [error, scope, onAuthorityFailure]);
+  return data ?? NO_COUNT;
 }
 
 function CatalogueLoader({ children }: { children: ReactNode }) {
@@ -165,6 +144,14 @@ function CatalogueLoader({ children }: { children: ReactNode }) {
     generationsRef.current = next;
     setGenerations(next);
   }, []);
+  const dropCatalogue = useCallback(() => {
+    refreshRun.current?.abort();
+    refreshRun.current = null;
+    queryClient.clear();
+    sessionRef.current = null;
+    apply(NO_GENERATIONS);
+    setScope(null);
+  }, [apply, queryClient]);
   const publish = useCallback(
     (state: CatalogueLoadState) =>
       apply(acceptWorking(generationsRef.current, state)),
@@ -178,6 +165,7 @@ function CatalogueLoader({ children }: { children: ReactNode }) {
       const resume =
         sessionRef.current === identity ? generationsRef.current.working : null;
       const generationId = resume ? resume.generationId : crypto.randomUUID();
+      if (!resume) dropCatalogue();
       sessionRef.current = identity;
       setScope(session);
       if (!resume) apply(startWorking(generationId));
@@ -187,39 +175,53 @@ function CatalogueLoader({ children }: { children: ReactNode }) {
         resume,
       });
     },
-    [apply, publish, queryClient],
+    [apply, dropCatalogue, publish, queryClient],
   );
-  const { data, busy, error, reload } = useProtectedData<ScopedCatalogue>(read);
-  // Losing protected data drops the cache the former authority filled; a scope change is read
-  // under the new authority instead.
-  useEffect(() => {
-    if (!busy && !data) queryClient.clear();
-  }, [busy, data, queryClient]);
+  const { error, reload, clear } = useProtectedData<ScopedCatalogue>(
+    read,
+    dropCatalogue,
+  );
+  const onAuthorityFailure = useCallback(
+    (failure: unknown, failedScope: EmployeeSession) => {
+      if (
+        sessionRef.current !==
+          `${renderedSession(failedScope.employee)}:${failedScope.accessRevision}` ||
+        !(
+          failure instanceof AccessChangedError ||
+          (failure instanceof RequestError &&
+            (failure.status === 401 || failure.status === 403))
+        )
+      )
+        return;
+      clear();
+      if (failure instanceof RequestError)
+        window.location.replace(
+          failure.status === 401 ? '/login' : '/access-denied',
+        );
+      else void reload();
+    },
+    [clear, reload],
+  );
 
-  const sessionIdentity = scope
-    ? `${renderedSession(scope.employee)}:${scope.accessRevision}`
-    : null;
   const workingCount = useCatalogueCount(
-    sessionIdentity,
+    scope,
     generations.working?.generationId ?? '',
+    onAuthorityFailure,
   );
   // The replacement's own total, counted exactly as the working load's is: a refresh states its own
   // progress and never borrows the count of the catalogue it is replacing.
   const stagedCount = useCatalogueCount(
-    sessionIdentity,
+    scope,
     generations.staged?.generationId ?? '',
+    onAuthorityFailure,
   );
-  // A refresh belongs to the authority that started it: losing or changing that scope abandons the
-  // replacement instead of letting its rows reach the new one.
-  useEffect(() => () => refreshRun.current?.abort(), [sessionIdentity]);
+  useEffect(() => () => refreshRun.current?.abort(), []);
 
   const refreshCatalogue = useCallback(() => {
     const session = scope;
     const state = generationsRef.current;
     if (!session || refreshRun.current) return;
-    // Retry continues a stopped generation when its staged rows were kept; otherwise - and for an
-    // ordinary refresh - a new generation starts with its progress reset.
-    const resume = state.failure?.resumable ? state.staged : null;
+    const resume = state.failure ? state.staged : null;
     const generationId = resume?.generationId ?? crypto.randomUUID();
     const started = beginRefresh(state, generationId, resume);
     // Refused: a replacement is already running, or the user has no complete catalogue to replace.
@@ -227,11 +229,11 @@ function CatalogueLoader({ children }: { children: ReactNode }) {
     apply(started);
     const controller = new AbortController();
     refreshRun.current = controller;
-    void readEveryCataloguePage({
-      read: readCataloguePage,
-      from: started.staged?.nextCursor ?? null,
-      signal: controller.signal,
-      onPage: (page) =>
+    void readCatalogueReplacement(
+      controller.signal,
+      session,
+      started.staged!,
+      (page) =>
         apply(
           acceptReplacementPage(
             generationsRef.current,
@@ -240,14 +242,13 @@ function CatalogueLoader({ children }: { children: ReactNode }) {
             new Date().toISOString(),
           ),
         ),
-    })
+    )
       .then(() => {
-        // The completed replacement is the working catalogue now. The cache the shell's own reads
-        // answer from is updated with it, so no later read of this scope can resurrect the
-        // catalogue it replaced.
-        const working = generationsRef.current.working;
-        if (working?.generationId === generationId)
-          queryClient.setQueryData(catalogueQueryKey(session), working);
+        controller.signal.throwIfAborted();
+        const next = commitReplacement(generationsRef.current, generationId);
+        if (next.working?.generationId !== generationId) return;
+        queryClient.setQueryData(catalogueQueryKey(session), next.working);
+        apply(next);
       })
       .catch((failure: unknown) => {
         // An abandoned read is not a failure to report: the scope that owned it is gone.
@@ -256,14 +257,23 @@ function CatalogueLoader({ children }: { children: ReactNode }) {
           failReplacement(
             generationsRef.current,
             generationId,
-            failure instanceof RequestError ? failure.code : 'unavailable',
+            failure instanceof AccessChangedError
+              ? 'access-changed'
+              : failure instanceof RequestError
+                ? failure.status === 401
+                  ? 'unauthenticated'
+                  : failure.status === 403
+                    ? 'access-denied'
+                    : failure.code
+                : 'unavailable',
           ),
         );
+        onAuthorityFailure(failure, session);
       })
       .finally(() => {
         if (refreshRun.current === controller) refreshRun.current = null;
       });
-  }, [apply, queryClient, scope]);
+  }, [apply, onAuthorityFailure, queryClient, scope]);
 
   const progress = useMemo(
     () => catalogueProgress(generations.working ?? NO_LOAD, workingCount),

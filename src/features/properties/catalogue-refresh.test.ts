@@ -11,10 +11,10 @@ import {
   acceptWorking,
   beginRefresh,
   catalogueRefreshView,
+  commitReplacement,
   failReplacement,
   NO_GENERATIONS,
   refreshing,
-  refreshResumes,
   startWorking,
   type CatalogueGenerations,
 } from './catalogue-refresh.ts';
@@ -138,12 +138,17 @@ test('only a completed replacement swaps in, and it is a real refresh', () => {
     'became-inaccessible',
   ]);
 
-  const swapped = acceptReplacementPage(
+  const traversed = acceptReplacementPage(
     partial,
     'refresh-1',
     page([property('added')], null),
     LATER,
   );
+  assert.equal(traversed.working, working);
+  assert.equal(traversed.staged?.isComplete, true);
+  assert.equal(commitReplacement(partial, 'refresh-1'), partial);
+  assert.equal(commitReplacement(traversed, 'superseded'), traversed);
+  const swapped = commitReplacement(traversed, 'refresh-1');
   assert.equal(swapped.staged, null);
   assert.equal(swapped.failure, null);
   assert.equal(swapped.working?.isComplete, true);
@@ -175,12 +180,11 @@ test('a failed refresh leaves the previous catalogue and its synchronization tim
   assert.deepEqual(failed.working, working);
   assert.equal(failed.working?.lastSyncedAt, SYNCED_AT);
   assert.equal(failed.working?.isComplete, true);
-  assert.deepEqual(failed.failure, { code: 'unavailable', resumable: true });
+  assert.deepEqual(failed.failure, { code: 'unavailable' });
   // The failure is stated as a failure, and the refresh line cannot describe a completed load.
   const view = catalogueRefreshView(failed, NO_COUNT);
   assert.deepEqual(view, {
     status: 'failed',
-    resumable: true,
     loadedCount: 1,
   });
 });
@@ -300,7 +304,7 @@ test('Retry resumes a compatible cursor instead of reading the inventory again',
   });
 });
 
-test('an ended authority starts a clearly identified new generation with reset progress', () => {
+test('authorization loss clears both generations and cannot resume the old scope', () => {
   const working = finished('working', [property('a')]);
   const running = beginRefresh(withWorking(working), 'refresh-1');
   const partial = acceptReplacementPage(
@@ -309,29 +313,24 @@ test('an ended authority starts a clearly identified new generation with reset p
     page([property('a'), property('b')], 'b'),
     LATER,
   );
-  const denied = failReplacement(partial, 'refresh-1', 'access-denied');
-
-  // A refusal ends the traversal's authority: its staged rows are discarded and the line says so.
-  assert.equal(denied.staged, null);
-  assert.equal(denied.working?.isComplete, true);
-  assert.deepEqual(denied.failure, { code: 'access-denied', resumable: false });
-  assert.deepEqual(catalogueRefreshView(denied, NO_COUNT), {
-    status: 'failed',
-    resumable: false,
-    loadedCount: 0,
-  });
-
-  // Retry therefore starts a new generation whose progress resets to nothing loaded.
-  const restarted = beginRefresh(denied, 'refresh-2');
-  assert.equal(restarted.resumed, false);
-  assert.equal(restarted.staged?.generationId, 'refresh-2');
-  assert.equal(restarted.staged?.loadedCount, 0);
-  assert.equal(catalogueRefreshView(restarted, NO_COUNT).status, 'refreshing');
-});
-
-test('the refresh rule states which failures keep their authority', () => {
-  assert.equal(refreshResumes('access-denied'), false);
-  assert.equal(refreshResumes('unavailable'), true);
+  for (const code of ['access-denied', 'unauthenticated']) {
+    const denied = failReplacement(partial, 'refresh-1', code);
+    assert.equal(denied.working, null);
+    assert.equal(denied.staged, null);
+    assert.equal(denied.failure, null);
+    assert.equal(beginRefresh(denied, 'refresh-2'), denied);
+    assert.equal(
+      acceptReplacementPage(
+        denied,
+        'refresh-1',
+        page([property('z')], null),
+        LATER,
+      ),
+      denied,
+    );
+    assert.equal(commitReplacement(denied, 'refresh-1'), denied);
+    assert.equal(failReplacement(partial, 'superseded', code), partial);
+  }
 });
 
 test('the refresh line describes the replacement and never the working catalogue', () => {
@@ -382,16 +381,19 @@ test('the refresh line describes the replacement and never the working catalogue
 
 test('a second refresh over a swapped catalogue is allowed and refills from empty', () => {
   const working = finished('working', [property('keep'), property('gone')]);
-  const swapped = acceptReplacementPage(
+  const swapped = commitReplacement(
     acceptReplacementPage(
-      beginRefresh(withWorking(working), 'refresh-1'),
+      acceptReplacementPage(
+        beginRefresh(withWorking(working), 'refresh-1'),
+        'refresh-1',
+        page([property('keep')], 'keep'),
+        LATER,
+      ),
       'refresh-1',
-      page([property('keep')], 'keep'),
+      page([property('keep')], null),
       LATER,
     ),
     'refresh-1',
-    page([property('keep')], null),
-    LATER,
   );
   assert.deepEqual(ids(swapped.working as CatalogueLoadState), ['keep']);
 
