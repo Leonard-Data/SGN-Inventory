@@ -4,6 +4,9 @@ import { api, RequestError } from '@/features/employees/api';
 import { label, messages, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { fields } from '@/features/property-maintenance/fields';
+import { applyServerSummary } from '@/features/properties/catalogue-changes';
+import { useCatalogueChange } from '@/features/properties/catalogue-provider';
+import type { PropertySummary } from '@/features/properties/types';
 import { useToast } from '@/features/toasts/toast-host';
 import { LoadingSkeleton } from '@/features/skeleton';
 import { vietnamTimestamp } from '@/features/properties/format';
@@ -31,6 +34,7 @@ export function StatusControl({
 }) {
   const text = statusText(locale);
   const notify = useToast();
+  const applyChange = useCatalogueChange();
   const id = useId();
   const [next, setNext] = useState(status);
   const [note, setNote] = useState('');
@@ -42,10 +46,16 @@ export function StatusControl({
     setBusy(true);
     setError(null);
     try {
-      const result = await api<{ change: StatusChange }>(
-        `/api/properties/${propertyId}/status`,
-        { status: next, note: note.trim() === '' ? null : note },
-      );
+      const result = await api<{
+        change: StatusChange;
+        summary?: PropertySummary | null;
+      }>(`/api/properties/${propertyId}/status`, {
+        status: next,
+        note: note.trim() === '' ? null : note,
+      });
+      // The list reads the status the server now holds for the property, not the one the picker
+      // submitted, so a change that no longer matches a local filter stops appearing.
+      applyServerSummary(applyChange, result, propertyId);
       // A request that is still waiting changed nothing, so the picker returns to the recorded
       // status and the confirmation says what was actually recorded.
       const applied = result.change.state === 'applied';

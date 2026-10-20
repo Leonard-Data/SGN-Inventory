@@ -21,6 +21,13 @@ export type ScopedCatalogue = {
   load: CatalogueLoadState;
 };
 
+// The one catalogue is kept for the whole browser session while its authorized scope holds, so an
+// unchanged scope is never read twice. Every other browser read keeps its own bounded retention
+// instead: the catalogue's unbounded one is deliberate and belongs to this key alone, and a
+// later explicit advanced-search result must not inherit it (issue #193).
+export const CATALOGUE_RETENTION = { staleTime: Infinity, gcTime: Infinity };
+export const BOUNDED_RETENTION = { staleTime: 5 * 60_000, gcTime: 10 * 60_000 };
+
 // The catalogue read's own address: one bounded page after the cursor, and nothing else. The
 // cursor is a position in the identity ordering, never a grant of access to the rows it names.
 function cataloguePageUrl(after: string | null) {
@@ -176,8 +183,7 @@ export async function readCatalogue(
         },
       }).then(() => state);
     },
-    staleTime: Infinity,
-    gcTime: Infinity,
+    ...CATALOGUE_RETENTION,
   });
   // A traversal the browser already finished and cached publishes nothing while it is read back,
   // so the state a freshly mounted loader reads is the one that was cached.

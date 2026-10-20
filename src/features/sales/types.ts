@@ -1,4 +1,5 @@
 import type { EmployeeAccess } from '@/features/employees/directory';
+import type { PropertySummary } from '@/features/properties/types';
 
 export type SaleCloserOption = {
   id: string;
@@ -31,6 +32,13 @@ export type SaleCompletionState = {
   suggestedCloser: { id: string; name: string } | null;
   employees: SaleCloserOption[];
   completion: CompletedSale | null;
+};
+
+// The answer to a committed completion: the fresh state plus the property's authoritative catalogue
+// summary, so the browser's list shows the status the sale recorded rather than the one it held.
+// An absent summary is one the server could not read back; the browser then keeps what it holds.
+export type SaleCompletionResult = SaleCompletionState & {
+  summary?: PropertySummary | null;
 };
 
 export type CompletedSaleRankRow = {

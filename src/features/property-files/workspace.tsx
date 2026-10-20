@@ -6,6 +6,9 @@ import { fileClass, sizeRefusal } from './limits';
 import { IconAction } from '@/features/icon-action';
 import { api, RequestError } from '@/features/employees/api';
 import { LoadingSkeleton } from '@/features/skeleton';
+import { applyServerSummary } from '@/features/properties/catalogue-changes';
+import { useCatalogueChange } from '@/features/properties/catalogue-provider';
+import type { PropertySummary } from '@/features/properties/types';
 import { CoverImage } from './cover-image';
 import type {
   PropertyFileList,
@@ -49,6 +52,9 @@ export function Workspace({
   onCoverChanged: () => void;
 }) {
   const [files, setFiles] = useState<PropertyFileList['files']>([]);
+  // The chosen cover is part of the list's summary, so the confirmed cover refreshes the browser's
+  // catalogue row from the server's own answer.
+  const applyChange = useCatalogueChange();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(true);
   const [revision, setRevision] = useState(0);
@@ -153,7 +159,12 @@ export function Workspace({
     setCoverBusy(true);
     setCoverError(null);
     try {
-      await api(`/api/properties/${propertyId}/cover`, { fileId }, signal);
+      const result = await api<{ summary?: PropertySummary | null }>(
+        `/api/properties/${propertyId}/cover`,
+        { fileId },
+        signal,
+      );
+      applyServerSummary(applyChange, result, propertyId);
       if (generation.current === version && !signal?.aborted) onCoverChanged();
     } catch (failure) {
       if (

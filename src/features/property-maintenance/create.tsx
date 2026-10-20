@@ -2,6 +2,9 @@
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, RequestError } from '@/features/employees/api';
+import { applyServerSummary } from '@/features/properties/catalogue-changes';
+import { useCatalogueChange } from '@/features/properties/catalogue-provider';
+import type { PropertySummary } from '@/features/properties/types';
 import type { Locale } from '@/i18n/messages';
 import { messages } from '@/i18n/messages';
 import { formChanges, targetFields } from './fields';
@@ -16,6 +19,7 @@ export function CreateProperty({
   onDenied: (status: number) => void;
 }) {
   const router = useRouter();
+  const applyChange = useCatalogueChange();
   const text = maintenanceText(locale),
     notify = useToast(),
     [busy, setBusy] = useState(false),
@@ -31,11 +35,17 @@ export function CreateProperty({
         address = formChanges('address', form);
       const mode = facts.listing_mode;
       delete facts.listing_mode;
-      const result = await api<{ id: string }>('/api/properties', {
+      const result = await api<{
+        id: string;
+        summary?: PropertySummary | null;
+      }>('/api/properties', {
         mode,
         facts,
         address,
       });
+      // The new record enters the browser's catalogue from the server's own answer, so the list
+      // already holds it when the person returns from the record they just created.
+      applyServerSummary(applyChange, result, result.id);
       // The record is committed and the new page opens with its confirmation.
       notify({ saved: true, message: text.propertyCreated });
       router.push('/properties/' + result.id);

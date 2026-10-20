@@ -25,10 +25,16 @@ import {
 import type { EmployeeSession } from '@/features/employees/types';
 import type { CatalogueIndexEntry } from './address-index';
 import {
+  reconcileCatalogue,
+  recordCatalogueChange,
+  type CatalogueChange,
+} from './catalogue-changes';
+import {
   catalogueCountQuery,
   catalogueQueryKey,
   readCatalogue,
   readCatalogueReplacement,
+  BOUNDED_RETENTION,
   type ScopedCatalogue,
 } from './catalogue-cache';
 import {
@@ -69,6 +75,10 @@ export type CatalogueState = {
   refreshCatalogue: () => void;
   scope: EmployeeSession | null;
   retry: () => void;
+  // Report a change the server has committed for one property, from the server's own answer. The
+  // catalogue the browser shows is the load reconciled with every change reported this way, so a
+  // read that started before the change can never overwrite it (issue #193).
+  applyChange: (change: CatalogueChange) => void;
 };
 
 const NO_COUNT: CatalogueCount = { total: null, capturedAt: null };
@@ -83,6 +93,7 @@ const EMPTY: CatalogueState = {
   refreshCatalogue: () => {},
   scope: null,
   retry: () => {},
+  applyChange: () => {},
 };
 const CatalogueContext = createContext<CatalogueState>(EMPTY);
 
@@ -101,11 +112,23 @@ export function useCatalogue(session: EmployeeSession | null): CatalogueState {
   return catalogue;
 }
 
+// A surface that has just committed a change reports it without reading the catalogue: the change
+// came from the server's own answer under the caller's session, so it needs no catalogue scope of
+// its own, and the provider drops it with the scope it belongs to.
+export function useCatalogueChange(): (change: CatalogueChange) => void {
+  return useContext(CatalogueContext).applyChange;
+}
+
 export function CatalogueProvider({ children }: { children: ReactNode }) {
   // One client for the whole authenticated application, created once per browser session: the
   // catalogue outlives every route inside the shell, and a page reload is what starts it over.
   const [queryClient] = useState(
-    () => new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+    () =>
+      new QueryClient({
+        // Only the catalogue's own key is kept unbounded; a detail or later advanced-search read
+        // inherits this bounded retention instead.
+        defaultOptions: { queries: { retry: false, ...BOUNDED_RETENTION } },
+      }),
   );
   return (
     <QueryClientProvider client={queryClient}>
@@ -132,6 +155,10 @@ function CatalogueLoader({ children }: { children: ReactNode }) {
   // by the rule in `catalogue-refresh.ts`.
   const [generations, setGenerations] =
     useState<CatalogueGenerations>(NO_GENERATIONS);
+  // The changes the server has committed since the load started, latest per property. They are
+  // applied over the load, so a batch or a replacement catalogue that answers with an older row
+  // cannot overwrite a successful change.
+  const [changes, setChanges] = useState<readonly CatalogueChange[]>([]);
   const [scope, setScope] = useState<EmployeeSession | null>(null);
   const sessionRef = useRef<string | null>(null);
   // The latest folded state, so a retry resumes the generation it interrupted and a refresh starts
@@ -150,6 +177,8 @@ function CatalogueLoader({ children }: { children: ReactNode }) {
     queryClient.clear();
     sessionRef.current = null;
     apply(NO_GENERATIONS);
+    // A new generation carries no change from the former authority.
+    setChanges([]);
     setScope(null);
   }, [apply, queryClient]);
   const publish = useCallback(
@@ -284,24 +313,34 @@ function CatalogueLoader({ children }: { children: ReactNode }) {
     : progress.isComplete
       ? 'complete'
       : 'loading';
+  const applyChange = useCallback((change: CatalogueChange) => {
+    setChanges((current) => recordCatalogueChange(current, change));
+  }, []);
+  const index = useMemo(
+    () => reconcileCatalogue(generations.working?.index ?? [], changes),
+    [generations.working, changes],
+  );
   const state = useMemo<CatalogueState>(
     () => ({
       status,
-      index: generations.working?.index ?? [],
+      index,
       progress,
       refresh: catalogueRefreshView(generations, stagedCount),
       refreshCatalogue,
       scope,
       retry: reload,
+      applyChange,
     }),
     [
       status,
-      generations,
+      index,
       progress,
+      generations,
       stagedCount,
       refreshCatalogue,
       scope,
       reload,
+      applyChange,
     ],
   );
   return (

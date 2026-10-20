@@ -2,6 +2,7 @@ import 'server-only';
 import { createHmac } from 'node:crypto';
 import { ApiError, uuid, type RouteContext } from '@/lib/supabase/route';
 import { copyObject, objectIdentity, storedObject } from '@/lib/r2';
+import { catalogueSummaryOf } from './catalogue-data';
 import { mergeLimit, mergeRequest, movedObjectPath } from './merge-rules';
 import type { AddressGroup, MergeReport } from './types';
 
@@ -151,5 +152,11 @@ export async function mergeDuplicates(
     const refusal = mergeRefusal(mergeFailure);
     throw refusal ?? new ApiError(503, 'unavailable');
   }
-  return report as MergeReport;
+  // The merge retired the merged records and left the kept one, so the browser's catalogue is told
+  // which rows to drop and is handed the kept property's current authoritative summary.
+  return {
+    ...(report as MergeReport),
+    removed: merge,
+    summary: await catalogueSummaryOf(context, id),
+  };
 }

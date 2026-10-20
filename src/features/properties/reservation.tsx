@@ -17,7 +17,10 @@ import {
   RESERVATION_DAYS_MIN,
   RESERVATION_REASON_MAX,
   RESERVATION_REASON_MIN,
+  lockStateMoved,
 } from './reservation-rules';
+import { applyServerSummary } from './catalogue-changes';
+import { useCatalogueChange } from './catalogue-provider';
 import { vietnamTimestamp } from './format';
 import type { ReservationState } from './types';
 
@@ -194,6 +197,10 @@ export function Reservation({
     requestReasonId = useId(),
     requestHelpId = useId();
   const notify = useToast();
+  // Every answer about this property - including the read a lost lock triggers - refreshes the
+  // browser's catalogue from the server's own summary of it, so a conflict leaves the current
+  // state on screen rather than the state the browser held.
+  const applyChange = useCatalogueChange();
   const [state, setState] = useState<ReservationState | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -211,11 +218,15 @@ export function Reservation({
   const inFlight = useRef<AbortController | null>(null);
   const generation = useRef(0);
   // A mutation's snapshot wins over any read that started before it committed.
-  const apply = useCallback((next: ReservationState) => {
-    inFlight.current?.abort();
-    generation.current += 1;
-    setState(next);
-  }, []);
+  const apply = useCallback(
+    (next: ReservationState) => {
+      inFlight.current?.abort();
+      generation.current += 1;
+      setState(next);
+      applyServerSummary(applyChange, next, propertyId);
+    },
+    [applyChange, propertyId],
+  );
   const failure = useCallback(
     (problem: unknown, set: (code: string) => void) => {
       if (
@@ -242,6 +253,7 @@ export function Reservation({
       .then((value) => {
         if (version !== generation.current) return;
         setState(value);
+        applyServerSummary(applyChange, value, propertyId);
         setLoadFailed(false);
       })
       .catch((problem: unknown) => {
@@ -252,7 +264,7 @@ export function Reservation({
         if (version === generation.current) setLoading(false);
       });
     return () => abort.abort();
-  }, [propertyId, refresh, failure]);
+  }, [propertyId, refresh, failure, applyChange]);
   const own = state?.pending.find(
     (request) => request.claimantId === employeeId,
   );
@@ -280,11 +292,10 @@ export function Reservation({
         onDenied(problem.status);
         return;
       }
-      // A conflict means the committed state moved on: refetch instead of guessing.
-      if (
-        problem instanceof RequestError &&
-        problem.code === 'reservation-conflict'
-      )
+      // A conflict means the committed state moved on: refetch instead of guessing. The database
+      // decided the lock - the status the browser held never authorized it - so the panel reads
+      // the current state rather than keeping the one it had.
+      if (problem instanceof RequestError && lockStateMoved(problem.code))
         setRefresh((value) => value + 1);
       setPostError(
         problem instanceof RequestError ? problem.code : 'unavailable',
@@ -332,12 +343,7 @@ export function Reservation({
           code: problem.code,
         });
       else setDecisionError({ id: lockId, code: 'unavailable' });
-      if (
-        problem instanceof RequestError &&
-        ['reservation-conflict', 'reservation-unavailable'].includes(
-          problem.code,
-        )
-      )
+      if (problem instanceof RequestError && lockStateMoved(problem.code))
         setRefresh((value) => value + 1);
     } finally {
       setDeciding(null);
@@ -376,10 +382,7 @@ export function Reservation({
         onDenied(problem.status);
         return;
       }
-      if (
-        problem instanceof RequestError &&
-        problem.code === 'reservation-closed'
-      )
+      if (problem instanceof RequestError && lockStateMoved(problem.code))
         setRefresh((value) => value + 1);
       setReleaseError(
         problem instanceof RequestError ? problem.code : 'unavailable',
@@ -472,6 +475,9 @@ export function Reservation({
             archived ? (
               <p className="field-hint">{text.reservationArchived}</p>
             ) : requestable.includes(status) ? (
+              // The recorded status only decides whether this control is offered: the database
+              // re-checks current availability, authorization and the competing reservation when
+              // the request is made, and a refusal refreshes this panel from server state.
               <form onSubmit={submitRequest}>
                 <div className="field">
                   <label className="field-label" htmlFor={requestReasonId}>
