@@ -201,7 +201,7 @@ The properties list as one result set ordered by the server (newest created firs
 _Avoid_: Numbered page, page-size setting, cursor, partial result set
 
 **Property catalogue**:
-The browser's own browsing snapshot of the authorized inventory: a bounded page of property summaries in one stable identity order, read through the authenticated catalogue endpoint and held in browser memory, with each property's recorded address variants folded once so typing in the address box narrows them without reading the database. It is a browsing aid only — a lock, an approval or an edit always validates against current server state — and a list filtered from it states the loaded properties rather than the whole inventory.
+The browser's own browsing snapshot of the authorized inventory: property summaries in one stable identity order, read through the authenticated catalogue endpoint and held in browser memory, with each property's recorded address variants folded once so typing in the address box narrows them without reading the database. It arrives progressively — every cursor is followed, rows are deduplicated by property identity and indexed as batches arrive — and states how complete it is against the authorized total, so the first page is searchable before the rest has loaded and an interrupted load keeps what it has and offers Retry. It is a browsing aid only — a lock, an approval or an edit always validates against current server state — and a list filtered from it states the loaded properties rather than the whole inventory, never an empty inventory while the load is incomplete.
 _Avoid_: Search cache, offline inventory, authoritative list
 
 **Inventory result view**:

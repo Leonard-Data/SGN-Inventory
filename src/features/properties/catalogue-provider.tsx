@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -13,30 +14,47 @@ import {
   QueryClientProvider,
   useQueryClient,
 } from '@tanstack/react-query';
+import { api } from '@/features/employees/api';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import {
   renderedSession,
   sessionDiffers,
 } from '@/features/employees/protected-load';
 import type { EmployeeSession } from '@/features/employees/types';
-import { buildAddressIndex, type CatalogueIndexEntry } from './address-index';
+import type { CatalogueIndexEntry } from './address-index';
 import { readCatalogue, type ScopedCatalogue } from './catalogue-cache';
+import {
+  catalogueProgress,
+  startCatalogueLoad,
+  type CatalogueCount,
+  type CatalogueLoadState,
+  type CatalogueProgress,
+} from './catalogue-load';
 
-// What the address box reads: the index of the page the browser holds and the honest state of the
-// load behind it. Nothing here authorizes anything - a lock, an approval or an edit always
-// validates against current server state, never against this browsing snapshot.
+// Whether the load behind the browser's catalogue is still arriving, finished, or stopped by an
+// error. A browser-held catalogue is a browsing aid only: a lock, an approval or an edit always
+// validates against current server state, never against this snapshot.
+export type CatalogueStatus = 'loading' | 'complete' | 'failed';
+
+// What a consumer of the catalogue reads: the index the address box searches, the structured
+// progress of the load behind it, and how to retry a load that stopped. Nothing here authorizes
+// anything.
 export type CatalogueState = {
-  status: 'loading' | 'ready' | 'failed';
+  status: CatalogueStatus;
   index: readonly CatalogueIndexEntry[];
-  loadedCount: number;
+  progress: CatalogueProgress;
   scope: EmployeeSession | null;
+  retry: () => void;
 };
+
+const NO_COUNT: CatalogueCount = { total: null, capturedAt: null };
 
 const EMPTY: CatalogueState = {
   status: 'loading',
   index: [],
-  loadedCount: 0,
+  progress: catalogueProgress(startCatalogueLoad(''), NO_COUNT),
   scope: null,
+  retry: () => {},
 };
 const CatalogueContext = createContext<CatalogueState>(EMPTY);
 
@@ -70,29 +88,79 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
 
 function CatalogueLoader({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
-  const read = useCallback(
-    (signal: AbortSignal, scope: EmployeeSession) =>
-      readCatalogue(queryClient, signal, scope),
-    [queryClient],
+  const [load, setLoad] = useState<CatalogueLoadState>(() =>
+    startCatalogueLoad(''),
   );
-  const { data, busy, error } = useProtectedData<ScopedCatalogue>(read);
+  const [count, setCount] = useState<CatalogueCount>(NO_COUNT);
+  const [scope, setScope] = useState<EmployeeSession | null>(null);
+  const sessionRef = useRef<string | null>(null);
+  // The latest indexed state, so a retry resumes the generation it interrupted rather than reading
+  // the whole traversal again.
+  const loadRef = useRef(load);
+  const publish = useCallback((state: CatalogueLoadState) => {
+    loadRef.current = state;
+    setLoad(state);
+  }, []);
+  const read = useCallback(
+    (signal: AbortSignal, session: EmployeeSession) => {
+      const identity = `${renderedSession(session.employee)}:${session.accessRevision}`;
+      // A scope this loader already started resumes it; a changed scope starts a new generation
+      // with nothing indexed from the former authority.
+      const resume = sessionRef.current === identity ? loadRef.current : null;
+      const generationId = resume ? resume.generationId : crypto.randomUUID();
+      sessionRef.current = identity;
+      setScope(session);
+      if (!resume) {
+        setCount(NO_COUNT);
+        publish(startCatalogueLoad(generationId));
+      }
+      return readCatalogue(queryClient, signal, session, {
+        publish,
+        generationId,
+        resume,
+      });
+    },
+    [publish, queryClient],
+  );
+  const { data, busy, error, reload } = useProtectedData<ScopedCatalogue>(read);
+  // Losing protected data drops the cache the former authority filled; a scope change is read
+  // under the new authority instead.
   useEffect(() => {
     if (!busy && !data) queryClient.clear();
   }, [busy, data, queryClient]);
-  const snapshot = busy ? null : data;
-  const page = snapshot?.page ?? null;
-  const index = useMemo(
-    () => buildAddressIndex(page?.properties ?? []),
-    [page],
-  );
+
+  const sessionIdentity = scope
+    ? `${renderedSession(scope.employee)}:${scope.accessRevision}`
+    : null;
+  // The authorized total is counted once per generation, on its own request: a slow or failed
+  // count leaves the total unknown, never delays a batch, and never decides where the traversal
+  // stops.
+  useEffect(() => {
+    if (!sessionIdentity || !load.generationId) return;
+    const controller = new AbortController();
+    void api<{ total?: unknown }>(
+      '/api/properties/catalogue/count',
+      undefined,
+      controller.signal,
+    )
+      .then((answer) => {
+        const total = Number(answer?.total);
+        if (!Number.isInteger(total) || total < 0) return;
+        setCount({ total, capturedAt: new Date().toISOString() });
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [sessionIdentity, load.generationId]);
+
+  const progress = useMemo(() => catalogueProgress(load, count), [load, count]);
+  const status: CatalogueStatus = error
+    ? 'failed'
+    : progress.isComplete
+      ? 'complete'
+      : 'loading';
   const state = useMemo<CatalogueState>(
-    () => ({
-      status: error ? 'failed' : snapshot ? 'ready' : 'loading',
-      index,
-      loadedCount: index.length,
-      scope: snapshot?.scope ?? null,
-    }),
-    [error, snapshot, index],
+    () => ({ status, index: load.index, progress, scope, retry: reload }),
+    [status, load.index, progress, scope, reload],
   );
   return (
     <CatalogueContext.Provider value={state}>

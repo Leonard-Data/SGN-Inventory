@@ -69,6 +69,15 @@ const vi = {
   catalogueLocalFailed:
     'Không tải được danh mục. Nhấn nút tìm kiếm để tìm toàn bộ kho.',
   catalogueLocalEmpty: 'Không có kết quả trong các bất động sản đã tải.',
+  // The progressive load's own words: the loaded count is always stated, and the authorized total
+  // and an approximate percentage only when the count is known and the load can state one.
+  catalogueLoadingKnown:
+    'Đang tải danh mục · {loaded} / {total} bất động sản · khoảng {percent}%',
+  catalogueLoadingUnknown: 'Đang tải danh mục · đã tải {loaded} bất động sản',
+  catalogueIncomplete: 'Chưa tải hết danh mục · đã tải {loaded} bất động sản',
+  catalogueComplete: 'Danh mục đã sẵn sàng · {loaded} bất động sản',
+  catalogueSyncedAt: 'Cập nhật lần cuối lúc {time}.',
+  catalogueMoreMatches: 'Có thể có thêm kết quả khi quá trình tải tiếp tục.',
   vndBillion: ' tỷ',
   vndMillion: ' triệu',
   quickUpload: 'Tải tập tin nhanh',
@@ -909,6 +918,15 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     catalogueLocalFailed:
       'The catalogue could not be loaded. Use the search button to search the whole inventory.',
     catalogueLocalEmpty: 'No matches in the loaded properties.',
+    // The progressive load's own words: the loaded count is always stated, and the authorized
+    // total and an approximate percentage only when the count is known and the load can state one.
+    catalogueLoadingKnown:
+      'Loading catalogue · {loaded} / {total} properties · approximately {percent}%',
+    catalogueLoadingUnknown: 'Loading catalogue · {loaded} properties loaded',
+    catalogueIncomplete: 'Catalogue incomplete · {loaded} properties loaded',
+    catalogueComplete: 'Catalogue ready · {loaded} properties',
+    catalogueSyncedAt: 'Last updated at {time}.',
+    catalogueMoreMatches: 'More matches may appear as loading continues.',
     vndBillion: 'bn',
     vndMillion: 'm',
     quickUpload: 'Quick upload',

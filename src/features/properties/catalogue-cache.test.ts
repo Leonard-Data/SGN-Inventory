@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { QueryClient } from '@tanstack/react-query';
 import { loadProtected, renderedSession } from '../employees/protected-load.ts';
-import type { EmployeeSession } from '../employees/types';
+import type { EmployeeSession } from '../employees/types.ts';
 import { readCatalogue } from './catalogue-cache.ts';
-import type { CataloguePage, PropertySummary } from './types';
+import { indexCataloguePage, startCatalogueLoad } from './catalogue-load.ts';
+import type { CataloguePage, PropertySummary } from './types.ts';
 
 const reviewer: EmployeeSession = {
   employee: {
@@ -54,13 +55,30 @@ const record: PropertySummary = {
 };
 const privatePage: CataloguePage = { properties: [record], nextCursor: null };
 const publicPage: CataloguePage = { properties: [], nextCursor: null };
+const AT = '2026-10-20T00:00:00.000Z';
+// The state one finished traversal reaches, with the one indexed page it read.
+const privateLoad = indexCataloguePage(
+  startCatalogueLoad('generation-1'),
+  privatePage,
+  AT,
+);
+const publicLoad = indexCataloguePage(
+  startCatalogueLoad('generation-1'),
+  publicPage,
+  AT,
+);
 const client = () =>
   new QueryClient({ defaultOptions: { queries: { retry: false } } });
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 function load(client: QueryClient, signal = new AbortController().signal) {
   return loadProtected({
-    source: (signal, scope) => readCatalogue(client, signal, scope),
+    source: (signal, scope) =>
+      readCatalogue(client, signal, scope, {
+        publish: () => {},
+        generationId: 'generation-1',
+        now: () => AT,
+      }),
     signal,
     renderedFor: null,
     renderedAccessRevision: null,
@@ -80,7 +98,7 @@ test('a stable protected scope reuses the catalogue across route reads', async (
   });
   const first = await load(cache);
   const returned = await load(cache);
-  assert.deepEqual(first.data, { scope: reviewer, page: privatePage });
+  assert.deepEqual(first.data, { scope: reviewer, load: privateLoad });
   assert.deepEqual(returned.data, first.data);
   assert.equal(catalogueReads, 1);
 });
@@ -104,14 +122,14 @@ test('changing employee, role or revision discards the former catalogue', async 
     await load(cache);
     current = next;
     const returned = await load(cache);
-    assert.deepEqual(returned.data, { scope: next, page: publicPage });
+    assert.deepEqual(returned.data, { scope: next, load: publicLoad });
     assert.equal(catalogueReads, 2);
     assert.deepEqual(
       cache
         .getQueryCache()
         .getAll()
         .map((query) => query.state.data),
-      [publicPage],
+      [publicLoad],
     );
   }
 });
@@ -134,14 +152,14 @@ test('authority changing during a catalogue read never publishes the earlier res
   current = sales;
   arriving.resolve(Response.json(privatePage));
   const returned = await pending;
-  assert.deepEqual(returned.data, { scope: sales, page: publicPage });
+  assert.deepEqual(returned.data, { scope: sales, load: publicLoad });
   assert.equal(renderedSession(returned.employee), 'sales:sales');
   assert.deepEqual(
     cache
       .getQueryCache()
       .getAll()
       .map((query) => query.state.data),
-    [publicPage],
+    [publicLoad],
   );
 });
 
@@ -172,12 +190,12 @@ test('a replaced scope cancels its pending read and cannot repopulate the cache'
   arriving.resolve(Response.json(privatePage));
   await rejected;
   assert.equal(originalSignals[0]?.aborted, true);
-  assert.deepEqual(returned.data, { scope: sales, page: publicPage });
+  assert.deepEqual(returned.data, { scope: sales, load: publicLoad });
   assert.deepEqual(
     cache
       .getQueryCache()
       .getAll()
       .map((query) => query.state.data),
-    [publicPage],
+    [publicLoad],
   );
 });

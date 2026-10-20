@@ -39,3 +39,19 @@ export async function cataloguePage(
     nextCursor: nextCatalogueCursor(rows.map((row) => row.id)),
   };
 }
+
+// The authorized total of the same inventory the pages above carry, read once per load generation.
+// It is an ordinary row count under the caller's own authorization and the same eligibility, so a
+// total can never describe rows the pages may not receive. It states how much there is to load and
+// never decides where the traversal stops, so it may arrive late, or fail, without blocking a page.
+export async function catalogueTotal(context: RouteContext): Promise<number> {
+  const { count, error } = await context.client
+    .from('properties')
+    .select('id', { count: 'exact', head: true })
+    .is('archived_at', null);
+  if (error) {
+    const failure = catalogueFailure(error.code);
+    throw new ApiError(failure.status, failure.code);
+  }
+  return count ?? 0;
+}
