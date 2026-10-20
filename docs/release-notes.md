@@ -13,6 +13,60 @@ shipped is implemented in the code on `main`; where a real-browser or hosted acc
 executed, that is stated in the entry rather than left implied. Correspondence between a feature and
 what was *verified* is in [testing.md](testing.md).
 
+## 20 October 2026 — a rewritten README, a release record, and three directory defects
+
+### The README describes the application that exists, and these notes begin (#183, #184)
+
+The repository's front page no longer introduces a 10 October foundation package. It states what the
+product is and who uses it, what each page and area does, the stack at the versions this repository
+actually pins, the minimum configuration a deployment needs — three resources and every environment
+variable, named with what breaks without each one — local setup and verification, the data model and
+where it lives, and the limits that are still real. The measured R2 volume is recorded there: 2,220
+objects, 587.3 MiB over 1,034 distinct property prefixes, largest object 2,041,894 bytes, listed
+read-only from the configured bucket with the repository's own client. So are the production row
+counts and the **154 MB** database size the operator measured on 20 October, after the import staging
+archive was pruned (narrated in the 19 October entry below).
+
+These notes were added in the same change, so everything shipped through 19 October now has a dated
+entry naming the behaviour it delivered and the gap that came with it, instead of surviving only in
+pull requests.
+
+_Why it matters:_ the document a reader meets first described an application that no longer exists,
+and a deployer had no single place stating which configuration actually has to be present for the
+app to run.
+
+_Known gap:_ the production figures are the operator's 20 October measurements relayed into the
+document. No copy of this repository holds database credentials and the Data API refuses an
+unauthenticated read, so nothing in that table was re-measured here; the queries that reproduce it
+are given beside it, and the README lists the acceptance gates that remain outstanding rather than
+implying them.
+
+### Three directory defects closed: one header, a stacked access cell, a reserved window skeleton (#182, #185)
+
+Three defects reported after the UI pass went live were fixed on the employee and contact
+directories. `/people/employees` rendered its page header twice — the house eyebrow block and the
+block carrying both the heading the panel is labelled by and the invite toolbar — and now renders one
+header, in every state the page can be in and in both languages. The access column kept its 210px
+desktop minimum inside the stacked phone row, so a row carrying several badges measured 613px inside
+a 360px wrapper and the page scrolled sideways; at phone width the cell now releases the width and
+its badges wrap between each other, while a badge's own label still never breaks mid-word and the
+desktop column keeps its width and appearance. Scrolling either directory also under-reserved the
+window about to arrive, so the loading effect was a stub of one to seven rows inside mostly blank
+reserved space and the list looked finished while it was still reading; each directory now passes the
+read length it pages with, so every chunk the arriving window fills is reserved and replaced by
+exactly the rows that land on it — the behaviour the properties list already had, through the same
+machinery. A window that resolves immediately still paints nothing.
+
+_Why it matters:_ the duplicated header and the sideways-scrolling phone row are what a person on a
+phone actually saw, and a skeleton that understates how much is still coming reads as a list that is
+empty or already complete.
+
+_Known gap:_ the fix was driven in headless Chromium at 1440×900 and 375×800 in both languages, but
+that lane had no authenticated session, so it mounted the real directory components against a stubbed
+API in a temporary route deleted before the commit. A signed-in load of `/people/employees` and
+`/people/contacts` against the development database — the real payloads and the RLS path behind them
+— has not been observed.
+
 ## 19 October 2026 — one inventory stream, status decisions, and the directories
 
 ### The inventory list is one streamed result set (#154–#157, #162–#164, #168–#170)
