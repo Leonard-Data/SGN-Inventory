@@ -114,7 +114,7 @@ const offsetsFor = (rows: number) => {
 
 test('scrolling near the end of the loaded contacts asks for the next window', () => {
   const known = CONTACT_PAGE_SIZE * 4;
-  const rows = streamKnownRows(known, true);
+  const rows = streamKnownRows(known, true, CONTACT_PAGE_SIZE);
   const { chunkCount, offsets } = offsetsFor(rows);
   const band = streamBand({
     chunkCount,
@@ -138,7 +138,7 @@ test('scrolling near the end of the loaded contacts asks for the next window', (
 
 test('only the rows near the viewport are in the page, however deep the stream goes', () => {
   const known = CONTACT_PAGE_SIZE * 40;
-  const rows = streamKnownRows(known, true);
+  const rows = streamKnownRows(known, true, CONTACT_PAGE_SIZE);
   const { chunkCount, offsets } = offsetsFor(rows);
   const windows = new Map<number, string[]>();
   for (let offset = 0; offset < known; offset += CONTACT_PAGE_SIZE)
@@ -157,21 +157,31 @@ test('only the rows near the viewport are in the page, however deep the stream g
       viewportHeight: VIEWPORT,
     });
     const mounted: string[] = [];
+    let reserved = 0;
     for (let index = band.first; index <= band.last; index++) {
+      const start = index * STREAM_CHUNK_ROWS;
       const chunk = streamChunkRows(
         windows,
-        index * STREAM_CHUNK_ROWS,
+        start,
         STREAM_CHUNK_ROWS,
         CONTACT_PAGE_SIZE,
       );
-      // The last chunk of the stream stands for the window the read is about to fetch: it is a
-      // reservation, and it is the only one the page holds.
-      if (index * STREAM_CHUNK_ROWS >= known) {
-        assert.equal(chunk, null, `chunk ${index} is the next window`);
+      // The chunks the window in flight fills stand for it as reservations instead of drawing a
+      // part of themselves: they are the skeletons, and there is more than the one straddling the
+      // last loaded row, because the whole arriving window is reserved.
+      if (chunk === null) {
+        assert.ok(
+          start + STREAM_CHUNK_ROWS > known,
+          `chunk ${index} touches the window in flight`,
+        );
+        reserved++;
         continue;
       }
-      assert.notEqual(chunk, null, `chunk ${index} is read`);
-      mounted.push(...(chunk ?? []));
+      assert.ok(
+        start + STREAM_CHUNK_ROWS <= known + CONTACT_PAGE_SIZE,
+        `chunk ${index} is inside the read rows`,
+      );
+      mounted.push(...chunk);
     }
     // The band holds the viewport and its overscan, never the rows above or below it.
     assert.ok(mounted.length > 0);
@@ -180,13 +190,74 @@ test('only the rows near the viewport are in the page, however deep the stream g
         Math.ceil((VIEWPORT + 2 * 800) / ROW_PX) + 2 * STREAM_CHUNK_ROWS,
       `${mounted.length} rows mounted at row ${row}`,
     );
-    // The reserved space is the rest of the stream: the page keeps one scroll length, counting
-    // the chunk the next window will fill.
-    const tail =
-      band.last * STREAM_CHUNK_ROWS >= known ? ROW_PX * STREAM_CHUNK_ROWS : 0;
+    // The reserved space is the rest of the stream: the band's own rows plus the chunks it leaves
+    // reserved over one scroll length that also counts the window in flight.
     assert.equal(
-      band.top + mounted.length * ROW_PX + tail + band.bottom,
+      band.top +
+        mounted.length * ROW_PX +
+        reserved * ROW_PX * STREAM_CHUNK_ROWS +
+        band.bottom,
       offsets[chunkCount],
     );
   }
+});
+
+// The window in flight as the contact directory reads it: the rows its reads reached plus the
+// window it pages next, so the skeleton the page draws is the rows that land on it.
+test('the window the directory is about to read is reserved whole, as its skeleton', () => {
+  const known = CONTACT_PAGE_SIZE * 2;
+  const rows = streamKnownRows(known, true, CONTACT_PAGE_SIZE);
+  // The space reserved past the read rows is the arriving window itself, not one row.
+  assert.equal(rows - known, CONTACT_PAGE_SIZE);
+  const chunkCount = streamChunkCount(rows, STREAM_CHUNK_ROWS);
+  const windows = new Map<number, readonly string[]>();
+  for (let offset = 0; offset < known; offset += CONTACT_PAGE_SIZE)
+    windows.set(
+      offset,
+      Array.from(
+        { length: CONTACT_PAGE_SIZE },
+        (_, index) => `${ROW_TEXT} ${offset + index}`,
+      ),
+    );
+  const skeletons = new Map<number, number>();
+  for (let index = 0; index < chunkCount; index++) {
+    const start = index * STREAM_CHUNK_ROWS;
+    if (
+      streamChunkRows(
+        windows,
+        start,
+        STREAM_CHUNK_ROWS,
+        CONTACT_PAGE_SIZE,
+        rows,
+      ) !== null
+    )
+      continue;
+    // The count the page passes: the rows this chunk draws once its window arrives.
+    skeletons.set(
+      index,
+      Math.min(STREAM_CHUNK_ROWS, Math.max(0, rows - start)),
+    );
+  }
+  // A window in flight is a skeleton per chunk it fills, not one row of it.
+  assert.ok(skeletons.size > 1, `${skeletons.size} reserved chunks`);
+  // The window arrives: every skeleton is replaced by exactly the rows it stood for.
+  windows.set(
+    known,
+    Array.from(
+      { length: CONTACT_PAGE_SIZE },
+      (_, index) => `${ROW_TEXT} ${known + index}`,
+    ),
+  );
+  for (const [index, count] of skeletons)
+    assert.equal(
+      streamChunkRows(
+        windows,
+        index * STREAM_CHUNK_ROWS,
+        STREAM_CHUNK_ROWS,
+        CONTACT_PAGE_SIZE,
+        rows,
+      )?.length,
+      count,
+      `chunk ${index} lands on its reservation`,
+    );
 });

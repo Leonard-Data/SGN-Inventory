@@ -93,11 +93,17 @@ export function streamChunkCount(
 }
 
 // The rows a stream can account for when its read pages by cursor and states no total: the rows
-// it has reached, plus one row standing for the next window while a further one exists. The
-// arithmetic then counts the chunk that window will fill, so the stream reserves the space the
-// rows about to arrive land on instead of growing a jump later.
-export function streamKnownRows(known: number, more: boolean): number {
-  return Math.max(0, known) + (more ? 1 : 0);
+// it has reached, plus the window it is about to read while a further one exists. The arithmetic
+// then counts every chunk that window will fill, so the stream reserves the space the arriving
+// rows land on - the skeleton stands in for exactly those rows - instead of growing a jump later.
+// `arriving` is the read length the caller pages with; a caller that states none reserves the one
+// chunk the next row falls in.
+export function streamKnownRows(
+  known: number,
+  more: boolean,
+  arriving = 1,
+): number {
+  return Math.max(0, known) + (more ? Math.max(1, arriving) : 0);
 }
 
 // The height of every chunk: what the browser measured, the average of what it measured for the

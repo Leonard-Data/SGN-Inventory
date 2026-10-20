@@ -70,28 +70,78 @@ test('the properties list reads the shared arithmetic rather than a copy of it',
 });
 
 test('a cursor read accounts for the rows it reached plus the window it is about to read', () => {
-  assert.equal(streamKnownRows(0, false), 0);
-  // Before the read answers, or while a further window exists, one row stands for it, so the
-  // chunk that window will fill is counted and reserved.
+  assert.equal(streamKnownRows(0, false, PAGE), 0);
+  // While a further window exists, the read length the caller pages with is reserved, so every
+  // chunk that window will fill is counted and stands in for the rows that land on it.
+  assert.equal(streamKnownRows(0, true, PAGE), PAGE);
+  assert.equal(streamKnownRows(PAGE, true, PAGE), PAGE * 2);
+  assert.equal(streamKnownRows(PAGE * 4, false, PAGE), PAGE * 4);
+  // A caller that states no read length still reserves the one chunk its next row falls in.
   assert.equal(streamKnownRows(0, true), 1);
-  assert.equal(streamKnownRows(PAGE, true), PAGE + 1);
-  assert.equal(streamKnownRows(PAGE * 4, false), PAGE * 4);
   // A raise never shortens the stream, and a negative reach is refused rather than reserved.
-  assert.equal(streamKnownRows(-4, false), 0);
+  assert.equal(streamKnownRows(-4, false, PAGE), 0);
 });
 
-test('a stream that pages by cursor counts the chunk the next window fills', () => {
+test('a stream that pages by cursor counts every chunk the next window fills', () => {
   // Two full windows: rows 0..59 are here and the read has another window to give.
   const known = PAGE * 2;
   assert.equal(streamChunkCount(known), 5);
-  assert.equal(streamChunkCount(streamKnownRows(known, true)), 6);
+  // The window about to arrive is thirty rows: the chunks it fills are reserved, not just the one
+  // the next row falls in, so the skeleton is the size of the rows that land on them.
+  assert.equal(streamChunkCount(streamKnownRows(known, true, PAGE)), 8);
+  assert.equal(streamKnownRows(known, true, PAGE) - known, PAGE);
   // Rows 0..47 fill four chunks exactly, so without the next window the fifth chunk would not be
   // reserved at all and the arriving rows would push the page down.
   const aligned = CHUNK * 4;
   assert.equal(streamChunkCount(aligned), 4);
+  assert.equal(streamChunkCount(streamKnownRows(aligned, true, PAGE)), 7);
   assert.equal(streamChunkCount(streamKnownRows(aligned, true)), 5);
   // At the end of the stream the rows themselves are the whole account.
-  assert.equal(streamChunkCount(streamKnownRows(aligned, false)), 4);
+  assert.equal(streamChunkCount(streamKnownRows(aligned, false, PAGE)), 4);
+});
+
+test('a window in flight is a skeleton the size of the rows that land on it', () => {
+  const known = PAGE * 3;
+  const rows = streamKnownRows(known, true, PAGE);
+  const chunkCount = streamChunkCount(rows, CHUNK);
+  const windows = new Map<number, readonly string[]>(
+    Array.from({ length: known / PAGE }, (_, window) => [
+      window * PAGE,
+      Array.from(
+        { length: PAGE },
+        (_, index) => `row-${window * PAGE + index}`,
+      ),
+    ]),
+  );
+  // The space reserved past the rows the read reached is the window about to arrive, not one row.
+  assert.equal(rows - known, PAGE);
+  const skeletons = new Map<number, number>();
+  for (let index = 0; index < chunkCount; index++) {
+    const start = index * CHUNK;
+    if (streamChunkRows(windows, start, CHUNK, PAGE, rows) !== null) {
+      assert.ok(
+        start + CHUNK <= known,
+        `chunk ${index} is inside the read rows`,
+      );
+      continue;
+    }
+    // The count the directories pass: the rows this chunk draws once its window arrives.
+    skeletons.set(index, Math.min(CHUNK, Math.max(0, rows - start)));
+  }
+  // Every chunk the arriving window fills is reserved, not only the one the next row falls in.
+  assert.ok(skeletons.size > 1, `${skeletons.size} reserved chunks`);
+  // The window arrives: each reserved chunk draws exactly the rows its skeleton stood for, so the
+  // list neither looked finished while it loaded nor moved when the rows landed.
+  windows.set(
+    known,
+    Array.from({ length: PAGE }, (_, index) => `row-${known + index}`),
+  );
+  for (const [index, count] of skeletons)
+    assert.equal(
+      streamChunkRows(windows, index * CHUNK, CHUNK, PAGE, rows)?.length,
+      count,
+      `chunk ${index} lands on its reservation`,
+    );
 });
 
 test('scrolling to the end of the loaded rows asks for the next window, and no further', () => {
