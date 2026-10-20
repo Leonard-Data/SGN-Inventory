@@ -188,13 +188,13 @@ export async function transitionCorrection(
         .select('property_id')
         .eq('id', id)
         .maybeSingle();
-      databaseError(readError);
-      return data
-        ? {
-            ok: true,
-            summary: await catalogueSummaryOf(context, data.property_id),
-          }
-        : { ok: true };
+      // The maintenance is committed by now, so an unreadable property id leaves the summary
+      // unknown rather than reporting the applied correction as a failure.
+      if (readError || !data) return { ok: true };
+      return {
+        ok: true,
+        summary: await catalogueSummaryOf(context, data.property_id),
+      };
     }
   }
   return { ok: true };

@@ -190,7 +190,7 @@ export function useWindowStream<T>({
     const controller = new AbortController();
     abort.current = controller;
     void read(0, controller.signal, generation.current);
-    return () => controller.abort();
+    return () => abort.current?.abort();
   }, [source, identity, read]);
 
   // The band the page shows again: the windows under it are read if they were dropped, and the
@@ -200,13 +200,21 @@ export function useWindowStream<T>({
     request(needed.current.length ? needed.current : [0], position.current);
   }, [request]);
 
+  // The band the page shows again after something behind it moved: the rows it holds are dropped
+  // and the reads still in flight are superseded, so a window read that started before the change
+  // can never publish the rows it carried.
   const refresh = useCallback(() => {
     setError(null);
+    if (!source) return;
+    generation.current++;
+    abort.current?.abort();
     cache.current = new Map();
+    pending.current = new Set();
     published.current = [];
     setWindows(NO_WINDOWS);
+    abort.current = new AbortController();
     request(needed.current.length ? needed.current : [0], position.current);
-  }, [request]);
+  }, [request, source]);
 
   return {
     windows,
