@@ -19,6 +19,7 @@ const left: InventoryListState = {
   edited: true,
   scrollTop: 4200,
   scrollLeft: 320,
+  pageTop: 96,
 };
 
 // The carrier is bounded to the result set the person is at, which is the one the ticket needs: the
@@ -35,12 +36,14 @@ test('the carrier holds the list a person left, and only that one', () => {
     edited: false,
     scrollTop: 0,
     scrollLeft: 0,
+    pageTop: 0,
   });
   assert.deepEqual(readListState(carrier, other), {
     text: '',
     edited: false,
     scrollTop: 0,
     scrollLeft: 0,
+    pageTop: 0,
   });
   assert.equal(readListState(carrier, address), null);
 });
@@ -52,6 +55,7 @@ test('a list is written whole, so nothing reaches it after the write', () => {
   state.text = 'something else';
   state.scrollTop = 0;
   state.scrollLeft = 0;
+  state.pageTop = 0;
   assert.deepEqual(readListState(carrier, address), left);
 });
 

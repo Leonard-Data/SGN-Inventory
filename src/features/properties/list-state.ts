@@ -19,6 +19,9 @@ export type InventoryListState = {
   // and a table wider than the stream comes back at the column the person was reading.
   scrollTop: number;
   scrollLeft: number;
+  // The document's own offset above the stream: the stream is a bounded scrollport, so the page it
+  // sits in is the other half of what frames the rows the person was looking at.
+  pageTop: number;
 };
 
 // One entry per result-set address: the list a person left is the address they left it at, and a

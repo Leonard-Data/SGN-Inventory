@@ -333,18 +333,21 @@ export function Inventory({
     streamNode.current = node;
     setContainer(node);
   }, []);
-  const [viewport, setViewport] = useState({ top: 0, left: 0, height: 0 });
-  // The stream's own two-axis scroll, read off the node that owns the scrollport: the band is
-  // measured from it and the carrier holds it, so both come from the same reading.
+  const [viewport, setViewport] = useState({ top: 0, left: 0, page: 0, height: 0 });
+  // Where the stream sits: its own two-axis scroll, read off the node that owns the scrollport, and
+  // the document's offset above it. The band is measured from the stream's scroll and the carrier
+  // holds all of it, so what frames the rows comes from one reading.
   const syncViewport = useCallback((node: HTMLDivElement) => {
     const next = {
       top: node.scrollTop,
       left: node.scrollLeft,
+      page: window.scrollY,
       height: node.clientHeight,
     };
     setViewport((current) =>
       current.top === next.top &&
       current.left === next.left &&
+      current.page === next.page &&
       current.height === next.height
         ? current
         : next,
@@ -399,13 +402,18 @@ export function Inventory({
     pending: boolean;
     top: number;
     left: number;
+    page: number;
     short: number;
   }>({
     address: resultLocation,
     pending:
-      restored !== null && (restored.scrollTop > 0 || restored.scrollLeft > 0),
+      restored !== null &&
+      (restored.scrollTop > 0 ||
+        restored.scrollLeft > 0 ||
+        restored.pageTop > 0),
     top: restored?.scrollTop ?? 0,
     left: restored?.scrollLeft ?? 0,
+    page: restored?.pageTop ?? 0,
     short: -1,
   });
   // A new column count or a new result set relabels every chunk, so old measurements describe
@@ -457,12 +465,14 @@ export function Inventory({
     };
     measure();
     node.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('scroll', schedule, { passive: true });
     window.addEventListener('resize', schedule);
     const observer = new ResizeObserver(schedule);
     observer.observe(node);
     return () => {
       if (pending) cancelAnimationFrame(pending);
       node.removeEventListener('scroll', schedule);
+      window.removeEventListener('scroll', schedule);
       window.removeEventListener('resize', schedule);
       observer.disconnect();
     };
@@ -488,8 +498,8 @@ export function Inventory({
   // the browser measured rather than the one asked for: each measurement retries, and a landing
   // that has stopped getting closer is where the stream can actually put the person. A different
   // result-set address is not this position's list at all, so the position is dropped and the new
-  // one opens at its own first rows. The scroll this sets is measured by the stream itself, so the
-  // band follows it.
+  // one opens at its own first rows. The scroll this sets is measured by the stream and by the
+  // document it sits in, so the band follows it and the rows sit where the person left them.
   const restoreReady = positionReady({
     read: ready,
     total,
@@ -505,6 +515,7 @@ export function Inventory({
         pending: false,
         top: 0,
         left: 0,
+        page: 0,
         short: -1,
       };
       if (!node) return;
@@ -516,8 +527,16 @@ export function Inventory({
     if (!open.pending || !restoreReady || !node) return;
     node.scrollTop = open.top;
     node.scrollLeft = open.left;
-    const landed = { top: node.scrollTop, left: node.scrollLeft };
-    const reached = landed.top === open.top && landed.left === open.left;
+    window.scrollTo(0, open.page);
+    const landed = {
+      top: node.scrollTop,
+      left: node.scrollLeft,
+      page: window.scrollY,
+    };
+    const reached =
+      landed.top === open.top &&
+      landed.left === open.left &&
+      landed.page === open.page;
     opening.current =
       reached || landed.top === open.short
         ? {
@@ -525,6 +544,7 @@ export function Inventory({
             pending: false,
             top: 0,
             left: 0,
+            page: 0,
             short: -1,
           }
         : { ...open, short: landed.top };
@@ -535,9 +555,15 @@ export function Inventory({
     setViewport((current) =>
       current.top === landed.top &&
       current.left === landed.left &&
+      current.page === landed.page &&
       current.height === node.clientHeight
         ? current
-        : { top: landed.top, left: landed.left, height: node.clientHeight },
+        : {
+            top: landed.top,
+            left: landed.left,
+            page: landed.page,
+            height: node.clientHeight,
+          },
     );
   }, [container, resultLocation, restoreReady, offsets, syncViewport]);
 
@@ -552,6 +578,7 @@ export function Inventory({
       edited: addressEdited,
       scrollTop: open.pending ? open.top : viewport.top,
       scrollLeft: open.pending ? open.left : viewport.left,
+      pageTop: open.pending ? open.page : viewport.page,
     });
   }, [carrier, resultLocation, typed, addressEdited, viewport]);
 
@@ -1133,8 +1160,8 @@ export function Inventory({
                 className="inventory-stream"
                 ref={bindStream}
                 data-view={shownView}
-                tabIndex={shownView === 'table' ? 0 : undefined}
-                role={shownView === 'table' ? 'region' : undefined}
+                tabIndex={0}
+                role="region"
                 aria-label={text.inventory}
               >
                 {shownView === 'table' ? (
