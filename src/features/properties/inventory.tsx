@@ -402,14 +402,13 @@ export function Inventory({
     [],
   );
   // The position the list was opened at and the address it belongs to: `target` is what still has to
-  // be reached and `landed` is where the last attempt actually put the browser. Until an attempt
-  // has been made, what the stream measures is not where the person was, so the target - not the
-  // measurement - is what the carrier holds. A later address inside the same visit is a different
-  // result set, so the position recorded here is dropped rather than applied to its rows.
+  // be reached, and while it is held it - not the measurement - is what the carrier holds, because
+  // until the restore has landed the stream is not where the person was. A later address inside the
+  // same visit is a different result set, so the position recorded here is dropped rather than
+  // applied to its rows.
   const opening = useRef<{
     address: string;
     target: { top: number; left: number; page: number } | null;
-    landed: { top: number; left: number; page: number } | null;
   }>({
     address: resultLocation,
     target:
@@ -423,7 +422,6 @@ export function Inventory({
             page: restored.pageTop,
           }
         : null,
-    landed: null,
   });
   // A new column count or a new result set relabels every chunk, so old measurements describe
   // rows the chunk no longer holds and are dropped; the mounted chunks measure themselves again.
@@ -505,12 +503,14 @@ export function Inventory({
   // that is not there yet and would land on rows the person never saw, so the target is held while
   // the stream's reserved height grows toward it - one attempt per measurement round, each one
   // publishing the position the browser actually measured rather than the one asked for - until it
-  // lands on every axis. A person who scrolls while it is still settling keeps their own position:
-  // the stream is no longer where the last attempt left it, and only the stream's own clamp onto a
-  // shorter reserved height is not a scroll the person made. A different result-set address is not
-  // this position's list at all, so the position is dropped and the new one opens at its own first
-  // rows. The scroll this sets is measured by the stream and by the document it sits in, so the
-  // band follows it and the rows sit where the person left them.
+  // is actually sitting on every axis. Reaching it is read on the next round rather than on the
+  // value the assignment returned, because a layout change in the same commit can clamp or re-anchor
+  // the position the browser had just accepted. A person who scrolls while it is still settling
+  // keeps their own position, which is what ends the restore; the browser adjusting the stream under
+  // them as a chunk measures is not. A different result-set address is not this position's list at
+  // all, so the position is dropped and the new one opens at its own first rows. The scroll this
+  // sets is measured by the stream and by the document it sits in, so the band follows it and the
+  // rows sit where the person left them.
   const restoreReady = positionReady({
     read: ready,
     total,
@@ -521,11 +521,7 @@ export function Inventory({
     const open = opening.current;
     const node = streamNode.current;
     if (open.address !== resultLocation) {
-      opening.current = {
-        address: resultLocation,
-        target: null,
-        landed: null,
-      };
+      opening.current = { address: resultLocation, target: null };
       if (!node) return;
       node.scrollTop = 0;
       node.scrollLeft = 0;
@@ -534,17 +530,18 @@ export function Inventory({
     }
     const target = open.target;
     if (!target || !restoreReady || !node) return;
-    const clamp = Math.max(
-      0,
-      (offsets[offsets.length - 1] ?? 0) - node.clientHeight,
-    );
+    // The position is held once the stream has reserved the height for it and the browser is
+    // sitting on it. A target past that height is clamped by the browser, and the rounds that
+    // measure the chunks around it ask again; deciding this on the next round rather than on what
+    // the assignment returned is what makes a narrow reservation - or one that shrinks again in the
+    // same commit - a retry rather than a landing, and leaves the person's own scroll alone.
+    const reserved = offsets[offsets.length - 1] ?? 0;
     if (
-      open.landed !== null &&
-      ((node.scrollTop !== open.landed.top && node.scrollTop !== clamp) ||
-        node.scrollLeft !== open.landed.left ||
-        window.scrollY !== open.landed.page)
+      node.scrollTop === target.top &&
+      node.scrollLeft === target.left &&
+      window.scrollY === target.page
     ) {
-      opening.current = { ...open, target: null };
+      if (reserved > target.top) opening.current = { ...open, target: null };
       return;
     }
     node.scrollTop = target.top;
@@ -554,16 +551,6 @@ export function Inventory({
       top: node.scrollTop,
       left: node.scrollLeft,
       page: window.scrollY,
-    };
-    opening.current = {
-      address: resultLocation,
-      target:
-        landed.top === target.top &&
-        landed.left === target.left &&
-        landed.page === target.page
-          ? null
-          : target,
-      landed,
     };
     // The band is computed from what the stream measured, and the position just set is what it
     // measures next: stating it here keeps the stream from asking for the rows at the top of a list
@@ -583,16 +570,47 @@ export function Inventory({
           },
     );
   }, [container, resultLocation, restoreReady, offsets, syncViewport]);
+  // Scrolling is the person's own, so the input that scrolls - a wheel, a touch, a scroll key, or a
+  // press on the scrollport's scrollbar - ends the restore and the position they take is the one
+  // they keep. The browser's own adjustment as a chunk measures moves the same scroll without them.
+  useEffect(() => {
+    const scrollKeys = new Set([
+      'ArrowUp',
+      'ArrowDown',
+      'PageUp',
+      'PageDown',
+      'Home',
+      'End',
+      ' ',
+    ]);
+    const end = () => {
+      const open = opening.current;
+      if (open.target !== null) opening.current = { ...open, target: null };
+    };
+    const key = (event: KeyboardEvent) => {
+      if (scrollKeys.has(event.key)) end();
+    };
+    const listening = { passive: true } as const;
+    window.addEventListener('wheel', end, listening);
+    window.addEventListener('touchmove', end, listening);
+    window.addEventListener('pointerdown', end, listening);
+    window.addEventListener('keydown', key);
+    return () => {
+      window.removeEventListener('wheel', end);
+      window.removeEventListener('touchmove', end);
+      window.removeEventListener('pointerdown', end);
+      window.removeEventListener('keydown', key);
+    };
+  }, []);
 
   // The list is kept in the carrier as it is used, so the address the person is looking at already
   // holds it when they come back. Written on every position change so navigation while mounted
-  // always leaves the latest position behind. What the stream measured is what is held from the
-  // first attempt onwards - a person who scrolls over a position that has not settled keeps their
-  // own scroll - and before that the target, so a return never loses the position it is restoring.
+  // always leaves the latest position behind. While a restore is still pending, the target is what
+  // is held, so a return never loses the position it is restoring; moving the list ends the restore
+  // first, so what the person scrolled to is what is kept.
   useEffect(() => {
     const open = opening.current;
-    const place =
-      open.target !== null && open.landed === null ? open.target : viewport;
+    const place = open.target !== null ? open.target : viewport;
     writeListState(carrier, resultLocation, {
       text: typed,
       edited: addressEdited,
