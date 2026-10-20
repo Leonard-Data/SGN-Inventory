@@ -1,6 +1,7 @@
 'use client';
 import {
   useCallback,
+  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -22,6 +23,7 @@ import { SearchIsland } from './search-island';
 import { useInventoryStream } from './use-inventory-stream';
 import { useCatalogue } from './catalogue-provider';
 import { localAddressQuery, matchCatalogue } from './address-index';
+import type { CatalogueMatch } from './address-index';
 import {
   activeFilterCount,
   filterParams,
@@ -55,8 +57,9 @@ import { SUMMARY_TABLE_COLUMNS } from './table';
 import type { PropertySummary } from './types';
 
 const NO_MEASURED: ReadonlyMap<number, number> = new Map();
+const NO_FORMATS: ReadonlyMap<string, string> = new Map();
 // A typed search the loaded catalogue cannot answer yet: no rows to filter, not a failed read.
-const NO_MATCHES: PropertySummary[] = [];
+const NO_MATCHES: CatalogueMatch[] = [];
 
 // The viewport query behind the switch: below this width the ten-column table is not offered at
 // all, so nobody lands on a table that cannot work there.
@@ -145,7 +148,17 @@ export function Inventory({
   // all: the rule lives in `address-index.ts` so it is tested without a browser. Local filtering is
   // offered for the ordinary browse only, because a chronological ordering or a filter set names a
   // result set the loaded page cannot state (issue #194).
-  const localQuery = localAddressQuery(typed, addressEdited, sort, filterCount);
+  //
+  // The typed value renders immediately and the heavier local match runs at a lower priority, so
+  // Vietnamese text composition stays responsive and no request is made either way. Measurement
+  // decides whether the work later moves to a Web Worker (#195).
+  const deferredTyped = useDeferredValue(typed);
+  const localQuery = localAddressQuery(
+    deferredTyped,
+    addressEdited,
+    sort,
+    filterCount,
+  );
   const localActive = localQuery !== null;
   // The local answer exists only when the page it filters is actually here. A load still running
   // or one that failed states that instead, never a filtered result over rows the browser does not
@@ -157,6 +170,20 @@ export function Inventory({
       ? matchCatalogue(catalogue.index, localQuery)
       : NO_MATCHES;
   }, [localActive, localReady, catalogue.index, localQuery]);
+  // The rows the local answer holds, and the stored format each one matched through. The format is
+  // only stated while a query is actually filtering: an empty box lists every loaded property and
+  // has no match to explain.
+  const matchedRows = useMemo(
+    () => matches?.map((match) => match.record) ?? null,
+    [matches],
+  );
+  const matchedFormats = useMemo(
+    () =>
+      matches && localQuery
+        ? new Map(matches.map((match) => [match.record.id, match.format]))
+        : NO_FORMATS,
+    [matches, localQuery],
+  );
   const [filtersOpen, setFiltersOpen] = useState(false);
   const sessionKey = session
     ? `${renderedSession(session.employee)}:${session.accessRevision}`
@@ -184,8 +211,8 @@ export function Inventory({
   // shape either way.
   const local = matches !== null;
   const shownWindows = useMemo(
-    () => (matches !== null ? localStreamWindows(matches) : windows),
-    [matches, windows],
+    () => (matchedRows !== null ? localStreamWindows(matchedRows) : windows),
+    [matchedRows, windows],
   );
   // The measured column count: the card grid the stream lays out, and the chunk size in whole
   // rows of it, so a chunk boundary never leaves a half-filled row behind.
@@ -793,6 +820,7 @@ export function Inventory({
                         reserved={heights[index] ?? STREAM_ESTIMATE_PX}
                         locale={locale}
                         resultLocation={resultLocation}
+                        matchedFormats={matchedFormats}
                         onOpen={openDrawer}
                         onMeasured={reportHeight}
                       />
@@ -827,6 +855,7 @@ export function Inventory({
                         locale={locale}
                         resultLocation={resultLocation}
                         showEntry={showEntry}
+                        matchedFormats={matchedFormats}
                         onDenied={denyFiles}
                         onOpen={openDrawer}
                         onMeasured={reportHeight}

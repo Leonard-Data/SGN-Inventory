@@ -33,6 +33,7 @@ export const PropertyCard = memo(function PropertyCard({
   onDenied,
   onQuickView,
   showEntry = false,
+  matchedFormat,
 }: {
   record: PropertySummary;
   locale: Locale;
@@ -42,6 +43,9 @@ export const PropertyCard = memo(function PropertyCard({
   // call, so closing the quick view returns focus to that same control.
   onQuickView?: (record: PropertySummary, opener: HTMLElement | null) => void;
   showEntry?: boolean;
+  // The stored format a local search matched this property through, stated only when it differs
+  // from the address the card already shows.
+  matchedFormat?: string;
 }) {
   // The chronological views carry the recorded original entry date and the database's Vietnam
   // age. A property the database reports with no date is an explicit unknown, not a missing row.
@@ -95,6 +99,13 @@ export const PropertyCard = memo(function PropertyCard({
               : label(locale, null)}
           </Link>
         </h2>
+        {matchedFormat && matchedFormat !== record.addresses[0]?.format ? (
+          <p className="card-entry">
+            <span className="badge" data-tone="muted">
+              {label(locale, matchedFormat)}
+            </span>
+          </p>
+        ) : null}
         {showEntry ? (
           <p className="card-entry">
             {label(locale, 'entryDate')}:{' '}
