@@ -21,6 +21,13 @@ export type ScopedCatalogue = {
   load: CatalogueLoadState;
 };
 
+// The one catalogue is kept for the whole browser session while its authorized scope holds, so an
+// unchanged scope is never read twice. Every other browser read keeps its own bounded retention
+// instead: the catalogue's unbounded one is deliberate and belongs to this key alone, and a
+// later explicit advanced-search result must not inherit it (issue #193).
+export const CATALOGUE_RETENTION = { staleTime: Infinity, gcTime: Infinity };
+export const BOUNDED_RETENTION = { staleTime: 5 * 60_000, gcTime: 10 * 60_000 };
+
 // The catalogue read's own address: one bounded page after the cursor, and nothing else. The
 // cursor is a position in the identity ordering, never a grant of access to the rows it names.
 function cataloguePageUrl(after: string | null) {
@@ -141,6 +148,9 @@ export type CatalogueLoadOptions = {
   // The state an interrupted generation reached, so Retry continues from the cursor it stopped at
   // instead of reading the whole traversal again. A new generation passes null.
   resume?: CatalogueLoadState | null;
+  // Read the traversal again from the first page even though this scope's finished load is cached.
+  // A committed change the server could not hand back a summary for is read this way.
+  fresh?: boolean;
   now?: () => string;
 };
 
@@ -155,6 +165,9 @@ export async function readCatalogue(
   options: CatalogueLoadOptions,
 ): Promise<ScopedCatalogue> {
   const queryKey = catalogueQueryKey(scope);
+  // A read that has to learn the property's current values again drops the retained traversal
+  // instead of answering with it.
+  if (options.fresh) client.removeQueries({ queryKey });
   client.removeQueries({
     queryKey: ['property-catalogue'],
     predicate: (query) => query.queryHash !== hashKey(queryKey),
@@ -176,8 +189,7 @@ export async function readCatalogue(
         },
       }).then(() => state);
     },
-    staleTime: Infinity,
-    gcTime: Infinity,
+    ...CATALOGUE_RETENTION,
   });
   // A traversal the browser already finished and cached publishes nothing while it is read back,
   // so the state a freshly mounted loader reads is the one that was cached.

@@ -17,6 +17,9 @@ import {
 } from '@/features/property-maintenance/messages';
 import { failureRoute } from '@/features/property-maintenance/refusal-rules';
 import { vietnamTimestamp } from '@/features/properties/format';
+import { applyServerSummary } from '@/features/properties/catalogue-changes';
+import { useCatalogueChange } from '@/features/properties/catalogue-provider';
+import type { PropertySummary } from '@/features/properties/types';
 import { CorrectionDraft } from './draft';
 import { Amendments } from './amendments';
 import { changedValues } from './changes';
@@ -49,6 +52,9 @@ function RequestActions({
   const text = maintenanceText(locale),
     staff = ['staff', 'manager', 'admin'].includes(employee.role);
   const notify = useToast();
+  // An applied correction changed the property through the same maintenance operation, so the
+  // browser's catalogue takes the server's own read of it.
+  const applyChange = useCatalogueChange();
   // The dialog closes on a committed decision, so the confirmation names the decision.
   const decided: Record<string, string> = {
     apply: text.correctionApplied,
@@ -75,11 +81,16 @@ function RequestActions({
     setBusy(true);
     setError(null);
     try {
-      await api('/api/corrections/' + snapshot.id, {
+      const result = await api<{
+        ok: true;
+        summary?: PropertySummary | null;
+      }>('/api/corrections/' + snapshot.id, {
         action,
         requestRevision: snapshot.revision,
         reason,
       });
+      if (action === 'apply')
+        applyServerSummary(applyChange, result, snapshot.property_id);
       notify({ saved: true, message: decided[action] ?? text.requestSaved });
       onSaved();
     } catch (error) {

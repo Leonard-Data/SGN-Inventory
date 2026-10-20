@@ -2,6 +2,7 @@ import 'server-only';
 import type { Json } from '@/types/database';
 import { ApiError, uuid, type RouteContext } from '@/lib/supabase/route';
 import { cursorPair } from '@/lib/supabase/query';
+import { catalogueSummaryOf } from '@/features/properties/catalogue-data';
 import {
   InputError,
   validateChanges,
@@ -85,7 +86,10 @@ export async function createProperty(
     p_address: address,
   });
   databaseError(error);
-  return { id: data };
+  // The catalogue summary comes from the server's own read of the committed record, never from the
+  // submitted facts, so the browser's list can take the change without guessing at it.
+  const id = data as string;
+  return { id, summary: await catalogueSummaryOf(context, id) };
 }
 // An optional explanation is a correction note, not another business field: it is only
 // accepted on an authorized price edit and the database attaches it to that revision's
@@ -130,7 +134,7 @@ export async function maintainProperty(
     rev = revisions(body),
     changed = changes(kind, body.changes),
     explanation = correctionExplanation(body.explanation, kind, changed);
-  const { data, error } = await context.client.rpc('maintain_property', {
+  const { error } = await context.client.rpc('maintain_property', {
     p_property_id: id,
     p_target: kind,
     p_target_id: rev.targetId,
@@ -140,7 +144,9 @@ export async function maintainProperty(
     p_explanation: explanation,
   });
   databaseError(error);
-  return { id: data };
+  // An address edit reindexes the same property, so the summary is read back from the server after
+  // the change rather than assembled from what was submitted.
+  return { id, summary: await catalogueSummaryOf(context, id) };
 }
 export async function contactDetail(context: RouteContext, id: string) {
   if (!uuid(id)) throw new ApiError(400, 'invalid-input');

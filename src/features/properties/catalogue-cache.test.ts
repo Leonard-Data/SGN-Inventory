@@ -12,6 +12,8 @@ import {
   catalogueCountQuery,
   readCatalogue,
   readCatalogueReplacement,
+  BOUNDED_RETENTION,
+  CATALOGUE_RETENTION,
 } from './catalogue-cache.ts';
 import {
   acceptReplacementPage,
@@ -83,15 +85,22 @@ const publicLoad = indexCataloguePage(
   AT,
 );
 const client = () =>
-  new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  new QueryClient({
+    defaultOptions: { queries: { retry: false, ...BOUNDED_RETENTION } },
+  });
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
-function load(client: QueryClient, signal = new AbortController().signal) {
+function load(
+  client: QueryClient,
+  signal = new AbortController().signal,
+  fresh = false,
+) {
   return loadProtected({
     source: (signal, scope) =>
       readCatalogue(client, signal, scope, {
         publish: () => {},
         generationId: 'generation-1',
+        fresh,
         now: () => AT,
       }),
     signal,
@@ -100,6 +109,31 @@ function load(client: QueryClient, signal = new AbortController().signal) {
     onIdentityChange: () => {},
   });
 }
+
+test('the catalogue keeps its own unbounded retention while other reads stay bounded', async (t) => {
+  const cache = client();
+  t.after(() => cache.clear());
+  t.mock.method(globalThis, 'fetch', async (path: string) => {
+    if (path === '/api/session') return Response.json(reviewer);
+    return Response.json(privatePage);
+  });
+  await load(cache);
+  // The one catalogue entry is retained for the whole session; the client's own defaults are the
+  // bounded policy a detail or advanced-search read inherits instead (issue #193).
+  const [catalogue] = cache.getQueryCache().getAll();
+  assert.equal(catalogue?.options.gcTime, Infinity);
+  assert.equal(CATALOGUE_RETENTION.gcTime, Infinity);
+  assert.equal(CATALOGUE_RETENTION.staleTime, Infinity);
+  assert.equal(BOUNDED_RETENTION.gcTime, 10 * 60_000);
+  assert.equal(BOUNDED_RETENTION.staleTime, 5 * 60_000);
+  const bounded = await cache.fetchQuery({
+    queryKey: ['advanced-search'],
+    queryFn: async () => 1,
+  });
+  assert.equal(bounded, 1);
+  const other = cache.getQueryCache().find({ queryKey: ['advanced-search'] });
+  assert.equal(other?.options.gcTime, BOUNDED_RETENTION.gcTime);
+});
 
 test('a stable protected scope reuses the catalogue across route reads', async (t) => {
   const cache = client();
@@ -116,6 +150,28 @@ test('a stable protected scope reuses the catalogue across route reads', async (
   assert.deepEqual(first.data, { scope: reviewer, load: privateLoad });
   assert.deepEqual(returned.data, first.data);
   assert.equal(catalogueReads, 1);
+});
+
+test('a committed change the server could not read back re-reads the catalogue', async (t) => {
+  const cache = client();
+  t.after(() => cache.clear());
+  let catalogueReads = 0;
+  t.mock.method(globalThis, 'fetch', async (path: string) => {
+    if (path === '/api/session') return Response.json(reviewer);
+    assert.equal(path, '/api/properties/catalogue');
+    catalogueReads++;
+    return Response.json(catalogueReads === 1 ? privatePage : publicPage);
+  });
+  await load(cache);
+  assert.deepEqual((await load(cache)).data?.load, privateLoad);
+  assert.equal(catalogueReads, 1);
+  // The recovery read goes back to the server instead of answering with the retained traversal, so
+  // the row the server no longer carries is gone rather than silently kept.
+  assert.deepEqual((await load(cache, undefined, true)).data, {
+    scope: reviewer,
+    load: publicLoad,
+  });
+  assert.equal(catalogueReads, 2);
 });
 
 test('changing employee, role or revision discards the former catalogue', async (t) => {
