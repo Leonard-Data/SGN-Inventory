@@ -24,12 +24,17 @@ export type InventoryListState = {
   pageTop: number;
 };
 
-// One entry per result-set address: the list a person left is the address they left it at, and a
-// different result set is a different list.
-export type ListStateCarrier = Map<string, InventoryListState>;
+// The list a person left, held as one slot: the address it belongs to and the state itself. Only the
+// result set the person is at is held - the one they are looking at is the one they come back to -
+// so leaving one list for another replaces it rather than keeping a history of every result set
+// visited, and a state read under any other address reads as never left.
+export type ListStateCarrier = {
+  address: string | null;
+  state: InventoryListState | null;
+};
 
 export function newListStateCarrier(): ListStateCarrier {
-  return new Map();
+  return { address: null, state: null };
 }
 
 // What the carrier holds for one result set, or null when the list was never left there.
@@ -37,20 +42,18 @@ export function readListState(
   carrier: ListStateCarrier,
   address: string,
 ): InventoryListState | null {
-  return carrier.get(address) ?? null;
+  return carrier.address === address ? carrier.state : null;
 }
 
 // The state is written whole and copied, so a list read back is the list that was written and a
 // later change to the writer's own object never reaches the carrier.
-// Bound carrier: only ever keep one entry (the active one). This satisfies the ticket requirement
-// perfectly: only the current result set needs to be preserved across navigation.
 export function writeListState(
   carrier: ListStateCarrier,
   address: string,
   state: InventoryListState,
 ): void {
-  carrier.clear();
-  carrier.set(address, { ...state });
+  carrier.address = address;
+  carrier.state = { ...state };
 }
 
 // What one result set runs, from what the address states and what the box holds: the text the

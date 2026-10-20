@@ -8,7 +8,7 @@ link carries that address back as `returnTo`, so the read behind the list was th
 was lost was the list's own state: the text in the address box (typed, and not necessarily
 submitted, so it was never in the address), and where the stream was scrolled.
 
-We decided that state is held in browser memory above the routes, one entry per result-set address,
+We decided that state is held in browser memory above the routes as the one list the person left,
 in a carrier mounted once in the shared authenticated layout beside the catalogue's own provider
 ([ADR 0003](0003-browser-property-catalogue-and-local-address-search.md)). The list reads its
 opened position from the carrier and writes the list back as it is left, so a visit to a property
@@ -46,5 +46,5 @@ not there yet.
 - A later address inside one visit (another ordering, filter set or view) is a different result set
   and opens at its own first rows; the position applies once, to the list the person opened.
 - The restored position is held until the stream's reserved height reaches it, and that height is
-the stream's own estimate until the chunks around it are measured, so a deep position settles on
-the rows it names as the rows around it are measured rather than in the first frame.
+  the stream's own estimate until the chunks around it are measured, so a deep position settles on
+  the rows it names as the rows around it are measured rather than in the first frame.
