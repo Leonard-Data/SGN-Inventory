@@ -1,6 +1,6 @@
 # Inventory list stream and table view
 
-Status: accepted (2026-10-19)
+Status: accepted (2026-10-19); the ordinary browse and the supported filters now answer from the browser-held catalogue, so the server read described here answers whole-inventory searches ([ADR 0003](0003-browser-property-catalogue-and-local-address-search.md), #194)
 
 The properties list was read one numbered page at a time (`page_inventory`), with a page-size selector and an older cursor trail as separate transports for the same set. A virtualised list cannot express page numbers: the rows the page holds change as a person scrolls, so "page 7" names nothing stable. We decided the list is one stream of everything the filters match. The server orders the whole filtered set — newest created first by default, or the eligible oldest-first/newest-first entry chronology — and answers consecutive windows of about a hundred rows at the window's own offset, stating the matching total on the same read. The browser reserves the whole stream's estimated height and keeps only the rows near the viewport in the page. Numbered pages, the page-size parameter and the cursor trail are removed from the address; the result view (`view=`, cards or table) is carried beside the search, the ordering and the filters, so switching views or applying a filter keeps the result set and never changes the read.
 
