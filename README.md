@@ -59,7 +59,8 @@ The list is one continuous result set, not pages: the plain browse and every fil
 holds the fields for are ordered, filtered and paged in the browser from the loaded rows and issue no
 request at all, while a whole-inventory search is read window by window from the server as the page
 scrolls. Only the rows near the viewport are mounted, and the matching count comes from the same rows
-or read that answers each window. There are no page numbers, no page size and no cursor trail
+the browser holds or from the read that answers each window. There are no page numbers, no page size
+and no cursor trail
 ([ADR 0002](docs/adr/0002-inventory-list-stream-and-table-view.md),
 [ADR 0003](docs/adr/0003-browser-property-catalogue-and-local-address-search.md)).
 

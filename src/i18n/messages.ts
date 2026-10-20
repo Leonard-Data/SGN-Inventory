@@ -123,7 +123,7 @@ const vi = {
   search: 'Tìm địa chỉ hoặc mã hồ sơ',
   searchHint:
     'Nhập một đoạn địa chỉ liền nhau hoặc một mã hồ sơ; không cần dấu. % và _ là ký tự thường, không phải ký tự đại diện.',
-  queryTooLong: 'Địa chỉ tìm kiếm tối đa 120 ký tự.',
+  queryTooLong: 'Địa chỉ hoặc mã hồ sơ tìm kiếm tối đa 120 ký tự.',
   sortLabel: 'Thứ tự',
   sortDefault: 'Mới tạo gần đây',
   sortOldest: 'Ngày nhập kho: cũ nhất trước',
@@ -998,7 +998,8 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     search: 'Search address or property code',
     searchHint:
       'Enter a contiguous address fragment or a property code; accents are optional. % and _ are literal characters, not wildcards.',
-    queryTooLong: 'Search addresses must be at most 120 characters.',
+    queryTooLong:
+      'Search addresses or property codes must be at most 120 characters.',
     sortLabel: 'Order',
     sortDefault: 'Newest created first',
     sortOldest: 'Oldest inventory entry first',
