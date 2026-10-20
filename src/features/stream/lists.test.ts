@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { localStreamWindows, streamChunkRows } from './window.ts';
 
 const source = (path: string) =>
   readFileSync(new URL(path, import.meta.url), 'utf8');
@@ -33,13 +34,23 @@ test('every streamed list reads the shared hook and the shared geometry', () => 
     assert.match(list, /height=\{layout\.band\.top\}/);
     assert.match(list, /height=\{layout\.band\.bottom\}/);
   }
-  // The properties list is untouched by the extraction: it still reads the stream its own way, and
-  // it draws the windows it holds - the stream's own, or the ones a local address filter built
-  // from the catalogue page the browser already has (ADR 0003).
   assert.match(INVENTORY, /useInventoryStream\(\{/);
-  assert.match(
-    INVENTORY,
-    /streamChunkRows\(shownWindows, index \* chunkRows, chunkRows\)/,
+});
+
+test('local property matches draw the final partial chunk instead of a skeleton', () => {
+  const matches = Array.from({ length: 200 }, (_, id) => ({ id }));
+  assert.deepEqual(
+    streamChunkRows(localStreamWindows(matches), 192, 12, 100, matches.length),
+    [
+      { id: 192 },
+      { id: 193 },
+      { id: 194 },
+      { id: 195 },
+      { id: 196 },
+      { id: 197 },
+      { id: 198 },
+      { id: 199 },
+    ],
   );
 });
 

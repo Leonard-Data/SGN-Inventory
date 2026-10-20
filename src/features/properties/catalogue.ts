@@ -127,9 +127,7 @@ export function parseCatalogueCursor(
   params: URLSearchParams,
 ): { ok: true; after: string | null } | { ok: false } {
   const after = params.get('after');
-  // An empty cursor is no cursor, exactly as an empty filter is no filter; a value that is not a
-  // property identity is refused instead of being read as a different position.
-  if (after === null || after === '') return { ok: true, after: null };
+  if (after === null) return { ok: true, after: null };
   return isUuid(after) ? { ok: true, after } : { ok: false };
 }
 
@@ -158,9 +156,8 @@ export function catalogueFailure(code: string | undefined): {
 // The cursor the page after this one starts after: the last identity this page carried, or null
 // when this page ended the traversal. A full page may still be the last one, so the following read
 // decides rather than this one.
-export function nextCatalogueCursor(
-  ids: readonly string[],
-  pageSize = CATALOGUE_PAGE_SIZE,
-): string | null {
-  return ids.length >= pageSize ? (ids[ids.length - 1] ?? null) : null;
+export function nextCatalogueCursor(ids: readonly string[]): string | null {
+  return ids.length >= CATALOGUE_PAGE_SIZE
+    ? (ids[ids.length - 1] ?? null)
+    : null;
 }

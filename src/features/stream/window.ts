@@ -276,11 +276,10 @@ export function streamChunkRows<T>(
 // for the stream without a read behind it.
 export function localStreamWindows<T>(
   rows: readonly T[],
-  pageSize = STREAM_PAGE_SIZE,
 ): ReadonlyMap<number, T[]> {
   const windows = new Map<number, T[]>();
-  for (let offset = 0; offset < rows.length; offset += pageSize)
-    windows.set(offset, rows.slice(offset, offset + pageSize));
+  for (let offset = 0; offset < rows.length; offset += STREAM_PAGE_SIZE)
+    windows.set(offset, rows.slice(offset, offset + STREAM_PAGE_SIZE));
   return windows;
 }
 

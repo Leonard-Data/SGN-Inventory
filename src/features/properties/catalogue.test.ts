@@ -195,7 +195,6 @@ const cursor = (values: Record<string, string>) =>
 
 test('an absent cursor is the first page and a mangled one is refused', () => {
   assert.deepEqual(cursor({}), { ok: true, after: null });
-  assert.deepEqual(cursor({ after: '' }), { ok: true, after: null });
   assert.deepEqual(cursor({ after: PROPERTY_ID }), {
     ok: true,
     after: PROPERTY_ID,
@@ -203,6 +202,7 @@ test('an absent cursor is the first page and a mangled one is refused', () => {
   // The cursor is a position in one ordering, so a value that names no position is refused rather
   // than read as a different page.
   for (const value of [
+    '',
     '1',
     'not-a-uuid',
     `${PROPERTY_ID} or true`,
@@ -238,6 +238,7 @@ test('the read answers one cursor and nothing else in the address', () => {
     { query: 'le loi' },
     { limit: '500' },
     { page: '2' },
+    { after: '' },
     { after: 'nonsense' },
     { after: PROPERTY_ID, query: '' },
   ] as Record<string, string>[])

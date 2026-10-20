@@ -53,13 +53,12 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
   );
   return (
     <QueryClientProvider client={queryClient}>
-      <CatalogueLoader />
-      {children}
+      <CatalogueLoader>{children}</CatalogueLoader>
     </QueryClientProvider>
   );
 }
 
-function CatalogueLoader() {
+function CatalogueLoader({ children }: { children: ReactNode }) {
   // The authorized context the catalogue belongs to: the employee's own identity and the
   // server-maintained access revision, both read from the session the application already
   // authorizes on. An access change moves the query key, so a catalogue authorized under other
@@ -112,6 +111,8 @@ function CatalogueLoader() {
     [catalogue.isSuccess, failed, index],
   );
   return (
-    <CatalogueContext.Provider value={state}>{null}</CatalogueContext.Provider>
+    <CatalogueContext.Provider value={state}>
+      {children}
+    </CatalogueContext.Provider>
   );
 }

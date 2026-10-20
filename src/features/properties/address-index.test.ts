@@ -125,28 +125,66 @@ test('a query the loaded page does not answer is an empty result, never an error
   assert.deepEqual(matchCatalogue([], 'le loi'), []);
 });
 
-test('only a text the page is not already showing filters the loaded catalogue locally', () => {
-  // Typing a text the page is not showing is the local filter; the address box keeps the text it
-  // was given, and the read behind the page is never rebuilt from it.
-  assert.equal(localAddressQuery('le loi', '', null, 0), 'le loi');
-  assert.equal(localAddressQuery('  le loi  ', '', null, 0), 'le loi');
-  // The search the page is already showing is the server search over the whole inventory, so it is
-  // not also filtered locally; whitespace alone is no search at all.
-  assert.equal(localAddressQuery('le loi', 'le loi', null, 0), null);
-  assert.equal(localAddressQuery(' le loi ', 'le loi', null, 0), null);
-  assert.equal(localAddressQuery('   ', '', null, 0), null);
-  // A chronological ordering or a filter set names a result set the loaded page cannot state, so
-  // those keep the server search (issue #194).
-  assert.equal(localAddressQuery('le loi', '', 'oldest', 0), null);
-  assert.equal(localAddressQuery('le loi', '', 'newest', 0), null);
-  assert.equal(localAddressQuery('le loi', '', null, 2), null);
-  // Clearing a box whose page is showing a search filters the whole loaded page, which is not the
-  // same as not filtering at all.
-  assert.equal(localAddressQuery('', 'le loi', null, 0), '');
-  assert.deepEqual(
-    matchCatalogue(index, localAddressQuery('', 'le loi', null, 0)!),
-    [LEGACY, BOTH, OTHER],
-  );
+test('an unedited or submitted search stays on its server result', () => {
+  for (const query of ['', 'le loi', '  le loi  '])
+    assert.equal(localAddressQuery(query, false, null, 0), null);
+});
+
+test('editing, restoring and clearing a basic search stays local until submission', () => {
+  for (const [typed, expected, ids] of [
+    ['le loi', 'le loi', ['2', '3']],
+    ['  le loi  ', 'le loi', ['2', '3']],
+    ['missing street', 'missing street', []],
+    ['', '', ['1', '2', '3']],
+    ['   ', '', ['1', '2', '3']],
+    ['le loi', 'le loi', ['2', '3']],
+  ] as const) {
+    const query = localAddressQuery(typed, true, null, 0);
+    assert.equal(query, expected);
+    assert.deepEqual(
+      matchCatalogue(index, query!).map((record) => record.id),
+      ids,
+    );
+  }
+  assert.equal(localAddressQuery('le loi', false, null, 0), null);
+});
+
+test('chronology and advanced filters keep the server result while typing', () => {
+  for (const typed of ['le loi', '', '   ']) {
+    assert.equal(localAddressQuery(typed, true, 'oldest', 0), null);
+    assert.equal(localAddressQuery(typed, true, 'newest', 0), null);
+    assert.equal(localAddressQuery(typed, true, null, 2), null);
+  }
+});
+
+test('each variant indexes its carried address parts without changing its source text', () => {
+  const record = property('parts', [
+    address('legacy', 'Địa chỉ gốc', {
+      houseNumber: '12A',
+      street: 'Đồng Khởi',
+      district: 'Bình Thạnh',
+      commune: 'Phường 25',
+    }),
+    address('current', 'Địa chỉ hiện tại', {
+      houseNumber: '12A',
+      street: 'Đồng Khởi',
+      commune: 'Phường Bến Thành',
+    }),
+  ]);
+  const indexed = buildAddressIndex([record]);
+  for (const query of [
+    'dia chi goc',
+    '12a',
+    'dong khoi',
+    '12a dong khoi',
+    'binh thanh',
+    'phuong 25',
+    'phuong ben thanh',
+  ])
+    assert.deepEqual(matchCatalogue(indexed, query), [record], query);
+  assert.deepEqual(matchCatalogue(indexed, 'binh thanh phuong ben thanh'), []);
+  assert.equal(indexed[0]?.variants[0]?.addressText, 'Địa chỉ gốc');
+  assert.equal(indexed[0]?.variants[1]?.addressText, 'Địa chỉ hiện tại');
 });
 
 test('a contiguous fragment is what matches, in the order it was recorded', () => {

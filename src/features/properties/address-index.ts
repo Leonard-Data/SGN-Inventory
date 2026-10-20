@@ -19,19 +19,13 @@ export type CatalogueIndexEntry = {
   variants: CatalogueAddressVariant[];
 };
 
-// What the address box filters locally: the text to match, or null when the box is not filtering the
-// loaded catalogue at all. Typing is local and submitting the box is the server search, so a text
-// the page is already showing is not re-filtered, and a chronological ordering or a filter set -
-// which the loaded page cannot state - keeps the server search until the local-filter split is
-// built (issue #194). An empty string is the whole loaded page, never an absence of filtering.
 export function localAddressQuery(
   typed: string,
-  shown: string,
+  edited: boolean,
   sort: string | null,
   filters: number,
 ): string | null {
-  if (typed.trim() === shown.trim() || sort !== null || filters > 0)
-    return null;
+  if (!edited || sort !== null || filters > 0) return null;
   return typed.trim();
 }
 
@@ -58,7 +52,15 @@ export function buildAddressIndex(
     variants: record.addresses.map((address) => ({
       format: address.format,
       addressText: address.addressText,
-      folded: foldAddress(address.addressText),
+      folded: foldAddress(
+        [
+          address.addressText,
+          address.houseNumber,
+          address.street,
+          address.district,
+          address.commune,
+        ].join(' '),
+      ),
     })),
   }));
 }

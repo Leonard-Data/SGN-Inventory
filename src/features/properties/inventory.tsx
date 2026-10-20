@@ -42,6 +42,7 @@ import {
   localStreamWindows,
   STREAM_CHUNK_ROWS,
   STREAM_ESTIMATE_PX,
+  STREAM_PAGE_SIZE,
   streamBand,
   streamChunkCount,
   streamChunkHeights,
@@ -136,17 +137,14 @@ export function Inventory({
     onDenied: denyFiles,
   });
   const [searchError, setSearchError] = useState(false);
-  // The address box: typing narrows the loaded catalogue in the browser, and submitting the box
-  // still runs the server search over the whole inventory. A search the page is already showing is
-  // not re-filtered locally, so the box and the results never describe two different searches at
-  // once (ADR 0003).
   const [typed, setTyped] = useState(initialQuery);
+  const [addressEdited, setAddressEdited] = useState(false);
   const catalogue = useCatalogue();
   // The text the box is filtering the loaded catalogue with, or null when it is not filtering at
   // all: the rule lives in `address-index.ts` so it is tested without a browser. Local filtering is
   // offered for the ordinary browse only, because a chronological ordering or a filter set names a
   // result set the loaded page cannot state (issue #194).
-  const localQuery = localAddressQuery(typed, initialQuery, sort, filterCount);
+  const localQuery = localAddressQuery(typed, addressEdited, sort, filterCount);
   const localActive = localQuery !== null;
   // The local answer exists only when the page it filters is actually here. A load still running
   // or one that failed states that instead, never a filtered result over rows the browser does not
@@ -169,7 +167,7 @@ export function Inventory({
   );
 
   // ── the stream's own geometry ─────────────────────────────────────────────
-  const container = useRef<HTMLDivElement | null>(null);
+  const [container, setContainer] = useState<HTMLDivElement | null>(null);
   const [viewport, setViewport] = useState({ top: 0, height: 0 });
   const [width, setWidth] = useState(0);
   const total = matches !== null ? matches.length : (matching ?? 0);
@@ -248,7 +246,7 @@ export function Inventory({
   // scroll position, the viewport and the container's own width come from the browser rather
   // than from any assumption about the shell above.
   useEffect(() => {
-    const node = container.current;
+    const node = container;
     if (!ready || !node) return;
     let pending = 0;
     const measure = () => {
@@ -280,10 +278,10 @@ export function Inventory({
       window.removeEventListener('resize', schedule);
       observer.disconnect();
     };
-  }, [ready, shownView, busy]);
+  }, [container, ready, shownView, busy]);
   // The width the card grid is laid out in, so the column count is the browser's own answer.
   useEffect(() => {
-    const node = container.current;
+    const node = container;
     if (!ready || !node || shownView !== 'cards') return;
     const read = () =>
       setWidth((current) =>
@@ -293,7 +291,7 @@ export function Inventory({
     const observer = new ResizeObserver(read);
     observer.observe(node);
     return () => observer.disconnect();
-  }, [ready, shownView]);
+  }, [container, ready, shownView]);
   // The band asks the stream for the windows it would show, and tells it which row position it is
   // centred on, so a deep scroll keeps its own windows and drops the far ones. A locally filtered
   // list reads nothing: the rows it draws are already in the browser.
@@ -313,12 +311,18 @@ export function Inventory({
       index <= Math.min(band.last, chunkCount - 1);
       index++
     ) {
-      const rows = streamChunkRows(shownWindows, index * chunkRows, chunkRows);
+      const rows = streamChunkRows(
+        shownWindows,
+        index * chunkRows,
+        chunkRows,
+        STREAM_PAGE_SIZE,
+        total,
+      );
       if (rows === null) continue;
       found.set(index, rows);
     }
     return found;
-  }, [shownWindows, band.first, band.last, chunkCount, chunkRows]);
+  }, [shownWindows, band.first, band.last, chunkCount, chunkRows, total]);
   const mounted = useMemo(() => {
     const indexes: number[] = [];
     for (
@@ -462,7 +466,10 @@ export function Inventory({
                   type="search"
                   autoComplete="off"
                   value={typed}
-                  onChange={(event) => setTyped(event.currentTarget.value)}
+                  onChange={(event) => {
+                    setTyped(event.currentTarget.value);
+                    setAddressEdited(true);
+                  }}
                   aria-invalid={searchError}
                   placeholder={text.search}
                 />
@@ -748,7 +755,7 @@ export function Inventory({
               ) : null}
               <div
                 className="inventory-stream"
-                ref={container}
+                ref={setContainer}
                 data-view={shownView}
                 tabIndex={shownView === 'table' ? 0 : undefined}
                 role={shownView === 'table' ? 'region' : undefined}

@@ -273,9 +273,24 @@ test('rows the browser already holds are published as the windows a read would a
   assert.equal(windows.get(200)?.[49], 'row-249');
   // An empty result set is no window at all, not a window holding nothing.
   assert.equal(localStreamWindows([]).size, 0);
-  // A shorter page length still starts every window at a multiple of it.
-  assert.deepEqual(
-    [...localStreamWindows(rows, 30).keys()],
-    [0, 30, 60, 90, 120, 150, 180, 210, 240],
-  );
+});
+
+test('every local row renders in table and card chunks at exact window boundaries', () => {
+  for (const total of [100, 200]) {
+    const rows = Array.from({ length: total }, (_, index) => `row-${index}`);
+    const windows = localStreamWindows(rows);
+    for (const chunkRows of [3, 6, 9, 12, 15]) {
+      const rendered: string[] = [];
+      for (let start = 0; start < total; start += chunkRows) {
+        const chunk = streamChunkRows(windows, start, chunkRows, 100, total);
+        assert.notEqual(chunk, null, `total=${total}, start=${start}`);
+        rendered.push(...chunk!);
+      }
+      assert.deepEqual(
+        rendered,
+        rows,
+        `total=${total}, chunkRows=${chunkRows}`,
+      );
+    }
+  }
 });
