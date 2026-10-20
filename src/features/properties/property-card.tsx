@@ -1,6 +1,7 @@
 import type { Locale } from '@/i18n/messages';
 import { label } from '@/i18n/messages';
 import { memo } from 'react';
+import Link from 'next/link';
 import type { PropertySummary } from './types';
 import { CoverImage } from '@/features/property-files/cover-image';
 import { Plate } from './plate';
@@ -79,8 +80,9 @@ export const PropertyCard = memo(function PropertyCard({
           {record.propertyCode} · {label(locale, record.listingMode)}
         </p>
         <h2 className="card-address">
-          <a
+          <Link
             translate="no"
+            prefetch={false}
             href={
               '/properties/' +
               record.id +
@@ -91,7 +93,7 @@ export const PropertyCard = memo(function PropertyCard({
             {record.addresses.length && record.addresses[0]?.addressText
               ? record.addresses[0].addressText
               : label(locale, null)}
-          </a>
+          </Link>
         </h2>
         {showEntry ? (
           <p className="card-entry">

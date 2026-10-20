@@ -110,6 +110,7 @@ export function Inventory({
   // nothing until it has answered.
   const {
     employee,
+    data: session,
     error: sessionError,
     busy,
     surface,
@@ -139,7 +140,7 @@ export function Inventory({
   const [searchError, setSearchError] = useState(false);
   const [typed, setTyped] = useState(initialQuery);
   const [addressEdited, setAddressEdited] = useState(false);
-  const catalogue = useCatalogue();
+  const catalogue = useCatalogue(session);
   // The text the box is filtering the loaded catalogue with, or null when it is not filtering at
   // all: the rule lives in `address-index.ts` so it is tested without a browser. Local filtering is
   // offered for the ordinary browse only, because a chronological ordering or a filter set names a
@@ -157,10 +158,16 @@ export function Inventory({
       : NO_MATCHES;
   }, [localActive, localReady, catalogue.index, localQuery]);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const sessionKey = session
+    ? `${renderedSession(session.employee)}:${session.accessRevision}`
+    : null;
   const [opened, setOpened] = useState<{
     record: PropertySummary;
     opener: HTMLElement | null;
+    scope: string | null;
   } | null>(null);
+  const currentOpened =
+    sessionKey !== null && opened?.scope === sessionKey ? opened : null;
   const numberFormat = useMemo(
     () => new Intl.NumberFormat(locale === 'vi' ? 'vi-VN' : 'en-GB'),
     [locale],
@@ -343,8 +350,8 @@ export function Inventory({
   const showEntry = order !== null;
   const openDrawer = useCallback(
     (record: PropertySummary, opener: HTMLElement | null) =>
-      setOpened({ record, opener }),
-    [setOpened],
+      setOpened({ record, opener, scope: sessionKey }),
+    [sessionKey],
   );
   const closeDrawer = useCallback(() => setOpened(null), [setOpened]);
   // The open row states the status the server just recorded, and the stream re-reads so the list
@@ -842,12 +849,12 @@ export function Inventory({
 
       <PropertyDrawer
         employee={employee}
-        property={opened?.record ?? null}
+        property={currentOpened?.record ?? null}
         locale={locale}
-        open={opened !== null}
+        open={currentOpened !== null}
         resultLocation={resultLocation}
         showEntry={showEntry}
-        opener={opened?.opener ?? null}
+        opener={currentOpened?.opener ?? null}
         onClose={closeDrawer}
         onDenied={denyFiles}
         onStatusChanged={statusChanged}
