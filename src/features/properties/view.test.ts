@@ -160,16 +160,13 @@ test('the view switch is icon-only, with a hidden name and the state kept', () =
 // meeting the page squarely, and the first and last rows are rounded with the frame so no square
 // corner of a row paints over it.
 test('the table sits inside one rounded, bordered surface', () => {
-  const frame = surfaces.slice(
-    surfaces.indexOf(".inventory-stream[data-view='table'] {"),
-  );
+  const frame = surfaces.slice(surfaces.indexOf('.inventory-stream {'));
   const rule = frame.slice(0, frame.indexOf('}'));
   assert.match(rule, /border: 1px solid var\(--border\)/);
   assert.match(rule, /border-radius: var\(--radius-lg\)/);
   assert.match(rule, /background: var\(--surface\)/);
   // The surface, not the whole page, contains a table wider than its available space.
   assert.match(rule, /width: 100%/);
-  assert.match(rule, /overflow: auto/);
   // The corners of the first and last rows follow the frame.
   for (const corner of [
     'thead th:first-child',
@@ -191,8 +188,8 @@ test('the table sits inside one rounded, bordered surface', () => {
 
 // One bounded table scrollport keeps sticky headings working while containing both axes.
 test('the table surface owns its scrollport and the virtual band measures it', () => {
-  const start = surfaces.indexOf(".inventory-stream[data-view='table'] {");
-  assert.ok(start > 0, 'the table surface is defined');
+  const start = surfaces.indexOf('.inventory-stream {');
+  assert.ok(start > 0, 'the base stream surface is defined');
   const frame = surfaces.slice(start, surfaces.indexOf('}', start));
   assert.match(frame, /overflow: auto/);
   assert.match(frame, /max-height: calc\(100dvh/);

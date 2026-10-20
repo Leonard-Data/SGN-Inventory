@@ -160,8 +160,9 @@
   padding-bottom: var(--space-5);
 }
 
-/* The whole stream is one table: the header row is sticky under the top bar and
-   each mounted chunk is its own tbody, so the ten columns align across chunk
+/* The stream is one surface in both views, and cards add their own padding inside it.
+   In the table the whole stream is one table: the header row is sticky under the top
+   bar and each mounted chunk is its own tbody, so the ten columns align across chunk
    boundaries and a reserved chunk is one full-height row. The rows sit on one
    surface rather than meeting the page squarely: the border and radius are drawn
    by the stream, and the first and last rows are rounded with it so no square
@@ -169,7 +170,7 @@
    header's own border attached to it while it scrolls. This bounded scrollport owns
    both axes: a horizontal-only overflow would also capture sticky positioning, so
    the stream measures this scrollport for its virtual band rather than the page. */
-.inventory-stream[data-view='table'] {
+.inventory-stream {
   width: 100%;
   max-width: 100%;
   max-height: calc(100dvh - var(--topbar-h) - var(--space-6));
@@ -179,6 +180,9 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
+}
+.inventory-stream[data-view='cards'] {
+  padding: var(--space-4);
 }
 .inventory-table {
   width: 100%;

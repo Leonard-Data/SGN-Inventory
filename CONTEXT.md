@@ -209,6 +209,10 @@ _Avoid_: Search cache, offline inventory, authoritative list
 The presentation choice for the inventory stream — cards or table — carried in the properties address beside the search, the ordering and the filters, so switching it or applying a filter keeps the narrowed result set and never changes the read. The summary table groups the recorded facts into property, address, price, area, status, updated time and actions; the full record keeps every source field. The table is not offered at phone width, where cards are the list.
 _Avoid_: Second result set, paged view
 
+**Inventory list state**:
+What the properties list holds beyond the result set the address names: the text the address box holds (typed, and not necessarily submitted), whether the box was edited at all, and where the stream was scrolled, measured from the stream's own top and left rather than the page's, together with the document's own offset above the stream. It is held in browser memory above the routes for the session as the one list the person left — only the result set they are at is held — so a visit to a property and back restores the list without reading the catalogue again, while a reload of the application starts over. The address still carries the result set itself — the search, the ordering, the filters and the view.
+_Avoid_: Second result set, address-carried page number or window offset, persisted list state
+
 **Property quick view**:
 The right-hand panel a list row opens without leaving the list: the record's key metadata, a comment composer, one attachment through the existing upload path and its limits, and a link into the full detail page for everything else. The row is a real keyboard-reachable control; Escape closes the panel and focus returns to the row that opened it. It is not an edit form and grants no authority the full record does not have.
 _Avoid_: Detail page, inline edit, side form

@@ -3,6 +3,7 @@ import {
   useCallback,
   useDeferredValue,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -29,8 +30,14 @@ import {
   type EmptyResultSource,
 } from './catalogue-load';
 import type { CatalogueRefreshView } from './catalogue-refresh';
-import { localAddressQuery, matchCatalogue } from './address-index';
-import type { CatalogueMatch } from './address-index';
+import { matchCatalogue, type CatalogueMatch } from './address-index';
+import { useListStateCarrier } from './list-state-provider';
+import {
+  listRun,
+  positionReady,
+  readListState,
+  writeListState,
+} from './list-state';
 import {
   activeFilterCount,
   filterParams,
@@ -191,11 +198,19 @@ export function Inventory({
   // address cannot put a person on one.
   const wide = useSyncExternalStore(subscribeWide, wideSnapshot, wideOnServer);
   const shownView = shownInventoryView(requestedView, wide);
-  const activeOrder = isInventoryOrder(sort) ? sort : null;
   // The filters the address states travel with every read of this stream: the free-text search,
   // the ordering, the filter island and the view switch all carry the same set.
   const activeFilters = filterParams(filters);
   const filterCount = activeFilterCount(filters);
+  // The address of the list as it stands: the search, the ordering, the view and the filters. It
+  // names the result set this list is showing, so it is also what the carrier holds the list's own
+  // state under and what a property's link carries back as `returnTo`.
+  const resultLocation = inventoryHref({
+    query: initialQuery,
+    sort,
+    view: requestedView,
+    filters,
+  });
   const endpoint =
     '/api/properties?' +
     new URLSearchParams({
@@ -240,10 +255,21 @@ export function Inventory({
     onDenied: denyFiles,
   });
   const [searchError, setSearchError] = useState(false);
-  const [typed, setTyped] = useState(initialQuery);
-  const [addressEdited, setAddressEdited] = useState(false);
-  // The text the box is filtering the loaded catalogue with, or null when it is not filtering at
-  // all: the rule lives in `address-index.ts` so it is tested without a browser. Local filtering is
+  // The list the person left, read once for the address this list is opened at: the text the
+  // address box held (typed, and not necessarily submitted), whether it was edited at all, and
+  // where the stream was scrolled. A result set the carrier holds no entry for opens at its own
+  // first rows with the address's own search, which is also where a reload of the application
+  // starts: the carrier is browser memory for the session, not storage.
+  const carrier = useListStateCarrier();
+  const [restored] = useState(() => readListState(carrier, resultLocation));
+  const [typed, setTyped] = useState(() => restored?.text ?? initialQuery);
+  const [addressEdited, setAddressEdited] = useState(
+    () => restored?.edited ?? false,
+  );
+  // What the list runs: the text the box is filtering the loaded catalogue with, or null when it
+  // is not filtering at all, and the ordering the read states. The rules live in `address-index.ts`
+  // and `stream.ts` so they are tested without a browser, and they are applied together here so a
+  // state read back out of the carrier runs the same list it was written from. Local filtering is
   // offered for the ordinary browse only, because a chronological ordering or a filter set names a
   // result set the loaded page cannot state (issue #194).
   //
@@ -251,12 +277,12 @@ export function Inventory({
   // Vietnamese text composition stays responsive and no request is made either way. Measurement
   // decides whether the work later moves to a Web Worker (#195).
   const deferredTyped = useDeferredValue(typed);
-  const localQuery = localAddressQuery(
-    deferredTyped,
-    addressEdited,
-    sort,
-    filterCount,
+  const run = listRun(
+    { text: deferredTyped, edited: addressEdited },
+    { sort, filters: filterCount },
   );
+  const localQuery = run.localQuery;
+  const activeOrder = run.order;
   const localActive = localQuery !== null;
   // The local answer exists as soon as any batch is indexed, so the first page is searchable
   // before the traversal finishes and before the authorized total arrives. A catalogue with
@@ -300,7 +326,41 @@ export function Inventory({
 
   // ── the stream's own geometry ─────────────────────────────────────────────
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
-  const [viewport, setViewport] = useState({ top: 0, height: 0 });
+  // The same element as a ref, because restoring the scroll position writes to it and a value read
+  // out of the render is not the place to write to a node from.
+  const streamNode = useRef<HTMLDivElement | null>(null);
+  const bindStream = useCallback((node: HTMLDivElement | null) => {
+    streamNode.current = node;
+    setContainer(node);
+  }, []);
+  const [viewport, setViewport] = useState({
+    top: 0,
+    left: 0,
+    page: 0,
+    height: 0,
+  });
+  // Where the stream sits: its own two-axis scroll, read off the node that owns the scrollport, and
+  // the document's offset above it. The band is measured from the stream's scroll and the carrier
+  // holds all of it, so what frames the rows comes from one reading.
+  const syncViewport = useCallback(
+    (node: HTMLDivElement) => {
+      const next = {
+        top: node.scrollTop,
+        left: node.scrollLeft,
+        page: window.scrollY,
+        height: node.clientHeight,
+      };
+      setViewport((current) =>
+        current.top === next.top &&
+        current.left === next.left &&
+        current.page === next.page &&
+        current.height === next.height
+          ? current
+          : next,
+      );
+    },
+    [setViewport],
+  );
   const [width, setWidth] = useState(0);
   const total = matches !== null ? matches.length : (matching ?? 0);
   const ready = matches !== null || matching !== null;
@@ -341,6 +401,33 @@ export function Inventory({
     },
     [],
   );
+  // The position the list was opened at and the address it belongs to: `target` is what still has to
+  // be reached, and until the first attempt has been made it - not the measurement - is what the
+  // carrier holds, because until then the stream is not where the person was. `rows` is the number
+  // of rows that attempt was made against, so a result set that has since lost rows releases it.
+  // A later address inside the same visit is a different result set, so the position recorded here
+  // is dropped rather than applied to its rows.
+  const opening = useRef<{
+    address: string;
+    target: { top: number; left: number; page: number } | null;
+    rows: number | null;
+    attempted: boolean;
+  }>({
+    address: resultLocation,
+    target:
+      restored !== null &&
+      (restored.scrollTop > 0 ||
+        restored.scrollLeft > 0 ||
+        restored.pageTop > 0)
+        ? {
+            top: restored.scrollTop,
+            left: restored.scrollLeft,
+            page: restored.pageTop,
+          }
+        : null,
+    rows: null,
+    attempted: false,
+  });
   // A new column count or a new result set relabels every chunk, so old measurements describe
   // rows the chunk no longer holds and are dropped; the mounted chunks measure themselves again.
   useEffect(() => {
@@ -383,34 +470,25 @@ export function Inventory({
     let pending = 0;
     const measure = () => {
       pending = 0;
-      const rect = node.getBoundingClientRect();
-      const top =
-        shownView === 'table' ? node.scrollTop : Math.max(0, -rect.top);
-      const height =
-        shownView === 'table' ? node.clientHeight : window.innerHeight;
-      setViewport((current) =>
-        current.top === top && current.height === height
-          ? current
-          : { top, height },
-      );
+      syncViewport(node);
     };
     const schedule = () => {
       if (!pending) pending = requestAnimationFrame(measure);
     };
     measure();
-    window.addEventListener('scroll', schedule, { passive: true });
     node.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('scroll', schedule, { passive: true });
     window.addEventListener('resize', schedule);
     const observer = new ResizeObserver(schedule);
     observer.observe(node);
     return () => {
       if (pending) cancelAnimationFrame(pending);
-      window.removeEventListener('scroll', schedule);
       node.removeEventListener('scroll', schedule);
+      window.removeEventListener('scroll', schedule);
       window.removeEventListener('resize', schedule);
       observer.disconnect();
     };
-  }, [container, ready, shownView, busy]);
+  }, [container, ready, busy, syncViewport]);
   // The width the card grid is laid out in, so the column count is the browser's own answer.
   useEffect(() => {
     const node = container;
@@ -424,6 +502,146 @@ export function Inventory({
     observer.observe(node);
     return () => observer.disconnect();
   }, [container, ready, shownView]);
+  // The position the person left is applied once the results have rendered: the stream has stated
+  // the total it reserves its height from, and the measured column count has settled the chunk size
+  // that height is reserved in. Applied any earlier, the position would be clamped onto a height
+  // that is not there yet and would land on rows the person never saw, so the target is held while
+  // the stream's reserved height grows toward it - one attempt per measurement round, each one
+  // publishing the position the browser actually measured rather than the one asked for - until it
+  // is actually sitting on every axis. Reaching it is read on the next round rather than on the
+  // value the assignment returned, because a layout change in the same commit can clamp or re-anchor
+  // the position the browser had just accepted. A person who scrolls the list while it is still
+  // settling keeps their own position, which is what ends the restore; the browser adjusting the
+  // stream under them as a chunk measures is not. A result set that has lost rows since the visit
+  // cannot hold the position any more, so the target is released rather than retried. A different
+  // result-set address is not this position's list at all, so the position is dropped and the new
+  // one opens at its own first rows. The scroll this sets is measured by the stream and by the
+  // document it sits in, so the band follows it and the rows sit where the person left them.
+  const restoreReady = positionReady({
+    read: ready,
+    total,
+    view: shownView,
+    width,
+  });
+  useLayoutEffect(() => {
+    const open = opening.current;
+    const node = streamNode.current;
+    if (open.address !== resultLocation) {
+      opening.current = {
+        address: resultLocation,
+        target: null,
+        rows: null,
+        attempted: false,
+      };
+      if (!node) return;
+      node.scrollTop = 0;
+      node.scrollLeft = 0;
+      syncViewport(node);
+      return;
+    }
+    const target = open.target;
+    if (!target || !restoreReady || !node) return;
+    if (open.rows !== null && total < open.rows) {
+      opening.current = { ...open, target: null };
+      return;
+    }
+    // The position is held once the stream has reserved the height for it and the browser is
+    // sitting on it. A target past that height is clamped by the browser, and the rounds that
+    // measure the chunks around it ask again; deciding this on the next round rather than on what
+    // the assignment returned is what makes a narrow reservation - or one that shrinks again in the
+    // same commit - a retry rather than a landing, and leaves the person's own scroll alone.
+    const reserved = offsets[offsets.length - 1] ?? 0;
+    if (
+      node.scrollTop === target.top &&
+      node.scrollLeft === target.left &&
+      window.scrollY === target.page
+    ) {
+      if (reserved > target.top) opening.current = { ...open, target: null };
+      return;
+    }
+    node.scrollTop = target.top;
+    node.scrollLeft = target.left;
+    window.scrollTo(0, target.page);
+    open.attempted = true;
+    open.rows = total;
+    const landed = {
+      top: node.scrollTop,
+      left: node.scrollLeft,
+      page: window.scrollY,
+    };
+    // The band is computed from what the stream measured, and the position just set is what it
+    // measures next: stating it here keeps the stream from asking for the rows at the top of a list
+    // the person is not looking at, and keeps the rows they are looking at from arriving a frame
+    // after the space they sit in.
+    setViewport((current) =>
+      current.top === landed.top &&
+      current.left === landed.left &&
+      current.page === landed.page &&
+      current.height === node.clientHeight
+        ? current
+        : {
+            top: landed.top,
+            left: landed.left,
+            page: landed.page,
+            height: node.clientHeight,
+          },
+    );
+  }, [container, resultLocation, restoreReady, offsets, syncViewport, total]);
+  // Scrolling the list is the person's own, so input inside the stream - a wheel, a touch, a scroll
+  // key while it holds focus, or a press on its scrollbar - ends the restore and the position they
+  // take is the one they keep. Input anywhere else, the address box or the toolbar included, is not
+  // the list being taken over, and a caret key in a text field is not scrolling. The browser's own
+  // adjustment as a chunk measures moves the same scroll without them.
+  useEffect(() => {
+    const node = container;
+    if (!node) return;
+    const scrollKeys = new Set([
+      'ArrowUp',
+      'ArrowDown',
+      'PageUp',
+      'PageDown',
+      'Home',
+      'End',
+      ' ',
+    ]);
+    const end = () => {
+      const open = opening.current;
+      if (open.target !== null) opening.current = { ...open, target: null };
+    };
+    const key = (event: KeyboardEvent) => {
+      if (scrollKeys.has(event.key)) end();
+    };
+    const listening = { passive: true } as const;
+    node.addEventListener('wheel', end, listening);
+    node.addEventListener('touchmove', end, listening);
+    node.addEventListener('pointerdown', end, listening);
+    node.addEventListener('keydown', key);
+    return () => {
+      node.removeEventListener('wheel', end);
+      node.removeEventListener('touchmove', end);
+      node.removeEventListener('pointerdown', end);
+      node.removeEventListener('keydown', key);
+    };
+  }, [container]);
+
+  // The list is kept in the carrier as it is used, so the address the person is looking at already
+  // holds it when they come back. Written on every position change so navigation while mounted
+  // always leaves the latest position behind. Before the restore has been attempted, the target is
+  // what is held, so a return never loses the position it is restoring; from the first attempt on,
+  // what the stream measured is held, so a position the results cannot reach is never published.
+  useEffect(() => {
+    const open = opening.current;
+    const place =
+      open.target !== null && !open.attempted ? open.target : viewport;
+    writeListState(carrier, resultLocation, {
+      text: typed,
+      edited: addressEdited,
+      scrollTop: place.top,
+      scrollLeft: place.left,
+      pageTop: place.page,
+    });
+  }, [carrier, resultLocation, typed, addressEdited, viewport]);
+
   // The band asks the stream for the windows it would show, and tells it which row position it is
   // centred on, so a deep scroll keeps its own windows and drops the far ones. A locally filtered
   // list reads nothing: the rows it draws are already in the browser.
@@ -466,12 +684,6 @@ export function Inventory({
     return indexes;
   }, [band.first, band.last, chunkCount]);
 
-  const resultLocation = inventoryHref({
-    query: initialQuery,
-    sort,
-    view: requestedView,
-    filters,
-  });
   const showEntry = order !== null;
   const openDrawer = useCallback(
     (record: PropertySummary, opener: HTMLElement | null) =>
@@ -1006,10 +1218,10 @@ export function Inventory({
               ) : null}
               <div
                 className="inventory-stream"
-                ref={setContainer}
+                ref={bindStream}
                 data-view={shownView}
-                tabIndex={shownView === 'table' ? 0 : undefined}
-                role={shownView === 'table' ? 'region' : undefined}
+                tabIndex={0}
+                role="region"
                 aria-label={text.inventory}
               >
                 {shownView === 'table' ? (

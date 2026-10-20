@@ -40,10 +40,9 @@ test('employee edits use the shared guarded drawer and retain field validation',
 test('the inventory summary scrolls inside its surface and measures that scrollport', () => {
   const css = source('../app/sgn-surfaces.css');
   const inventory = source('./properties/inventory.tsx');
-  assert.match(
-    css,
-    /\.inventory-stream\[data-view='table'\] \{[^}]*overflow: auto/,
-  );
+  // The stream is its own bounded scrollport in both views, so the band measures that element
+  // rather than the page.
+  assert.match(css, /\.inventory-stream \{[^}]*overflow: auto/);
   assert.match(css, /\.inventory-table thead th \{[^}]*top: 0/);
   assert.match(inventory, /node\.scrollTop/);
   assert.match(inventory, /node\.addEventListener\('scroll'/);
