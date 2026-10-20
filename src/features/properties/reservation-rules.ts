@@ -24,3 +24,19 @@ export function decisionDays(value: unknown): number | null {
     ? value
     : null;
 }
+
+// The database refusals that mean the committed reservation state moved on while the browser was
+// acting: a competing lock was approved or requested first, the property is no longer available
+// for the request, or the lock was already closed. Each one means the browser must re-read the
+// property's current server state instead of leaving what it held on screen. A refusal is never
+// answered from the cached status, because the cached status never authorized the lock: the
+// database decides, and this only says that the browser's copy is now stale.
+const MOVED_ON = [
+  'reservation-conflict',
+  'reservation-unavailable',
+  'reservation-closed',
+];
+
+export function lockStateMoved(code: string): boolean {
+  return MOVED_ON.includes(code);
+}

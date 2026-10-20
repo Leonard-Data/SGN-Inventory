@@ -5,6 +5,8 @@ import { RequestError } from '@/features/employees/api';
 import { DetailActionDialog } from './detail-dialog';
 import { detailMessages } from './messages';
 import { loadAddressGroup, mergeAddressGroup } from './detail-loader';
+import { applyServerSummary } from './catalogue-changes';
+import { useCatalogueChange } from './catalogue-provider';
 import { dimensions } from './dimension-summary';
 import { formatDecimal, formatInteger, formatVnd } from './format';
 import { mergeLimit } from './merge-rules';
@@ -83,6 +85,9 @@ export function SharedAddress({
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [report, setReport] = useState<MergeReport | null>(null);
+  // A merge retires the records it folded in, so the browser's catalogue drops them and takes the
+  // surviving record's summary from the server's own answer.
+  const applyChange = useCatalogueChange();
 
   useEffect(() => {
     const abort = new AbortController();
@@ -132,12 +137,14 @@ export function SharedAddress({
     setBusy(true);
     setFailure(null);
     try {
-      setReport(
-        await mergeAddressGroup(
-          keepId,
-          others.map((member) => member.id),
-        ),
+      const result = await mergeAddressGroup(
+        keepId,
+        others.map((member) => member.id),
       );
+      for (const record of result.merged)
+        applyChange({ kind: 'remove', id: record.id });
+      applyServerSummary(applyChange, result, keepId);
+      setReport(result);
       setConfirming(false);
     } catch (problem) {
       if (

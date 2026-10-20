@@ -11,9 +11,11 @@ import { label, messages, type Locale } from '@/i18n/messages';
 import { api, RequestError } from '@/features/employees/api';
 import { LoadingSkeleton } from '@/features/skeleton';
 import { vietnamDate, vietnamTimestamp } from '@/features/properties/format';
+import { applyServerSummary } from '@/features/properties/catalogue-changes';
+import { useCatalogueChange } from '@/features/properties/catalogue-provider';
 import { useToast } from '@/features/toasts/toast-host';
 import { SALE_REFERENCE_MAX } from './rules';
-import type { SaleCompletionState } from './types';
+import type { SaleCompletionResult, SaleCompletionState } from './types';
 
 const accessLabel = {
   active: 'employeeAccessActive',
@@ -44,6 +46,7 @@ export function SaleCompletion({
     referenceId = useId(),
     helpId = useId();
   const notify = useToast();
+  const applyChange = useCatalogueChange();
   const [state, setState] = useState<SaleCompletionState | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -104,7 +107,7 @@ export function SaleCompletion({
     setSaving(true);
     setError(null);
     try {
-      const next = await api<SaleCompletionState>(
+      const next = await api<SaleCompletionResult>(
         '/api/properties/' + propertyId + '/sale-completion',
         {
           creditedEmployeeId: closer,
@@ -113,6 +116,9 @@ export function SaleCompletion({
           key: key.current,
         },
       );
+      // The completion recorded a status, so the browser's catalogue takes the server's own read
+      // of the property rather than the status the record had before it was completed.
+      applyServerSummary(applyChange, next, propertyId);
       setState(next);
       setCloser('');
       setReference('');

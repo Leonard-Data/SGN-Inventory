@@ -4,7 +4,10 @@ import type { Locale } from '@/i18n/messages';
 import type { Employee } from '@/features/employees/types';
 import { api, RequestError } from '@/features/employees/api';
 import { LoadingSkeleton } from '@/features/skeleton';
+import { applyServerSummary } from '@/features/properties/catalogue-changes';
+import { useCatalogueChange } from '@/features/properties/catalogue-provider';
 import type { PropertyDetail } from '@/features/properties/detail-data';
+import type { PropertySummary } from '@/features/properties/types';
 import type { ContactDetail } from './data';
 import { MutationForm, RecordFields, AddressFields } from './forms';
 import { LocationEditor } from '@/features/properties/location';
@@ -58,6 +61,9 @@ export function Maintenance({
     [contactBusy, setContactBusy] = useState(false),
     [contactError, setContactError] = useState<string | null>(null);
   const notify = useToast();
+  // Every committed edit reports what the server now holds for this property, so the browser's
+  // catalogue follows a changed address or fact instead of keeping the record it had.
+  const applyChange = useCatalogueChange();
   // The dialog closes on a committed save, so the confirmation names the target it recorded.
   const targetSaved: Record<Target, string> = {
     property: text.propertySaved,
@@ -145,14 +151,19 @@ export function Maintenance({
   }
   async function save(changes: Changes, explanation?: string) {
     if (!editor) return;
-    return api('/api/properties/' + property.id + '/maintenance', {
-      target: editor.target,
-      targetId: editor.targetId,
-      revision: editor.revision,
-      propertyRevision: editor.propertyRevision,
-      changes,
-      ...(explanation ? { explanation } : {}),
-    });
+    const result = await api<{ summary?: PropertySummary | null }>(
+      '/api/properties/' + property.id + '/maintenance',
+      {
+        target: editor.target,
+        targetId: editor.targetId,
+        revision: editor.revision,
+        propertyRevision: editor.propertyRevision,
+        changes,
+        ...(explanation ? { explanation } : {}),
+      },
+    );
+    applyServerSummary(applyChange, result, property.id);
+    return result;
   }
   async function saved() {
     if (!editor) return;
@@ -161,14 +172,18 @@ export function Maintenance({
     await onSaved();
   }
   async function saveFacts(changes: Changes, explanation?: string) {
-    const result = await api('/api/properties/' + facts.id + '/maintenance', {
-      target: 'property',
-      targetId: facts.id,
-      revision: facts.revision,
-      propertyRevision: facts.revision,
-      changes,
-      ...(explanation ? { explanation } : {}),
-    });
+    const result = await api<{ summary?: PropertySummary | null }>(
+      '/api/properties/' + facts.id + '/maintenance',
+      {
+        target: 'property',
+        targetId: facts.id,
+        revision: facts.revision,
+        propertyRevision: facts.revision,
+        changes,
+        ...(explanation ? { explanation } : {}),
+      },
+    );
+    applyServerSummary(applyChange, result, facts.id);
     setFactsSavedRevision(facts.revision);
     return result;
   }

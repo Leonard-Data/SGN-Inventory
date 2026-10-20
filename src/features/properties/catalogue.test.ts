@@ -46,6 +46,7 @@ const row: CatalogueRow = {
       district_text: 'Bình Thạnh',
       is_primary: true,
       mapping_status: 'unresolved',
+      supersedes_address_id: null,
     },
     {
       id: PROPERTY_ID,
@@ -57,6 +58,7 @@ const row: CatalogueRow = {
       district_text: null,
       is_primary: false,
       mapping_status: 'candidate',
+      supersedes_address_id: null,
     },
   ],
 };
@@ -181,6 +183,61 @@ test('one row becomes the list summary, with the recorded text and both formats'
   // attribution the stream read used to supply; the catalogue states no entry chronology.
   assert.equal(summary.createdBy, 'Nguyễn Thu Hà');
   assert.equal(summary.entryOn, undefined);
+});
+
+test('a superseded address version is history, not part of the summary', () => {
+  const replaced = '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
+  const replacement = '1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e';
+  const summary = catalogueSummary(
+    {
+      ...row,
+      property_addresses: [
+        {
+          id: replaced,
+          format: 'legacy',
+          address_text: '12 Lê Lợi, Phường 5, Quận 3',
+          house_number: '12',
+          street: 'Lê Lợi',
+          commune_text: 'Phường 5',
+          district_text: 'Quận 3',
+          is_primary: false,
+          mapping_status: 'unresolved',
+          supersedes_address_id: null,
+        },
+        {
+          id: replacement,
+          format: 'legacy',
+          address_text: '99 Hai Bà Trưng, Phường 6, Quận 3',
+          house_number: '99',
+          street: 'Hai Bà Trưng',
+          commune_text: 'Phường 6',
+          district_text: 'Quận 3',
+          is_primary: true,
+          mapping_status: 'unresolved',
+          supersedes_address_id: replaced,
+        },
+        {
+          id: PROPERTY_ID,
+          format: 'alternate',
+          address_text: '99 Hai Bà Trưng, Phường 6, Quận 3 (hẻm 7)',
+          house_number: '99',
+          street: 'Hai Bà Trưng',
+          commune_text: 'Phường 6',
+          district_text: 'Quận 3',
+          is_primary: false,
+          mapping_status: 'unresolved',
+          supersedes_address_id: null,
+        },
+      ],
+    },
+    null,
+  );
+  // The retained row the replacement superseded is not folded into the summary, while the current
+  // recorded address and a variant nobody superseded both are.
+  assert.deepEqual(
+    summary.addresses.map((address) => address.id),
+    [replacement, PROPERTY_ID],
+  );
 });
 
 test('a row with no address or no facts states the gap rather than inventing one', () => {

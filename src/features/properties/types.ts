@@ -86,6 +86,10 @@ export type ReservationState = {
   effective: EffectiveReservation | null;
   pending: ReservationRequest[];
   canDecide: boolean;
+  // The property's catalogued summary as the server read it back with this answer, so the browser
+  // refreshes its own copy from server state rather than from what it held. Absent when the server
+  // could not read it back, and null when the property is no longer in the caller's catalogue.
+  summary?: PropertySummary | null;
 };
 // One member of a shared-address group, as the comparison reads it. Owner names are listed the
 // way the record's own contact panel lists them; no phone crosses this boundary.
@@ -116,6 +120,10 @@ export type MergeReport = {
     alreadyLinked: number;
     history: number;
   };
+  // The kept property's authoritative summary as the server read it back (absent when it could not
+  // be read at all: the browser then reads the catalogue again). The retired records are the ones
+  // `merged` names, so that one list is what the browser drops.
+  summary?: PropertySummary | null;
 };
 // The database returns the disclosure contact and the committed activity reference. A matched
 // retry can return the reference without a contact when the owner link was later removed.

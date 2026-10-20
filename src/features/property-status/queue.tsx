@@ -7,7 +7,10 @@ import { useProtectedData } from '@/features/employees/use-protected-data';
 import { LoadingSkeleton } from '@/features/skeleton';
 import { useToast } from '@/features/toasts/toast-host';
 import { vietnamTimestamp } from '@/features/properties/format';
-import type { StatusRequestQueue } from './data';
+import { applyServerSummary } from '@/features/properties/catalogue-changes';
+import { useCatalogueChange } from '@/features/properties/catalogue-provider';
+import type { PropertySummary } from '@/features/properties/types';
+import type { StatusChange, StatusRequestQueue } from './data';
 import { statusMessage, statusText } from './messages';
 
 // The reviewer's queue: only requests nobody has decided yet, oldest first. A decision is one
@@ -22,6 +25,7 @@ export function StatusRequestQueue({
 }) {
   const text = statusText(locale);
   const notify = useToast();
+  const applyChange = useCatalogueChange();
   const [cursor, setCursor] = useState<{
     after: string;
     afterId: string;
@@ -43,7 +47,13 @@ export function StatusRequestQueue({
     setDeciding(id);
     setFailure(null);
     try {
-      await api('/api/status-requests/' + id, { approve, reason });
+      const result = await api<{
+        change: StatusChange;
+        summary?: PropertySummary | null;
+      }>('/api/status-requests/' + id, { approve, reason });
+      // An approval applied a status, so the property's catalogue row is refreshed from the
+      // server's own answer rather than left reading the status it had before the decision.
+      applyServerSummary(applyChange, result, result.change.property_id);
       notify({
         saved: true,
         message: approve ? text.queueApproved : text.queueRejected,

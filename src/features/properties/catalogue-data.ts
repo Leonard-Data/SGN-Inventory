@@ -9,7 +9,7 @@ import {
   type CatalogueRow,
 } from './catalogue';
 import { propertyCreators } from './creator';
-import type { CataloguePage } from './types';
+import type { CataloguePage, PropertySummary } from './types';
 
 // One page of the browser catalogue: the caller's own authorized, unarchived inventory in one
 // stable identity order, with each property's address variants flattened into its row.
@@ -80,4 +80,32 @@ export async function catalogueTotal(context: RouteContext): Promise<number> {
     throw new ApiError(failure.status, failure.code);
   }
   return count ?? 0;
+}
+
+// The authoritative summary of one property, as the catalogue states it, read on the caller's own
+// session client after a change committed. It is the same select, projection, unarchived
+// eligibility and authorization as a catalogue page, so a mutation response can never carry a
+// summary the catalogue would not answer with.
+//
+// null is the server's own answer that the property is no longer in this caller's catalogue
+// (archived, deleted or no longer readable), and undefined is a summary that could not be read
+// back at all: the browser then reads the catalogue again rather than keeping a row nothing
+// confirms.
+export async function catalogueSummaryOf(
+  context: RouteContext,
+  id: string,
+): Promise<PropertySummary | null | undefined> {
+  const { data, error } = await context.client
+    .from('properties')
+    .select(CATALOGUE_SELECT)
+    .eq('id', id)
+    .is('archived_at', null)
+    .maybeSingle();
+  if (error) return undefined;
+  if (!data) return null;
+  const row = data as unknown as CatalogueRow;
+  // The same attribution the page read states: one names read for this row's creator, so a summary
+  // committed by a change keeps showing who created the property.
+  const creators = await catalogueCreators(context, [row]);
+  return catalogueSummary(row, creators.get(row.id) ?? null);
 }

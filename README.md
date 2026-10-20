@@ -63,12 +63,18 @@ the browser holds or from the read that answers each window. There are no page n
 and no cursor trail
 ([ADR 0002](docs/adr/0002-inventory-list-stream-and-table-view.md),
 [ADR 0003](docs/adr/0003-browser-property-catalogue-and-local-address-search.md)).
-
 The address box narrows the catalogue page the browser already holds as a person types, so typing no
 longer reads the database; the search button still searches the whole inventory, and the deliberate
 Refresh control rebuilds that catalogue in the background and swaps it in only once the replacement
-is complete
-([ADR 0003](docs/adr/0003-browser-property-catalogue-and-local-address-search.md)).
+is complete. A saved edit, a create, a merge or a status decision updates the list from the
+server's own answer, so the change itself needs no Refresh
+([ADR 0003](docs/adr/0003-browser-property-catalogue-and-local-address-search.md),
+[ADR 0004](docs/adr/0004-committed-changes-and-the-browser-catalogue.md)).
+
+Opening a property from the list and coming back restores the list the person left — the text in
+the box, the filters, the ordering, the view, the position in the stream — without reading the
+catalogue again; a reload of the application starts over
+([ADR 0005](docs/adr/0005-inventory-list-state-across-a-property-visit.md)).
 
 ### Review and decision queues
 
@@ -178,7 +184,7 @@ Not environment variables, but part of a working deployment: Supabase Auth email
 invitations and recovery, and the option to switch on Vercel Web Analytics per project. Never enable
 open signup or anonymous sign-in.
 
-`npm run check:env` validates this surface without contacting Supabase and without printing values.
+`npm run check:env` validates this surface without contacting Supabase and without printing values; it also reads the R2 bucket's CORS rule, because the four credentials alone do not prove that a browser upload works.
 `/api/health` reports configuration readiness only (`200` with the stage, otherwise `503`); it proves
 neither database connectivity nor authorization. See [docs/setup.md](docs/setup.md) for the full
 staging, GitHub environment and activation checklist.

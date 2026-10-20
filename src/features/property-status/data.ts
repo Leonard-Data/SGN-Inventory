@@ -1,6 +1,7 @@
 import 'server-only';
 import { ApiError, uuid, type RouteContext } from '@/lib/supabase/route';
 import { isUuid, timestamp } from '@/lib/supabase/query';
+import { catalogueSummaryOf } from '@/features/properties/catalogue-data';
 
 // One recorded status event. `pending` is a sold/rented request a reviewer has not decided yet;
 // `applied` and `rejected` are terminal and name the decider. A direct change has no separate
@@ -96,7 +97,12 @@ export async function setStatus(
     p_note: write.note,
   });
   statusError(error);
-  return { change: change(data) };
+  // The catalogued status comes from the server's own read after the change, so the list shows
+  // what was applied (or requested) rather than what the picker submitted.
+  return {
+    change: change(data),
+    summary: await catalogueSummaryOf(context, id),
+  };
 }
 
 // The trail of one property, oldest first, so the record reads as the story it is. A record nobody
@@ -196,7 +202,14 @@ export async function decideStatusRequest(
     p_reason: body.reason.trim(),
   });
   statusError(error);
-  return { change: change(data) };
+  const decided = change(data);
+  // An approval applied the requested status, so the property's summary is read back from the
+  // server for the browser's catalogue; a rejection applied nothing and answers the same current
+  // state.
+  return {
+    change: decided,
+    summary: await catalogueSummaryOf(context, decided.property_id),
+  };
 }
 
 export type StatusTrailPage = Awaited<ReturnType<typeof statusTrail>>;

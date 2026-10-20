@@ -27,7 +27,7 @@ export const CATALOGUE_SELECT =
   'land_area_m2::text,floor_area_m2::text,frontage_m::text,depth_m::text,floors,' +
   'direction,access_type,cover_file_id,created_at,updated_at,created_by,' +
   'property_addresses(id,format,address_text,house_number,street,commune_text,district_text,' +
-  'is_primary,mapping_status)';
+  'is_primary,mapping_status,supersedes_address_id)';
 
 // One row of the catalogue read, as that read's own select list shapes it: the summary fields with
 // the property's address variants flattened into the row.
@@ -41,6 +41,9 @@ export type CatalogueAddressRow = {
   district_text: string | null;
   is_primary: boolean;
   mapping_status: string;
+  // The version of this property's address this row replaced: a row another row names here is
+  // history the database keeps, not part of the address the property is recorded at now.
+  supersedes_address_id: string | null;
 };
 
 export type CatalogueRow = {
@@ -83,12 +86,20 @@ function catalogueAddress(row: CatalogueAddressRow): AddressSummary {
 
 // The summary one catalogue row states, in the list's own record shape so the list, the quick view
 // and the local address index read the same record they read from the stream. The creator is the
-// display name the page resolved for this row, and the entry chronology is not part of the
-// catalogue: it belongs to the chronological views.
+// display name the page resolved for this row; the entry chronology is not part of the catalogue,
+// because it belongs to the chronological views.
 export function catalogueSummary(
   row: CatalogueRow,
   createdBy: string | null,
 ): PropertySummary {
+  const versions = row.property_addresses ?? [];
+  // A version another version replaced is superseded history, so it is not folded into the summary
+  // and the address index never matches the address a property moved from.
+  const superseded = new Set(
+    versions.flatMap((address) =>
+      address.supersedes_address_id ? [address.supersedes_address_id] : [],
+    ),
+  );
   return {
     id: row.id,
     propertyCode: row.property_code,
@@ -102,7 +113,8 @@ export function catalogueSummary(
     // Primary first, then identity: the card draws the first address, and the order is the one the
     // stream's own address read states. Both stored formats are carried; neither is rewritten from
     // the other.
-    addresses: [...(row.property_addresses ?? [])]
+    addresses: versions
+      .filter((address) => !superseded.has(address.id))
       .sort((left, right) =>
         left.is_primary === right.is_primary
           ? left.id < right.id
