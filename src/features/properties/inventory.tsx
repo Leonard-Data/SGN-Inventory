@@ -3,6 +3,7 @@ import {
   useCallback,
   useDeferredValue,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -29,8 +30,14 @@ import {
   type EmptyResultSource,
 } from './catalogue-load';
 import type { CatalogueRefreshView } from './catalogue-refresh';
-import { localAddressQuery, matchCatalogue } from './address-index';
-import type { CatalogueMatch } from './address-index';
+import { matchCatalogue, type CatalogueMatch } from './address-index';
+import { useListStateCarrier } from './list-state-provider';
+import {
+  listRun,
+  positionReady,
+  readListState,
+  writeListState,
+} from './list-state';
 import {
   activeFilterCount,
   filterParams,
@@ -191,11 +198,19 @@ export function Inventory({
   // address cannot put a person on one.
   const wide = useSyncExternalStore(subscribeWide, wideSnapshot, wideOnServer);
   const shownView = shownInventoryView(requestedView, wide);
-  const activeOrder = isInventoryOrder(sort) ? sort : null;
   // The filters the address states travel with every read of this stream: the free-text search,
   // the ordering, the filter island and the view switch all carry the same set.
   const activeFilters = filterParams(filters);
   const filterCount = activeFilterCount(filters);
+  // The address of the list as it stands: the search, the ordering, the view and the filters. It
+  // names the result set this list is showing, so it is also what the carrier holds the list's own
+  // state under and what a property's link carries back as `returnTo`.
+  const resultLocation = inventoryHref({
+    query: initialQuery,
+    sort,
+    view: requestedView,
+    filters,
+  });
   const endpoint =
     '/api/properties?' +
     new URLSearchParams({
@@ -240,23 +255,33 @@ export function Inventory({
     onDenied: denyFiles,
   });
   const [searchError, setSearchError] = useState(false);
-  const [typed, setTyped] = useState(initialQuery);
-  const [addressEdited, setAddressEdited] = useState(false);
-  // The text the box is filtering the loaded catalogue with, or null when it is not filtering at
-  // all: the rule lives in `address-index.ts` so it is tested without a browser. Local filtering is
+  // The list the person left, read once for the address this list is opened at: the text the
+  // address box held (typed, and not necessarily submitted), whether it was edited at all, and
+  // where the stream was scrolled. A result set the carrier holds no entry for opens at its own
+  // first rows with the address's own search, which is also where a reload of the application
+  // starts: the carrier is browser memory for the session, not storage.
+  const carrier = useListStateCarrier();
+  const [restored] = useState(() => readListState(carrier, resultLocation));
+  const [typed, setTyped] = useState(() => restored?.text ?? initialQuery);
+  const [addressEdited, setAddressEdited] = useState(
+    () => restored?.edited ?? false,
+  );
+  // What the list runs: the text the box is filtering the loaded catalogue with, or null when it
+  // is not filtering at all, and the ordering the read states. The rules live in `address-index.ts`
+  // and `stream.ts` so they are tested without a browser, and they are applied together here so a
+  // state read back out of the carrier runs the same list it was written from. Local filtering is
   // offered for the ordinary browse only, because a chronological ordering or a filter set names a
   // result set the loaded page cannot state (issue #194).
   //
   // The typed value renders immediately and the heavier local match runs at a lower priority, so
   // Vietnamese text composition stays responsive and no request is made either way. Measurement
   // decides whether the work later moves to a Web Worker (#195).
-  const deferredTyped = useDeferredValue(typed);
-  const localQuery = localAddressQuery(
-    deferredTyped,
-    addressEdited,
-    sort,
-    filterCount,
+  const run = listRun(
+    { text: typed, edited: addressEdited },
+    { sort, filters: filterCount },
   );
+  const localQuery = run.localQuery;
+  const activeOrder = run.order;
   const localActive = localQuery !== null;
   // The local answer exists as soon as any batch is indexed, so the first page is searchable
   // before the traversal finishes and before the authorized total arrives. A catalogue with
@@ -300,6 +325,13 @@ export function Inventory({
 
   // ── the stream's own geometry ─────────────────────────────────────────────
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
+  // The same element as a ref, because restoring the scroll position writes to it and a value read
+  // out of the render is not the place to write to a node from.
+  const streamNode = useRef<HTMLDivElement | null>(null);
+  const bindStream = useCallback((node: HTMLDivElement | null) => {
+    streamNode.current = node;
+    setContainer(node);
+  }, []);
   const [viewport, setViewport] = useState({ top: 0, height: 0 });
   const [width, setWidth] = useState(0);
   const total = matches !== null ? matches.length : (matching ?? 0);
@@ -341,6 +373,13 @@ export function Inventory({
     },
     [],
   );
+  // The position the list was opened at, and whether it is still waiting to be applied. Until it
+  // has been applied, what the stream measures is not where the person was, so it is not written
+  // back over the position being restored.
+  const opening = useRef<{ position: number | null; pending: boolean }>({
+    position: restored?.scroll ?? null,
+    pending: (restored?.scroll ?? null) !== null,
+  });
   // A new column count or a new result set relabels every chunk, so old measurements describe
   // rows the chunk no longer holds and are dropped; the mounted chunks measure themselves again.
   useEffect(() => {
@@ -424,6 +463,54 @@ export function Inventory({
     observer.observe(node);
     return () => observer.disconnect();
   }, [container, ready, shownView]);
+  // The position the person left is applied once the results have rendered: the stream has stated
+  // the total it reserves its height from, and the measured column count has settled the chunk size
+  // that height is reserved in. Applied any earlier, the position would be clamped onto a height
+  // that is not there yet and would land on rows the person never saw. A later address inside the
+  // same visit is a different result set and opens at its own first rows, which is why this applies
+  // once. The scroll this sets is measured by the stream itself, so the band follows it.
+  const restoreReady = positionReady({
+    read: ready,
+    total,
+    view: shownView,
+    width,
+  });
+  useLayoutEffect(() => {
+    const node = streamNode.current;
+    if (!opening.current.pending || !restoreReady || !node) return;
+    const target = opening.current.position ?? 0;
+    if (shownView === 'table') node.scrollTop = target;
+    else
+      window.scrollTo(
+        0,
+        node.getBoundingClientRect().top + window.scrollY + target,
+      );
+    opening.current.pending = false;
+    // The band is computed from what the stream measured, and the position just set is what it
+    // measures next: stating it here keeps the stream from asking for the rows at the top of a list
+    // the person is not looking at, and keeps the rows they are looking at from arriving a frame
+    // after the space they sit in.
+    setViewport({
+      top: target,
+      height: shownView === 'table' ? node.clientHeight : window.innerHeight,
+    });
+  }, [container, restoreReady, shownView]);
+
+  // The list is kept in the carrier as it is used, so the address the person is looking at already
+  // holds it when they come back. It is written as the list is left and as its address changes -
+  // the cleanup of an effect that follows the state it writes - so a visit to a property leaves the
+  // list behind it.
+  useEffect(() => {
+    const opened = opening.current;
+    return () => {
+      writeListState(carrier, resultLocation, {
+        text: typed,
+        edited: addressEdited,
+        scroll: opened.pending ? (opened.position ?? 0) : viewport.top,
+      });
+    };
+  }, [carrier, resultLocation, typed, addressEdited, viewport.top]);
+
   // The band asks the stream for the windows it would show, and tells it which row position it is
   // centred on, so a deep scroll keeps its own windows and drops the far ones. A locally filtered
   // list reads nothing: the rows it draws are already in the browser.
@@ -466,12 +553,6 @@ export function Inventory({
     return indexes;
   }, [band.first, band.last, chunkCount]);
 
-  const resultLocation = inventoryHref({
-    query: initialQuery,
-    sort,
-    view: requestedView,
-    filters,
-  });
   const showEntry = order !== null;
   const openDrawer = useCallback(
     (record: PropertySummary, opener: HTMLElement | null) =>
@@ -1006,7 +1087,7 @@ export function Inventory({
               ) : null}
               <div
                 className="inventory-stream"
-                ref={setContainer}
+                ref={bindStream}
                 data-view={shownView}
                 tabIndex={shownView === 'table' ? 0 : undefined}
                 role={shownView === 'table' ? 'region' : undefined}
