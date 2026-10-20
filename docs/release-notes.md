@@ -114,8 +114,7 @@ Supabase project: **18,801 properties** (all `record_review_status = pending`), 
 legacy addresses and 18,510 converted current addresses, **8,078 distinct owner contacts** over 8,444
 recorded links, **2,220 ready files** (587 MiB over 1,034 properties) stored in the private R2 bucket
 through the application's own registration and completion RPCs, 18,587 `Historical` rows archived in
-the import's private staging table (that table was pruned on 20 October; see the README), and **35
-employees** with **33 recorded invitations**.
+the import's private staging table, and **35 employees** with **33 recorded invitations**.
 
 _Why it matters:_ the inventory is now real, with every imported row traceable through
 `private.property_source_map` to its workbook row, and nothing approved or finalised by the import:
@@ -129,6 +128,15 @@ and recovered by **resuming**, never by reseeding: the link reset roughly half o
 attempts, and an expired Drive token lost 326 downloads in the second pass, which the third pass
 recovered with zero failures. The production write stage is now pinned in the script and refuses to
 write to another account's bucket (#151), so a mislabelled environment file cannot retarget it.
+
+_Later, on 20 October 2026, that project's import staging archive was **pruned**._ The staging table
+(41,484 rows / 68 MB) and the provenance map that pointed at it (39,608 rows / 7.7 MB) held import
+scratch the application never reads, so removing them changed no application behaviour and reclaimed
+75 MB of the database (229 MB → 154 MB). The rows were archived gzipped outside the database before
+deletion — 41,484 rows, 4.1 MiB, read back line by line — and the property-to-source-key map was
+deliberately **kept** (18,801 rows, 5.2 MB), so every imported property is still traceable to its
+workbook row. What that leaves is an audit trail at 82 MB whose 90-day trim is defined but not
+scheduled, so the trail grows without a ceiling until an operator runs the trim.
 
 ## 18 October 2026 — private storage, the first real import, and duplicate addresses
 

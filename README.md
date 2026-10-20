@@ -263,9 +263,13 @@ that ages.
 | `public.employee_invitations` |                                 33 | All `state = recorded`                                                                                |
 | `private.staging_rows`        |                                  0 | **Pruned 20 October 2026**: was 41,484 rows / 68 MB, now 16 kB. Archived outside the database (below) |
 | `private.import_entity_map`   |                                  0 | **Pruned with it**: was 39,608 rows / 7.7 MB, now 16 kB                                               |
-| `private.property_source_map` |                             18,801 | One row per imported property, tracing it to its workbook row                                         |
+| `private.property_source_map` |                             18,801 | Kept: 5.2 MB. One row per imported property, tracing it to its workbook row                           |
+| `private.audit_events`        |                             85,681 | **The largest table: 82 MB.** The audit trail for every guarded write                                 |
 
 **Total production database size: 154 MB**, down from 229 MB — the staging prune reclaimed 75 MB.
+The largest table is now `private.audit_events` at 82 MB over 85,681 rows, and it is the one to watch:
+its 90-day retention trim is defined but **not scheduled**, because the project has no scheduler, so
+the trail currently grows without a ceiling until an operator runs the trim in a maintenance window.
 On the development project, `private.audit_events` measured 7,568 KB within a 25 MB database total
 as an operator-supplied before figure; a production per-table size breakdown has to be taken on the
 production project itself.
@@ -278,10 +282,12 @@ why the table's row count is larger than that read-back. That file is private to
 machine and lives outside this repository, so its path is named here rather than linked.
 
 The bulk of the database is now the **private audit trail**, which records an actor, time and
-before/after values for every guarded write, so it grows with editing rather than with inventory. The
-business tables are small: 18.8k properties with their addresses and links. The **import staging rows**
-and the provenance map that pointed at them were the largest single consumers until the prune above;
-removing them changed no application behaviour, because the application never reads them.
+before/after values for every guarded write, so it grows with editing rather than with inventory —
+82 MB of the 154 MB, with no ceiling in place today. The **import staging rows** and the provenance
+map that pointed at them were the largest single consumers until the prune above; removing them
+changed no application behaviour, because the application never reads them. The property-to-source-key
+map was deliberately kept (18,801 rows, 5.2 MB), so every imported property stays traceable to its
+workbook row. The business tables are small: 18.8k properties with their addresses and links.
 
 Re-measure with an owner (privileged) connection — these are read-only:
 
@@ -320,8 +326,9 @@ select pg_size_pretty(pg_total_relation_size('private.audit_events')) as audit_e
 ```
 
 The audit trail is trimmed only by an operator running `select private.trim_audit_events();` from a
-privileged session in a maintenance window — a destructive action that needs its own authorization
-([docs/database-contract.md](docs/database-contract.md#private-audit-trail-retention)).
+privileged session in a maintenance window — the trim exists but is **not scheduled**, so nothing
+bounds the trail's growth today, and running it is a destructive action that needs its own
+authorization ([docs/database-contract.md](docs/database-contract.md#private-audit-trail-retention)).
 
 ## Limits and what is not built
 
