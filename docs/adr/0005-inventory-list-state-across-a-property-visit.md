@@ -48,4 +48,4 @@ describes instead of being clamped onto a height that is not there yet.
 - The restored position is held until the stream's reserved height reaches it, and that height is
   the stream's own estimate until the chunks around it are measured, so a deep position settles on
   the rows it names as the rows around it are measured rather than in the first frame; a person who
-  scrolls while it is still settling keeps their own position and ends the restore.
+  scrolls the list while it is still settling keeps their own position and ends the restore.
