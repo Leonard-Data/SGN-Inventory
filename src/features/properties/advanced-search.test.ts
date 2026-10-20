@@ -95,7 +95,7 @@ test('the same criteria always produce the same key, and never the catalogue key
   const once = advancedSearchKey({
     scope: 'sales:sales:2',
     criteria: {
-      query: '  le loi  ',
+      query: 'le loi',
       filters: { ...noInventoryFilters, status: 'available', areaMin: '20' },
       sort: 'oldest',
     },
@@ -114,6 +114,21 @@ test('the same criteria always produce the same key, and never the catalogue key
   });
   assert.deepEqual(once, again);
   assert.equal(once[0], 'property-search');
+  // The key states the query exactly as the request sends it: the database searches the surrounding
+  // whitespace, so a query that differs in it is a different entry rather than another search's
+  // page.
+  assert.notDeepEqual(
+    advancedSearchKey({
+      scope: 'sales:sales:2',
+      criteria: {
+        query: '  le loi  ',
+        filters: { ...noInventoryFilters, status: 'available', areaMin: '20' },
+        sort: 'oldest',
+      },
+      page: 0,
+    }),
+    once,
+  );
   // The catalogue keeps its own namespace and its own retention: an advanced result is never read
   // back as a catalogue page, or the other way round.
   const catalogueKey = [

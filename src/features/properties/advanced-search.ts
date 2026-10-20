@@ -64,7 +64,7 @@ export function advancedSearchKey({
   return [
     'property-search',
     scope,
-    criteria.query.trim(),
+    criteria.query,
     ...Object.entries(filterParams(criteria.filters)).flat(),
     criteria.sort ?? '',
     page,

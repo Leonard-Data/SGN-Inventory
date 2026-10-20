@@ -74,14 +74,14 @@ export function useInventoryStream({
           criteria: searchCriteria(source),
           page: offset,
         }),
-        // The query client owns this read's lifecycle: it deduplicates a page already in flight
-        // and cancels it when the scope is cleared, so this read carries its own signal rather
-        // than the window band's.
-        queryFn: ({ signal }) =>
+        // The query client owns the page in flight and cancels it when the scope is cleared; the
+        // window band's signal is composed with it so a superseded read - another submission, or a
+        // result the browser now answers locally - stops with the band that issued it.
+        queryFn: ({ signal: querySignal }) =>
           api<PropertyStream>(
             streamWindowUrl(source, offset),
             undefined,
-            signal,
+            AbortSignal.any([signal, querySignal]),
           ),
         ...ADVANCED_SEARCH_QUERY_OPTIONS,
       });
