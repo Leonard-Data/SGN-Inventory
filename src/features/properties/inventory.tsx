@@ -22,6 +22,12 @@ import { TableChunk, TableHead } from './property-table';
 import { SearchIsland } from './search-island';
 import { useInventoryStream } from './use-inventory-stream';
 import { useCatalogue } from './catalogue-provider';
+import {
+  catalogueProgressView,
+  emptyResultWording,
+  type CatalogueProgressView,
+  type EmptyResultSource,
+} from './catalogue-load';
 import { localAddressQuery, matchCatalogue } from './address-index';
 import type { CatalogueMatch } from './address-index';
 import {
@@ -71,6 +77,59 @@ function subscribeWide(onChange: () => void) {
 }
 const wideSnapshot = () => window.matchMedia(WIDE_QUERY).matches;
 const wideOnServer = () => false;
+
+// The one line the progress indicator states for each state of the load: how much is indexed and,
+// when the authorized total and a determinate percentage are known, out of how much and
+// approximately how far along. An unknown, failed or still-zero total states the loaded count
+// alone rather than inventing a percentage.
+function catalogueProgressText(
+  text: typeof messages.vi,
+  numberFormat: Intl.NumberFormat,
+  view: CatalogueProgressView,
+): string {
+  switch (view.kind) {
+    case 'loading-known':
+      return text.catalogueLoadingKnown
+        .replace('{loaded}', numberFormat.format(view.loaded))
+        .replace('{total}', numberFormat.format(view.total))
+        .replace('{percent}', numberFormat.format(view.percent));
+    case 'loading-unknown':
+      return text.catalogueLoadingUnknown.replace(
+        '{loaded}',
+        numberFormat.format(view.loaded),
+      );
+    case 'incomplete':
+      return text.catalogueIncomplete.replace(
+        '{loaded}',
+        numberFormat.format(view.loaded),
+      );
+    case 'complete':
+      return text.catalogueComplete.replace(
+        '{loaded}',
+        numberFormat.format(view.loaded),
+      );
+  }
+}
+
+// The empty result area's own wording, chosen by the catalogue module: an answer drawn from the
+// loaded properties is never presented as an empty inventory.
+function emptyResultText(
+  text: typeof messages.vi,
+  source: EmptyResultSource,
+): string {
+  switch (emptyResultWording(source)) {
+    case 'catalogue-no-matches':
+      return text.catalogueLocalEmpty;
+    case 'catalogue-failed':
+      return text.catalogueLocalFailed;
+    case 'catalogue-loading':
+      return text.catalogueLocalLoading;
+    case 'filtered':
+      return text.emptyFiltered;
+    case 'inventory':
+      return text.empty;
+  }
+}
 
 export function Inventory({
   initialLocale,
@@ -160,10 +219,13 @@ export function Inventory({
     filterCount,
   );
   const localActive = localQuery !== null;
-  // The local answer exists only when the page it filters is actually here. A load still running
-  // or one that failed states that instead, never a filtered result over rows the browser does not
-  // hold.
-  const localReady = localActive && catalogue.status === 'ready';
+  // The local answer exists as soon as any batch is indexed, so the first page is searchable
+  // before the traversal finishes and before the authorized total arrives. A catalogue with
+  // nothing indexed yet states the load itself, never a filtered result over rows the browser does
+  // not hold.
+  const localReady = localActive && catalogue.index.length > 0;
+  const catalogueFailed =
+    catalogue.status === 'failed' && !catalogue.progress.isComplete;
   const matches = useMemo(() => {
     if (!localActive) return null;
     return localReady
@@ -419,16 +481,53 @@ export function Inventory({
       ? [{ value: 'newest' as const, label: text.sortNewest }]
       : []),
   ];
+  // What the progress indicator states, and where an empty result area may draw its own wording
+  // from. Both are decided by the catalogue module so the honest-coverage rules are tested rather
+  // than buried in a render branch.
+  const progressText = catalogueProgressText(
+    text,
+    numberFormat,
+    catalogueProgressView(catalogue.progress, catalogueFailed),
+  );
+  const emptyText = useMemo(
+    () =>
+      emptyResultText(
+        text,
+        local
+          ? {
+              from: 'catalogue',
+              loaded: localReady,
+              complete: catalogue.progress.isComplete,
+              failed: catalogueFailed,
+            }
+          : { from: 'inventory', filterCount },
+      ),
+    [
+      text,
+      local,
+      localReady,
+      catalogue.progress.isComplete,
+      catalogueFailed,
+      filterCount,
+    ],
+  );
   // What the address box's own filtering states: how much of the loaded catalogue matches, or the
-  // honest state of a load that is not here yet. The note beside the box states that these are the
-  // loaded properties and not the whole inventory.
+  // honest state of a load with nothing indexed yet. The note beside the box states that these are
+  // the loaded properties and not the whole inventory.
   const localStatus = localReady
     ? text.catalogueLocalCount
         .replace('{matches}', numberFormat.format(total))
-        .replace('{loaded}', numberFormat.format(catalogue.loadedCount))
-    : catalogue.status === 'failed'
-      ? text.catalogueLocalFailed
-      : text.catalogueLocalLoading;
+        .replace(
+          '{loaded}',
+          numberFormat.format(catalogue.progress.loadedCount),
+        )
+    : emptyText;
+  const syncedTime = catalogue.progress.lastSyncedAt
+    ? new Intl.DateTimeFormat(locale === 'vi' ? 'vi-VN' : 'en-GB', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }).format(new Date(catalogue.progress.lastSyncedAt))
+    : null;
   const failureMessage = (code: string) =>
     code === 'query-too-long'
       ? text.queryTooLong
@@ -656,7 +755,12 @@ export function Inventory({
           />
           <div className="inventory-search-help">
             {local ? (
-              <p className="search-hint">{text.catalogueLocalNote}</p>
+              <>
+                <p className="search-hint">{text.catalogueLocalNote}</p>
+                {!catalogue.progress.isComplete ? (
+                  <p className="search-hint">{text.catalogueMoreMatches}</p>
+                ) : null}
+              </>
             ) : null}
             <p className="search-hint">{text.inventorySearchHint}</p>
             <details>
@@ -664,6 +768,40 @@ export function Inventory({
               <p>{text.inventorySearchHelp}</p>
             </details>
           </div>
+          {catalogue.scope ? (
+            <div className="catalogue-progress" data-state={catalogue.status}>
+              {/* A numeric value is exposed only when the load can state a determinate percentage;
+                  the text label carries the count either way. It is not a live region, so a batch
+                  arriving never interrupts a screen reader. */}
+              <progress
+                id="catalogue-progress"
+                className="catalogue-progress-bar"
+                max={100}
+                {...(catalogue.progress.progressPercent === null
+                  ? {}
+                  : { value: catalogue.progress.progressPercent })}
+                aria-labelledby="catalogue-progress-label"
+              />
+              <p
+                id="catalogue-progress-label"
+                className="catalogue-progress-text"
+              >
+                {progressText}
+                {syncedTime ? (
+                  <> {text.catalogueSyncedAt.replace('{time}', syncedTime)}</>
+                ) : null}
+              </p>
+              {catalogueFailed ? (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  type="button"
+                  onClick={catalogue.retry}
+                >
+                  {text.retry}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           {sort ? <p className="search-hint">{text.ageHint}</p> : null}
           {searchError ? (
             <p className="search-hint" role="alert">
@@ -761,15 +899,7 @@ export function Inventory({
                     <path d="M20.5 20.5 16.7 16.7" />
                   </svg>
                 </span>
-                <h3>
-                  {local
-                    ? localReady
-                      ? text.catalogueLocalEmpty
-                      : localStatus
-                    : filterCount
-                      ? text.emptyFiltered
-                      : text.empty}
-                </h3>
+                <h3>{emptyText}</h3>
               </div>
             </div>
           ) : null}
