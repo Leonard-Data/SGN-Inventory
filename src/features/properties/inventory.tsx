@@ -276,8 +276,9 @@ export function Inventory({
   // The typed value renders immediately and the heavier local match runs at a lower priority, so
   // Vietnamese text composition stays responsive and no request is made either way. Measurement
   // decides whether the work later moves to a Web Worker (#195).
+  const deferredTyped = useDeferredValue(typed);
   const run = listRun(
-    { text: typed, edited: addressEdited },
+    { text: deferredTyped, edited: addressEdited },
     { sort, filters: filterCount },
   );
   const localQuery = run.localQuery;

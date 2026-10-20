@@ -20,20 +20,22 @@ const left: InventoryListState = {
   scroll: 4200,
 };
 
-test('the carrier holds the list a person left, per result set', () => {
+// The carrier is bounded to the result set the person is at, which is the one the ticket needs: the
+// list they left is the list they come back to. Writing another result set replaces it rather than
+// keeping a history of every result set ever visited.
+test('the carrier holds the list a person left, and only that one', () => {
   const carrier = newListStateCarrier();
   assert.equal(readListState(carrier, address), null);
   writeListState(carrier, address, left);
   assert.deepEqual(readListState(carrier, address), left);
-  // A different result set is a different list: the same address is what names it.
-  assert.equal(readListState(carrier, other), null);
+  // The bound: one result set at a time, so the list the person is looking at is the one held.
   writeListState(carrier, other, { text: '', edited: false, scroll: 0 });
-  assert.deepEqual(readListState(carrier, address), left);
   assert.deepEqual(readListState(carrier, other), {
     text: '',
     edited: false,
     scroll: 0,
   });
+  assert.equal(readListState(carrier, address), null);
 });
 
 test('a list is written whole, so nothing reaches it after the write', () => {

@@ -160,9 +160,7 @@ test('the view switch is icon-only, with a hidden name and the state kept', () =
 // meeting the page squarely, and the first and last rows are rounded with the frame so no square
 // corner of a row paints over it.
 test('the table sits inside one rounded, bordered surface', () => {
-  const frame = surfaces.slice(
-    surfaces.indexOf('.inventory-stream {'),
-  );
+  const frame = surfaces.slice(surfaces.indexOf('.inventory-stream {'));
   const rule = frame.slice(0, frame.indexOf('}'));
   assert.match(rule, /border: 1px solid var\(--border\)/);
   assert.match(rule, /border-radius: var\(--radius-lg\)/);
