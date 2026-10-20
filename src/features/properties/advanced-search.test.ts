@@ -142,13 +142,13 @@ test('advanced results are retained for a bounded time, separate from the catalo
   assert.notEqual(ADVANCED_SEARCH_QUERY_OPTIONS.staleTime, Infinity);
 });
 
-// A presentation change is not a submission. Switching cards/table or refreshing the language
-// re-renders the list with a freshly built filter record and an address whose parameters are in
-// another order; the search it names is the same one, so the reader keys the same window and
-// reopens nothing.
-test('a presentation change cannot reopen a submitted search', () => {
+// The reader derives a window from the submitted address alone, so a search names the same window
+// however many filter records and criteria objects a render rebuilt for it, and an address that
+// only differs in presentation names that same window. Whether such a render also avoids
+// restarting the read is an effect-level observation and stays a staging gate in `docs/testing.md`.
+test('the reader derives a window from the submitted address, not from a rebuilt object', () => {
   const scope = 'sales:sales:2';
-  const windowKey = (address: URLSearchParams) =>
+  const derived = (address: URLSearchParams) =>
     advancedSearchKey({
       scope,
       criteria: searchCriteria(
@@ -160,28 +160,34 @@ test('a presentation change cannot reopen a submitted search', () => {
       ),
       page: 0,
     });
-  const submitted = windowKey(
-    new URLSearchParams({
-      query: 'le loi',
-      sort: 'oldest',
-      status: 'available',
-    }),
+  const address = new URLSearchParams({
+    query: 'le loi',
+    sort: 'oldest',
+    status: 'available',
+  });
+  const submitted = derived(address);
+  // Two renders build two distinct filter records from the same address: the window is the same
+  // one, because it is keyed by what the address states rather than by object identity.
+  assert.notStrictEqual(inventoryFilters(address), inventoryFilters(address));
+  assert.deepEqual(derived(address), submitted);
+  // A presentation-only address - another view, its parameters in another order - is the same
+  // window.
+  assert.deepEqual(
+    derived(
+      new URLSearchParams({
+        view: 'table',
+        status: 'available',
+        query: 'le loi',
+        sort: 'oldest',
+      }),
+    ),
+    submitted,
   );
-  // After that render: another view, another parameter order, another filter record.
-  const presented = windowKey(
-    new URLSearchParams({
-      view: 'table',
-      status: 'available',
-      query: 'le loi',
-      sort: 'oldest',
-    }),
-  );
-  assert.deepEqual(presented, submitted);
   // A submission that really states other criteria or another ordering is another window.
   for (const other of [
     { query: 'ben thanh', sort: 'oldest', status: 'available' },
     { query: 'le loi', sort: 'newest', status: 'available' },
     { query: 'le loi', sort: 'oldest', status: 'sold' },
   ])
-    assert.notDeepEqual(windowKey(new URLSearchParams(other)), submitted);
+    assert.notDeepEqual(derived(new URLSearchParams(other)), submitted);
 });

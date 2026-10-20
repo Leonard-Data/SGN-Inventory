@@ -89,8 +89,9 @@ function selected(select: string): Map<string, string | null> {
 
 test('the catalogue read names the summary contract and casts its money and measurements', () => {
   const fields = selected(CATALOGUE_SELECT);
-  // Exactly this set: contacts, legal fields, notes, coordinates, the creator and the entry
-  // chronology belong to the detail and chronological reads, which authorize them separately.
+  // Exactly this set: contacts, legal fields, notes, coordinates and the entry chronology belong
+  // to the detail and chronological reads, which authorize them separately. The creator reference
+  // is carried so the ordinary browse keeps its attribution.
   assert.deepEqual([...fields.keys()].sort(), [
     'access_type',
     'cover_file_id',
