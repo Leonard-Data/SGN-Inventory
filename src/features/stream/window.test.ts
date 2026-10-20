@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
   cursorWindowUrl,
+  localStreamWindows,
   STREAM_CHUNK_ROWS,
   STREAM_OVERSCAN_PX,
   streamBand,
@@ -257,5 +258,24 @@ test('the cursor window address carries the search and the filter into every win
   assert.equal(
     cursorWindowUrl('/api/employees', 'cursor'),
     '/api/employees?after=cursor',
+  );
+});
+
+test('rows the browser already holds are published as the windows a read would answer with', () => {
+  const rows = Array.from({ length: 250 }, (_, index) => `row-${index}`);
+  const windows = localStreamWindows(rows);
+  // A window is a slice of the read length, so the rows a page filtered locally stand in for the
+  // stream without a read behind them and every chunk still finds the rows it draws.
+  assert.deepEqual([...windows.keys()], [0, 100, 200]);
+  assert.equal(windows.get(0)?.length, 100);
+  assert.equal(windows.get(200)?.length, 50);
+  assert.equal(windows.get(0)?.[0], 'row-0');
+  assert.equal(windows.get(200)?.[49], 'row-249');
+  // An empty result set is no window at all, not a window holding nothing.
+  assert.equal(localStreamWindows([]).size, 0);
+  // A shorter page length still starts every window at a multiple of it.
+  assert.deepEqual(
+    [...localStreamWindows(rows, 30).keys()],
+    [0, 30, 60, 90, 120, 150, 180, 210, 240],
   );
 });

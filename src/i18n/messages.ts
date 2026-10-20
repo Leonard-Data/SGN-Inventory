@@ -58,6 +58,17 @@ const vi = {
   searchHelp: 'Cách tìm kiếm',
   inventorySearchHelp:
     'Tìm theo một đoạn địa chỉ liên tiếp. Dấu % và _ được tìm như ký tự thường. Dùng bộ lọc để giới hạn giá, diện tích và khu vực.',
+  // The address box narrows the page the browser already holds, so what the person sees is stated
+  // as the loaded catalogue and never as a search of the whole inventory.
+  catalogueLocalCount:
+    'Trong danh mục đã tải: {matches} / {loaded} bất động sản phù hợp.',
+  catalogueLocalNote:
+    'Kết quả lọc trong danh mục đã tải; nhấn nút tìm kiếm để tìm toàn bộ kho.',
+  catalogueLocalLoading:
+    'Đang tải danh mục. Nhấn nút tìm kiếm để tìm toàn bộ kho.',
+  catalogueLocalFailed:
+    'Không tải được danh mục. Nhấn nút tìm kiếm để tìm toàn bộ kho.',
+  catalogueLocalEmpty: 'Không có kết quả trong các bất động sản đã tải.',
   vndBillion: ' tỷ',
   vndMillion: ' triệu',
   quickUpload: 'Tải tập tin nhanh',
@@ -887,6 +898,17 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     searchHelp: 'Search help',
     inventorySearchHelp:
       'Search for a continuous address fragment. The % and _ characters are literal. Use filters to narrow the price, area and location.',
+    // The address box narrows the page the browser already holds, so what the person sees is
+    // stated as the loaded catalogue and never as a search of the whole inventory.
+    catalogueLocalCount:
+      'In the loaded catalogue: {matches} of {loaded} properties match.',
+    catalogueLocalNote:
+      'Matches are filtered within the loaded catalogue; use the search button to search the whole inventory.',
+    catalogueLocalLoading:
+      'Loading the catalogue. Use the search button to search the whole inventory.',
+    catalogueLocalFailed:
+      'The catalogue could not be loaded. Use the search button to search the whole inventory.',
+    catalogueLocalEmpty: 'No matches in the loaded properties.',
     vndBillion: 'bn',
     vndMillion: 'm',
     quickUpload: 'Quick upload',

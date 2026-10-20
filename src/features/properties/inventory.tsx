@@ -20,6 +20,8 @@ import { PropertyDrawer } from './property-drawer';
 import { TableChunk, TableHead } from './property-table';
 import { SearchIsland } from './search-island';
 import { useInventoryStream } from './use-inventory-stream';
+import { useCatalogue } from './catalogue-provider';
+import { localAddressQuery, matchCatalogue } from './address-index';
 import {
   activeFilterCount,
   filterParams,
@@ -37,6 +39,7 @@ import {
 } from './view';
 import {
   isInventoryOrder,
+  localStreamWindows,
   STREAM_CHUNK_ROWS,
   STREAM_ESTIMATE_PX,
   streamBand,
@@ -51,6 +54,8 @@ import { SUMMARY_TABLE_COLUMNS } from './table';
 import type { PropertySummary } from './types';
 
 const NO_MEASURED: ReadonlyMap<number, number> = new Map();
+// A typed search the loaded catalogue cannot answer yet: no rows to filter, not a failed read.
+const NO_MATCHES: PropertySummary[] = [];
 
 // The viewport query behind the switch: below this width the ten-column table is not offered at
 // all, so nobody lands on a table that cannot work there.
@@ -92,6 +97,7 @@ export function Inventory({
   // The filters the address states travel with every read of this stream: the free-text search,
   // the ordering, the filter island and the view switch all carry the same set.
   const activeFilters = filterParams(filters);
+  const filterCount = activeFilterCount(filters);
   const endpoint =
     '/api/properties?' +
     new URLSearchParams({
@@ -130,6 +136,28 @@ export function Inventory({
     onDenied: denyFiles,
   });
   const [searchError, setSearchError] = useState(false);
+  // The address box: typing narrows the loaded catalogue in the browser, and submitting the box
+  // still runs the server search over the whole inventory. A search the page is already showing is
+  // not re-filtered locally, so the box and the results never describe two different searches at
+  // once (ADR 0003).
+  const [typed, setTyped] = useState(initialQuery);
+  const catalogue = useCatalogue();
+  // The text the box is filtering the loaded catalogue with, or null when it is not filtering at
+  // all: the rule lives in `address-index.ts` so it is tested without a browser. Local filtering is
+  // offered for the ordinary browse only, because a chronological ordering or a filter set names a
+  // result set the loaded page cannot state (issue #194).
+  const localQuery = localAddressQuery(typed, initialQuery, sort, filterCount);
+  const localActive = localQuery !== null;
+  // The local answer exists only when the page it filters is actually here. A load still running
+  // or one that failed states that instead, never a filtered result over rows the browser does not
+  // hold.
+  const localReady = localActive && catalogue.status === 'ready';
+  const matches = useMemo(() => {
+    if (!localActive) return null;
+    return localReady
+      ? matchCatalogue(catalogue.index, localQuery)
+      : NO_MATCHES;
+  }, [localActive, localReady, catalogue.index, localQuery]);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [opened, setOpened] = useState<{
     record: PropertySummary;
@@ -144,8 +172,16 @@ export function Inventory({
   const container = useRef<HTMLDivElement | null>(null);
   const [viewport, setViewport] = useState({ top: 0, height: 0 });
   const [width, setWidth] = useState(0);
-  const total = matching ?? 0;
-  const ready = matching !== null;
+  const total = matches !== null ? matches.length : (matching ?? 0);
+  const ready = matches !== null || matching !== null;
+  // What the results area holds: the locally matched rows of the loaded catalogue, or the server
+  // stream. Both are one total order the page draws as chunks of rows, so the area below has one
+  // shape either way.
+  const local = matches !== null;
+  const shownWindows = useMemo(
+    () => (matches !== null ? localStreamWindows(matches) : windows),
+    [matches, windows],
+  );
   // The measured column count: the card grid the stream lays out, and the chunk size in whole
   // rows of it, so a chunk boundary never leaves a half-filled row behind.
   const columns = useMemo(() => cardColumns(width), [width]);
@@ -259,11 +295,12 @@ export function Inventory({
     return () => observer.disconnect();
   }, [ready, shownView]);
   // The band asks the stream for the windows it would show, and tells it which row position it is
-  // centred on, so a deep scroll keeps its own windows and drops the far ones.
+  // centred on, so a deep scroll keeps its own windows and drops the far ones. A locally filtered
+  // list reads nothing: the rows it draws are already in the browser.
   useEffect(() => {
-    if (!ready || !parsedView.ok) return;
+    if (!ready || !parsedView.ok || localActive) return;
     request(needed, band.top);
-  }, [request, needed, band.top, ready, parsedView.ok]);
+  }, [request, needed, band.top, ready, parsedView.ok, localActive]);
 
   // The rows each mounted chunk holds. A chunk whose windows are not all here renders nothing of
   // its own and reserves its space instead, which is an empty-slice result only when the stream
@@ -276,12 +313,12 @@ export function Inventory({
       index <= Math.min(band.last, chunkCount - 1);
       index++
     ) {
-      const rows = streamChunkRows(windows, index * chunkRows, chunkRows);
+      const rows = streamChunkRows(shownWindows, index * chunkRows, chunkRows);
       if (rows === null) continue;
       found.set(index, rows);
     }
     return found;
-  }, [windows, band.first, band.last, chunkCount, chunkRows]);
+  }, [shownWindows, band.first, band.last, chunkCount, chunkRows]);
   const mounted = useMemo(() => {
     const indexes: number[] = [];
     for (
@@ -344,7 +381,16 @@ export function Inventory({
       ? [{ value: 'newest' as const, label: text.sortNewest }]
       : []),
   ];
-  const filterCount = activeFilterCount(filters);
+  // What the address box's own filtering states: how much of the loaded catalogue matches, or the
+  // honest state of a load that is not here yet. The note beside the box states that these are the
+  // loaded properties and not the whole inventory.
+  const localStatus = localReady
+    ? text.catalogueLocalCount
+        .replace('{matches}', numberFormat.format(total))
+        .replace('{loaded}', numberFormat.format(catalogue.loadedCount))
+    : catalogue.status === 'failed'
+      ? text.catalogueLocalFailed
+      : text.catalogueLocalLoading;
   const failureMessage = (code: string) =>
     code === 'query-too-long'
       ? text.queryTooLong
@@ -362,10 +408,12 @@ export function Inventory({
           <h1>{text.inventory}</h1>
           {ready ? (
             <p className="intro-copy" role="status">
-              {text.inventoryMatchCount.replace(
-                '{total}',
-                numberFormat.format(total),
-              )}
+              {local
+                ? localStatus
+                : text.inventoryMatchCount.replace(
+                    '{total}',
+                    numberFormat.format(total),
+                  )}
             </p>
           ) : null}
         </div>
@@ -413,7 +461,8 @@ export function Inventory({
                   name="query"
                   type="search"
                   autoComplete="off"
-                  defaultValue={initialQuery}
+                  value={typed}
+                  onChange={(event) => setTyped(event.currentTarget.value)}
                   aria-invalid={searchError}
                   placeholder={text.search}
                 />
@@ -565,6 +614,9 @@ export function Inventory({
             onDenied={denyFiles}
           />
           <div className="inventory-search-help">
+            {local ? (
+              <p className="search-hint">{text.catalogueLocalNote}</p>
+            ) : null}
             <p className="search-hint">{text.inventorySearchHint}</p>
             <details>
               <summary>{text.searchHelp}</summary>
@@ -668,7 +720,15 @@ export function Inventory({
                     <path d="M20.5 20.5 16.7 16.7" />
                   </svg>
                 </span>
-                <h3>{filterCount ? text.emptyFiltered : text.empty}</h3>
+                <h3>
+                  {local
+                    ? localReady
+                      ? text.catalogueLocalEmpty
+                      : localStatus
+                    : filterCount
+                      ? text.emptyFiltered
+                      : text.empty}
+                </h3>
               </div>
             </div>
           ) : null}

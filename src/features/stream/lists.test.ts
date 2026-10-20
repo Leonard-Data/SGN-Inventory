@@ -33,11 +33,13 @@ test('every streamed list reads the shared hook and the shared geometry', () => 
     assert.match(list, /height=\{layout\.band\.top\}/);
     assert.match(list, /height=\{layout\.band\.bottom\}/);
   }
-  // The properties list is untouched by the extraction: it still reads the stream its own way.
+  // The properties list is untouched by the extraction: it still reads the stream its own way, and
+  // it draws the windows it holds - the stream's own, or the ones a local address filter built
+  // from the catalogue page the browser already has (ADR 0003).
   assert.match(INVENTORY, /useInventoryStream\(\{/);
   assert.match(
     INVENTORY,
-    /streamChunkRows\(windows, index \* chunkRows, chunkRows\)/,
+    /streamChunkRows\(shownWindows, index \* chunkRows, chunkRows\)/,
   );
 });
 
