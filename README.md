@@ -176,7 +176,7 @@ Not environment variables, but part of a working deployment: Supabase Auth email
 invitations and recovery, and the option to switch on Vercel Web Analytics per project. Never enable
 open signup or anonymous sign-in.
 
-`npm run check:env` validates this surface without contacting Supabase and without printing values.
+`npm run check:env` validates this surface without contacting Supabase and without printing values; it also reads the R2 bucket's CORS rule, because the four credentials alone do not prove that a browser upload works.
 `/api/health` reports configuration readiness only (`200` with the stage, otherwise `503`); it proves
 neither database connectivity nor authorization. See [docs/setup.md](docs/setup.md) for the full
 staging, GitHub environment and activation checklist.
