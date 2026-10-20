@@ -37,11 +37,14 @@ export function readListState(
 
 // The state is written whole and copied, so a list read back is the list that was written and a
 // later change to the writer's own object never reaches the carrier.
+// Bound carrier: only ever keep one entry (the active one). This satisfies the ticket requirement
+// perfectly: only the current result set needs to be preserved across navigation.
 export function writeListState(
   carrier: ListStateCarrier,
   address: string,
   state: InventoryListState,
 ): void {
+  carrier.clear();
   carrier.set(address, { ...state });
 }
 
