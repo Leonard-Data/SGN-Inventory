@@ -29,6 +29,9 @@ export type CatalogueAddressVariant = {
 export type CatalogueIndexEntry = {
   record: PropertySummary;
   variants: CatalogueAddressVariant[];
+  // The folded recorded property code, the summary field the database's own text search matches
+  // beside the address.
+  code: string;
 };
 
 // One result: the property and the stored format of the variant that matched it, so the list can
@@ -149,6 +152,7 @@ export function buildAddressIndex(
   return records.map((record) => ({
     record,
     variants: record.addresses.map(variantOf),
+    code: tokenize(record.propertyCode).join(' '),
   }));
 }
 
@@ -178,15 +182,17 @@ function tokenMatches(queryToken: string, variantToken: string): boolean {
     : variantToken.startsWith(queryToken);
 }
 
-// The ranking the specification sets out, lower first: the exact normalized address, the exact
-// house number with its street, the alley sitting under the queried main number, the street with
-// its locality, and then the looser all-token and prefix matches. `prefixPenalty` counts the query
-// tokens that only matched as a prefix, so an exact token outranks a prefix within a rank.
-const EXACT_ADDRESS = 1;
-const NUMBER_AND_STREET = 2;
-const ALLEY_UNDER_NUMBER = 3;
-const STREET_AND_LOCALITY = 4;
-const ALL_TOKENS = 5;
+// The ranking the specification sets out, lower first: the exact recorded property code, the exact
+// normalized address, the exact house number with its street, the alley sitting under the queried
+// main number, the street with its locality, and then the looser all-token and prefix matches.
+// `prefixPenalty` counts the query tokens that only matched as a prefix, so an exact token outranks
+// a prefix within a rank.
+const EXACT_CODE = 1;
+const EXACT_ADDRESS = 2;
+const NUMBER_AND_STREET = 3;
+const ALLEY_UNDER_NUMBER = 4;
+const STREET_AND_LOCALITY = 5;
+const ALL_TOKENS = 6;
 
 type Ranked = { rank: number; prefixPenalty: number };
 
@@ -247,6 +253,16 @@ function compareId(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
+// The recorded property code, which the database's own text search matches beside the address
+// (`stream_inventory` reads `property_code` too). An exact code is the strongest result there is;
+// a code fragment the query falls inside stays at the loosest rank, so it never displaces an
+// address match.
+function codeRank(query: Query, entry: CatalogueIndexEntry): number | null {
+  if (!query.folded || !entry.code) return null;
+  if (query.folded === entry.code) return EXACT_CODE;
+  return entry.code.includes(query.folded) ? ALL_TOKENS : null;
+}
+
 // The properties whose recorded address matches what the person typed, best first. Each stored
 // variant is searched on its own, so a query can never match a mixture of an old district and a
 // current ward, and a property matches when any one of its variants does. An empty query is the
@@ -264,7 +280,7 @@ export function matchCatalogue(
   const found: { ranked: Ranked; match: CatalogueMatch }[] = [];
   for (const entry of index) {
     let best: Ranked | null = null;
-    let bestFormat: string | null = null;
+    let bestFormat = '';
     for (const variant of entry.variants) {
       const ranked = rankVariant(parsed, variant);
       if (!ranked) continue;
@@ -273,7 +289,12 @@ export function matchCatalogue(
         bestFormat = variant.format;
       }
     }
-    if (best && bestFormat !== null)
+    const code = codeRank(parsed, entry);
+    if (code !== null && (!best || code < best.rank)) {
+      best = { rank: code, prefixPenalty: 0 };
+      bestFormat = '';
+    }
+    if (best)
       found.push({
         ranked: best,
         match: { record: entry.record, format: bestFormat },

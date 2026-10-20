@@ -918,7 +918,7 @@ export function Inventory({
         {busy ? <SkeletonCards label={text.loading} /> : null}
 
         <div ref={surface} hidden={!employee || busy}>
-          {ready && streamError && total === 0 ? (
+          {streamError && total === 0 ? (
             <div className="panel">
               <div className="state-panel" data-tone="danger">
                 <h3>{failureMessage(streamError)}</h3>

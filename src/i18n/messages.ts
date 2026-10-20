@@ -63,7 +63,7 @@ const vi = {
   catalogueLocalCount:
     'Trong danh mục đã tải: {matches} / {loaded} bất động sản phù hợp.',
   catalogueLocalNote:
-    'Kết quả lọc trong danh mục đã tải; nhấn nút tìm kiếm để tìm toàn bộ kho.',
+    'Kết quả lọc trong danh mục đã tải theo mã bất động sản và các phần địa chỉ đã ghi; nhấn nút tìm kiếm để tìm toàn bộ kho, nơi cũng tìm theo tên tỉnh/thành phố, quận/huyện và xã/phường đã ghi.',
   catalogueLocalLoading:
     'Đang tải danh mục. Nhấn nút tìm kiếm để tìm toàn bộ kho.',
   catalogueLocalFailed:
@@ -934,7 +934,7 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     catalogueLocalCount:
       'In the loaded catalogue: {matches} of {loaded} properties match.',
     catalogueLocalNote:
-      'Matches are filtered within the loaded catalogue; use the search button to search the whole inventory.',
+      'Matches are filtered in the loaded catalogue on the property code and the recorded address parts; use the search button to search the whole inventory, which also matches the recorded province, district and ward names.',
     catalogueLocalLoading:
       'Loading the catalogue. Use the search button to search the whole inventory.',
     catalogueLocalFailed:

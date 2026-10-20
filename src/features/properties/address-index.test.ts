@@ -272,6 +272,28 @@ test('ranking follows exact address, exact number and street, street and localit
   assert.deepEqual(found('le loi'), ['2', '3', '4', '5']);
 });
 
+test('a property code is matched beside the address, and an exact code ranks first', () => {
+  // The database's own text search matches the recorded property code beside the address, so the
+  // browser matches it too instead of answering a code with an empty local result.
+  const exactAddress = property('8', [address('legacy', 'Lê Lợi')]);
+  const coded: PropertySummary = {
+    ...property('9', [address('legacy', '99 Nguyễn Huệ')]),
+    propertyCode: 'LE-LOI',
+  };
+  const numbered = property('7', [address('legacy', '7 Trần Hưng Đạo')]);
+  const indexed = buildAddressIndex([exactAddress, coded, numbered]);
+  const ids = (query: string) =>
+    matchCatalogue(indexed, query).map((match) => match.record.id);
+  // An exact code is the strongest result there is: above even an exactly recorded address that
+  // states the same text.
+  assert.deepEqual(ids('LE-LOI'), ['9', '8']);
+  // A code typed in full finds its row, a fragment of it does, and neither claims a recorded
+  // address format for the match.
+  assert.deepEqual(ids('BDS-7'), ['7']);
+  assert.deepEqual(ids('DS-7'), ['7']);
+  assert.equal(matchCatalogue(indexed, 'BDS-7')[0]?.format, '');
+});
+
 test('the same search always returns the same order', () => {
   const reversed = buildAddressIndex([...RECORDS].reverse());
   assert.deepEqual(

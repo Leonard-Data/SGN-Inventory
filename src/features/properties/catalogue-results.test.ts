@@ -297,6 +297,13 @@ test('a typed query keeps the address ranking and a browse takes the catalogue o
   assert.deepEqual(ids('le loi'), ['a', 'b', 'c']);
   assert.deepEqual(ids(''), ['b', 'c', 'a']);
   assert.deepEqual(ids('', { ...noInventoryFilters, status: 'sold' }), []);
+  // The database's own search matches the recorded property code, so a code typed into the box
+  // finds its loaded row, alone or beside a local filter.
+  assert.deepEqual(ids('BDS-b'), ['b']);
+  assert.deepEqual(
+    ids('BDS-b', { ...noInventoryFilters, status: 'available' }),
+    ['b'],
+  );
 });
 
 test('the browser pages the local answer from the rows it holds', () => {
