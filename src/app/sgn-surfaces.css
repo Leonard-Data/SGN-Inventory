@@ -169,7 +169,7 @@
    header's own border attached to it while it scrolls. This bounded scrollport owns
    both axes: a horizontal-only overflow would also capture sticky positioning, so
    the stream measures this scrollport for its virtual band rather than the page. */
-.inventory-stream[data-view='table'] {
+.inventory-stream {
   width: 100%;
   max-width: 100%;
   max-height: calc(100dvh - var(--topbar-h) - var(--space-6));
@@ -179,6 +179,11 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
+}
+.inventory-stream[data-view='table'] {
+}
+.inventory-stream[data-view='cards'] {
+  padding: var(--space-4);
 }
 .inventory-table {
   width: 100%;
