@@ -36,10 +36,10 @@ and a deployer had no single place stating which configuration actually has to b
 app to run.
 
 _Known gap:_ the production figures are the operator's 20 October measurements relayed into the
-document. No copy of this repository holds database credentials and the Data API refuses an
-unauthenticated read, so nothing in that table was re-measured here; the queries that reproduce it
-are given beside it, and the README lists the acceptance gates that remain outstanding rather than
-implying them.
+document. That documentation run had no database credentials and the Data API refused an
+unauthenticated read, so the database figures were not re-measured; the queries that reproduce them
+are given beside the README's table, and it lists the acceptance gates that remain outstanding rather
+than implying they passed.
 
 ### Three directory defects closed: one header, a stacked access cell, a reserved window skeleton (#182, #185)
 
