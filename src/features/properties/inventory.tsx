@@ -10,7 +10,6 @@ import {
   type FormEvent,
 } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { messages, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { renderedSession } from '@/features/employees/protected-load';
@@ -29,8 +28,13 @@ import {
   type EmptyResultSource,
 } from './catalogue-load';
 import type { CatalogueRefreshView } from './catalogue-refresh';
-import { localAddressQuery, matchCatalogue } from './address-index';
+import {
+  catalogueMatches,
+  inventoryRead,
+  resultMode,
+} from './catalogue-results';
 import type { CatalogueMatch } from './address-index';
+import type { AdvancedCriteria } from './advanced-search';
 import {
   activeFilterCount,
   filterParams,
@@ -47,7 +51,6 @@ import {
   shownInventoryView,
 } from './view';
 import {
-  isInventoryOrder,
   localStreamWindows,
   STREAM_CHUNK_ROWS,
   STREAM_ESTIMATE_PX,
@@ -58,7 +61,6 @@ import {
   streamChunkRows,
   streamOffsets,
   streamWindows,
-  type InventoryOrder,
 } from './stream';
 import { SUMMARY_TABLE_COLUMNS } from './table';
 import type { PropertySummary } from './types';
@@ -181,7 +183,6 @@ export function Inventory({
 }) {
   const text = messages[initialLocale];
   const locale = initialLocale;
-  const router = useRouter();
   const parsedView = parseInventoryView(view);
   const requestedView = parsedView.ok
     ? parsedView.view
@@ -191,7 +192,6 @@ export function Inventory({
   // address cannot put a person on one.
   const wide = useSyncExternalStore(subscribeWide, wideSnapshot, wideOnServer);
   const shownView = shownInventoryView(requestedView, wide);
-  const activeOrder = isInventoryOrder(sort) ? sort : null;
   // The filters the address states travel with every read of this stream: the free-text search,
   // the ordering, the filter island and the view switch all carry the same set.
   const activeFilters = filterParams(filters);
@@ -222,10 +222,33 @@ export function Inventory({
     },
     [clear],
   );
+  const [searchError, setSearchError] = useState(false);
+  const [typed, setTyped] = useState(initialQuery);
+  const [addressEdited, setAddressEdited] = useState(false);
   const catalogue = useCatalogue(session);
+  // The generation is part of the scope so a replacement catalogue restarts the advanced reader
+  // too: Refresh and Retry drop older windows instead of leaving rows of the replaced catalogue.
   const sessionKey = session
     ? `${renderedSession(session.employee)}:${session.accessRevision}:${catalogue.progress.generationId}`
     : null;
+  // Which result set the address describes: the filters, the ordering and the paging the loaded
+  // catalogue can answer are computed in the browser, and a criterion the catalogue has no field
+  // for is an explicit whole-inventory search (issue #194). The split is `catalogue-results.ts`,
+  // so which filters are offered locally and which route to advanced search is tested without a
+  // browser.
+  const mode = resultMode({
+    query: initialQuery,
+    filters,
+    sort,
+    typing: addressEdited,
+  });
+  const read = inventoryRead({ mode, endpoint });
+  // The criteria an advanced page is cached under: a submitted search, with the ordering it was
+  // submitted with (issue #194).
+  const advancedCriteria = useMemo<AdvancedCriteria>(
+    () => ({ query: initialQuery, filters, sort }),
+    [initialQuery, filters, sort],
+  );
   const {
     windows,
     total: matching,
@@ -234,28 +257,26 @@ export function Inventory({
     request,
     retry,
   } = useInventoryStream({
-    source: employee && parsedView.ok ? endpoint : null,
+    // A catalogue result names no endpoint at all, so the browser answers from the rows it holds
+    // and no search-data request is made until the person runs an advanced search.
+    source:
+      employee && parsedView.ok && read.kind === 'advanced'
+        ? read.endpoint
+        : null,
     identity: sessionKey ?? 'no-session',
+    scope: sessionKey ?? 'no-session',
+    criteria: read.kind === 'advanced' ? advancedCriteria : null,
     onDenied: denyFiles,
   });
-  const [searchError, setSearchError] = useState(false);
-  const [typed, setTyped] = useState(initialQuery);
-  const [addressEdited, setAddressEdited] = useState(false);
-  // The text the box is filtering the loaded catalogue with, or null when it is not filtering at
-  // all: the rule lives in `address-index.ts` so it is tested without a browser. Local filtering is
-  // offered for the ordinary browse only, because a chronological ordering or a filter set names a
-  // result set the loaded page cannot state (issue #194).
+  // The text the box narrows the loaded catalogue with, or null while the result set is the
+  // advanced search's. Every catalogue result - the ordinary browse, a supported filter, a typed
+  // query - is filtered, ordered and paged from rows the browser already holds and reads nothing.
   //
   // The typed value renders immediately and the heavier local match runs at a lower priority, so
-  // Vietnamese text composition stays responsive and no request is made either way. Measurement
-  // decides whether the work later moves to a Web Worker (#195).
+  // Vietnamese text composition stays responsive. Measurement decides whether the work later
+  // moves to a Web Worker (#195).
   const deferredTyped = useDeferredValue(typed);
-  const localQuery = localAddressQuery(
-    deferredTyped,
-    addressEdited,
-    sort,
-    filterCount,
-  );
+  const localQuery = mode === 'catalogue' ? deferredTyped.trim() : null;
   const localActive = localQuery !== null;
   // The local answer exists as soon as any batch is indexed, so the first page is searchable
   // before the traversal finishes and before the authorized total arrives. A catalogue with
@@ -267,9 +288,9 @@ export function Inventory({
   const matches = useMemo(() => {
     if (!localActive) return null;
     return localReady
-      ? matchCatalogue(catalogue.index, localQuery)
+      ? catalogueMatches(catalogue.index, { query: localQuery, filters })
       : NO_MATCHES;
-  }, [localActive, localReady, catalogue.index, localQuery]);
+  }, [localActive, localReady, catalogue.index, localQuery, filters]);
   // The rows the local answer holds, and the stored format each one matched through. The format is
   // only stated while a query is actually filtering: an empty box lists every loaded property and
   // has no match to explain.
@@ -302,7 +323,13 @@ export function Inventory({
   const [viewport, setViewport] = useState({ top: 0, height: 0 });
   const [width, setWidth] = useState(0);
   const total = matches !== null ? matches.length : (matching ?? 0);
-  const ready = matches !== null || matching !== null;
+  // A catalogue result is ready once any batch is indexed, or once the load ended without one: the
+  // list states the load itself rather than an empty inventory before that, and never presents a
+  // filtered view of the rows it happens to hold as a search of the whole inventory.
+  const ready =
+    matches !== null
+      ? localReady || catalogue.progress.isComplete || catalogueFailed
+      : matching !== null;
   // What the results area holds: the locally matched rows of the loaded catalogue, or the server
   // stream. Both are one total order the page draws as chunks of rows, so the area below has one
   // shape either way.
@@ -499,23 +526,9 @@ export function Inventory({
       setSearchError(false);
     }
   }
-  // Changing the ordering starts the stream over; the ordering never rewrites the search, the
-  // filters or the view.
-  function orderHref(next: InventoryOrder | null) {
-    return inventoryHref({
-      query: initialQuery,
-      sort: next,
-      view: requestedView,
-      filters,
-    });
-  }
-  const orders: { value: InventoryOrder | null; label: string }[] = [
-    { value: null, label: text.sortDefault },
-    { value: 'oldest', label: text.sortOldest },
-    ...(activeOrder === 'newest'
-      ? [{ value: 'newest' as const, label: text.sortNewest }]
-      : []),
-  ];
+  // The ordering is not offered beside the box any more: the chronological orderings the database
+  // answers are advanced criteria, and they are submitted from the filter panel with the rest of
+  // them instead of running the moment a control changes (issue #194).
   // What the progress indicator states, and where an empty result area may draw its own wording
   // from. Both are decided by the catalogue module so the honest-coverage rules are tested rather
   // than buried in a render branch.
@@ -671,29 +684,6 @@ export function Inventory({
                 <input key={name} type="hidden" name={name} value={value} />
               ))}
             </form>
-            <label className="sr" htmlFor="inventory-sort">
-              {text.sortLabel}
-            </label>
-            <select
-              id="inventory-sort"
-              className="select toolbar-sort"
-              key={sort ?? 'default'}
-              defaultValue={sort ?? ''}
-              onChange={(event) => {
-                const next = event.currentTarget.value;
-                router.push(orderHref(isInventoryOrder(next) ? next : null));
-              }}
-            >
-              {orders.map((order) => (
-                <option
-                  key={order.value ?? 'default'}
-                  value={order.value ?? ''}
-                  hidden={order.value === 'newest'}
-                >
-                  {order.label}
-                </option>
-              ))}
-            </select>
             <button
               className="btn btn-secondary btn-sm"
               type="button"
@@ -799,7 +789,12 @@ export function Inventory({
                   <p className="search-hint">{text.catalogueMoreMatches}</p>
                 ) : null}
               </>
-            ) : null}
+            ) : (
+              // The advanced result is the database's answer for the whole inventory: the note
+              // says so, so a result the browser could not have produced is never read as a local
+              // filter over the loaded rows.
+              <p className="search-hint">{text.advancedSearchNote}</p>
+            )}
             <p className="search-hint">{text.inventorySearchHint}</p>
             <details>
               <summary>{text.searchHelp}</summary>

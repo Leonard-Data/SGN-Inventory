@@ -131,6 +131,15 @@ const vi = {
     'Chỉ gồm hồ sơ đang chào hoặc đang thương lượng, chưa lưu trữ. Thứ tự dùng ngày nhập kho gốc, không đổi khi cập nhật, đổi giá hoặc đăng lại. Hồ sơ chưa xác định ngày nhập kho được liệt kê sau cùng, không bị ẩn.',
   filters: 'Bộ lọc',
   filtersApply: 'Áp dụng bộ lọc',
+  catalogueFiltersHeading: 'Bộ lọc trong danh mục đã tải',
+  catalogueFiltersHint:
+    'Các bộ lọc này chạy ngay trên danh mục đã tải trong trình duyệt và không gửi yêu cầu nào.',
+  advancedSearchHeading: 'Tìm kiếm toàn kho',
+  advancedSearchHint:
+    'Tỉnh/thành phố, xã/phường, người liên hệ và thứ tự theo ngày nhập kho không có trong danh mục đã tải, nên chúng chỉ được tìm khi bạn bấm nút bên dưới. Kết quả khi đó là câu trả lời của toàn kho, không phải của danh mục đã tải.',
+  advancedSearchRun: 'Tìm toàn kho',
+  advancedSearchNote:
+    'Kết quả tìm kiếm trên toàn kho, không phải danh mục đã tải.',
   filtersClear: 'Xoá bộ lọc',
   filtersRemove: 'Bỏ điều kiện lọc',
   filtersAny: 'Tất cả',
@@ -991,6 +1000,15 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
       'Available and negotiating unarchived inventory only. Order uses the original inventory entry date and does not change on update, price edit or relisting. Records with an unknown entry date are listed last, never hidden.',
     filters: 'Filters',
     filtersApply: 'Apply filters',
+    catalogueFiltersHeading: 'Filters in the loaded catalogue',
+    catalogueFiltersHint:
+      'These filters run on the loaded catalogue in the browser and send no request.',
+    advancedSearchHeading: 'Whole-inventory search',
+    advancedSearchHint:
+      'Province/city, commune/ward, contact and the inventory-entry order are not in the loaded catalogue, so they are searched only when you press the button below. Those results are the whole inventory, not the loaded catalogue.',
+    advancedSearchRun: 'Run advanced search',
+    advancedSearchNote:
+      'These results come from a whole-inventory search, not from the loaded catalogue.',
     filtersClear: 'Clear filters',
     filtersRemove: 'Remove filter',
     filtersAny: 'Any',

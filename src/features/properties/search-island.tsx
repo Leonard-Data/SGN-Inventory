@@ -25,6 +25,8 @@ import {
   type InventoryFilters,
 } from './filters';
 import { inventoryHref, type InventoryView } from './view';
+import { isInventoryOrder } from './stream';
+import { draftNeedsAdvancedSearch } from './catalogue-results';
 
 // The official catalog rows the province/ward pickers read. Names are source data and are never
 // translated, so a language switch keeps the same unit name.
@@ -60,6 +62,10 @@ export function SearchIsland({
   const appliedProvince = filters.province ?? '';
   const appliedWard = filters.ward ?? '';
   const appliedContact = filters.contact ?? '';
+  // The stated ordering, when the address carries one. A chronological ordering is an advanced
+  // criterion: it names the eligible-status database view, which the loaded catalogue cannot
+  // state, so it is submitted from this panel rather than run as soon as a control changes.
+  const appliedOrder = isInventoryOrder(sort) ? sort : '';
   const appliedStateKey = JSON.stringify([
     query,
     sort,
@@ -67,6 +73,7 @@ export function SearchIsland({
   ]);
   const [invalid, setInvalid] = useState(false);
   const [mode, setMode] = useState(appliedMode);
+  const [order, setOrder] = useState(appliedOrder);
   // The dialog's live province selection drives the dependent ward list; applying or dismissing
   // returns both to the filter set the address currently states. The contact selection is the
   // same shape: it starts at the applied value and returns to it on dismiss.
@@ -83,6 +90,7 @@ export function SearchIsland({
     onOpen(false);
     setInvalid(false);
     setMode(appliedMode);
+    setOrder(appliedOrder);
     setProvince(appliedProvince);
     setWard(appliedWard);
     setContact(appliedContact);
@@ -99,12 +107,14 @@ export function SearchIsland({
   }, [open]);
   useEffect(() => {
     setMode(appliedMode);
+    setOrder(appliedOrder);
     setInvalid(false);
     setProvince(appliedProvince);
     setWard(appliedWard);
     setContact(appliedContact);
   }, [
     appliedMode,
+    appliedOrder,
     appliedProvince,
     appliedWard,
     appliedContact,
@@ -209,7 +219,14 @@ export function SearchIsland({
       return;
     }
     dismiss();
-    router.push(inventoryHref({ query, sort, view, filters: parsed.filters }));
+    router.push(
+      inventoryHref({
+        query,
+        sort: isInventoryOrder(order) ? order : null,
+        view,
+        filters: parsed.filters,
+      }),
+    );
   }
   const vnd = (value: string) =>
     wholeVnd(value) ? formatVnd(value, locale) : value;
@@ -228,6 +245,16 @@ export function SearchIsland({
       : selectedMode
         ? [text.priceUnitVnd]
         : [text.priceUnitVnd, text.priceUnitMonthly];
+  // Whether the panel is holding criteria the loaded catalogue cannot answer. Only these make the
+  // submission an advanced search, so the action names the read it will perform instead of
+  // promising a filter. It is asked of the draft, so an edit is still only an edit: nothing is
+  // submitted until the panel is run.
+  const advancedDraft = draftNeedsAdvancedSearch({
+    province,
+    ward,
+    contact,
+    order,
+  });
   // The current filter set stays visible as removable chips, and each chip removes exactly its
   // own condition, so the address is still the only place a filter lives.
   const applied: { key: InventoryFilterKey; label: string }[] = [];
@@ -420,14 +447,43 @@ export function SearchIsland({
             </button>
           </div>
           <div className="sgn-dialog-body">
+            {/* The two groups are what the local/advanced split means at the controls: the first
+                group is filtered in the browser from the loaded catalogue and sends nothing, the
+                second names criteria the catalogue has no field for and is read from the database
+                once the panel is run. */}
             <div className="form-section">
+              <div className="form-section-head">
+                <h3>{text.catalogueFiltersHeading}</h3>
+              </div>
               <div className="form-grid-3">
                 {select('status', text.status, INVENTORY_STATUSES, true)}
                 {select('mode', text.listingMode, INVENTORY_LISTING_MODES)}
                 {select('type', text.propertyType, INVENTORY_PROPERTY_TYPES)}
               </div>
+              <div className="filter-range">
+                <div className="form-grid">
+                  {bound(
+                    'priceMin',
+                    priceLabel(mode, 'from'),
+                    priceUnits(mode),
+                  )}
+                  {bound('priceMax', priceLabel(mode, 'to'), priceUnits(mode))}
+                </div>
+                <p className="field-hint">{text.priceFilterHint}</p>
+              </div>
+              <div className="filter-range">
+                <div className="form-grid">
+                  {bound('areaMin', text.areaRangeFrom, ['m²'])}
+                  {bound('areaMax', text.areaRangeTo, ['m²'])}
+                </div>
+                <p className="field-hint">{text.areaFilterHint}</p>
+              </div>
+              <p className="field-hint">{text.catalogueFiltersHint}</p>
             </div>
             <div className="form-section">
+              <div className="form-section-head">
+                <h3>{text.advancedSearchHeading}</h3>
+              </div>
               <div className="form-grid">
                 <ContactPicker
                   locale={locale}
@@ -441,8 +497,6 @@ export function SearchIsland({
               </div>
               <input type="hidden" name="contact" value={contact} />
               <p className="field-hint">{text.contactFilterHint}</p>
-            </div>
-            <div className="form-section">
               <div className="form-grid">
                 <div className="field">
                   <label className="field-label" htmlFor="filter-province">
@@ -501,26 +555,26 @@ export function SearchIsland({
                   {text.areaFilterUnavailable}
                 </p>
               ) : null}
-            </div>
-            <div className="form-section">
-              <div className="filter-range">
-                <div className="form-grid">
-                  {bound(
-                    'priceMin',
-                    priceLabel(mode, 'from'),
-                    priceUnits(mode),
-                  )}
-                  {bound('priceMax', priceLabel(mode, 'to'), priceUnits(mode))}
+              <div className="form-grid">
+                <div className="field">
+                  <label className="field-label" htmlFor="filter-sort">
+                    {text.sortLabel}
+                  </label>
+                  <select
+                    id="filter-sort"
+                    className="select"
+                    name="sort"
+                    value={order}
+                    onChange={(event) => setOrder(event.currentTarget.value)}
+                  >
+                    <option value="">{text.sortDefault}</option>
+                    <option value="oldest">{text.sortOldest}</option>
+                    <option value="newest">{text.sortNewest}</option>
+                  </select>
                 </div>
-                <p className="field-hint">{text.priceFilterHint}</p>
               </div>
-              <div className="filter-range">
-                <div className="form-grid">
-                  {bound('areaMin', text.areaRangeFrom, ['m²'])}
-                  {bound('areaMax', text.areaRangeTo, ['m²'])}
-                </div>
-                <p className="field-hint">{text.areaFilterHint}</p>
-              </div>
+              <p className="field-hint">{text.ageHint}</p>
+              <p className="field-hint">{text.advancedSearchHint}</p>
             </div>
             {invalid ? (
               <p className="field-error" role="alert">
@@ -537,7 +591,7 @@ export function SearchIsland({
               {text.filtersClear}
             </Link>
             <button className="btn btn-primary" type="submit">
-              {text.filtersApply}
+              {advancedDraft ? text.advancedSearchRun : text.filtersApply}
             </button>
           </div>
         </form>

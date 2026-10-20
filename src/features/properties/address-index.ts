@@ -38,16 +38,6 @@ export type CatalogueMatch = {
   format: string;
 };
 
-export function localAddressQuery(
-  typed: string,
-  edited: boolean,
-  sort: string | null,
-  filters: number,
-): string | null {
-  if (!edited || sort !== null || filters > 0) return null;
-  return typed.trim();
-}
-
 // Controlled contextual abbreviations, expanded only when the whole token is one of these and only
 // to the name it stands for: P. to Phường, Q. to Quận and so on. Nothing here infers an official
 // boundary change, and nothing rewrites the recorded text - the expansion is comparison only.

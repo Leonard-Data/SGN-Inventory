@@ -211,7 +211,9 @@ function includes<T extends string>(
   return (options as readonly string[]).includes(value);
 }
 
-function areaHundredths(area: string): bigint {
+// One area value as hundredths of a square metre, so two recorded decimal areas compare exactly
+// rather than through a JavaScript number.
+export function areaHundredths(area: string): bigint {
   const [whole, fraction = ''] = area.split('.') as [string, string?];
   return BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0'));
 }
