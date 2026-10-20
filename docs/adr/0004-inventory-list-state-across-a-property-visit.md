@@ -47,4 +47,5 @@ not there yet.
   and opens at its own first rows; the position applies once, to the list the person opened.
 - The restored position is held until the stream's reserved height reaches it, and that height is
   the stream's own estimate until the chunks around it are measured, so a deep position settles on
-  the rows it names as the rows around it are measured rather than in the first frame.
+  the rows it names as the rows around it are measured rather than in the first frame; a person who
+  scrolls while it is still settling keeps their own position and ends the restore.
