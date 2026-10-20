@@ -55,9 +55,9 @@ planned but not built; nothing links to them.
 | `/properties/new`    | Create a property from a known address                                                                                                                                                                                                                                    |
 | `/properties/[id]`   | The full record: legacy and current address, facts, map point, cover photo and private documents, contacts and vendor links, asking-price history, status trail, owner-contact disclosure, discussion, reservations, sale completion, corrections and page-view recording |
 
-The list is one stream, not pages: it is ordered by the server and read window by window as the page
-scrolls, only the rows near the viewport are mounted, and the matching count comes from the same read
-that answers each window. There are no page numbers, no page size and no cursor trail
+The list is one stream, not pages: it is ordered by the server and read window by window as the
+stream scrolls, only the rows near the viewport are mounted, and the matching count comes from the
+same read that answers each window. There are no page numbers, no page size and no cursor trail
 ([ADR 0002](docs/adr/0002-inventory-list-stream-and-table-view.md)).
 
 The address box narrows the catalogue page the browser already holds as a person types, so typing no

@@ -333,26 +333,34 @@ export function Inventory({
     streamNode.current = node;
     setContainer(node);
   }, []);
-  const [viewport, setViewport] = useState({ top: 0, left: 0, page: 0, height: 0 });
+  const [viewport, setViewport] = useState({
+    top: 0,
+    left: 0,
+    page: 0,
+    height: 0,
+  });
   // Where the stream sits: its own two-axis scroll, read off the node that owns the scrollport, and
   // the document's offset above it. The band is measured from the stream's scroll and the carrier
   // holds all of it, so what frames the rows comes from one reading.
-  const syncViewport = useCallback((node: HTMLDivElement) => {
-    const next = {
-      top: node.scrollTop,
-      left: node.scrollLeft,
-      page: window.scrollY,
-      height: node.clientHeight,
-    };
-    setViewport((current) =>
-      current.top === next.top &&
-      current.left === next.left &&
-      current.page === next.page &&
-      current.height === next.height
-        ? current
-        : next,
-    );
-  }, []);
+  const syncViewport = useCallback(
+    (node: HTMLDivElement) => {
+      const next = {
+        top: node.scrollTop,
+        left: node.scrollLeft,
+        page: window.scrollY,
+        height: node.clientHeight,
+      };
+      setViewport((current) =>
+        current.top === next.top &&
+        current.left === next.left &&
+        current.page === next.page &&
+        current.height === next.height
+          ? current
+          : next,
+      );
+    },
+    [setViewport],
+  );
   const [width, setWidth] = useState(0);
   const total = matches !== null ? matches.length : (matching ?? 0);
   const ready = matches !== null || matching !== null;

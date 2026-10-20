@@ -160,8 +160,9 @@
   padding-bottom: var(--space-5);
 }
 
-/* The whole stream is one table: the header row is sticky under the top bar and
-   each mounted chunk is its own tbody, so the ten columns align across chunk
+/* The stream is one surface in both views, and cards add their own padding inside it.
+   In the table the whole stream is one table: the header row is sticky under the top
+   bar and each mounted chunk is its own tbody, so the ten columns align across chunk
    boundaries and a reserved chunk is one full-height row. The rows sit on one
    surface rather than meeting the page squarely: the border and radius are drawn
    by the stream, and the first and last rows are rounded with it so no square
