@@ -24,7 +24,9 @@ test('every streamed list reads the shared hook and the shared geometry', () => 
     assert.match(list, /streamChunkRows\(/);
     assert.match(
       list,
-      /streamKnownRows\(stream\.loaded, stream\.more === true\)/,
+      // The window in flight is reserved whole, so the skeleton stands in for the rows that land
+      // on it rather than one row of them.
+      /streamKnownRows\(\s*stream\.loaded,\s*stream\.more === true,\s*[A-Z_]+PAGE_SIZE,\s*\)/,
     );
     // Only the rows near the viewport are mounted, and the two gaps stand in for the rest.
     assert.match(list, /layout\.mounted\.map\(/);

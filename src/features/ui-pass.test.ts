@@ -94,3 +94,41 @@ test('shared tables distinguish column headings from semantic row headers', () =
     assert.match(source('./' + path), /scope="row"/, path);
   }
 });
+
+test('the employee directory renders one page header in every state', () => {
+  const directory = source('./employees/employee-directory.tsx');
+  // The page rendered two page-head blocks carrying the same heading, so the title and its
+  // toolbar appeared twice. One header carries the eyebrow, the heading the panel is labelled by,
+  // the note and the toolbar, and it is the only one.
+  assert.equal((directory.match(/className="page-head"/g) ?? []).length, 1);
+  assert.equal((directory.match(/<h1/g) ?? []).length, 1);
+  const head = directory.slice(
+    directory.indexOf('className="page-head"'),
+    directory.indexOf('hidden={!actor || busy}'),
+  );
+  assert.match(head, /<p className="example">\{text\.people\}<\/p>/);
+  assert.match(head, /<h1 id="employees">\{text\.employeeDirectory\}<\/h1>/);
+  assert.match(
+    head,
+    /<p className="intro-copy">\{text\.employeeDirectoryNote\}<\/p>/,
+  );
+  assert.match(head, /mayAdministerEmployees\(actor\?\.role \?\? ''\)/);
+  assert.match(directory, /aria-labelledby="employees"/);
+});
+
+test('the stacked mobile table keeps the access cell inside its row', () => {
+  const css = source('../app/sgn-app.css');
+  // The desktop column keeps the width that holds its badges; the one-column stack releases it,
+  // because a minimum width inside a stack wider than the phone makes the page scroll sideways.
+  assert.match(css, /\.data-table \.status-cell \{ min-width: 210px; \}/);
+  const stacked = css.slice(
+    css.indexOf('.data-table.stackable thead'),
+    css.indexOf('.data-table.stackable .row-detail td::before'),
+  );
+  assert.match(
+    stacked,
+    /\.data-table\.stackable \.status-cell \{ min-width: 0; flex-wrap: wrap; \}/,
+  );
+  // The value wraps between its badges, never inside one.
+  assert.match(css, /\.badge \{[^}]*white-space: nowrap/);
+});

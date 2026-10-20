@@ -87,9 +87,14 @@ export function ContactDirectory({
     onDenied: denied,
   });
   const { request, retry, refresh } = stream;
-  // The rows the stream accounts for: what its reads have reached, plus the one row standing for
-  // the window it is about to fetch, so that window's chunk is reserved before it arrives.
-  const rows = streamKnownRows(stream.loaded, stream.more === true);
+  // The rows the stream accounts for: what its reads have reached, plus the window it is about to
+  // fetch, so the chunks that window fills are reserved - as a skeleton sized to its rows, in the
+  // space those rows land on - before it arrives.
+  const rows = streamKnownRows(
+    stream.loaded,
+    stream.more === true,
+    CONTACT_PAGE_SIZE,
+  );
   const ready = stream.more !== null;
   const [container, layout] = useStreamLayout({
     active: ready && !busy,

@@ -7,6 +7,7 @@ import {
   streamBand,
   streamChunkCount,
   streamChunkHeights,
+  streamChunkRows,
   streamKnownRows,
   streamOffsets,
   streamWindows,
@@ -89,7 +90,7 @@ const offsetsFor = (rows: number) => {
 
 test('scrolling near the end of the loaded employees asks for the next window', () => {
   const known = DIRECTORY_PAGE_SIZE * 3;
-  const rows = streamKnownRows(known, true);
+  const rows = streamKnownRows(known, true, DIRECTORY_PAGE_SIZE);
   const { chunkCount, offsets } = offsetsFor(rows);
   const band = streamBand({
     chunkCount,
@@ -130,4 +131,62 @@ test('scrolling near the end of the loaded employees asks for the next window', 
     }),
     [0],
   );
+});
+
+// The window in flight as the employee directory reads it: the rows its reads reached plus the
+// window it pages next, so the skeleton the page draws is the rows that land on it.
+test('the window the directory is about to read is reserved whole, as its skeleton', () => {
+  const known = DIRECTORY_PAGE_SIZE * 2;
+  const rows = streamKnownRows(known, true, DIRECTORY_PAGE_SIZE);
+  // The space reserved past the read rows is the arriving window itself, not one row.
+  assert.equal(rows - known, DIRECTORY_PAGE_SIZE);
+  const chunkCount = streamChunkCount(rows, STREAM_CHUNK_ROWS);
+  const windows = new Map<number, readonly ReturnType<typeof entry>[]>();
+  for (let offset = 0; offset < known; offset += DIRECTORY_PAGE_SIZE)
+    windows.set(
+      offset,
+      Array.from({ length: DIRECTORY_PAGE_SIZE }, (_, index) =>
+        entry(offset + index),
+      ),
+    );
+  const skeletons = new Map<number, number>();
+  for (let index = 0; index < chunkCount; index++) {
+    const start = index * STREAM_CHUNK_ROWS;
+    if (
+      streamChunkRows(
+        windows,
+        start,
+        STREAM_CHUNK_ROWS,
+        DIRECTORY_PAGE_SIZE,
+        rows,
+      ) !== null
+    )
+      continue;
+    // The count the page passes: the rows this chunk draws once its window arrives.
+    skeletons.set(
+      index,
+      Math.min(STREAM_CHUNK_ROWS, Math.max(0, rows - start)),
+    );
+  }
+  // A window in flight is a skeleton per chunk it fills, not one row of it.
+  assert.ok(skeletons.size > 1, `${skeletons.size} reserved chunks`);
+  // The window arrives: every skeleton is replaced by exactly the rows it stood for.
+  windows.set(
+    known,
+    Array.from({ length: DIRECTORY_PAGE_SIZE }, (_, index) =>
+      entry(known + index),
+    ),
+  );
+  for (const [index, count] of skeletons)
+    assert.equal(
+      streamChunkRows(
+        windows,
+        index * STREAM_CHUNK_ROWS,
+        STREAM_CHUNK_ROWS,
+        DIRECTORY_PAGE_SIZE,
+        rows,
+      )?.length,
+      count,
+      `chunk ${index} lands on its reservation`,
+    );
 });
