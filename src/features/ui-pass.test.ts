@@ -114,6 +114,52 @@ test('the employee directory renders one page header in every state', () => {
   );
   assert.match(head, /mayAdministerEmployees\(actor\?\.role \?\? ''\)/);
   assert.match(directory, /aria-labelledby="employees"/);
+  // The header holds its place from the first paint: it is drawn before the surface and the
+  // loading state, which belongs inside the content area rather than above the page.
+  const surfaceAt = directory.indexOf('hidden={!actor || busy}');
+  assert.ok(directory.indexOf('className="page-head"') < surfaceAt);
+  assert.ok(
+    directory.indexOf('{busy ? (') > surfaceAt,
+    'the loading skeleton sits below the surface, inside the content area',
+  );
+});
+
+test('every table draws the same rounded surface and the document reserves its scrollbar', () => {
+  const css = source('../app/sgn-app.css');
+  const base = source('../app/app.css');
+  // The frame belongs to the table itself, so a table written later cannot miss out on it.
+  const start = css.indexOf(
+    '.data-table {\n  width: 100%; border-collapse: separate',
+  );
+  assert.ok(start > 0, 'the shared table surface is declared on .data-table');
+  const rule = css.slice(start, css.indexOf('}', start));
+  assert.match(rule, /border: 1px solid var\(--border\)/);
+  assert.match(rule, /border-radius: var\(--radius-lg\)/);
+  assert.match(rule, /border-collapse: separate/);
+  // The corners of the first and last rows follow the frame; the last row is the last row of
+  // the last group that holds rows, because a streamed table ends in a reserved gap.
+  for (const corner of [
+    '.data-table thead th:first-child {',
+    '.data-table thead th:last-child {',
+    '.data-table > tbody:not(:has(~ tbody > tr)) > tr:last-child > :first-child {',
+    '.data-table > tbody:not(:has(~ tbody > tr)) > tr:last-child > :last-child {',
+  ])
+    assert.ok(css.includes(corner), `${corner} rounds a corner with the frame`);
+  // The directories scroll with the document, which reserves the room its scrollbar takes; the
+  // inventory stream already reserves the same gutter on its own bounded scrollport.
+  assert.match(base, /html:has\(\.sgn-app\) \{ scrollbar-gutter: stable; \}/);
+  // A streamed table sizes its columns from the header, so mounting a window cannot re-cut them.
+  assert.match(
+    css,
+    /\.employee-table-wrap \.data-table \{ table-layout: fixed; \}/,
+  );
+  const directory = source('./employees/employee-directory.tsx');
+  for (const column of ['name', 'email', 'role', 'bio', 'access', 'actions'])
+    assert.match(
+      directory,
+      new RegExp(`data-column="${column}"`),
+      `${column} names its column`,
+    );
 });
 
 test('the stacked mobile table keeps the access cell inside its row', () => {

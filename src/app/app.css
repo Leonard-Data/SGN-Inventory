@@ -112,6 +112,13 @@
 /* ── reusable primitives promoted out of the app layer ───────────────────── */
 
 *, *::before, *::after { box-sizing: border-box; }
+/* The directories scroll with the document, so the document is the scrollport that reserves
+   the room its scrollbar takes. Without it every 100%-wide table reflows by the scrollbar's
+   width each time the page grows past the viewport while the stream loads and measures. The
+   inventory stream already reserves the same gutter on its own bounded scrollport. Scoped to
+   the application shell: the sign-in surfaces are centred cards that do not scroll, and this
+   change is not theirs. */
+html:has(.sgn-app) { scrollbar-gutter: stable; }
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;

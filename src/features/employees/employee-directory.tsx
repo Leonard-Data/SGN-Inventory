@@ -469,6 +469,26 @@ export function EmployeeDirectory({
           : text.employeeDirectoryFailed;
   return (
     <>
+      {/* The page's own header is drawn first and in every state: the loading skeleton used to
+          stand above it, so the title appeared below a placeholder that then disappeared and
+          moved the page. The loading state belongs inside the content area, below the header. */}
+      <div className="page-head">
+        <div className="page-intro">
+          <p className="example">{text.people}</p>
+          <h1 id="employees">{text.employeeDirectory}</h1>
+          <p className="intro-copy">{text.employeeDirectoryNote}</p>
+        </div>
+        {mayAdministerEmployees(actor?.role ?? '') ? (
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => setInvitationOpen(true)}
+          >
+            {text.employeeInviteOpen}
+          </button>
+        ) : null}
+      </div>
+
       {failure ? (
         <div className="alert" data-tone="danger" role="alert">
           <svg
@@ -499,33 +519,6 @@ export function EmployeeDirectory({
         </div>
       ) : null}
 
-      {busy ? (
-        <LoadingSkeleton
-          label={text.loading}
-          className="panel page-section"
-          shape="table"
-          rows={6}
-          columns={COLUMNS}
-        />
-      ) : null}
-
-      <div className="page-head">
-        <div className="page-intro">
-          <p className="example">{text.people}</p>
-          <h1 id="employees">{text.employeeDirectory}</h1>
-          <p className="intro-copy">{text.employeeDirectoryNote}</p>
-        </div>
-        {mayAdministerEmployees(actor?.role ?? '') ? (
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={() => setInvitationOpen(true)}
-          >
-            {text.employeeInviteOpen}
-          </button>
-        ) : null}
-      </div>
-
       <div ref={surface} hidden={!actor || busy}>
         <section className="panel page-section" aria-labelledby="employees">
           <div className="panel-body">
@@ -547,12 +540,26 @@ export function EmployeeDirectory({
                 <table className="data-table stackable">
                   <thead>
                     <tr>
-                      <th scope="col">{text.employeeName}</th>
-                      <th scope="col">{text.email}</th>
-                      <th scope="col">{text.employeeRole}</th>
-                      <th scope="col">{text.employeeBio}</th>
-                      <th scope="col">{text.employeeAccess}</th>
-                      <th className="cell-actions" scope="col">
+                      <th scope="col" data-column="name">
+                        {text.employeeName}
+                      </th>
+                      <th scope="col" data-column="email">
+                        {text.email}
+                      </th>
+                      <th scope="col" data-column="role">
+                        {text.employeeRole}
+                      </th>
+                      <th scope="col" data-column="bio">
+                        {text.employeeBio}
+                      </th>
+                      <th scope="col" data-column="access">
+                        {text.employeeAccess}
+                      </th>
+                      <th
+                        className="cell-actions"
+                        scope="col"
+                        data-column="actions"
+                      >
                         {text.employeeActions}
                       </th>
                     </tr>
@@ -653,6 +660,15 @@ export function EmployeeDirectory({
           </div>
         </div>
       </dialog>
+      {busy ? (
+        <LoadingSkeleton
+          label={text.loading}
+          className="panel page-section"
+          shape="table"
+          rows={6}
+          columns={COLUMNS}
+        />
+      ) : null}
     </>
   );
 }
