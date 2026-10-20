@@ -380,6 +380,11 @@ export function Inventory({
     position: restored?.scroll ?? null,
     pending: (restored?.scroll ?? null) !== null,
   });
+
+  // Reset pending opening position when result set changes so old positions are not applied to new results
+  useEffect(() => {
+    opening.current = { position: null, pending: false };
+  }, [resultLocation]);
   // A new column count or a new result set relabels every chunk, so old measurements describe
   // rows the chunk no longer holds and are dropped; the mounted chunks measure themselves again.
   useEffect(() => {
@@ -422,11 +427,8 @@ export function Inventory({
     let pending = 0;
     const measure = () => {
       pending = 0;
-      const rect = node.getBoundingClientRect();
-      const top =
-        shownView === 'table' ? node.scrollTop : Math.max(0, -rect.top);
-      const height =
-        shownView === 'table' ? node.clientHeight : window.innerHeight;
+      const top = node.scrollTop;
+      const height = node.clientHeight;
       setViewport((current) =>
         current.top === top && current.height === height
           ? current
@@ -437,19 +439,17 @@ export function Inventory({
       if (!pending) pending = requestAnimationFrame(measure);
     };
     measure();
-    window.addEventListener('scroll', schedule, { passive: true });
     node.addEventListener('scroll', schedule, { passive: true });
     window.addEventListener('resize', schedule);
     const observer = new ResizeObserver(schedule);
     observer.observe(node);
     return () => {
       if (pending) cancelAnimationFrame(pending);
-      window.removeEventListener('scroll', schedule);
       node.removeEventListener('scroll', schedule);
       window.removeEventListener('resize', schedule);
       observer.disconnect();
     };
-  }, [container, ready, shownView, busy]);
+  }, [container, ready, busy]);
   // The width the card grid is laid out in, so the column count is the browser's own answer.
   useEffect(() => {
     const node = container;
@@ -479,12 +479,7 @@ export function Inventory({
     const node = streamNode.current;
     if (!opening.current.pending || !restoreReady || !node) return;
     const target = opening.current.position ?? 0;
-    if (shownView === 'table') node.scrollTop = target;
-    else
-      window.scrollTo(
-        0,
-        node.getBoundingClientRect().top + window.scrollY + target,
-      );
+    node.scrollTop = target;
     opening.current.pending = false;
     // The band is computed from what the stream measured, and the position just set is what it
     // measures next: stating it here keeps the stream from asking for the rows at the top of a list
@@ -492,23 +487,20 @@ export function Inventory({
     // after the space they sit in.
     setViewport({
       top: target,
-      height: shownView === 'table' ? node.clientHeight : window.innerHeight,
+      height: node.clientHeight,
     });
-  }, [container, restoreReady, shownView]);
+  }, [container, restoreReady]);
 
   // The list is kept in the carrier as it is used, so the address the person is looking at already
-  // holds it when they come back. It is written as the list is left and as its address changes -
-  // the cleanup of an effect that follows the state it writes - so a visit to a property leaves the
-  // list behind it.
+  // holds it when they come back. Written on every position change so navigation while mounted
+  // always leaves the latest position behind.
   useEffect(() => {
     const opened = opening.current;
-    return () => {
-      writeListState(carrier, resultLocation, {
-        text: typed,
-        edited: addressEdited,
-        scroll: opened.pending ? (opened.position ?? 0) : viewport.top,
-      });
-    };
+    writeListState(carrier, resultLocation, {
+      text: typed,
+      edited: addressEdited,
+      scroll: opened.pending ? (opened.position ?? 0) : viewport.top,
+    });
   }, [carrier, resultLocation, typed, addressEdited, viewport.top]);
 
   // The band asks the stream for the windows it would show, and tells it which row position it is
