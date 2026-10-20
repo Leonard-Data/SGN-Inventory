@@ -383,7 +383,10 @@ export function Inventory({
 
   // Reset pending opening position when result set changes so old positions are not applied to new results
   useEffect(() => {
-    opening.current = { position: null, pending: false };
+    // Skip first run: initial restored position was already set in ref constructor
+    return () => {
+      opening.current = { position: null, pending: false };
+    };
   }, [resultLocation]);
   // A new column count or a new result set relabels every chunk, so old measurements describe
   // rows the chunk no longer holds and are dropped; the mounted chunks measure themselves again.
