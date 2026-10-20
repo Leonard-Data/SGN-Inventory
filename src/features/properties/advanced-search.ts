@@ -24,17 +24,14 @@ export type AdvancedCriteria = {
   sort: string | null;
 };
 
-// What every advanced page is read with: never refetched on its own, dropped once nothing has read
-// it for the retention window, and never retried - a refusal is answered as a refusal, so a lost
-// session reaches the denial path without three more attempts behind it.
+// What every advanced page is read with: retained for a bounded time, never retried - a refusal is
+// answered as a refusal, so a lost session reaches the denial path without three more attempts
+// behind it - and never refetched on its own, because `fetchQuery` reads a page when the reader
+// asks for it and not otherwise.
 export const ADVANCED_SEARCH_QUERY_OPTIONS = {
   staleTime: ADVANCED_SEARCH_STALE_MS,
   gcTime: ADVANCED_SEARCH_GC_MS,
   retry: false,
-  refetchOnMount: false,
-  refetchOnWindowFocus: false,
-  refetchOnReconnect: false,
-  refetchInterval: false,
 } as const;
 
 // The criteria a submitted search's address states. The address is built from exactly these, so

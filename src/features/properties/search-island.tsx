@@ -452,9 +452,10 @@ export function SearchIsland({
           </div>
           <div className="sgn-dialog-body">
             {/* The two groups are what the local/advanced split means at the controls: the first
-                group is filtered in the browser from the loaded catalogue and sends nothing, the
-                second names criteria the catalogue has no field for and is read from the database
-                once the panel is run. */}
+                group names filters the loaded catalogue answers, the second criteria it has no
+                field for. The hint under the first states which of the two actually answers the
+                run: a whole-inventory criterion anywhere in the panel, or a submitted address
+                search, makes the run one database read that applies both groups. */}
             <div className="form-section">
               <div className="form-section-head">
                 <h3>{text.catalogueFiltersHeading}</h3>
@@ -483,9 +484,9 @@ export function SearchIsland({
                 <p className="field-hint">{text.areaFilterHint}</p>
               </div>
               <p className="field-hint">
-                {query.trim() === ''
-                  ? text.catalogueFiltersHint
-                  : text.catalogueFiltersQueryHint}
+                {advancedDraft
+                  ? text.catalogueFiltersAdvancedHint
+                  : text.catalogueFiltersHint}
               </p>
             </div>
             <div className="form-section">
