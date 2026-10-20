@@ -27,6 +27,7 @@ import type { CatalogueIndexEntry } from './address-index';
 import {
   reconcileCatalogue,
   recordCatalogueChange,
+  type CatalogueAnswer,
   type CatalogueChange,
 } from './catalogue-changes';
 import {
@@ -75,10 +76,12 @@ export type CatalogueState = {
   refreshCatalogue: () => void;
   scope: EmployeeSession | null;
   retry: () => void;
-  // Report a change the server has committed for one property, from the server's own answer. The
-  // catalogue the browser shows is the load reconciled with every change reported this way, so a
-  // read that started before the change can never overwrite it (issue #193).
-  applyChange: (change: CatalogueChange) => void;
+  // Report the answer the server gave for a change it committed: the catalogue takes the server's
+  // own summary for that property, or - when the server could not hand one back - reads the
+  // catalogue again from the server. Either way the catalogue the browser shows is the load
+  // reconciled with what the server answered, so a read that started before the change can never
+  // overwrite it (issue #193).
+  applyChange: (answer: CatalogueAnswer) => void;
 };
 
 const NO_COUNT: CatalogueCount = { total: null, capturedAt: null };
@@ -115,7 +118,7 @@ export function useCatalogue(session: EmployeeSession | null): CatalogueState {
 // A surface that has just committed a change reports it without reading the catalogue: the change
 // came from the server's own answer under the caller's session, so it needs no catalogue scope of
 // its own, and the provider drops it with the scope it belongs to.
-export function useCatalogueChange(): (change: CatalogueChange) => void {
+export function useCatalogueChange(): (answer: CatalogueAnswer) => void {
   return useContext(CatalogueContext).applyChange;
 }
 
@@ -167,6 +170,9 @@ function CatalogueLoader({ children }: { children: ReactNode }) {
   // The refresh in flight, so a second press cannot start an overlapping load and a changed
   // authority can abandon the replacement it no longer owns.
   const refreshRun = useRef<AbortController | null>(null);
+  // Set when the server committed a change it could not hand a summary back for: the next read
+  // starts a new traversal instead of resuming the one the browser already holds.
+  const fresh = useRef(false);
   const apply = useCallback((next: CatalogueGenerations) => {
     generationsRef.current = next;
     setGenerations(next);
@@ -189,10 +195,15 @@ function CatalogueLoader({ children }: { children: ReactNode }) {
   const read = useCallback(
     (signal: AbortSignal, session: EmployeeSession) => {
       const identity = `${renderedSession(session.employee)}:${session.accessRevision}`;
-      // A scope this loader already started resumes it; a changed scope starts a new generation
-      // with nothing indexed or staged from the former authority.
+      const freshRead = fresh.current;
+      fresh.current = false;
+      // A scope this loader already started resumes it; a changed scope, and a read that has
+      // to learn a property's current values again, starts a new generation with nothing
+      // indexed or staged from the former authority.
       const resume =
-        sessionRef.current === identity ? generationsRef.current.working : null;
+        freshRead || sessionRef.current !== identity
+          ? null
+          : generationsRef.current.working;
       const generationId = resume ? resume.generationId : crypto.randomUUID();
       if (!resume) dropCatalogue();
       sessionRef.current = identity;
@@ -202,6 +213,7 @@ function CatalogueLoader({ children }: { children: ReactNode }) {
         publish,
         generationId,
         resume,
+        fresh: freshRead,
       });
     },
     [apply, dropCatalogue, publish, queryClient],
@@ -313,9 +325,19 @@ function CatalogueLoader({ children }: { children: ReactNode }) {
     : progress.isComplete
       ? 'complete'
       : 'loading';
-  const applyChange = useCallback((change: CatalogueChange) => {
-    setChanges((current) => recordCatalogueChange(current, change));
-  }, []);
+  const applyChange = useCallback(
+    (answer: CatalogueAnswer) => {
+      if (answer.kind === 'unreconciled') {
+        // The change committed but its current values are unknown, so the browser reads the
+        // catalogue again from the server instead of keeping a row nothing confirms.
+        fresh.current = true;
+        void reload();
+        return;
+      }
+      setChanges((current) => recordCatalogueChange(current, answer));
+    },
+    [reload],
+  );
   const index = useMemo(
     () => reconcileCatalogue(generations.working?.index ?? [], changes),
     [generations.working, changes],

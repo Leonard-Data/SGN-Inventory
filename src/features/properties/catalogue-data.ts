@@ -63,7 +63,8 @@ export async function catalogueTotal(context: RouteContext): Promise<number> {
 //
 // null is the server's own answer that the property is no longer in this caller's catalogue
 // (archived, deleted or no longer readable), and undefined is a summary that could not be read
-// back at all: the browser keeps what it holds rather than being told either.
+// back at all: the browser then reads the catalogue again rather than keeping a row nothing
+// confirms.
 export async function catalogueSummaryOf(
   context: RouteContext,
   id: string,

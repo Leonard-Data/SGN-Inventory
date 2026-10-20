@@ -3,7 +3,9 @@
 // it), that property's addresses are folded again so search finds it under its current address,
 // and the change stays on top of whatever a catalogue read answers with afterwards. A read that
 // started before the change committed therefore can never overwrite it - neither the next batch of
-// the traversal nor a replacement catalogue swapped in later (issue #193).
+// the traversal nor a replacement catalogue swapped in later (issue #193). When the server commits
+// a change but cannot hand its summary back, the catalogue is read again from the server instead
+// of keeping a row nothing authoritative confirms.
 //
 // Everything here is shaping over values the browser already holds, so applying a server response,
 // reindexing after an address change, the filter and ranking that follow it, and the
@@ -22,34 +24,41 @@ import type { PropertySummary } from './types';
 export type CatalogueChange =
   { kind: 'upsert'; summary: PropertySummary } | { kind: 'remove'; id: string };
 
+// What one server answer states about the property a change committed for. It is a change, or the
+// admission that the change committed but its summary could not be read back: the browser then
+// holds no authoritative value for that property and reads the catalogue again from the server
+// rather than keeping a row the server may no longer agree with.
+export type CatalogueAnswer =
+  CatalogueChange | { kind: 'unreconciled'; id: string };
+
 export function changedProperty(change: CatalogueChange): string {
   return change.kind === 'upsert' ? change.summary.id : change.id;
 }
 
-// The change one server response states. A summary the server answered with is the change; a
+// The answer one server response states. A summary the server answered with is the change; a
 // response that carries no summary for the property (null) states that the property is no longer
 // in the caller's catalogue, so the browser drops it rather than keeping a record the server has
-// already stopped answering with. An unreadable summary (undefined) states nothing at all.
+// already stopped answering with. An unreadable summary (undefined) states that the change
+// committed and its current values are unknown to this answer.
 export function summaryChange(
   summary: PropertySummary | null | undefined,
   propertyId: string,
-): CatalogueChange | null {
-  if (summary === undefined) return null;
+): CatalogueAnswer {
+  if (summary === undefined) return { kind: 'unreconciled', id: propertyId };
   return summary === null
     ? { kind: 'remove', id: propertyId }
     : { kind: 'upsert', summary };
 }
 
-// Apply the answer one mutation response gave: what the server said about the property becomes the
-// catalogue's row for it. A response that carried no summary at all states nothing and changes
-// nothing, so a server that could not read the record back never makes the browser guess.
+// Report the answer one mutation response gave: what the server said about the property becomes
+// the catalogue's row for it, and an answer that could not carry the record back makes the
+// catalogue read the property again from the server instead of silently keeping what it held.
 export function applyServerSummary(
-  applyChange: (change: CatalogueChange) => void,
+  report: (answer: CatalogueAnswer) => void,
   result: { summary?: PropertySummary | null },
   propertyId: string,
 ): void {
-  const change = summaryChange(result.summary, propertyId);
-  if (change) applyChange(change);
+  report(summaryChange(result.summary, propertyId));
 }
 
 // Record a committed change: the latest change to a property replaces any earlier one, so the log

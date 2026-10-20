@@ -122,7 +122,7 @@ export type MergeReport = {
   };
   // The records the merge retired, so the browser's catalogue drops the rows the server no longer
   // answers with, and the kept property's authoritative summary as the server read it back
-  // (undefined when it could not be read at all: the browser then keeps what it holds).
+  // (absent when it could not be read at all: the browser then reads the catalogue again).
   removed?: string[];
   summary?: PropertySummary | null;
 };

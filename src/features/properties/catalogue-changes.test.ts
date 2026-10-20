@@ -7,6 +7,7 @@ import {
   reconcileCatalogue,
   recordCatalogueChange,
   summaryChange,
+  type CatalogueAnswer,
   type CatalogueChange,
 } from './catalogue-changes.ts';
 import { indexCataloguePage, startCatalogueLoad } from './catalogue-load.ts';
@@ -240,28 +241,32 @@ test('the change log keeps one entry per property, latest last', () => {
   assert.deepEqual(ids(reconcileCatalogue(load.index, second)), ['2']);
 });
 
-test('a server answer states a change, a removal, or nothing at all', () => {
+test('a server answer states a change, a removal, or an unreadable summary', () => {
   assert.deepEqual(summaryChange(MOVED, '1'), {
     kind: 'upsert',
     summary: MOVED,
   });
   // The server answered that the property is no longer in the caller's catalogue.
   assert.deepEqual(summaryChange(null, '1'), { kind: 'remove', id: '1' });
-  // The summary could not be read back, so the browser is told nothing and keeps what it has.
-  assert.equal(summaryChange(undefined, '1'), null);
+  // The summary could not be read back, so the browser is told the change is unreconciled and
+  // reads the catalogue again rather than keeping a row nothing confirms.
+  assert.deepEqual(summaryChange(undefined, '1'), {
+    kind: 'unreconciled',
+    id: '1',
+  });
 });
 
-test('a surface applies exactly what the server answered', () => {
-  const applied: CatalogueChange[] = [];
-  applyServerSummary((change) => applied.push(change), { summary: MOVED }, '1');
-  assert.deepEqual(applied, [{ kind: 'upsert', summary: MOVED }]);
-  // A response that carried no summary at all leaves the catalogue as it is rather than guessing
-  // that the property went away.
-  applyServerSummary((change) => applied.push(change), {}, '1');
-  assert.equal(applied.length, 1);
+test('a surface reports exactly what the server answered', () => {
+  const answers: CatalogueAnswer[] = [];
+  applyServerSummary((answer) => answers.push(answer), { summary: MOVED }, '1');
+  assert.deepEqual(answers, [{ kind: 'upsert', summary: MOVED }]);
+  // A response that carried no summary at all is reported as the committed change the server could
+  // not read back, so the catalogue recovers instead of silently keeping what it held.
+  applyServerSummary((answer) => answers.push(answer), {}, '1');
+  assert.deepEqual(answers[1], { kind: 'unreconciled', id: '1' });
   // A response the server answered with null removes the row the server no longer carries.
-  applyServerSummary((change) => applied.push(change), { summary: null }, '1');
-  assert.deepEqual(applied[1], { kind: 'remove', id: '1' });
+  applyServerSummary((answer) => answers.push(answer), { summary: null }, '1');
+  assert.deepEqual(answers[2], { kind: 'remove', id: '1' });
 });
 
 test('an unchanged catalogue is returned as it was read', () => {

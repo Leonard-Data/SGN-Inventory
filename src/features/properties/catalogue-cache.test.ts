@@ -90,12 +90,17 @@ const client = () =>
   });
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
-function load(client: QueryClient, signal = new AbortController().signal) {
+function load(
+  client: QueryClient,
+  signal = new AbortController().signal,
+  fresh = false,
+) {
   return loadProtected({
     source: (signal, scope) =>
       readCatalogue(client, signal, scope, {
         publish: () => {},
         generationId: 'generation-1',
+        fresh,
         now: () => AT,
       }),
     signal,
@@ -145,6 +150,28 @@ test('a stable protected scope reuses the catalogue across route reads', async (
   assert.deepEqual(first.data, { scope: reviewer, load: privateLoad });
   assert.deepEqual(returned.data, first.data);
   assert.equal(catalogueReads, 1);
+});
+
+test('a committed change the server could not read back re-reads the catalogue', async (t) => {
+  const cache = client();
+  t.after(() => cache.clear());
+  let catalogueReads = 0;
+  t.mock.method(globalThis, 'fetch', async (path: string) => {
+    if (path === '/api/session') return Response.json(reviewer);
+    assert.equal(path, '/api/properties/catalogue');
+    catalogueReads++;
+    return Response.json(catalogueReads === 1 ? privatePage : publicPage);
+  });
+  await load(cache);
+  assert.deepEqual((await load(cache)).data?.load, privateLoad);
+  assert.equal(catalogueReads, 1);
+  // The recovery read goes back to the server instead of answering with the retained traversal, so
+  // the row the server no longer carries is gone rather than silently kept.
+  assert.deepEqual((await load(cache, undefined, true)).data, {
+    scope: reviewer,
+    load: publicLoad,
+  });
+  assert.equal(catalogueReads, 2);
 });
 
 test('changing employee, role or revision discards the former catalogue', async (t) => {

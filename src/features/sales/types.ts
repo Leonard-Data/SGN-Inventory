@@ -36,7 +36,8 @@ export type SaleCompletionState = {
 
 // The answer to a committed completion: the fresh state plus the property's authoritative catalogue
 // summary, so the browser's list shows the status the sale recorded rather than the one it held.
-// An absent summary is one the server could not read back; the browser then keeps what it holds.
+// An absent summary is one the server could not read back; the browser then reads the catalogue
+// again instead of keeping what it holds.
 export type SaleCompletionResult = SaleCompletionState & {
   summary?: PropertySummary | null;
 };

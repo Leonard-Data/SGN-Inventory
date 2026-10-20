@@ -148,6 +148,9 @@ export type CatalogueLoadOptions = {
   // The state an interrupted generation reached, so Retry continues from the cursor it stopped at
   // instead of reading the whole traversal again. A new generation passes null.
   resume?: CatalogueLoadState | null;
+  // Read the traversal again from the first page even though this scope's finished load is cached.
+  // A committed change the server could not hand back a summary for is read this way.
+  fresh?: boolean;
   now?: () => string;
 };
 
@@ -162,6 +165,9 @@ export async function readCatalogue(
   options: CatalogueLoadOptions,
 ): Promise<ScopedCatalogue> {
   const queryKey = catalogueQueryKey(scope);
+  // A read that has to learn the property's current values again drops the retained traversal
+  // instead of answering with it.
+  if (options.fresh) client.removeQueries({ queryKey });
   client.removeQueries({
     queryKey: ['property-catalogue'],
     predicate: (query) => query.queryHash !== hashKey(queryKey),
