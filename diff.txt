@@ -1,0 +1,2024 @@
+diff --git a/CONTEXT.md b/CONTEXT.md
+index 3e3005f..45f2e16 100644
+--- a/CONTEXT.md
++++ b/CONTEXT.md
+@@ -200,6 +200,10 @@ _Avoid_: Fixed sale-price basis; "area" for province/ward
+ The properties list as one result set ordered by the server (newest created first by default, or the eligible entry-date chronology in either direction), read as consecutive windows of about a hundred rows with the matching total stated by every read. The browser reserves the whole stream's estimated height and keeps only the rows near the viewport in the page. It has no page numbers, no page size and no cursor trail; the count and the rows always come from the same filtered read, so they cannot describe different inventories.
+ _Avoid_: Numbered page, page-size setting, cursor, partial result set
+ 
++**Property catalogue**:
++The browser's own browsing snapshot of the authorized inventory: a bounded page of property summaries in one stable identity order, read through the authenticated catalogue endpoint and held in browser memory, with each property's recorded address variants folded once so typing in the address box narrows them without reading the database. It is a browsing aid only — a lock, an approval or an edit always validates against current server state — and a list filtered from it states the loaded properties rather than the whole inventory.
++_Avoid_: Search cache, offline inventory, authoritative list
++
+ **Inventory result view**:
+ The presentation choice for the inventory stream — cards or table — carried in the properties address beside the search, the ordering and the filters, so switching it or applying a filter keeps the narrowed result set and never changes the read. The summary table groups the recorded facts into property, address, price, area, status, updated time and actions; the full record keeps every source field. The table is not offered at phone width, where cards are the list.
+ _Avoid_: Second result set, paged view
+diff --git a/README.md b/README.md
+index a81417c..600640e 100644
+--- a/README.md
++++ b/README.md
+@@ -60,6 +60,10 @@ scrolls, only the rows near the viewport are mounted, and the matching count com
+ that answers each window. There are no page numbers, no page size and no cursor trail
+ ([ADR 0002](docs/adr/0002-inventory-list-stream-and-table-view.md)).
+ 
++The address box narrows the catalogue page the browser already holds as a person types, so typing no
++longer reads the database; the search button still searches the whole inventory
++([ADR 0003](docs/adr/0003-browser-property-catalogue-and-local-address-search.md)).
++
+ ### Review and decision queues
+ 
+ | Route                      | Who                                        | What a user does there                                                                                                                                      |
+diff --git a/docs/adr/0003-browser-property-catalogue-and-local-address-search.md b/docs/adr/0003-browser-property-catalogue-and-local-address-search.md
+new file mode 100644
+index 0000000..b62fee4
+--- /dev/null
++++ b/docs/adr/0003-browser-property-catalogue-and-local-address-search.md
+@@ -0,0 +1,36 @@
++# Browser property catalogue and local address search
++
++Status: accepted (2026-10-20)
++
++Ordinary address search read the database. The list carried the free-text query in its address and every submitted search was a window of a server read (`stream_inventory`), so a remount or a return from a property's details read the same rows again. Salespeople search mostly by free text address, and caching individual search strings buys little: every spelling, abbreviation and partial address is a different key.
++
++We decided the browser holds a compact, user-scoped catalogue of the authorized inventory and searches it locally. An authenticated Route Handler, `GET /api/properties/catalogue`, answers one bounded page of property summaries in a stable property-identity order, with each property's stored address variants flattened into its own row and money and measurements cast to text. The read runs on the caller's own session client, so Row Level Security is what decides which rows and fields exist for them at all, and it is reapplied on every page: the cursor (`after`) is a position in that one ordering and never an authorization grant. Responses stay private and `no-store`. The shared protected-session lifecycle brackets the catalogue read with live session checks and owns publication, cancellation and refocus checks. TanStack Query deduplicates the read and holds the browser cache under one key per authorized context (employee identity and role, the server-maintained `accessRevision`, and the summary's own schema version), with `staleTime`/`gcTime` at infinity and no automatic query refetch. A changed scope removes the former entry; superseded responses are discarded, and consumers only accept a catalogue matching their own protected session. A local index folds each property's recorded addresses once per loaded page and keeps the original text for display; typing in the address box narrows those rows in the browser and issues no request, while submitting the box still runs the existing server search over the whole inventory.
++
++The loader and cache are mounted once in the shared authenticated layout, so the list and a property's details reuse one catalogue instead of each reading their own. The browser is the single initial loading owner: the list's server-rendered shell reads no catalogue at all, so nothing is fetched twice and no employee-specific result passes through a shared cache. The catalogue is a browsing snapshot. Locking, approvals and edits always validate against current server state, and a locally filtered list states what it is - the loaded catalogue, never the whole inventory.
++
++## Measured payload budget
++
++Measured on production before this decision, from the captain's own numbers: the authorized inventory is 18,801 properties and 18,510 of them carry both an old and a current stored address. The full summary contract measures 12.5 MB of JSON held in browser memory, roughly 2.3 MB gzipped over the wire; address text alone is 9.5 MB and a display minimum without it is 6.2 MB.
++
++At that measured rate one property's summary is about 665 bytes, so this read's bound of 200 summaries is about 133 KB of JSON and about 25 KB gzipped - the first page is affordable before anything else is built. The budget for the whole authorized catalogue is the measured 12.5 MB in memory and about 2.3 MB over the wire; a payload that exceeds it must be answered with an explicitly scoped catalogue or a server-search mode, never silent truncation, and the progressive loader that would reach that size has to be measured against this budget before it is relied on.
++
++## Considered options
++
++- Caching individual search strings - rejected: every spelling, abbreviation and partial address is a different key, so the cache buys almost no reuse, and each search still reads the database.
++- Keeping server search and debouncing it - rejected: it is still a database read per search and per remount, which is the latency this change removes; the server search is kept only as the explicit full-inventory path.
++- Reading the whole authorized inventory into the page at once - rejected: at the measured 12.5 MB it makes the first paint wait on the largest payload, and nothing is usable until it all arrives. This slice reads one bounded page and later work loads progressively.
++- Prefetching the catalogue in the server-rendered shell - rejected: it duplicates the browser's own read, and it would put employee-specific inventory into a server-rendered response and any cache in front of it.
++- A durable browser store (IndexedDB, service worker) - rejected for this release: persistent storage and offline access are out of scope, and a memory-only cache is discarded when the tab closes, which is the honest boundary.
++- Cursor paging for the list stream - rejected earlier in [ADR 0002](0002-inventory-list-stream-and-table-view.md) and not reopened here: that decision is about a virtualised list with no pages. The catalogue is a different read with a different job - one stable traversal a loader can resume - so it carries a keyset cursor of its own.
++
++## Consequences
++
++- Local filtering is offered for the ordinary browse only. A chronological ordering or a filter set names a result set the loaded page cannot state, so those keep the server search; the local-filter and advanced-search split is a later slice ([#194](https://github.com/Leonard-Data/SGN-Inventory/issues/194)).
++- A typed search is filtered, not definitive: the list states how many of the loaded properties match and that these are the loaded properties. It never presents a partial catalogue as a search of the whole inventory, and the search button remains the full-inventory path until the catalogue is complete.
++- The catalogue carries the summary fields the list already draws. Contacts, legal fields, notes, the creator and the entry chronology are deliberately absent: they belong to detail and chronological reads that authorize them separately, and the creator would cost a further read per page.
++- Each address variant is searched independently using its recorded text and the house number, street, district and commune parts already carried by the summary. Picker-only official unit names are not carried, so they remain a local-search gap for the matching slice (#191); full-inventory server search still includes them. The catalogue does not add `property_addresses.search_text`, which would duplicate address text against the measured payload budget.
++- The summary shape is versioned (`CATALOGUE_SCHEMA_VERSION`). A later field change starts a new cache key rather than reading rows of the old shape as the new one, and an access-revision change does the same for authority.
++- Retention is infinite for this one catalogue only while its authorized scope remains current; a scope change or loss of protected data drops the former entry. An unchanged scope keeps its page across client navigation and window refocus. Detail and advanced-search reads keep their own bounded retention, and memory caching cannot retract rows already delivered.
++- This is the first slice of [#186](https://github.com/Leonard-Data/SGN-Inventory/issues/186) and deliberately the narrowest complete one. Progressive background loading with progress, explicit Refresh as a replacement catalogue, Vietnamese normalization and ranking, navigation restoration, mutation reconciliation, the local-filter split and the flagged rollout are separate slices ([#189](https://github.com/Leonard-Data/SGN-Inventory/issues/189)-[#195](https://github.com/Leonard-Data/SGN-Inventory/issues/195)).
++
++The endpoint's own contract is documented in [`docs/database-contract.md`](../database-contract.md); the local index and the read's projection are in `src/features/properties/catalogue.ts`, `catalogue-data.ts` and `address-index.ts`.
+diff --git a/docs/database-contract.md b/docs/database-contract.md
+index fcf87bd..9080ca3 100644
+--- a/docs/database-contract.md
++++ b/docs/database-contract.md
+@@ -30,7 +30,7 @@ The issue #1 implementation supplies sign-in, protected browsing/search, read-on
+ 
+ `src/lib/supabase/route.ts` creates one publishable-key/session client per request, forwards refreshed cookies and SDK cache headers, and applies private/no-store responses and no-referrer policy. Auth cookies are HttpOnly and Secure on HTTPS. The locale cookie is presentation only; live membership and employee preference come from the database. Public auth navigation may carry `lang=vi|en`, but successful protected language switching persists only through `set_my_locale`.
+ 
+-Application endpoints: `POST /api/auth/login` `{email,password,locale}`, `POST /api/auth/logout` `{}` (local scope), `GET /api/session`, `GET /api/properties?query=&page=&sort=&status=&mode=&type=&priceMin=&priceMax=&areaMin=&areaMax=&province=&ward=&contact=`, `GET /api/properties/[id]`, `POST /api/properties/[id]/page-view` `{key}`, `POST /api/properties/[id]/owner-contact` `{key}`, `GET`/`POST /api/properties/[id]/duplicates` (the shared-address group and the deliberate merge, [issue #147](#issue-147--shared-address-group-and-duplicate-merge)), `GET`/`POST /api/properties/[id]/vendors`, `POST /api/properties/[id]/vendors/[vendorId]`, `GET /api/activity/today`, `GET /api/activity/me?from=&to=`, `GET /api/activity/company?from=&to=`, `GET /api/activity/provinces?from=&to=`, `GET`/`POST /api/properties/[id]/comments`, `GET`/`PATCH /api/properties/[id]/comments/[commentId]`, `POST /api/properties/[id]/comments/[commentId]/removal`, `GET /api/properties/[id]/comments/[commentId]/history`, `GET`/`POST /api/properties/[id]/reservations`, `POST /api/properties/[id]/reservations/decision`, `POST /api/properties/[id]/reservations/release` `{lockId,reason}`, `POST /api/properties/[id]/status`, `GET /api/properties/[id]/status-history`, `GET /api/status-requests`, `POST /api/status-requests/[id]` (tickets [#173 and #174](#issue-173--174--property-status-trail-and-the-reviewer-decision-on-sold-and-rented)), `GET`/`POST /api/properties/[id]/sale-completion`, `GET /api/reports/completed-sales?from=&to=`, `GET /api/employees?after=`, `GET`/`POST /api/employees/invitations` (`{email,role,key}`), `POST /api/employees/invitations/resend` (`{email}`), `POST /api/auth/invite/session` (`{accessToken,refreshToken}` or `{}`), `POST /api/auth/invite/accept` (`{invitationId,revision,name,password,confirmPassword,locale}`), `GET /api/vendors?query=&before=&beforeId=`, `POST /api/vendors` `{key,displayName,contactName?,phones?,email?,sourceAddress?,notes?}`, `GET /api/vendors/[id]`, `POST /api/employees/[id]/profile` `{displayName,phone,role,bio}`, `GET`/`POST /api/profile` (read returns `{displayName,role,bio}`; write accepts `{displayName,bio}`), and `POST /api/locale` `{locale}`. All JSON writes require the configured same Origin and a bounded JSON object; identities, keys, enum values and query bounds are validated. Issue #7 adds same-origin creation/maintenance, contact, correction, amendment and property-history endpoints under the same rules; issue #36 adds `GET /api/properties/[id]/price-history?series=sale|rent&before=&beforeId=` over the same property-scoped history boundary and an optional maintenance `explanation` for an authorized price correction; see [maintenance-contract.md](maintenance-contract.md). Detail prices are cast to text in PostgREST before JSON serialization; consumers must keep whole-VND decimal strings, not parse them to Number.
++Application endpoints: `POST /api/auth/login` `{email,password,locale}`, `POST /api/auth/logout` `{}` (local scope), `GET /api/session`, `GET /api/properties?query=&page=&sort=&status=&mode=&type=&priceMin=&priceMax=&areaMin=&areaMax=&province=&ward=&contact=`, `GET /api/properties/catalogue?after=`, `GET /api/properties/[id]`, `POST /api/properties/[id]/page-view` `{key}`, `POST /api/properties/[id]/owner-contact` `{key}`, `GET`/`POST /api/properties/[id]/duplicates` (the shared-address group and the deliberate merge, [issue #147](#issue-147--shared-address-group-and-duplicate-merge)), `GET`/`POST /api/properties/[id]/vendors`, `POST /api/properties/[id]/vendors/[vendorId]`, `GET /api/activity/today`, `GET /api/activity/me?from=&to=`, `GET /api/activity/company?from=&to=`, `GET /api/activity/provinces?from=&to=`, `GET`/`POST /api/properties/[id]/comments`, `GET`/`PATCH /api/properties/[id]/comments/[commentId]`, `POST /api/properties/[id]/comments/[commentId]/removal`, `GET /api/properties/[id]/comments/[commentId]/history`, `GET`/`POST /api/properties/[id]/reservations`, `POST /api/properties/[id]/reservations/decision`, `POST /api/properties/[id]/reservations/release` `{lockId,reason}`, `POST /api/properties/[id]/status`, `GET /api/properties/[id]/status-history`, `GET /api/status-requests`, `POST /api/status-requests/[id]` (tickets [#173 and #174](#issue-173--174--property-status-trail-and-the-reviewer-decision-on-sold-and-rented)), `GET`/`POST /api/properties/[id]/sale-completion`, `GET /api/reports/completed-sales?from=&to=`, `GET /api/employees?after=`, `GET`/`POST /api/employees/invitations` (`{email,role,key}`), `POST /api/employees/invitations/resend` (`{email}`), `POST /api/auth/invite/session` (`{accessToken,refreshToken}` or `{}`), `POST /api/auth/invite/accept` (`{invitationId,revision,name,password,confirmPassword,locale}`), `GET /api/vendors?query=&before=&beforeId=`, `POST /api/vendors` `{key,displayName,contactName?,phones?,email?,sourceAddress?,notes?}`, `GET /api/vendors/[id]`, `POST /api/employees/[id]/profile` `{displayName,phone,role,bio}`, `GET`/`POST /api/profile` (read returns `{displayName,role,bio}`; write accepts `{displayName,bio}`), and `POST /api/locale` `{locale}`. All JSON writes require the configured same Origin and a bounded JSON object; identities, keys, enum values and query bounds are validated. Issue #7 adds same-origin creation/maintenance, contact, correction, amendment and property-history endpoints under the same rules; issue #36 adds `GET /api/properties/[id]/price-history?series=sale|rent&before=&beforeId=` over the same property-scoped history boundary and an optional maintenance `explanation` for an authorized price correction; see [maintenance-contract.md](maintenance-contract.md). Detail prices are cast to text in PostgREST before JSON serialization; consumers must keep whole-VND decimal strings, not parse them to Number.
+ Property file read workspace (ticket #22):
+ - `GET /api/properties/{propertyId}/files` → `{files: [...]}` — completed attachments for a property, subject to live employee access and archived-property reviewer boundary.
+ - `POST /api/properties/{propertyId}/files/{fileId}/signed` `{download?: boolean}` → `{url, expiresAt}` — authorized 60-second presigned R2 GET URL; the record is read first under RLS. Omission means open; non-boolean values and unknown keys return `400/invalid-input`. Downloads retain the original filename through `response-content-disposition`.
+@@ -46,6 +46,7 @@ Recovery: `POST /api/auth/recover` `{email,locale}` invokes `resetPasswordForEma
+ | Feature | Source | Scope |
+ | --- | --- | --- |
+ | Inventory stream, matching count and windows | `stream_inventory` RPC | Active employees, unarchived inventory; the oldest-first/newest-first order reads the unarchived `available`/`negotiating` eligible set with unknown dates explicitly placed last. Every read states the matching total beside one window of rows, from the one filtered read |
++| Browser property catalogue | `properties` with its `property_addresses` rows embedded, through `GET /api/properties/catalogue` | Active employees, unarchived inventory; one bounded page of summaries in identity order per request, with the caller's own authorization reapplied on every page. The cursor is a position in that ordering, never a grant |
+ | Property detail | `properties` + `property_addresses` + `property_contacts`/`contacts` + `property_files` | Active internal employees; archived properties only reviewers |
+ | Reservation banner | `v_effective_property_locks` filtered by property UUID | Approved, unexpired; includes claimant name |
+ | My requests / reviewer queue | `property_locks`, `lock_events` | Active employees can read company reservations; decision capability is separate |
+@@ -412,6 +413,15 @@ Migration `20261019041526_inventory_stream_list.sql` replaces the counted page r
+ - **Application boundary**: `GET /api/properties?query=&offset=&sort=&status=&mode=&type=&priceMin=&priceMax=&areaMin=&areaMax=&province=&ward=&contact=` serves one window of about a hundred rows with the matching total. A mangled or negative offset, the retired `page`/`pageSize` parameters, an unknown sort or an invalid filter is `400/invalid-input`, and `42501` stays `403/access-denied`. The properties address carries the search, the ordering, the filters and `view=` (cards or table); it never carries a page number, a page size or a cursor, so the surface cannot be asked for a window it does not render.
+ - **Browser**: the page reserves the whole stream's estimated height and mounts only the chunks the viewport and its overscan touch, reading windows as the band crosses them and keeping at most 16 of them in memory; the window arithmetic lives in `src/features/properties/stream.ts` with its own tests. The table view has exactly the ten requested columns in order (property ID, created date, price, status, house number, street, ward, district, total area m², modified time), the price emphasised with tabular numerals, missing values as an em dash, total area as floor area with a land-area fallback, and is not offered at phone width. A row opens the right-hand drawer by click, Enter or Space; the drawer repeats the key metadata, posts a comment without a reload, runs one attachment through the existing register/PUT/recover/complete upload path and its per-class limits, links to the full detail page, closes on Escape and returns focus to the originating row. Every new label, heading, action and empty state exists in Vietnamese and English.
+ 
++### Issue #188 — Browser property catalogue and local address search
++
++`GET /api/properties/catalogue?after=` answers one bounded page of the caller's authorized, unarchived inventory as browsing summaries, for the browser-held catalogue the properties list filters its address box against. It adds no table and no function, so it adds no grant, policy or migration: the read is an ordinary PostgREST select on `properties` with its `property_addresses` rows embedded, run on the caller's own publishable-key session client, so `properties_read` and `addresses_read` decide every row. The decision, the alternatives it rejects and its measured payload budget are recorded in [`docs/adr/0003-browser-property-catalogue-and-local-address-search.md`](adr/0003-browser-property-catalogue-and-local-address-search.md).
++
++- **Fields**: `id`, `property_code`, `listing_mode`, `status`, `property_type`, `sale_price_vnd`, `monthly_rent_vnd`, `land_area_m2`, `floor_area_m2`, `frontage_m`, `depth_m`, `floors`, `direction`, `access_type`, `cover_file_id`, `created_at`, `updated_at`, and each address's `format`, `address_text`, `house_number`, `street`, `commune_text`, `district_text`, `is_primary` and `mapping_status`. Money and measurements are cast to text before serialization, exactly as the stream and detail reads cast them. Contacts, legal fields, notes, coordinates, the creator and the entry chronology are not part of a browsing summary: they stay with the detail and chronological reads that authorize them separately, and the creator would cost a further read per page.
++- **Ordering and cursor**: `id` ascending, a total order. `after` names the last identity of the previous page and is applied as `id > after`; it is a position in that ordering, never an authorization grant, and every page re-applies current authorization through the caller's own client. A cursor that is not a UUID, or any other parameter, is `400/invalid-input`. A page is at most 200 summaries; the response states `nextCursor` as the last identity of a full page and `null` when that page ended the traversal. Pages are a best-effort traversal of live data, not one point-in-time snapshot, so a new or changed record can require a later refresh.
++- **Boundary**: `activeEmployee` refuses an unauthenticated caller (`401`) or an identity with no active employee row (`403`) before the read; a permission error from the read stays `403/access-denied` and any other failure is `503/unavailable`, never an empty catalogue presented as an answer. Responses carry `private, no-store` with `Pragma`, `Expires` and `no-referrer`, like every other application endpoint, and no employee-specific page passes through a shared cache.
++- **Browser**: one TanStack Query client owns the catalogue under one key per authorized context (the employee identity, the server-maintained `accessRevision` and the summary shape's own version), with `staleTime`/`gcTime` at infinity and no automatic query refetch. The existing protected-session lifecycle brackets reads with live identity, role and access-revision checks, rejects superseded responses and rechecks on refocus without rereading an unchanged scope. Scope changes remove the former entry; loss of protected data clears the cache, and Inventory accepts only a catalogue matching its own protected session. The loader and cache are mounted once in the shared authenticated layout (`src/features/properties/catalogue-provider.tsx`), so the list and a property's details reuse one page; the list's server-rendered shell reads no catalogue, which makes the browser the single initial loading owner. The local index (`src/features/properties/address-index.ts`) folds each recorded address once per loaded page and keeps the recorded text for display. Typing in the address box filters those rows with no request; submitting the box still runs the server search above, and a locally filtered list states that its matches are the loaded properties rather than the whole inventory. The catalogue is a browsing snapshot: locking, approvals and edits always validate against current server state.
++
+ ### Ticket #73 — Vendor directory
+ 
+ Migration `20261013161825_vendor_directory.sql` adds the distinct Vendor domain identity: `public.vendors` and the guarded `create_vendor` / bounded `list_vendors` wrappers. A vendor is a company record with one optional contact block; it is not a reclassified contact, owner, broker, employee or property link, and this slice adds no editing, fan-out, procurement or payment fields.
+diff --git a/docs/interface-design.md b/docs/interface-design.md
+index bf6326c..d653151 100644
+--- a/docs/interface-design.md
++++ b/docs/interface-design.md
+@@ -114,6 +114,7 @@ All page bodies render inside the shell `main` region; `SessionHeader` is gone f
+   states: .skeleton-region (loading) · .state-panel (empty) · .state-panel[data-tone="danger"] (error)
+ ```
+ Shipped: the list is one stream of everything the filters match, ordered by the server (newest created first by default; the entry-date chronology through the toolbar select) and read window by window as the page scrolls, with only the rows near the viewport mounted in the page and the matching count stated by the same read that answers each window (issue #154; the numbered pager, the page-size parameter and the cursor trail are gone, and [`docs/adr/0002-inventory-list-stream-and-table-view.md`](adr/0002-inventory-list-stream-and-table-view.md) records why). The card cover is the site plate drawn from the record's own fields; a stored cover photograph wins; a record with no areas keeps the plate's muted placeholder. The Cards/Table `.seg` switch now ships above the phone breakpoint: switching keeps the search, the ordering and the filters (the view travels in the address beside them) and never changes the read, and the table draws exactly the ten requested columns with the price emphasised in tabular numerals, a missing value as an em dash and the total area as floor area with a land-area fallback (issue #155); below 641px the table is not offered and cards are the list. A row — card or table — is a real keyboard-reachable control: it opens the property's quick view from the right by click, Enter or Space; the drawer repeats the key metadata, posts a comment without a reload, runs one attachment through the existing upload path and its per-class limits, links into the full detail page, closes on Escape and returns focus to the row that opened it (issue #156). The chronological order still starts a new journey without rewriting the search, and the active order adds the `.card-entry` line to each card. The two panels that used to sit under the results — the create-property form and the correction queue — moved to their own destinations (`/properties/new`, `/reviews/corrections`); `/properties` keeps search, results and the view switch. Status, listing mode, property type, an asking-price range, a land/floor area range in m², the address's administrative area (a province/city select and its dependent commune/ward select, so "area" never means both at once) and a recorded contact linked to a property (the same bounded name search and Next-page selector the property maintenance panel uses, so the panel reads one page per request rather than the whole directory) are the search island's filters: the trigger sits beside the search box, the panel carries the same set in the dialog/form vocabulary rather than chips, and every applied condition returns as a removable chip while the address stays the single source of truth.
++The address box itself narrows the loaded property catalogue in the browser as a person types - no request per keystroke - and the list states how many of the loaded properties match and that the search button searches the whole inventory; submitting the box keeps the server search it always had (issue #188, [ADR 0003](adr/0003-browser-property-catalogue-and-local-address-search.md)).
+ 
+ ### 5.2 `/properties/[id]` — Detail *(shipped, minus the items noted)*
+ 
+diff --git a/docs/testing.md b/docs/testing.md
+index 8f6feb9..c59f46c 100644
+--- a/docs/testing.md
++++ b/docs/testing.md
+@@ -1278,9 +1278,28 @@ Embedded coverage: `scripts/address-duplicate-merge-contract.mjs` (in `npm run t
+ 
+ **Remaining limits.** The copy of a ready object to the survivor's key happens in the application before the transaction, so its real-bucket behaviour — a same-bucket `CopyObject`, reading the copied object to derive the identity the signature covers, a refused merge leaving only unreferenced copies, and a repeated merge overwriting the same key — is a staging observation, not an embedded one; the embedded test supplies the attested object identity the server would read. A merge is not reversed by the application: the archived record and the moved evidence stay, and restoring a folded record is a separate reviewed operator action. A contact link that duplicates another folded record's link to the same contact stays on the archived record rather than moving twice. This slice adds no duplicate detection to the inventory list, the import or any other surface, no second address matcher, and no way to select a subset of an oversized group; splitting one is follow-up work.
+ 
++## Browser property catalogue acceptance (issue #188)
++
++Scope: the first slice of [#186](https://github.com/Leonard-Data/SGN-Inventory/issues/186) — one bounded page of property summaries through the authenticated catalogue endpoint, held in one browser-side cache and loader mounted in the authenticated layout, with the address box filtering those rows locally. Use the authorized isolated development/staging target with real Supabase Auth, Data API/RLS and the actual VI/EN browser interface. Embedded coverage is the deterministic supplement, not this acceptance.
++
++| Scenario | Required observation |
++| --- | --- |
++| Authenticated entry | Opening `/properties` issues exactly one `GET /api/properties/catalogue` (no `after`) and returns 200 with `private, no-store`, at most 200 summaries, and each summary carrying its own address variants; the loader is not read a second time by the list's server-rendered shell |
++| Unauthenticated or inactive caller | The same request without a session is `401`; with a signed-in identity that has no active employee row it is `403`, and neither response carries inventory rows |
++| Pagination | A second request with `?after=<last identity>` returns the following page and no row of the first; a request with a malformed cursor or any other parameter is `400/invalid-input`; a request made after an access change reads under the new authority instead of the cursor's |
++| Field boundary | The response contains no contact, legal, note, coordinate, creator or entry-chronology field, and money and measurements arrive as decimal strings |
++| Typing in the address box | Typing, changing and clearing the box issues no catalogue or search request at all (the network panel is silent), the list narrows to the loaded rows that match, and the header states how many of the loaded properties match |
++| Coverage disclosure | A search with no match states "no matches in the loaded properties" and never "no properties found"; the note beside the box says the matches are the loaded catalogue and that the search button searches the whole inventory; submitting the box still returns the whole-inventory server result |
++| Shared cache across routes | Opening a property's details and returning to the list reads no catalogue again, and the same loaded page is still there |
++| VI/EN | The count line, the coverage note, the loading and failed lines and the local empty state are equivalent in both languages, and no recorded address text is translated or rewritten |
++
++Embedded coverage: `src/features/properties/catalogue.test.ts` (in `npm run test:unit`) proves the read's field list carries the summary contract and none of the private fields, that a row becomes the list summary with both recorded address formats and the recorded text preserved, that the cursor is refused unless it is a property identity and that a request carrying any other parameter is refused, that the next cursor is stated only for a full page, and that a permission error is a refusal rather than an empty catalogue; `src/features/properties/address-index.test.ts` proves the folding, that either stored format finds the same property while no query mixes the two variants, that the index holds every recorded variant with its original text, and that a query the loaded page does not answer is an empty result; `src/features/stream/window.test.ts` proves that locally filtered rows are published as the windows a read would have answered with.
++
++**Remaining limits.** No browser and no hosted Supabase run was available in this lane, so nothing in the table above is claimed as executed: the route-level refusal (`401`/`403` through `activeEmployee` and `42501` from RLS), the real response headers, the live field restriction under RLS and the "no request while typing" observation all stay staging gates. The local filter is offered for the ordinary browse only — a chronological ordering or a filter set keeps the server search — and ranking, abbreviation expansion, house-number structure and the old/current variant rules are issue #191, not this slice. Progressive loading, explicit Refresh, navigation restoration, mutation reconciliation and the local-filter/advanced-search split are #189–#194.
++
+ ## Honest completion limits
+ 
+-Issue #1 has real development Supabase and scoped app/Auth/Data API/browser evidence, plus separately completed active/inactive/unlinked delivered recovery with fixture restoration; historical foundation-only evidence above remains separate. Spec #33 has the complete six-ticket private-files journey and real isolated-development browser/API/RLS/Storage acceptance documented above. Embedded Auth/Storage shims alone do not prove email delivery, signed URLs, HTTP deployment protections or cloud release correctness. Issue #38's sale completion and ranking is implemented in source with embedded and unit regressions; its real-browser/real-Supabase harness is written but has not run, so no hosted evidence is claimed. Production rollout still requires the separate staging/release gates and authorization; imports, broader workflows and deployment are not part of this delivery. The owner-contact activity ranking (#34) has development Auth/Data API/RLS and real-browser acceptance with synthetic fixture restoration and a committed sanitized report, subject to the limits recorded in its section. Hosted/browser acceptance has not run for issue #7 and issue #36 (both in the unexecuted maintenance gate), #30, #38, #46, #65, #66, #70, #72 and #122, and #68's hosted run executed on the development project and proved delivery from the verified-domain sender plus the recorded invited role and state in the admin list, while the delivered link still lands on the project Site URL because the Redirect URLs allow list lacks the application origin, and #69's acceptance journey is implemented with its delivered-link hosted acceptance still a staging gate, and issue #28's revised head has not reproduced its earlier acceptance; those remain staging gates recorded above. Issue #67's hosted Auth/Storage/Data API/browser acceptance did run: all ten observations passed on 15 October 2026 at `f3910727` against `tneucwzcrzteeixvttpu`, subject to the limits, guard-retained residue and unre-run review-fix head recorded in its section. Independent Spec #33 review workers were quota-blocked; inline review and all resulting corrections were completed, but independent human PR review remains required. The private audit trail's retention rule has embedded coverage and a locally measured size effect only: its hosted trim, the resulting development-project size change and any file-shrink step have not run and stay destructive operator actions requiring their own authorization. Issue #140's matching count and numbered inventory pager in place of cursor paging have unit coverage (`src/features/properties/paging.test.ts`) and embedded contract coverage (`scripts/inventory-paging-contract.mjs`) only: no real-browser acceptance run has exercised the pager, so no hosted or browser evidence is claimed for it.
++Issue #1 has real development Supabase and scoped app/Auth/Data API/browser evidence, plus separately completed active/inactive/unlinked delivered recovery with fixture restoration; historical foundation-only evidence above remains separate. Spec #33 has the complete six-ticket private-files journey and real isolated-development browser/API/RLS/Storage acceptance documented above. Embedded Auth/Storage shims alone do not prove email delivery, signed URLs, HTTP deployment protections or cloud release correctness. Issue #38's sale completion and ranking is implemented in source with embedded and unit regressions; its real-browser/real-Supabase harness is written but has not run, so no hosted evidence is claimed. Production rollout still requires the separate staging/release gates and authorization; imports, broader workflows and deployment are not part of this delivery. The owner-contact activity ranking (#34) has development Auth/Data API/RLS and real-browser acceptance with synthetic fixture restoration and a committed sanitized report, subject to the limits recorded in its section. Hosted/browser acceptance has not run for issue #7 and issue #36 (both in the unexecuted maintenance gate), #30, #38, #46, #65, #66, #70, #72 and #122, and #68's hosted run executed on the development project and proved delivery from the verified-domain sender plus the recorded invited role and state in the admin list, while the delivered link still lands on the project Site URL because the Redirect URLs allow list lacks the application origin, and #69's acceptance journey is implemented with its delivered-link hosted acceptance still a staging gate, and issue #28's revised head has not reproduced its earlier acceptance; those remain staging gates recorded above. Issue #67's hosted Auth/Storage/Data API/browser acceptance did run: all ten observations passed on 15 October 2026 at `f3910727` against `tneucwzcrzteeixvttpu`, subject to the limits, guard-retained residue and unre-run review-fix head recorded in its section. Independent Spec #33 review workers were quota-blocked; inline review and all resulting corrections were completed, but independent human PR review remains required. The private audit trail's retention rule has embedded coverage and a locally measured size effect only: its hosted trim, the resulting development-project size change and any file-shrink step have not run and stay destructive operator actions requiring their own authorization. Issue #140's matching count and numbered inventory pager in place of cursor paging have unit coverage (`src/features/properties/paging.test.ts`) and embedded contract coverage (`scripts/inventory-paging-contract.mjs`) only: no real-browser acceptance run has exercised the pager, so no hosted or browser evidence is claimed for it. Issue #188's browser property catalogue has unit coverage for its read's field list, projection, cursor and refusal mapping and for the local index, and no browser or hosted Supabase run: its staging gate is recorded above.
+ 
+ ### Executed table-view polish (ticket #170)
+ 
+diff --git a/docs/validation-results.json b/docs/validation-results.json
+index 47338ff..b9bb767 100644
+--- a/docs/validation-results.json
++++ b/docs/validation-results.json
+@@ -1,5 +1,5 @@
+ {
+-  "checked_at": "2026-10-19T17:41:44.572Z",
++  "checked_at": "2026-10-20T05:12:26.700Z",
+   "engine": "PGlite embedded PostgreSQL plus an embedded real PostgreSQL engine for the two-connection last-admin, property-vendor-link and contact-link races; mocked auth/storage schemas",
+   "passed": 742,
+   "limitations": [
+diff --git a/package-lock.json b/package-lock.json
+index c98d112..7fdf982 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -12,6 +12,7 @@
+         "@aws-sdk/s3-request-presigner": "3.1152.0",
+         "@supabase/ssr": "0.12.7",
+         "@supabase/supabase-js": "2.117.3",
++        "@tanstack/react-query": "5.104.5",
+         "@vercel/analytics": "2.0.1",
+         "leaflet": "1.9.4",
+         "next": "16.4.0",
+@@ -4197,6 +4198,38 @@
+         "tslib": "^2.8.0"
+       }
+     },
++    "node_modules/@tanstack/query-core": {
++      "version": "5.104.5",
++      "resolved": "https://registry.npmjs.org/@tanstack/query-core/-/query-core-5.104.5.tgz",
++      "integrity": "sha512-Q94gI8Opd+CbdVNOdj8ZCyV8WqLYitrDq1t96Xc8WZT6lY0r5iRnJLXYDxMex7EEf2v+mXvn4FcjaBKSxXZQ9A==",
++      "license": "MIT",
++      "funding": {
++        "type": "github",
++        "url": "https://github.com/sponsors/tannerlinsley"
++      }
++    },
++    "node_modules/@tanstack/react-query": {
++      "version": "5.104.5",
++      "resolved": "https://registry.npmjs.org/@tanstack/react-query/-/react-query-5.104.5.tgz",
++      "integrity": "sha512-RORgFe052U+93weaNuqg7qHq7vNVNzXN/VrXqD4bbAuQCWUqOl2lV5Ui9flWk5CVvMyL/Bh27QWhzwH0aaOx9g==",
++      "license": "MIT",
++      "dependencies": {
++        "@tanstack/query-core": "5.104.5"
++      },
++      "funding": {
++        "type": "github",
++        "url": "https://github.com/sponsors/tannerlinsley"
++      },
++      "peerDependencies": {
++        "@types/react": "^18 || ^19",
++        "react": "^18 || ^19"
++      },
++      "peerDependenciesMeta": {
++        "@types/react": {
++          "optional": true
++        }
++      }
++    },
+     "node_modules/@tootallnate/once": {
+       "version": "2.0.1",
+       "resolved": "https://registry.npmjs.org/@tootallnate/once/-/once-2.0.1.tgz",
+@@ -4314,7 +4347,7 @@
+       "version": "19.3.0",
+       "resolved": "https://registry.npmjs.org/@types/react/-/react-19.3.0.tgz",
+       "integrity": "sha512-N0rFCuH9YoxG9/m61l9MfpJKfmLOVU0em7ipIz6TRgSSkvReLB9vL85GB+yr8Bs5leqpvg96JSwF4ZS1s4viQg==",
+-      "dev": true,
++      "devOptional": true,
+       "license": "MIT",
+       "dependencies": {
+         "csstype": "^3.2.2"
+@@ -6901,7 +6934,7 @@
+       "version": "3.2.3",
+       "resolved": "https://registry.npmjs.org/csstype/-/csstype-3.2.3.tgz",
+       "integrity": "sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==",
+-      "dev": true,
++      "devOptional": true,
+       "license": "MIT"
+     },
+     "node_modules/damerau-levenshtein": {
+diff --git a/package.json b/package.json
+index d229504..09e3ccb 100644
+--- a/package.json
++++ b/package.json
+@@ -17,7 +17,7 @@
+     "typecheck": "tsc --noEmit",
+     "format:check": "prettier . --check",
+     "format": "prettier . --write",
+-    "test:unit": "node --experimental-transform-types --test src/features/contacts/linked-properties.test.ts src/features/ui-pass.test.ts src/features/toasts/toast-state.test.ts src/lib/environment.test.ts src/lib/supabase/query.test.ts src/lib/supabase/origin.test.ts src/i18n/messages.test.ts src/features/employees/activity-level.test.ts src/features/employees/action-menu.test.ts src/features/employees/password-policy.test.ts src/features/employees/report-range.test.ts src/features/employees/company-report-groups.test.ts src/features/employees/deactivation.test.ts src/features/employees/deletion.test.ts src/features/employees/invitation.test.ts src/features/employees/invitation-acceptance.test.ts src/features/property-maintenance/fields.test.ts src/features/property-maintenance/units.test.ts src/features/property-maintenance/refusal-rules.test.ts src/features/property-maintenance/sections.test.ts src/features/corrections/changes.test.ts src/features/corrections/draft-fields.test.ts src/features/properties/format.test.ts src/features/properties/detail-loader.test.ts src/features/properties/creator.test.ts src/features/properties/contact-rows.test.ts src/features/properties/owner-phone.test.ts src/features/properties/quick-view.test.ts src/features/properties/stream.test.ts src/features/stream/window.test.ts src/features/employees/directory-window.test.ts src/features/stream/lists.test.ts src/features/contacts/window.test.ts src/features/properties/table.test.ts src/features/properties/view.test.ts src/features/properties/window-skeleton.test.ts src/features/properties/filters.test.ts src/features/properties/plate.test.ts src/features/properties/reservation-rules.test.ts src/features/properties/merge-rules.test.ts src/features/properties/dimension-summary.test.ts src/features/property-comments/discussion-state.test.ts src/features/property-comments/quick-comment.test.ts src/features/sales/rules.test.ts src/features/navigation/navigation.test.ts src/features/skeleton.test.ts src/features/employees/protected-load.test.ts src/features/employees/directory.test.ts src/features/employees/profile.test.ts src/features/property-files/content.test.ts src/features/vendors/directory.test.ts src/features/vendors/draft.test.ts src/features/vendors/links.test.ts scripts/personal-activity.test.mjs scripts/release-guard.test.mjs scripts/workflow-activation.test.mjs scripts/import-legacy-sheet.test.mjs src/features/contacts/directory.test.ts src/features/property-files/limits.test.ts src/features/property-files/quick-upload.test.ts src/features/property-files/read-path.test.ts scripts/copy-property-files-to-r2.test.mjs src/features/property-files/upload-cleanup.test.ts src/lib/r2-upload.test.ts",
++    "test:unit": "node --experimental-transform-types --test src/features/contacts/linked-properties.test.ts src/features/ui-pass.test.ts src/features/toasts/toast-state.test.ts src/lib/environment.test.ts src/lib/supabase/query.test.ts src/lib/supabase/origin.test.ts src/i18n/messages.test.ts src/features/employees/activity-level.test.ts src/features/employees/action-menu.test.ts src/features/employees/password-policy.test.ts src/features/employees/report-range.test.ts src/features/employees/company-report-groups.test.ts src/features/employees/deactivation.test.ts src/features/employees/deletion.test.ts src/features/employees/invitation.test.ts src/features/employees/invitation-acceptance.test.ts src/features/property-maintenance/fields.test.ts src/features/property-maintenance/units.test.ts src/features/property-maintenance/refusal-rules.test.ts src/features/property-maintenance/sections.test.ts src/features/corrections/changes.test.ts src/features/corrections/draft-fields.test.ts src/features/properties/format.test.ts src/features/properties/catalogue.test.ts src/features/properties/catalogue-cache.test.ts src/features/properties/address-index.test.ts src/features/properties/detail-loader.test.ts src/features/properties/creator.test.ts src/features/properties/contact-rows.test.ts src/features/properties/owner-phone.test.ts src/features/properties/quick-view.test.ts src/features/properties/stream.test.ts src/features/stream/window.test.ts src/features/employees/directory-window.test.ts src/features/stream/lists.test.ts src/features/contacts/window.test.ts src/features/properties/table.test.ts src/features/properties/view.test.ts src/features/properties/window-skeleton.test.ts src/features/properties/filters.test.ts src/features/properties/plate.test.ts src/features/properties/reservation-rules.test.ts src/features/properties/merge-rules.test.ts src/features/properties/dimension-summary.test.ts src/features/property-comments/discussion-state.test.ts src/features/property-comments/quick-comment.test.ts src/features/sales/rules.test.ts src/features/navigation/navigation.test.ts src/features/skeleton.test.ts src/features/employees/protected-load.test.ts src/features/employees/directory.test.ts src/features/employees/profile.test.ts src/features/property-files/content.test.ts src/features/vendors/directory.test.ts src/features/vendors/draft.test.ts src/features/vendors/links.test.ts scripts/personal-activity.test.mjs scripts/release-guard.test.mjs scripts/workflow-activation.test.mjs scripts/import-legacy-sheet.test.mjs src/features/contacts/directory.test.ts src/features/property-files/limits.test.ts src/features/property-files/quick-upload.test.ts src/features/property-files/read-path.test.ts scripts/copy-property-files-to-r2.test.mjs src/features/property-files/upload-cleanup.test.ts src/lib/r2-upload.test.ts",
+     "test:schema": "node scripts/validate-schema.mjs",
+     "test:acceptance": "node --env-file-if-exists=.env.local --env-file-if-exists=.env.acceptance.local scripts/employee-access-acceptance.mjs",
+     "test:import": "python -m unittest discover -s scripts -p test_*.py",
+@@ -32,6 +32,7 @@
+     "@aws-sdk/s3-request-presigner": "3.1152.0",
+     "@supabase/ssr": "0.12.7",
+     "@supabase/supabase-js": "2.117.3",
++    "@tanstack/react-query": "5.104.5",
+     "@vercel/analytics": "2.0.1",
+     "leaflet": "1.9.4",
+     "next": "16.4.0",
+diff --git a/src/app/(app)/layout.tsx b/src/app/(app)/layout.tsx
+index 1d0067f..303f978 100644
+--- a/src/app/(app)/layout.tsx
++++ b/src/app/(app)/layout.tsx
+@@ -1,12 +1,22 @@
+ import { cookies } from 'next/headers';
+ import type { ReactNode } from 'react';
+ import { AppShell } from '@/features/navigation/app-shell';
++import { CatalogueProvider } from '@/features/properties/catalogue-provider';
+ 
+ // One authenticated shell for every product route (ADR 0001). Session and role
+ // are already enforced server-side by src/proxy.ts before this renders; the
+ // shell reads the session itself only for the account menu and the role filter.
++//
++// The property catalogue's loader and cache are mounted here once (ADR 0003), so the
++// list and a property's details share one browser-held page instead of each reading
++// their own. Nothing is prefetched while rendering: the browser is the one initial
++// loading owner, and no authenticated inventory is cached by a shared cache.
+ export default async function AppLayout({ children }: { children: ReactNode }) {
+   const locale =
+     (await cookies()).get('sgn-locale')?.value === 'en' ? 'en' : 'vi';
+-  return <AppShell locale={locale}>{children}</AppShell>;
++  return (
++    <AppShell locale={locale}>
++      <CatalogueProvider>{children}</CatalogueProvider>
++    </AppShell>
++  );
+ }
+diff --git a/src/app/api/properties/catalogue/route.ts b/src/app/api/properties/catalogue/route.ts
+new file mode 100644
+index 0000000..49c5a36
+--- /dev/null
++++ b/src/app/api/properties/catalogue/route.ts
+@@ -0,0 +1,20 @@
++import { NextRequest, NextResponse } from 'next/server';
++import { ApiError, runRoute } from '@/lib/supabase/route';
++import { activeEmployee } from '@/features/employees/access';
++import { catalogueRequest } from '@/features/properties/catalogue';
++import { cataloguePage } from '@/features/properties/catalogue-data';
++
++// One bounded page of the caller's authorized inventory as browsing summaries (ADR 0003). The
++// caller's own session client enforces row level security, so an unauthenticated or inactive
++// request is refused and a caller receives only the rows and fields they may receive. The response
++// is private and never cached by a shared cache.
++export function GET(request: NextRequest) {
++  return runRoute(request, async (context) => {
++    await activeEmployee(context);
++    // The cursor is the read's only parameter: anything else in the address is refused instead of
++    // being answered with a page the caller did not ask for.
++    const asked = catalogueRequest(request.nextUrl.searchParams);
++    if (!asked.ok) throw new ApiError(400, 'invalid-input');
++    return NextResponse.json(await cataloguePage(context, asked.after));
++  });
++}
+diff --git a/src/features/employees/protected-load.test.ts b/src/features/employees/protected-load.test.ts
+index 1696da2..38c2ac8 100644
+--- a/src/features/employees/protected-load.test.ts
++++ b/src/features/employees/protected-load.test.ts
+@@ -242,6 +242,31 @@ test('a revision that never settles stops after three attempts without publishin
+   assert.equal(sourceReads, 3);
+ });
+ 
++test('a scoped source receives the authorization for each bracketed attempt', async (t) => {
++  let sessionReads = 0;
++  t.mock.method(globalThis, 'fetch', async () =>
++    sessionReads++ === 0
++      ? sessionResponse(manager, 1)
++      : sessionResponse(sales, 2),
++  );
++  const scopes: string[] = [];
++  const abort = new AbortController();
++  const result = await loadProtected({
++    source: async (signal, session) => {
++      assert.equal(signal, abort.signal);
++      scopes.push(`${session.employee.id}:${session.accessRevision}`);
++      return session.employee.id;
++    },
++    signal: abort.signal,
++    renderedFor: null,
++    renderedAccessRevision: null,
++    onIdentityChange: () => {},
++  });
++  assert.deepEqual(scopes, ['emp-manager:1', 'emp-sales:2']);
++  assert.equal(result.data, 'emp-sales');
++  assert.equal(result.accessRevision, 2);
++});
++
+ test('a denied session rejects without publishing or concealing', async (t) => {
+   t.mock.method(globalThis, 'fetch', async () =>
+     Response.json({ error: 'access-denied' }, { status: 403 }),
+diff --git a/src/features/employees/protected-load.ts b/src/features/employees/protected-load.ts
+index a1045e1..bb24c5a 100644
+--- a/src/features/employees/protected-load.ts
++++ b/src/features/employees/protected-load.ts
+@@ -35,17 +35,20 @@ export function refocusAction(
+ // stops instead of reading again.
+ export class AccessChangedError extends Error {}
+ 
++export type ProtectedSource<T> =
++  string | ((signal: AbortSignal, session: EmployeeSession) => Promise<T>);
++
+ export async function loadProtected<T>(options: {
+-  source: string | ((signal: AbortSignal) => Promise<T>);
++  source: ProtectedSource<T>;
+   signal: AbortSignal;
+   renderedFor: string | null;
+   renderedAccessRevision: number | null;
+   onIdentityChange: () => void;
+ }) {
+-  const readSource = () =>
++  const readSource = (session: EmployeeSession) =>
+     typeof options.source === 'string'
+       ? api<T>(options.source, undefined, options.signal)
+-      : options.source(options.signal);
++      : options.source(options.signal, session);
+   // The session read brackets the data read on both sides, so the data is only
+   // accepted when the access it was authorized on did not move under it.
+   let session = await api<EmployeeSession>(
+@@ -64,7 +67,7 @@ export async function loadProtected<T>(options: {
+     )
+       options.onIdentityChange();
+     options.signal.throwIfAborted();
+-    const data = await readSource();
++    const data = await readSource(session);
+     options.signal.throwIfAborted();
+     const current = await api<EmployeeSession>(
+       '/api/session',
+diff --git a/src/features/employees/use-protected-data.ts b/src/features/employees/use-protected-data.ts
+index fda167b..906056b 100644
+--- a/src/features/employees/use-protected-data.ts
++++ b/src/features/employees/use-protected-data.ts
+@@ -8,11 +8,10 @@ import {
+   refocusAction,
+   renderedSession,
+   sessionDiffers,
++  type ProtectedSource,
+ } from './protected-load';
+ 
+-export function useProtectedData<T>(
+-  source: string | ((signal: AbortSignal) => Promise<T>),
+-) {
++export function useProtectedData<T>(source: ProtectedSource<T>) {
+   const [employee, setEmployee] = useState<Employee | null>(null);
+   const [data, setData] = useState<T | null>(null);
+   const [error, setError] = useState<string | null>(null);
+diff --git a/src/features/properties/address-index.test.ts b/src/features/properties/address-index.test.ts
+new file mode 100644
+index 0000000..37d1716
+--- /dev/null
++++ b/src/features/properties/address-index.test.ts
+@@ -0,0 +1,196 @@
++import assert from 'node:assert/strict';
++import test from 'node:test';
++import {
++  buildAddressIndex,
++  foldAddress,
++  localAddressQuery,
++  matchCatalogue,
++} from './address-index.ts';
++import type { AddressSummary, PropertySummary } from './types';
++
++function address(
++  format: string,
++  addressText: string,
++  parts: Partial<AddressSummary> = {},
++): AddressSummary {
++  return {
++    id: `${format}-address`,
++    format,
++    addressText,
++    mappingStatus: 'unresolved',
++    isPrimary: format === 'legacy',
++    houseNumber: null,
++    street: null,
++    commune: null,
++    district: null,
++    ...parts,
++  };
++}
++
++function property(id: string, addresses: AddressSummary[]): PropertySummary {
++  return {
++    id,
++    propertyCode: `BDS-${id}`,
++    listingMode: 'sale',
++    status: 'available',
++    propertyType: 'house',
++    salePriceVnd: null,
++    monthlyRentVnd: null,
++    createdAt: null,
++    updatedAt: null,
++    addresses,
++    coverFileId: null,
++    frontageM: null,
++    depthM: null,
++    landAreaM2: null,
++    floorAreaM2: null,
++    floors: null,
++    direction: null,
++    accessType: null,
++    createdBy: null,
++  };
++}
++
++// The captain's own example: an old address with a district and an unaccented query.
++const LEGACY = property('1', [
++  address('legacy', '125 Nguyễn Văn Thương, Phường 25, Bình Thạnh', {
++    houseNumber: '125',
++    street: 'Nguyễn Văn Thương',
++    commune: 'Phường 25',
++    district: 'Bình Thạnh',
++  }),
++]);
++// The same property with both stored formats, as the catalogue carries them.
++const BOTH = property('2', [
++  address('legacy', '12/5 Lê Lợi, Phường 5, Quận 3', {
++    houseNumber: '12/5',
++    district: 'Quận 3',
++  }),
++  address('current', '12/5 Lê Lợi, Phường 5, Thành phố Hồ Chí Minh', {
++    houseNumber: '12/5',
++  }),
++]);
++const OTHER = property('3', [
++  address('legacy', '112 Lê Lợi, Phường 5, Quận 3'),
++]);
++
++const index = buildAddressIndex([LEGACY, BOTH, OTHER]);
++const found = (query: string) =>
++  matchCatalogue(index, query).map((record) => record.id);
++
++test('an address is compared without case, accents, đ or repeated whitespace', () => {
++  assert.equal(foldAddress('  Nguyễn  Văn Thương '), 'nguyen van thuong');
++  assert.equal(foldAddress('Đường Đồng Khởi'), 'duong dong khoi');
++  assert.equal(foldAddress('12/5 Lê Lợi'), '12/5 le loi');
++});
++
++test('an unaccented query finds the accented recorded address', () => {
++  assert.deepEqual(found('125 nguyen van thuong'), ['1']);
++  assert.deepEqual(found('nguyễn văn thương'), ['1']);
++  assert.deepEqual(found('Bình Thạnh'), ['1']);
++  // The recorded text is kept for display: folding is only how the comparison is made.
++  assert.equal(
++    index[0]?.variants[0]?.addressText,
++    LEGACY.addresses[0]?.addressText,
++  );
++  assert.equal(index[0]?.variants[0]?.format, 'legacy');
++});
++
++test('either stored format finds the same property, and no query mixes them', () => {
++  assert.deepEqual(found('12/5 le loi'), ['2']);
++  // The district is recorded on the old address and the province on the current one; a query that
++  // names one part of each matches neither, because each variant is searched on its own.
++  assert.deepEqual(found('quan 3 ho chi minh'), []);
++  // A property with two variants is one result, never two.
++  assert.deepEqual(found('le loi'), ['2', '3']);
++  assert.equal(found('le loi').length, 2);
++});
++
++test('the index is built once per property and holds every recorded variant', () => {
++  assert.equal(index.length, 3);
++  assert.equal(index[0]?.variants.length, 1);
++  assert.equal(index[1]?.variants.length, 2);
++  assert.deepEqual(
++    index[1]?.variants.map((variant) => variant.format),
++    ['legacy', 'current'],
++  );
++});
++
++test('a query the loaded page does not answer is an empty result, never an error', () => {
++  assert.deepEqual(found('đường không có trong danh mục'), []);
++  assert.deepEqual(found('le loi quan 1'), []);
++  // The whole loaded page is what an empty query is, not an empty result.
++  assert.deepEqual(found(''), ['1', '2', '3']);
++  assert.deepEqual(found('   '), ['1', '2', '3']);
++  assert.deepEqual(matchCatalogue([], 'le loi'), []);
++});
++
++test('an unedited or submitted search stays on its server result', () => {
++  for (const query of ['', 'le loi', '  le loi  '])
++    assert.equal(localAddressQuery(query, false, null, 0), null);
++});
++
++test('editing, restoring and clearing a basic search stays local until submission', () => {
++  for (const [typed, expected, ids] of [
++    ['le loi', 'le loi', ['2', '3']],
++    ['  le loi  ', 'le loi', ['2', '3']],
++    ['missing street', 'missing street', []],
++    ['', '', ['1', '2', '3']],
++    ['   ', '', ['1', '2', '3']],
++    ['le loi', 'le loi', ['2', '3']],
++  ] as const) {
++    const query = localAddressQuery(typed, true, null, 0);
++    assert.equal(query, expected);
++    assert.deepEqual(
++      matchCatalogue(index, query!).map((record) => record.id),
++      ids,
++    );
++  }
++  assert.equal(localAddressQuery('le loi', false, null, 0), null);
++});
++
++test('chronology and advanced filters keep the server result while typing', () => {
++  for (const typed of ['le loi', '', '   ']) {
++    assert.equal(localAddressQuery(typed, true, 'oldest', 0), null);
++    assert.equal(localAddressQuery(typed, true, 'newest', 0), null);
++    assert.equal(localAddressQuery(typed, true, null, 2), null);
++  }
++});
++
++test('each variant indexes its carried address parts without changing its source text', () => {
++  const record = property('parts', [
++    address('legacy', 'Địa chỉ gốc', {
++      houseNumber: '12A',
++      street: 'Đồng Khởi',
++      district: 'Bình Thạnh',
++      commune: 'Phường 25',
++    }),
++    address('current', 'Địa chỉ hiện tại', {
++      houseNumber: '12A',
++      street: 'Đồng Khởi',
++      commune: 'Phường Bến Thành',
++    }),
++  ]);
++  const indexed = buildAddressIndex([record]);
++  for (const query of [
++    'dia chi goc',
++    '12a',
++    'dong khoi',
++    '12a dong khoi',
++    'binh thanh',
++    'phuong 25',
++    'phuong ben thanh',
++  ])
++    assert.deepEqual(matchCatalogue(indexed, query), [record], query);
++  assert.deepEqual(matchCatalogue(indexed, 'binh thanh phuong ben thanh'), []);
++  assert.equal(indexed[0]?.variants[0]?.addressText, 'Địa chỉ gốc');
++  assert.equal(indexed[0]?.variants[1]?.addressText, 'Địa chỉ hiện tại');
++});
++
++test('a contiguous fragment is what matches, in the order it was recorded', () => {
++  // Deliberate limit of this slice: matching is the contiguous, accent-insensitive fragment the
++  // database's own address search documents. Token order, ranking, abbreviation expansion and
++  // house-number structure belong to the matching slice (issue #191).
++  assert.deepEqual(found('le loi'), ['2', '3']);
++  assert.deepEqual(found('loi le'), []);
++});
+diff --git a/src/features/properties/address-index.ts b/src/features/properties/address-index.ts
+new file mode 100644
+index 0000000..c7a9080
+--- /dev/null
++++ b/src/features/properties/address-index.ts
+@@ -0,0 +1,83 @@
++// The local address index: the catalogue's recorded addresses folded once per property, and the
++// one match the address box runs while a person types. Folding is the accent-insensitive
++// comparison the database's own address search already documents, kept here so a keystroke reads
++// nothing at all. Ranking, abbreviation expansion, house-number structure and the rules that
++// relate an old address to a current one belong to the matching slice (issue #191) and are
++// deliberately not here.
++import type { PropertySummary } from './types';
++
++export type CatalogueAddressVariant = {
++  // The recorded format the variant was stored in: legacy, current or alternate.
++  format: string;
++  // The recorded address text exactly as entered. Display reads this, never the folded form.
++  addressText: string;
++  folded: string;
++};
++
++export type CatalogueIndexEntry = {
++  record: PropertySummary;
++  variants: CatalogueAddressVariant[];
++};
++
++export function localAddressQuery(
++  typed: string,
++  edited: boolean,
++  sort: string | null,
++  filters: number,
++): string | null {
++  if (!edited || sort !== null || filters > 0) return null;
++  return typed.trim();
++}
++
++// The comparison form of an address: case-folded, without accent marks, with đ read as d, and with
++// repeated whitespace collapsed. House-number structure (12/5, 12A) survives untouched, and
++// nothing is added to the text: an unrecorded new ward name is never inferred from an old one.
++export function foldAddress(text: string): string {
++  return text
++    .toLowerCase()
++    .normalize('NFD')
++    .replace(/[\u0300-\u036f]/g, '')
++    .replaceAll('đ', 'd')
++    .replace(/\s+/g, ' ')
++    .trim();
++}
++
++// The index is built once per loaded page rather than once per keystroke: every property's variants
++// are folded here, and the record itself is kept so a result draws its recorded address text.
++export function buildAddressIndex(
++  records: readonly PropertySummary[],
++): CatalogueIndexEntry[] {
++  return records.map((record) => ({
++    record,
++    variants: record.addresses.map((address) => ({
++      format: address.format,
++      addressText: address.addressText,
++      folded: foldAddress(
++        [
++          address.addressText,
++          address.houseNumber,
++          address.street,
++          address.district,
++          address.commune,
++        ].join(' '),
++      ),
++    })),
++  }));
++}
++
++// The properties whose recorded address text matches what the person typed. Each stored variant is
++// searched on its own, so a query can never match a mixture of an old district and a current ward,
++// and a property matches when any one of its variants does. An empty query is the whole loaded
++// page, never an empty result.
++export function matchCatalogue(
++  index: readonly CatalogueIndexEntry[],
++  query: string,
++): PropertySummary[] {
++  const folded = foldAddress(query);
++  if (!folded) return index.map((entry) => entry.record);
++  return index
++    .filter((entry) =>
++      entry.variants.some((variant) => variant.folded.includes(folded)),
++    )
++    .map((entry) => entry.record);
++}
+diff --git a/src/features/properties/catalogue-cache.test.ts b/src/features/properties/catalogue-cache.test.ts
+new file mode 100644
+index 0000000..56e484e
+--- /dev/null
++++ b/src/features/properties/catalogue-cache.test.ts
+@@ -0,0 +1,183 @@
++import assert from 'node:assert/strict';
++import test from 'node:test';
++import { QueryClient } from '@tanstack/react-query';
++import { loadProtected, renderedSession } from '../employees/protected-load.ts';
++import type { EmployeeSession } from '../employees/types';
++import { readCatalogue } from './catalogue-cache.ts';
++import type { CataloguePage, PropertySummary } from './types';
++
++const reviewer: EmployeeSession = {
++  employee: {
++    id: 'reviewer',
++    displayName: 'Reviewer',
++    role: 'manager',
++    locale: 'vi',
++  },
++  accessRevision: 1,
++};
++const sales: EmployeeSession = {
++  employee: { id: 'sales', displayName: 'Sales', role: 'sales', locale: 'vi' },
++  accessRevision: 2,
++};
++const record: PropertySummary = {
++  id: 'retired-property',
++  propertyCode: 'BDS-001',
++  listingMode: 'sale',
++  status: 'available',
++  propertyType: 'house',
++  salePriceVnd: '12000000000',
++  monthlyRentVnd: null,
++  createdAt: null,
++  updatedAt: null,
++  addresses: [
++    {
++      id: 'old-address',
++      format: 'legacy',
++      addressText: '12 Lê Lợi',
++      mappingStatus: 'unresolved',
++      isPrimary: true,
++      houseNumber: '12',
++      street: 'Lê Lợi',
++      commune: null,
++      district: 'Quận 1',
++    },
++  ],
++  coverFileId: null,
++  frontageM: null,
++  depthM: null,
++  landAreaM2: null,
++  floorAreaM2: null,
++  floors: null,
++  direction: null,
++  accessType: null,
++  createdBy: null,
++};
++const privatePage: CataloguePage = { properties: [record], nextCursor: null };
++const publicPage: CataloguePage = { properties: [], nextCursor: null };
++const client = () =>
++  new QueryClient({ defaultOptions: { queries: { retry: false } } });
++const flush = () => new Promise((resolve) => setImmediate(resolve));
++
++function load(client: QueryClient, signal = new AbortController().signal) {
++  return loadProtected({
++    source: (signal, scope) => readCatalogue(client, signal, scope),
++    signal,
++    renderedFor: null,
++    renderedAccessRevision: null,
++    onIdentityChange: () => {},
++  });
++}
++
++test('a stable protected scope reuses the catalogue across route reads', async (t) => {
++  const cache = client();
++  t.after(() => cache.clear());
++  let catalogueReads = 0;
++  t.mock.method(globalThis, 'fetch', async (path: string) => {
++    if (path === '/api/session') return Response.json(reviewer);
++    assert.equal(path, '/api/properties/catalogue');
++    catalogueReads++;
++    return Response.json(privatePage);
++  });
++  const first = await load(cache);
++  const returned = await load(cache);
++  assert.deepEqual(first.data, { scope: reviewer, page: privatePage });
++  assert.deepEqual(returned.data, first.data);
++  assert.equal(catalogueReads, 1);
++});
++
++test('changing employee, role or revision discards the former catalogue', async (t) => {
++  for (const next of [
++    sales,
++    { ...reviewer, employee: { ...reviewer.employee, role: 'sales' as const } },
++    { ...reviewer, accessRevision: 2 },
++  ]) {
++    const cache = client();
++    t.after(() => cache.clear());
++    let current = reviewer;
++    let catalogueReads = 0;
++    t.mock.method(globalThis, 'fetch', async (path: string) => {
++      if (path === '/api/session') return Response.json(current);
++      assert.equal(path, '/api/properties/catalogue');
++      catalogueReads++;
++      return Response.json(current === reviewer ? privatePage : publicPage);
++    });
++    await load(cache);
++    current = next;
++    const returned = await load(cache);
++    assert.deepEqual(returned.data, { scope: next, page: publicPage });
++    assert.equal(catalogueReads, 2);
++    assert.deepEqual(
++      cache
++        .getQueryCache()
++        .getAll()
++        .map((query) => query.state.data),
++      [publicPage],
++    );
++  }
++});
++
++test('authority changing during a catalogue read never publishes the earlier response', async (t) => {
++  const cache = client();
++  t.after(() => cache.clear());
++  const arriving = Promise.withResolvers<Response>();
++  let current = reviewer;
++  let catalogueReads = 0;
++  t.mock.method(globalThis, 'fetch', async (path: string) => {
++    if (path === '/api/session') return Response.json(current);
++    assert.equal(path, '/api/properties/catalogue');
++    return ++catalogueReads === 1
++      ? arriving.promise
++      : Response.json(publicPage);
++  });
++  const pending = load(cache);
++  await flush();
++  current = sales;
++  arriving.resolve(Response.json(privatePage));
++  const returned = await pending;
++  assert.deepEqual(returned.data, { scope: sales, page: publicPage });
++  assert.equal(renderedSession(returned.employee), 'sales:sales');
++  assert.deepEqual(
++    cache
++      .getQueryCache()
++      .getAll()
++      .map((query) => query.state.data),
++    [publicPage],
++  );
++});
++
++test('a replaced scope cancels its pending read and cannot repopulate the cache', async (t) => {
++  const cache = client();
++  t.after(() => cache.clear());
++  const arriving = Promise.withResolvers<Response>();
++  let current = reviewer;
++  const originalSignals: AbortSignal[] = [];
++  t.mock.method(
++    globalThis,
++    'fetch',
++    async (path: string, options?: RequestInit) => {
++      if (path === '/api/session') return Response.json(current);
++      assert.equal(path, '/api/properties/catalogue');
++      if (current === reviewer) {
++        if (options?.signal) originalSignals.push(options.signal);
++        return arriving.promise;
++      }
++      return Response.json(publicPage);
++    },
++  );
++  const pending = load(cache);
++  const rejected = assert.rejects(pending);
++  await flush();
++  current = sales;
++  const returned = await load(cache);
++  arriving.resolve(Response.json(privatePage));
++  await rejected;
++  assert.equal(originalSignals[0]?.aborted, true);
++  assert.deepEqual(returned.data, { scope: sales, page: publicPage });
++  assert.deepEqual(
++    cache
++      .getQueryCache()
++      .getAll()
++      .map((query) => query.state.data),
++    [publicPage],
++  );
++});
+diff --git a/src/features/properties/catalogue-cache.ts b/src/features/properties/catalogue-cache.ts
+new file mode 100644
+index 0000000..46d149b
+--- /dev/null
++++ b/src/features/properties/catalogue-cache.ts
+@@ -0,0 +1,37 @@
++import { hashKey, type QueryClient } from '@tanstack/react-query';
++import { api } from '../employees/api.ts';
++import { renderedSession } from '../employees/protected-load.ts';
++import type { EmployeeSession } from '../employees/types';
++import { CATALOGUE_SCHEMA_VERSION } from './catalogue.ts';
++import type { CataloguePage } from './types';
++
++export type ScopedCatalogue = { scope: EmployeeSession; page: CataloguePage };
++
++export async function readCatalogue(
++  client: QueryClient,
++  signal: AbortSignal,
++  scope: EmployeeSession,
++): Promise<ScopedCatalogue> {
++  const queryKey = [
++    'property-catalogue',
++    renderedSession(scope.employee),
++    scope.accessRevision,
++    CATALOGUE_SCHEMA_VERSION,
++  ];
++  client.removeQueries({
++    queryKey: ['property-catalogue'],
++    predicate: (query) => query.queryHash !== hashKey(queryKey),
++  });
++  const page = await client.fetchQuery({
++    queryKey,
++    queryFn: ({ signal: querySignal }) =>
++      api<CataloguePage>(
++        '/api/properties/catalogue',
++        undefined,
++        AbortSignal.any([signal, querySignal]),
++      ),
++    staleTime: Infinity,
++    gcTime: Infinity,
++  });
++  return { scope, page };
++}
+diff --git a/src/features/properties/catalogue-data.ts b/src/features/properties/catalogue-data.ts
+new file mode 100644
+index 0000000..af2efaa
+--- /dev/null
++++ b/src/features/properties/catalogue-data.ts
+@@ -0,0 +1,41 @@
++import 'server-only';
++import { ApiError, type RouteContext } from '@/lib/supabase/route';
++import {
++  CATALOGUE_PAGE_SIZE,
++  CATALOGUE_SELECT,
++  catalogueFailure,
++  catalogueSummary,
++  nextCatalogueCursor,
++  type CatalogueRow,
++} from './catalogue';
++import type { CataloguePage } from './types';
++
++// One page of the browser catalogue: the caller's own authorized, unarchived inventory in one
++// stable identity order, with each property's address variants flattened into its row.
++//
++// The cursor names the position the page starts after and nothing else. The read runs on the
++// caller's own session client, so row level security is what decides which rows exist for them at
++// all, and it is reapplied on every page: a cursor can never reach a row the caller may not read.
++export async function cataloguePage(
++  context: RouteContext,
++  after: string | null,
++): Promise<CataloguePage> {
++  const read = context.client
++    .from('properties')
++    .select(CATALOGUE_SELECT)
++    // The ordinary inventory boundary: an archived record is not part of the browsing catalogue,
++    // exactly as the list's own stream excludes it.
++    .is('archived_at', null)
++    .order('id', { ascending: true })
++    .limit(CATALOGUE_PAGE_SIZE);
++  const { data, error } = await (after === null ? read : read.gt('id', after));
++  if (error) {
++    const failure = catalogueFailure(error.code);
++    throw new ApiError(failure.status, failure.code);
++  }
++  const rows = (data ?? []) as unknown as CatalogueRow[];
++  return {
++    properties: rows.map(catalogueSummary),
++    nextCursor: nextCatalogueCursor(rows.map((row) => row.id)),
++  };
++}
+diff --git a/src/features/properties/catalogue-provider.tsx b/src/features/properties/catalogue-provider.tsx
+new file mode 100644
+index 0000000..63c5621
+--- /dev/null
++++ b/src/features/properties/catalogue-provider.tsx
+@@ -0,0 +1,102 @@
++'use client';
++import {
++  createContext,
++  useCallback,
++  useContext,
++  useEffect,
++  useMemo,
++  useState,
++  type ReactNode,
++} from 'react';
++import {
++  QueryClient,
++  QueryClientProvider,
++  useQueryClient,
++} from '@tanstack/react-query';
++import { useProtectedData } from '@/features/employees/use-protected-data';
++import {
++  renderedSession,
++  sessionDiffers,
++} from '@/features/employees/protected-load';
++import type { EmployeeSession } from '@/features/employees/types';
++import { buildAddressIndex, type CatalogueIndexEntry } from './address-index';
++import { readCatalogue, type ScopedCatalogue } from './catalogue-cache';
++
++// What the address box reads: the index of the page the browser holds and the honest state of the
++// load behind it. Nothing here authorizes anything - a lock, an approval or an edit always
++// validates against current server state, never against this browsing snapshot.
++export type CatalogueState = {
++  status: 'loading' | 'ready' | 'failed';
++  index: readonly CatalogueIndexEntry[];
++  loadedCount: number;
++  scope: EmployeeSession | null;
++};
++
++const EMPTY: CatalogueState = {
++  status: 'loading',
++  index: [],
++  loadedCount: 0,
++  scope: null,
++};
++const CatalogueContext = createContext<CatalogueState>(EMPTY);
++
++export function useCatalogue(session: EmployeeSession | null): CatalogueState {
++  const catalogue = useContext(CatalogueContext);
++  if (
++    catalogue.scope &&
++    (!session ||
++      sessionDiffers(
++        renderedSession(catalogue.scope.employee),
++        catalogue.scope.accessRevision,
++        session,
++      ))
++  )
++    return EMPTY;
++  return catalogue;
++}
++
++export function CatalogueProvider({ children }: { children: ReactNode }) {
++  // One client for the whole authenticated application, created once per browser session: the
++  // catalogue outlives every route inside the shell, and a page reload is what starts it over.
++  const [queryClient] = useState(
++    () => new QueryClient({ defaultOptions: { queries: { retry: false } } }),
++  );
++  return (
++    <QueryClientProvider client={queryClient}>
++      <CatalogueLoader>{children}</CatalogueLoader>
++    </QueryClientProvider>
++  );
++}
++
++function CatalogueLoader({ children }: { children: ReactNode }) {
++  const queryClient = useQueryClient();
++  const read = useCallback(
++    (signal: AbortSignal, scope: EmployeeSession) =>
++      readCatalogue(queryClient, signal, scope),
++    [queryClient],
++  );
++  const { data, busy, error } = useProtectedData<ScopedCatalogue>(read);
++  useEffect(() => {
++    if (!busy && !data) queryClient.clear();
++  }, [busy, data, queryClient]);
++  const snapshot = busy ? null : data;
++  const page = snapshot?.page ?? null;
++  const index = useMemo(
++    () => buildAddressIndex(page?.properties ?? []),
++    [page],
++  );
++  const state = useMemo<CatalogueState>(
++    () => ({
++      status: error ? 'failed' : snapshot ? 'ready' : 'loading',
++      index,
++      loadedCount: index.length,
++      scope: snapshot?.scope ?? null,
++    }),
++    [error, snapshot, index],
++  );
++  return (
++    <CatalogueContext.Provider value={state}>
++      {children}
++    </CatalogueContext.Provider>
++  );
++}
+diff --git a/src/features/properties/catalogue.test.ts b/src/features/properties/catalogue.test.ts
+new file mode 100644
+index 0000000..72278e6
+--- /dev/null
++++ b/src/features/properties/catalogue.test.ts
+@@ -0,0 +1,262 @@
++import assert from 'node:assert/strict';
++import test from 'node:test';
++import {
++  CATALOGUE_PAGE_SIZE,
++  CATALOGUE_SELECT,
++  catalogueFailure,
++  catalogueRequest,
++  catalogueSummary,
++  nextCatalogueCursor,
++  parseCatalogueCursor,
++  type CatalogueRow,
++} from './catalogue.ts';
++
++const PROPERTY_ID = '3f1c1f0e-2a4b-4c5d-8e6f-7a8b9c0d1e2f';
++const SECOND_ID = '8b2d3e4f-5a6b-4c7d-9e8f-1a2b3c4d5e6f';
++
++// One row as the read's own select list shapes it: the summary fields with the address variants
++// flattened into the row, money and measurements already cast to text.
++const row: CatalogueRow = {
++  id: PROPERTY_ID,
++  property_code: 'BDS-0001',
++  listing_mode: 'sale',
++  status: 'available',
++  property_type: 'house',
++  sale_price_vnd: '12500000000',
++  monthly_rent_vnd: null,
++  land_area_m2: '85.50',
++  floor_area_m2: null,
++  frontage_m: '5.00',
++  depth_m: '17.10',
++  floors: 3,
++  direction: 'SE',
++  access_type: 'car_alley',
++  cover_file_id: null,
++  created_at: '2026-10-01T00:00:00Z',
++  updated_at: '2026-10-19T04:00:00Z',
++  property_addresses: [
++    {
++      id: SECOND_ID,
++      format: 'legacy',
++      address_text: '125 Nguyễn Văn Thương, Phường 25, Bình Thạnh',
++      house_number: '125',
++      street: 'Nguyễn Văn Thương',
++      commune_text: 'Phường 25',
++      district_text: 'Bình Thạnh',
++      is_primary: true,
++      mapping_status: 'unresolved',
++    },
++    {
++      id: PROPERTY_ID,
++      format: 'current',
++      address_text: '125 Nguyễn Văn Thương, Phường 25, Thành phố Hồ Chí Minh',
++      house_number: '125',
++      street: 'Nguyễn Văn Thương',
++      commune_text: 'Phường 25',
++      district_text: null,
++      is_primary: false,
++      mapping_status: 'candidate',
++    },
++  ],
++};
++
++// The fields the read's own select list names, with the cast each one states and the embedded
++// address resource counted as one field. Parsing it means the assertion is about the contract the
++// read states rather than about the text that states it.
++function selected(select: string): Map<string, string | null> {
++  const fields = new Map<string, string | null>();
++  let depth = 0;
++  let current = '';
++  const flush = () => {
++    const [name, cast] = current.trim().split('::');
++    const field = name?.split('(')[0]?.trim();
++    if (field) fields.set(field, cast ?? null);
++    current = '';
++  };
++  for (const character of select) {
++    if (character === '(') depth++;
++    if (character === ')') depth--;
++    if (character === ',' && depth === 0) {
++      flush();
++      continue;
++    }
++    current += character;
++  }
++  flush();
++  return fields;
++}
++
++test('the catalogue read names the summary contract and casts its money and measurements', () => {
++  const fields = selected(CATALOGUE_SELECT);
++  // Exactly this set: contacts, legal fields, notes, coordinates, the creator and the entry
++  // chronology belong to the detail and chronological reads, which authorize them separately.
++  assert.deepEqual([...fields.keys()].sort(), [
++    'access_type',
++    'cover_file_id',
++    'created_at',
++    'depth_m',
++    'direction',
++    'floor_area_m2',
++    'floors',
++    'frontage_m',
++    'id',
++    'land_area_m2',
++    'listing_mode',
++    'monthly_rent_vnd',
++    'property_addresses',
++    'property_code',
++    'property_type',
++    'sale_price_vnd',
++    'status',
++    'updated_at',
++  ]);
++  // Money and measurements are cast before serialization, so no numeric(18,0) or m² value is
++  // rounded through a JavaScript number; every other field is stated as its own type.
++  for (const money of [
++    'sale_price_vnd',
++    'monthly_rent_vnd',
++    'land_area_m2',
++    'floor_area_m2',
++    'frontage_m',
++    'depth_m',
++  ])
++    assert.equal(fields.get(money), 'text', money);
++  for (const field of [
++    'id',
++    'property_code',
++    'listing_mode',
++    'status',
++    'property_type',
++    'floors',
++    'direction',
++    'access_type',
++    'cover_file_id',
++    'created_at',
++    'updated_at',
++    'property_addresses',
++  ])
++    assert.equal(fields.get(field), null, field);
++});
++
++test('one row becomes the list summary, with the recorded text and both formats', () => {
++  const summary = catalogueSummary(row);
++  assert.deepEqual(Object.keys(summary).sort(), [
++    'accessType',
++    'addresses',
++    'coverFileId',
++    'createdAt',
++    'createdBy',
++    'depthM',
++    'direction',
++    'floorAreaM2',
++    'floors',
++    'frontageM',
++    'id',
++    'landAreaM2',
++    'listingMode',
++    'monthlyRentVnd',
++    'propertyCode',
++    'propertyType',
++    'salePriceVnd',
++    'status',
++    'updatedAt',
++  ]);
++  assert.equal(summary.salePriceVnd, '12500000000');
++  assert.equal(summary.landAreaM2, '85.50');
++  assert.equal(summary.propertyCode, 'BDS-0001');
++  // The primary address is the one the card draws, and the legacy text is kept exactly as
++  // recorded: a current address is never rebuilt from it and the old one is never overwritten.
++  assert.equal(summary.addresses[0]?.format, 'legacy');
++  assert.equal(
++    summary.addresses[0]?.addressText,
++    '125 Nguyễn Văn Thương, Phường 25, Bình Thạnh',
++  );
++  assert.equal(summary.addresses[1]?.format, 'current');
++  assert.equal(summary.addresses[1]?.district, null);
++  // The catalogue states no attribution and no entry chronology.
++  assert.equal(summary.createdBy, null);
++  assert.equal(summary.entryOn, undefined);
++});
++
++test('a row with no address or no facts states the gap rather than inventing one', () => {
++  const summary = catalogueSummary({
++    ...row,
++    sale_price_vnd: null,
++    floors: null,
++    property_addresses: null,
++  });
++  assert.deepEqual(summary.addresses, []);
++  assert.equal(summary.salePriceVnd, null);
++  assert.equal(summary.floors, null);
++});
++
++const cursor = (values: Record<string, string>) =>
++  parseCatalogueCursor(new URLSearchParams(values));
++
++test('an absent cursor is the first page and a mangled one is refused', () => {
++  assert.deepEqual(cursor({}), { ok: true, after: null });
++  assert.deepEqual(cursor({ after: PROPERTY_ID }), {
++    ok: true,
++    after: PROPERTY_ID,
++  });
++  // The cursor is a position in one ordering, so a value that names no position is refused rather
++  // than read as a different page.
++  for (const value of [
++    '',
++    '1',
++    'not-a-uuid',
++    `${PROPERTY_ID} or true`,
++    `${PROPERTY_ID} `,
++    PROPERTY_ID.toUpperCase() + 'x',
++  ])
++    assert.deepEqual(cursor({ after: value }), { ok: false }, `after=${value}`);
++});
++
++test('the next cursor is the last identity of a full page only', () => {
++  // A short page ends the traversal: there is no position after it to state.
++  assert.equal(nextCatalogueCursor([PROPERTY_ID]), null);
++  assert.equal(nextCatalogueCursor([]), null);
++  const full = Array.from(
++    { length: CATALOGUE_PAGE_SIZE },
++    (_, index) =>
++      `${String(index).padStart(8, '0')}-0000-0000-0000-000000000000`,
++  );
++  assert.equal(nextCatalogueCursor(full), full[full.length - 1]);
++});
++
++test('the read answers one cursor and nothing else in the address', () => {
++  const ask = (values: Record<string, string>) =>
++    catalogueRequest(new URLSearchParams(values));
++  assert.deepEqual(ask({}), { ok: true, after: null });
++  assert.deepEqual(ask({ after: PROPERTY_ID }), {
++    ok: true,
++    after: PROPERTY_ID,
++  });
++  // The catalogue read has no filters, no ordering and no page size of its own: a caller that
++  // sends one is refused rather than answered with a page it did not ask for.
++  for (const values of [
++    { query: 'le loi' },
++    { limit: '500' },
++    { page: '2' },
++    { after: '' },
++    { after: 'nonsense' },
++    { after: PROPERTY_ID, query: '' },
++  ] as Record<string, string>[])
++    assert.deepEqual(ask(values), { ok: false }, JSON.stringify(values));
++});
++
++test('a refused read answers a refusal, never an empty catalogue', () => {
++  // Row level security denies a read the caller may not make; that is a refusal, not an inventory
++  // that happens to hold no properties.
++  assert.deepEqual(catalogueFailure('42501'), {
++    status: 403,
++    code: 'access-denied',
++  });
++  // Any other failure is unavailable, so a caller is never shown an empty page as an answer.
++  for (const code of ['57014', 'PGRST301', undefined])
++    assert.deepEqual(
++      catalogueFailure(code),
++      { status: 503, code: 'unavailable' },
++      `code=${String(code)}`,
++    );
++});
+diff --git a/src/features/properties/catalogue.ts b/src/features/properties/catalogue.ts
+new file mode 100644
+index 0000000..3921e96
+--- /dev/null
++++ b/src/features/properties/catalogue.ts
+@@ -0,0 +1,163 @@
++// The browser catalogue's own contract: the summary fields one catalogue read may carry, the
++// stable cursor that walks the authorized inventory, and the projection from a read row to the
++// summary the list draws. Everything here is shaping and arithmetic over values, so the page
++// length, the cursor and the projection are testable without a database or a browser. The read
++// that uses them is `catalogue-data.ts`; the decision behind it is ADR 0003.
++import { isUuid } from '../../lib/supabase/query.ts';
++import type { AddressSummary, PropertySummary } from './types';
++
++// Rows per catalogue read. The specification's starting point for the first batch is 100 to 200
++// summaries; the read states its own bound, so a page stays a bounded payload whatever a caller
++// asks for.
++export const CATALOGUE_PAGE_SIZE = 200;
++
++// The summary shape's own version. A browser-held catalogue is only reused for the same shape, so
++// a later field change starts a new key instead of reading rows of the old one as the new one.
++export const CATALOGUE_SCHEMA_VERSION = 1;
++
++// The one field list a catalogue read carries. Money and measurements are cast to text, so a
++// whole-VND or m² value is never rounded through a JavaScript number, and a property's address
++// variants ride on the same row: the browser never fetches related records per result. Contacts,
++// legal fields, notes, the creator and the entry chronology are deliberately absent - they belong
++// to detail and chronological reads.
++export const CATALOGUE_SELECT =
++  'id,property_code,listing_mode,status,property_type,' +
++  'sale_price_vnd::text,monthly_rent_vnd::text,' +
++  'land_area_m2::text,floor_area_m2::text,frontage_m::text,depth_m::text,floors,' +
++  'direction,access_type,cover_file_id,created_at,updated_at,' +
++  'property_addresses(id,format,address_text,house_number,street,commune_text,district_text,' +
++  'is_primary,mapping_status)';
++
++// One row of the catalogue read, as that read's own select list shapes it: the summary fields with
++// the property's address variants flattened into the row.
++export type CatalogueAddressRow = {
++  id: string;
++  format: string;
++  address_text: string;
++  house_number: string | null;
++  street: string | null;
++  commune_text: string | null;
++  district_text: string | null;
++  is_primary: boolean;
++  mapping_status: string;
++};
++
++export type CatalogueRow = {
++  id: string;
++  property_code: string;
++  listing_mode: string;
++  status: string;
++  property_type: string;
++  sale_price_vnd: string | null;
++  monthly_rent_vnd: string | null;
++  land_area_m2: string | null;
++  floor_area_m2: string | null;
++  frontage_m: string | null;
++  depth_m: string | null;
++  floors: number | null;
++  direction: string | null;
++  access_type: string | null;
++  cover_file_id: string | null;
++  created_at: string | null;
++  updated_at: string | null;
++  property_addresses: CatalogueAddressRow[] | null;
++};
++
++// The recorded address the catalogue states, in the shape the list already reads.
++function catalogueAddress(row: CatalogueAddressRow): AddressSummary {
++  return {
++    id: row.id,
++    format: row.format,
++    // The recorded text exactly as entered: display never reads a folded or rebuilt address.
++    addressText: row.address_text,
++    mappingStatus: row.mapping_status,
++    isPrimary: row.is_primary,
++    houseNumber: row.house_number,
++    street: row.street,
++    commune: row.commune_text,
++    district: row.district_text,
++  };
++}
++
++// The summary one catalogue row states, in the list's own record shape so the list, the quick view
++// and the local address index read the same record they read from the stream. The creator and the
++// entry chronology are not part of the catalogue: attribution needs a further read, and the
++// chronology belongs to the chronological views.
++export function catalogueSummary(row: CatalogueRow): PropertySummary {
++  return {
++    id: row.id,
++    propertyCode: row.property_code,
++    listingMode: row.listing_mode,
++    status: row.status,
++    propertyType: row.property_type,
++    salePriceVnd: row.sale_price_vnd ?? null,
++    monthlyRentVnd: row.monthly_rent_vnd ?? null,
++    createdAt: row.created_at ?? null,
++    updatedAt: row.updated_at ?? null,
++    // Primary first, then identity: the card draws the first address, and the order is the one the
++    // stream's own address read states. Both stored formats are carried; neither is rewritten from
++    // the other.
++    addresses: [...(row.property_addresses ?? [])]
++      .sort((left, right) =>
++        left.is_primary === right.is_primary
++          ? left.id < right.id
++            ? -1
++            : 1
++          : left.is_primary
++            ? -1
++            : 1,
++      )
++      .map(catalogueAddress),
++    coverFileId: row.cover_file_id ?? null,
++    frontageM: row.frontage_m ?? null,
++    depthM: row.depth_m ?? null,
++    landAreaM2: row.land_area_m2 ?? null,
++    floorAreaM2: row.floor_area_m2 ?? null,
++    floors: row.floors ?? null,
++    direction: row.direction ?? null,
++    accessType: row.access_type ?? null,
++    createdBy: null,
++  };
++}
++
++// The catalogue's cursor is a row position in one stable ordering - the property identity - and
++// never an authorization grant: every read reapplies the caller's own authorization and answers
++// with the rows that identity may receive, whatever cursor it was handed.
++export function parseCatalogueCursor(
++  params: URLSearchParams,
++): { ok: true; after: string | null } | { ok: false } {
++  const after = params.get('after');
++  if (after === null) return { ok: true, after: null };
++  return isUuid(after) ? { ok: true, after } : { ok: false };
++}
++
++// The one request a catalogue read answers: no cursor is the first page, a property identity is a
++// position in the traversal, and anything else in the address - a filter, a page number, a
++// mangled cursor - is refused rather than answered with a page the caller did not ask for.
++export function catalogueRequest(
++  params: URLSearchParams,
++): { ok: true; after: string | null } | { ok: false } {
++  if ([...params.keys()].some((key) => key !== 'after')) return { ok: false };
++  return parseCatalogueCursor(params);
++}
++
++// The refusal one failed catalogue read answers. A permission error is a refusal and anything else
++// is unavailable; neither is ever answered as an empty catalogue, which would read as an inventory
++// that happens to hold no properties.
++export function catalogueFailure(code: string | undefined): {
++  status: number;
++  code: string;
++} {
++  return code === '42501'
++    ? { status: 403, code: 'access-denied' }
++    : { status: 503, code: 'unavailable' };
++}
++
++// The cursor the page after this one starts after: the last identity this page carried, or null
++// when this page ended the traversal. A full page may still be the last one, so the following read
++// decides rather than this one.
++export function nextCatalogueCursor(ids: readonly string[]): string | null {
++  return ids.length >= CATALOGUE_PAGE_SIZE
++    ? (ids[ids.length - 1] ?? null)
++    : null;
++}
+diff --git a/src/features/properties/detail.tsx b/src/features/properties/detail.tsx
+index 63986b4..cfe4cf3 100644
+--- a/src/features/properties/detail.tsx
++++ b/src/features/properties/detail.tsx
+@@ -7,6 +7,7 @@ import {
+   useState,
+   type KeyboardEvent as ReactKeyboardEvent,
+ } from 'react';
++import Link from 'next/link';
+ import { label, messages, type Locale } from '@/i18n/messages';
+ import { useProtectedData } from '@/features/employees/use-protected-data';
+ import { LoadingSkeleton, Skeleton } from '@/features/skeleton';
+@@ -436,9 +437,9 @@ export function Detail({
+   return (
+     <div lang={locale}>
+       <p>
+-        <a className="link-quiet" href={returnTo}>
++        <Link className="link-quiet" href={returnTo} prefetch={false}>
+           {dt.back}
+-        </a>
++        </Link>
+       </p>
+ 
+       <div className="detail-head">
+diff --git a/src/features/properties/inventory.tsx b/src/features/properties/inventory.tsx
+index 381a1b1..5008a74 100644
+--- a/src/features/properties/inventory.tsx
++++ b/src/features/properties/inventory.tsx
+@@ -20,6 +20,8 @@ import { PropertyDrawer } from './property-drawer';
+ import { TableChunk, TableHead } from './property-table';
+ import { SearchIsland } from './search-island';
+ import { useInventoryStream } from './use-inventory-stream';
++import { useCatalogue } from './catalogue-provider';
++import { localAddressQuery, matchCatalogue } from './address-index';
+ import {
+   activeFilterCount,
+   filterParams,
+@@ -37,8 +39,10 @@ import {
+ } from './view';
+ import {
+   isInventoryOrder,
++  localStreamWindows,
+   STREAM_CHUNK_ROWS,
+   STREAM_ESTIMATE_PX,
++  STREAM_PAGE_SIZE,
+   streamBand,
+   streamChunkCount,
+   streamChunkHeights,
+@@ -51,6 +55,8 @@ import { SUMMARY_TABLE_COLUMNS } from './table';
+ import type { PropertySummary } from './types';
+ 
+ const NO_MEASURED: ReadonlyMap<number, number> = new Map();
++// A typed search the loaded catalogue cannot answer yet: no rows to filter, not a failed read.
++const NO_MATCHES: PropertySummary[] = [];
+ 
+ // The viewport query behind the switch: below this width the ten-column table is not offered at
+ // all, so nobody lands on a table that cannot work there.
+@@ -92,6 +98,7 @@ export function Inventory({
+   // The filters the address states travel with every read of this stream: the free-text search,
+   // the ordering, the filter island and the view switch all carry the same set.
+   const activeFilters = filterParams(filters);
++  const filterCount = activeFilterCount(filters);
+   const endpoint =
+     '/api/properties?' +
+     new URLSearchParams({
+@@ -103,6 +110,7 @@ export function Inventory({
+   // nothing until it has answered.
+   const {
+     employee,
++    data: session,
+     error: sessionError,
+     busy,
+     surface,
+@@ -130,22 +138,55 @@ export function Inventory({
+     onDenied: denyFiles,
+   });
+   const [searchError, setSearchError] = useState(false);
++  const [typed, setTyped] = useState(initialQuery);
++  const [addressEdited, setAddressEdited] = useState(false);
++  const catalogue = useCatalogue(session);
++  // The text the box is filtering the loaded catalogue with, or null when it is not filtering at
++  // all: the rule lives in `address-index.ts` so it is tested without a browser. Local filtering is
++  // offered for the ordinary browse only, because a chronological ordering or a filter set names a
++  // result set the loaded page cannot state (issue #194).
++  const localQuery = localAddressQuery(typed, addressEdited, sort, filterCount);
++  const localActive = localQuery !== null;
++  // The local answer exists only when the page it filters is actually here. A load still running
++  // or one that failed states that instead, never a filtered result over rows the browser does not
++  // hold.
++  const localReady = localActive && catalogue.status === 'ready';
++  const matches = useMemo(() => {
++    if (!localActive) return null;
++    return localReady
++      ? matchCatalogue(catalogue.index, localQuery)
++      : NO_MATCHES;
++  }, [localActive, localReady, catalogue.index, localQuery]);
+   const [filtersOpen, setFiltersOpen] = useState(false);
++  const sessionKey = session
++    ? `${renderedSession(session.employee)}:${session.accessRevision}`
++    : null;
+   const [opened, setOpened] = useState<{
+     record: PropertySummary;
+     opener: HTMLElement | null;
++    scope: string | null;
+   } | null>(null);
++  const currentOpened =
++    sessionKey !== null && opened?.scope === sessionKey ? opened : null;
+   const numberFormat = useMemo(
+     () => new Intl.NumberFormat(locale === 'vi' ? 'vi-VN' : 'en-GB'),
+     [locale],
+   );
+ 
+   // ── the stream's own geometry ─────────────────────────────────────────────
+-  const container = useRef<HTMLDivElement | null>(null);
++  const [container, setContainer] = useState<HTMLDivElement | null>(null);
+   const [viewport, setViewport] = useState({ top: 0, height: 0 });
+   const [width, setWidth] = useState(0);
+-  const total = matching ?? 0;
+-  const ready = matching !== null;
++  const total = matches !== null ? matches.length : (matching ?? 0);
++  const ready = matches !== null || matching !== null;
++  // What the results area holds: the locally matched rows of the loaded catalogue, or the server
++  // stream. Both are one total order the page draws as chunks of rows, so the area below has one
++  // shape either way.
++  const local = matches !== null;
++  const shownWindows = useMemo(
++    () => (matches !== null ? localStreamWindows(matches) : windows),
++    [matches, windows],
++  );
+   // The measured column count: the card grid the stream lays out, and the chunk size in whole
+   // rows of it, so a chunk boundary never leaves a half-filled row behind.
+   const columns = useMemo(() => cardColumns(width), [width]);
+@@ -212,7 +253,7 @@ export function Inventory({
+   // scroll position, the viewport and the container's own width come from the browser rather
+   // than from any assumption about the shell above.
+   useEffect(() => {
+-    const node = container.current;
++    const node = container;
+     if (!ready || !node) return;
+     let pending = 0;
+     const measure = () => {
+@@ -244,10 +285,10 @@ export function Inventory({
+       window.removeEventListener('resize', schedule);
+       observer.disconnect();
+     };
+-  }, [ready, shownView, busy]);
++  }, [container, ready, shownView, busy]);
+   // The width the card grid is laid out in, so the column count is the browser's own answer.
+   useEffect(() => {
+-    const node = container.current;
++    const node = container;
+     if (!ready || !node || shownView !== 'cards') return;
+     const read = () =>
+       setWidth((current) =>
+@@ -257,13 +298,14 @@ export function Inventory({
+     const observer = new ResizeObserver(read);
+     observer.observe(node);
+     return () => observer.disconnect();
+-  }, [ready, shownView]);
++  }, [container, ready, shownView]);
+   // The band asks the stream for the windows it would show, and tells it which row position it is
+-  // centred on, so a deep scroll keeps its own windows and drops the far ones.
++  // centred on, so a deep scroll keeps its own windows and drops the far ones. A locally filtered
++  // list reads nothing: the rows it draws are already in the browser.
+   useEffect(() => {
+-    if (!ready || !parsedView.ok) return;
++    if (!ready || !parsedView.ok || localActive) return;
+     request(needed, band.top);
+-  }, [request, needed, band.top, ready, parsedView.ok]);
++  }, [request, needed, band.top, ready, parsedView.ok, localActive]);
+ 
+   // The rows each mounted chunk holds. A chunk whose windows are not all here renders nothing of
+   // its own and reserves its space instead, which is an empty-slice result only when the stream
+@@ -276,12 +318,18 @@ export function Inventory({
+       index <= Math.min(band.last, chunkCount - 1);
+       index++
+     ) {
+-      const rows = streamChunkRows(windows, index * chunkRows, chunkRows);
++      const rows = streamChunkRows(
++        shownWindows,
++        index * chunkRows,
++        chunkRows,
++        STREAM_PAGE_SIZE,
++        total,
++      );
+       if (rows === null) continue;
+       found.set(index, rows);
+     }
+     return found;
+-  }, [windows, band.first, band.last, chunkCount, chunkRows]);
++  }, [shownWindows, band.first, band.last, chunkCount, chunkRows, total]);
+   const mounted = useMemo(() => {
+     const indexes: number[] = [];
+     for (
+@@ -302,8 +350,8 @@ export function Inventory({
+   const showEntry = order !== null;
+   const openDrawer = useCallback(
+     (record: PropertySummary, opener: HTMLElement | null) =>
+-      setOpened({ record, opener }),
+-    [setOpened],
++      setOpened({ record, opener, scope: sessionKey }),
++    [sessionKey],
+   );
+   const closeDrawer = useCallback(() => setOpened(null), [setOpened]);
+   // The open row states the status the server just recorded, and the stream re-reads so the list
+@@ -344,7 +392,16 @@ export function Inventory({
+       ? [{ value: 'newest' as const, label: text.sortNewest }]
+       : []),
+   ];
+-  const filterCount = activeFilterCount(filters);
++  // What the address box's own filtering states: how much of the loaded catalogue matches, or the
++  // honest state of a load that is not here yet. The note beside the box states that these are the
++  // loaded properties and not the whole inventory.
++  const localStatus = localReady
++    ? text.catalogueLocalCount
++        .replace('{matches}', numberFormat.format(total))
++        .replace('{loaded}', numberFormat.format(catalogue.loadedCount))
++    : catalogue.status === 'failed'
++      ? text.catalogueLocalFailed
++      : text.catalogueLocalLoading;
+   const failureMessage = (code: string) =>
+     code === 'query-too-long'
+       ? text.queryTooLong
+@@ -362,10 +419,12 @@ export function Inventory({
+           <h1>{text.inventory}</h1>
+           {ready ? (
+             <p className="intro-copy" role="status">
+-              {text.inventoryMatchCount.replace(
+-                '{total}',
+-                numberFormat.format(total),
+-              )}
++              {local
++                ? localStatus
++                : text.inventoryMatchCount.replace(
++                    '{total}',
++                    numberFormat.format(total),
++                  )}
+             </p>
+           ) : null}
+         </div>
+@@ -413,7 +472,11 @@ export function Inventory({
+                   name="query"
+                   type="search"
+                   autoComplete="off"
+-                  defaultValue={initialQuery}
++                  value={typed}
++                  onChange={(event) => {
++                    setTyped(event.currentTarget.value);
++                    setAddressEdited(true);
++                  }}
+                   aria-invalid={searchError}
+                   placeholder={text.search}
+                 />
+@@ -565,6 +628,9 @@ export function Inventory({
+             onDenied={denyFiles}
+           />
+           <div className="inventory-search-help">
++            {local ? (
++              <p className="search-hint">{text.catalogueLocalNote}</p>
++            ) : null}
+             <p className="search-hint">{text.inventorySearchHint}</p>
+             <details>
+               <summary>{text.searchHelp}</summary>
+@@ -668,7 +734,15 @@ export function Inventory({
+                     <path d="M20.5 20.5 16.7 16.7" />
+                   </svg>
+                 </span>
+-                <h3>{filterCount ? text.emptyFiltered : text.empty}</h3>
++                <h3>
++                  {local
++                    ? localReady
++                      ? text.catalogueLocalEmpty
++                      : localStatus
++                    : filterCount
++                      ? text.emptyFiltered
++                      : text.empty}
++                </h3>
+               </div>
+             </div>
+           ) : null}
+@@ -688,7 +762,7 @@ export function Inventory({
+               ) : null}
+               <div
+                 className="inventory-stream"
+-                ref={container}
++                ref={setContainer}
+                 data-view={shownView}
+                 tabIndex={shownView === 'table' ? 0 : undefined}
+                 role={shownView === 'table' ? 'region' : undefined}
+@@ -775,12 +849,12 @@ export function Inventory({
+ 
+       <PropertyDrawer
+         employee={employee}
+-        property={opened?.record ?? null}
++        property={currentOpened?.record ?? null}
+         locale={locale}
+-        open={opened !== null}
++        open={currentOpened !== null}
+         resultLocation={resultLocation}
+         showEntry={showEntry}
+-        opener={opened?.opener ?? null}
++        opener={currentOpened?.opener ?? null}
+         onClose={closeDrawer}
+         onDenied={denyFiles}
+         onStatusChanged={statusChanged}
+diff --git a/src/features/properties/property-card.tsx b/src/features/properties/property-card.tsx
+index c503df8..4536483 100644
+--- a/src/features/properties/property-card.tsx
++++ b/src/features/properties/property-card.tsx
+@@ -1,6 +1,7 @@
+ import type { Locale } from '@/i18n/messages';
+ import { label } from '@/i18n/messages';
+ import { memo } from 'react';
++import Link from 'next/link';
+ import type { PropertySummary } from './types';
+ import { CoverImage } from '@/features/property-files/cover-image';
+ import { Plate } from './plate';
+@@ -79,8 +80,9 @@ export const PropertyCard = memo(function PropertyCard({
+           {record.propertyCode} · {label(locale, record.listingMode)}
+         </p>
+         <h2 className="card-address">
+-          <a
++          <Link
+             translate="no"
++            prefetch={false}
+             href={
+               '/properties/' +
+               record.id +
+@@ -91,7 +93,7 @@ export const PropertyCard = memo(function PropertyCard({
+             {record.addresses.length && record.addresses[0]?.addressText
+               ? record.addresses[0].addressText
+               : label(locale, null)}
+-          </a>
++          </Link>
+         </h2>
+         {showEntry ? (
+           <p className="card-entry">
+diff --git a/src/features/properties/types.ts b/src/features/properties/types.ts
+index 98583a2..19e3005 100644
+--- a/src/features/properties/types.ts
++++ b/src/features/properties/types.ts
+@@ -49,6 +49,13 @@ export type PropertySummary = {
+   // card renders as nothing rather than as a placeholder.
+   createdBy: string | null;
+ };
++// One page of the browser catalogue: the summaries this page carries and the cursor the page after
++// it starts after, or null when this page ended the traversal. The cursor is a position in one
++// stable ordering, never a grant of access to the rows it names.
++export type CataloguePage = {
++  properties: PropertySummary[];
++  nextCursor: string | null;
++};
+ // One window of the stream: the rows this read answered with, the position they start at, and the
+ // matching total that arrived on the same read, so the count and the rows cannot describe
+ // different result sets.
+diff --git a/src/features/stream/lists.test.ts b/src/features/stream/lists.test.ts
+index e31715c..bccee87 100644
+--- a/src/features/stream/lists.test.ts
++++ b/src/features/stream/lists.test.ts
+@@ -1,6 +1,7 @@
+ import assert from 'node:assert/strict';
+ import { readFileSync } from 'node:fs';
+ import test from 'node:test';
++import { localStreamWindows, streamChunkRows } from './window.ts';
+ 
+ const source = (path: string) =>
+   readFileSync(new URL(path, import.meta.url), 'utf8');
+@@ -33,11 +34,23 @@ test('every streamed list reads the shared hook and the shared geometry', () =>
+     assert.match(list, /height=\{layout\.band\.top\}/);
+     assert.match(list, /height=\{layout\.band\.bottom\}/);
+   }
+-  // The properties list is untouched by the extraction: it still reads the stream its own way.
+   assert.match(INVENTORY, /useInventoryStream\(\{/);
+-  assert.match(
+-    INVENTORY,
+-    /streamChunkRows\(windows, index \* chunkRows, chunkRows\)/,
++});
++
++test('local property matches draw the final partial chunk instead of a skeleton', () => {
++  const matches = Array.from({ length: 200 }, (_, id) => ({ id }));
++  assert.deepEqual(
++    streamChunkRows(localStreamWindows(matches), 192, 12, 100, matches.length),
++    [
++      { id: 192 },
++      { id: 193 },
++      { id: 194 },
++      { id: 195 },
++      { id: 196 },
++      { id: 197 },
++      { id: 198 },
++      { id: 199 },
++    ],
+   );
+ });
+ 
+diff --git a/src/features/stream/window.test.ts b/src/features/stream/window.test.ts
+index c10490f..c38307d 100644
+--- a/src/features/stream/window.test.ts
++++ b/src/features/stream/window.test.ts
+@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
+ import test from 'node:test';
+ import {
+   cursorWindowUrl,
++  localStreamWindows,
+   STREAM_CHUNK_ROWS,
+   STREAM_OVERSCAN_PX,
+   streamBand,
+@@ -259,3 +260,37 @@ test('the cursor window address carries the search and the filter into every win
+     '/api/employees?after=cursor',
+   );
+ });
++
++test('rows the browser already holds are published as the windows a read would answer with', () => {
++  const rows = Array.from({ length: 250 }, (_, index) => `row-${index}`);
++  const windows = localStreamWindows(rows);
++  // A window is a slice of the read length, so the rows a page filtered locally stand in for the
++  // stream without a read behind them and every chunk still finds the rows it draws.
++  assert.deepEqual([...windows.keys()], [0, 100, 200]);
++  assert.equal(windows.get(0)?.length, 100);
++  assert.equal(windows.get(200)?.length, 50);
++  assert.equal(windows.get(0)?.[0], 'row-0');
++  assert.equal(windows.get(200)?.[49], 'row-249');
++  // An empty result set is no window at all, not a window holding nothing.
++  assert.equal(localStreamWindows([]).size, 0);
++});
++
++test('every local row renders in table and card chunks at exact window boundaries', () => {
++  for (const total of [100, 200]) {
++    const rows = Array.from({ length: total }, (_, index) => `row-${index}`);
++    const windows = localStreamWindows(rows);
++    for (const chunkRows of [3, 6, 9, 12, 15]) {
++      const rendered: string[] = [];
++      for (let start = 0; start < total; start += chunkRows) {
++        const chunk = streamChunkRows(windows, start, chunkRows, 100, total);
++        assert.notEqual(chunk, null, `total=${total}, start=${start}`);
++        rendered.push(...chunk!);
++      }
++      assert.deepEqual(
++        rendered,
++        rows,
++        `total=${total}, chunkRows=${chunkRows}`,
++      );
++    }
++  }
++});
+diff --git a/src/features/stream/window.ts b/src/features/stream/window.ts
+index cea14f9..c453d5c 100644
+--- a/src/features/stream/window.ts
++++ b/src/features/stream/window.ts
+@@ -271,6 +271,18 @@ export function streamChunkRows<T>(
+   return rows;
+ }
+ 
++// Rows a browser already holds, published as the windows a read would have answered with: a
++// window is a slice of the read length, so a result set that was filtered in the page stands in
++// for the stream without a read behind it.
++export function localStreamWindows<T>(
++  rows: readonly T[],
++): ReadonlyMap<number, T[]> {
++  const windows = new Map<number, T[]>();
++  for (let offset = 0; offset < rows.length; offset += STREAM_PAGE_SIZE)
++    windows.set(offset, rows.slice(offset, offset + STREAM_PAGE_SIZE));
++  return windows;
++}
++
+ // The last chunk whose top is at or above a position: the chunk a position falls in.
+ function chunkAt(
+   offsets: readonly number[],
+diff --git a/src/i18n/messages.ts b/src/i18n/messages.ts
+index 92098ca..2f878de 100644
+--- a/src/i18n/messages.ts
++++ b/src/i18n/messages.ts
+@@ -58,6 +58,17 @@ const vi = {
+   searchHelp: 'Cách tìm kiếm',
+   inventorySearchHelp:
+     'Tìm theo một đoạn địa chỉ liên tiếp. Dấu % và _ được tìm như ký tự thường. Dùng bộ lọc để giới hạn giá, diện tích và khu vực.',
++  // The address box narrows the page the browser already holds, so what the person sees is stated
++  // as the loaded catalogue and never as a search of the whole inventory.
++  catalogueLocalCount:
++    'Trong danh mục đã tải: {matches} / {loaded} bất động sản phù hợp.',
++  catalogueLocalNote:
++    'Kết quả lọc trong danh mục đã tải; nhấn nút tìm kiếm để tìm toàn bộ kho.',
++  catalogueLocalLoading:
++    'Đang tải danh mục. Nhấn nút tìm kiếm để tìm toàn bộ kho.',
++  catalogueLocalFailed:
++    'Không tải được danh mục. Nhấn nút tìm kiếm để tìm toàn bộ kho.',
++  catalogueLocalEmpty: 'Không có kết quả trong các bất động sản đã tải.',
+   vndBillion: ' tỷ',
+   vndMillion: ' triệu',
+   quickUpload: 'Tải tập tin nhanh',
+@@ -887,6 +898,17 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
+     searchHelp: 'Search help',
+     inventorySearchHelp:
+       'Search for a continuous address fragment. The % and _ characters are literal. Use filters to narrow the price, area and location.',
++    // The address box narrows the page the browser already holds, so what the person sees is
++    // stated as the loaded catalogue and never as a search of the whole inventory.
++    catalogueLocalCount:
++      'In the loaded catalogue: {matches} of {loaded} properties match.',
++    catalogueLocalNote:
++      'Matches are filtered within the loaded catalogue; use the search button to search the whole inventory.',
++    catalogueLocalLoading:
++      'Loading the catalogue. Use the search button to search the whole inventory.',
++    catalogueLocalFailed:
++      'The catalogue could not be loaded. Use the search button to search the whole inventory.',
++    catalogueLocalEmpty: 'No matches in the loaded properties.',
+     vndBillion: 'bn',
+     vndMillion: 'm',
+     quickUpload: 'Quick upload',
