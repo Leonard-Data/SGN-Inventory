@@ -6,7 +6,6 @@ import {
   advancedFilterKeys,
   advancedOrder,
   catalogueMatches,
-  draftNeedsAdvancedSearch,
   matchesLocalFilters,
   orderCatalogue,
   resultMode,
@@ -97,9 +96,10 @@ test('every filter the catalogue carries a field for is offered locally, and no 
   );
 });
 
-test('a supported filter, a typed search and the plain browse are answered by the catalogue', () => {
+test('a supported filter, a blank search and the plain browse are answered by the catalogue', () => {
   for (const stated of [
     { query: '', filters: noInventoryFilters },
+    { query: '   ', filters: noInventoryFilters },
     { query: '', filters: { ...noInventoryFilters, status: 'available' } },
     { query: '', filters: { ...noInventoryFilters, areaMin: '20' } },
     {
@@ -107,57 +107,37 @@ test('a supported filter, a typed search and the plain browse are answered by th
       filters: { ...noInventoryFilters, priceMin: '1000000000', mode: 'rent' },
     },
   ])
-    for (const typing of [true, false])
-      assert.equal(
-        resultMode({ ...stated, sort: null, typing }),
-        'catalogue',
-        JSON.stringify(stated),
-      );
+    assert.equal(
+      resultMode({ ...stated, sort: null }),
+      'catalogue',
+      JSON.stringify(stated),
+    );
 });
 
 test('criteria the catalogue cannot answer route to an advanced search', () => {
   // A province, a ward or a contact names a database catalog identity the summaries do not carry,
-  // so it is an advanced search even while the box is being edited.
+  // so it is an advanced search.
   for (const filters of [
     { ...noInventoryFilters, province: PROVINCE },
     { ...noInventoryFilters, ward: WARD },
     { ...noInventoryFilters, contact: CONTACT },
   ])
-    for (const typing of [true, false])
-      assert.equal(
-        resultMode({ query: '', filters, sort: null, typing }),
-        'advanced',
-      );
+    assert.equal(resultMode({ query: '', filters, sort: null }), 'advanced');
   // A stated ordering is the eligible-status chronology the database reads, and an ordering this
   // application does not know is refused by that read rather than served as another order.
   for (const sort of ['oldest', 'newest', 'anything-else'])
-    for (const typing of [true, false])
-      assert.equal(
-        resultMode({ query: '', filters: noInventoryFilters, sort, typing }),
-        'advanced',
-        String(sort),
-      );
+    assert.equal(
+      resultMode({ query: '', filters: noInventoryFilters, sort }),
+      'advanced',
+      String(sort),
+    );
   assert.equal(advancedOrder(null), false);
   assert.equal(advancedOrder(''), false);
-  // A submitted query searches the whole inventory; typing in the box narrows the loaded catalogue
-  // instead.
+  // The address is the submission: a query it states is the whole-inventory search the person
+  // asked for, whether or not the box has been edited since.
   assert.equal(
-    resultMode({
-      query: 'le loi',
-      filters: noInventoryFilters,
-      sort: null,
-      typing: false,
-    }),
+    resultMode({ query: 'le loi', filters: noInventoryFilters, sort: null }),
     'advanced',
-  );
-  assert.equal(
-    resultMode({
-      query: 'le loi',
-      filters: noInventoryFilters,
-      sort: null,
-      typing: true,
-    }),
-    'catalogue',
   );
 });
 
@@ -177,17 +157,15 @@ test('a stated filter set the database read would refuse is never applied locall
     { ward: WARD },
     { province: 'not-a-unit' },
   ])
-    for (const typing of [true, false])
-      assert.equal(
-        resultMode({
-          query: '',
-          filters: { ...noInventoryFilters, ...filters },
-          sort: null,
-          typing,
-        }),
-        'advanced',
-        JSON.stringify(filters),
-      );
+    assert.equal(
+      resultMode({
+        query: '',
+        filters: { ...noInventoryFilters, ...filters },
+        sort: null,
+      }),
+      'advanced',
+      JSON.stringify(filters),
+    );
 });
 
 test('a submitted search states its criteria in one address and nothing else', () => {
@@ -225,33 +203,6 @@ test('a submitted search states its criteria in one address and nothing else', (
       searchEndpoint({ query: '', sort: null, filters: noInventoryFilters }),
     ),
     { query: '' },
-  );
-});
-
-// Editing the panel is not a submission: the draft is only classified when the panel is run, and
-// its action names the whole-inventory search only for the criteria the catalogue cannot answer.
-// What a submission then does is the address it builds, which `resultMode` classifies above.
-test('a draft is an advanced search only when it holds a criterion the catalogue cannot answer', () => {
-  const localOnly = { province: '', ward: '', contact: '', order: '' };
-  assert.equal(draftNeedsAdvancedSearch(localOnly, ''), false);
-  assert.equal(draftNeedsAdvancedSearch(localOnly, '   '), false);
-  for (const key of ['province', 'ward', 'contact', 'order'] as const)
-    assert.equal(
-      draftNeedsAdvancedSearch({ ...localOnly, [key]: 'chosen' }, ''),
-      true,
-      key,
-    );
-  // The address's query travels with the panel's run, so a draft run carrying it is the same
-  // whole-inventory search the address itself states.
-  assert.equal(draftNeedsAdvancedSearch(localOnly, 'le loi'), true);
-  assert.equal(
-    resultMode({
-      query: 'le loi',
-      filters: noInventoryFilters,
-      sort: null,
-      typing: false,
-    }),
-    'advanced',
   );
 });
 

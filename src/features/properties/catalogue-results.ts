@@ -41,33 +41,6 @@ export function advancedOrder(sort: string | null): boolean {
   return sort !== null && sort.trim() !== '';
 }
 
-// The filter-panel draft while it is being edited, with the address's own submitted query. The panel
-// asks this which of the criteria it is holding the loaded catalogue cannot answer, so its action
-// can name the read it will perform instead of promising a filter. Nothing here is a submission:
-// the draft is only classified when the panel is run, which is what keeps an edit from running a
-// query.
-export type PanelDraft = {
-  province: string;
-  ward: string;
-  contact: string;
-  order: string;
-};
-
-// A draft run carries the address's query, so a stated query is an advanced criterion here exactly
-// as it is in `resultMode`.
-export function draftNeedsAdvancedSearch(
-  draft: PanelDraft,
-  query: string,
-): boolean {
-  return Boolean(
-    draft.province ||
-    draft.ward ||
-    draft.contact ||
-    draft.order ||
-    query.trim(),
-  );
-}
-
 export type ResultMode = 'catalogue' | 'advanced';
 
 // Whether the stated filters are a set the address could have produced. The one place its bounds
@@ -78,25 +51,22 @@ function statedFiltersAreValid(filters: InventoryFilters): boolean {
   return parseInventoryFilters(new URLSearchParams(filterParams(filters))).ok;
 }
 
-// Which result set the stated criteria describe. A stated advanced filter or ordering is the
-// whole-inventory search the person asked for; the address box being edited narrows the loaded
-// catalogue in the browser; otherwise a submitted query is the whole-inventory search and a plain
-// address is the loaded catalogue.
+// Which result set the address describes, and the one decision every surface reads. A stated
+// advanced filter or ordering is the whole-inventory search the person asked for, and so is a
+// submitted query: the address is the submission, so editing the box changes nothing here until the
+// next submission. A plain address is the loaded catalogue.
 export function resultMode({
   query,
   filters,
   sort,
-  typing,
 }: {
   query: string;
   filters: InventoryFilters;
   sort: string | null;
-  typing: boolean;
 }): ResultMode {
   if (!statedFiltersAreValid(filters)) return 'advanced';
   if (advancedFilterKeys(filters).length > 0) return 'advanced';
   if (advancedOrder(sort)) return 'advanced';
-  if (typing) return 'catalogue';
   return query.trim() === '' ? 'catalogue' : 'advanced';
 }
 

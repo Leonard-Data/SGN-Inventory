@@ -217,7 +217,6 @@ export function Inventory({
   );
   const [searchError, setSearchError] = useState(false);
   const [typed, setTyped] = useState(initialQuery);
-  const [addressEdited, setAddressEdited] = useState(false);
   const catalogue = useCatalogue(session);
   // The authorization scope: the employee, their role and the server-maintained access revision.
   // A replacement catalogue is not a new authority, so it neither reopens a submitted search nor
@@ -230,12 +229,7 @@ export function Inventory({
   // for is an explicit whole-inventory search (issue #194). The split is `catalogue-results.ts`,
   // so which filters are offered locally and which route to advanced search is tested without a
   // browser.
-  const mode = resultMode({
-    query: initialQuery,
-    filters,
-    sort,
-    typing: addressEdited,
-  });
+  const mode = resultMode({ query: initialQuery, filters, sort });
   const {
     windows,
     total: matching,
@@ -632,10 +626,7 @@ export function Inventory({
                   type="search"
                   autoComplete="off"
                   value={typed}
-                  onChange={(event) => {
-                    setTyped(event.currentTarget.value);
-                    setAddressEdited(true);
-                  }}
+                  onChange={(event) => setTyped(event.currentTarget.value)}
                   aria-invalid={searchError}
                   placeholder={text.search}
                 />

@@ -26,7 +26,7 @@ import {
 } from './filters';
 import { inventoryHref, type InventoryView } from './view';
 import { isInventoryOrder } from './stream';
-import { draftNeedsAdvancedSearch } from './catalogue-results';
+import { resultMode } from './catalogue-results';
 
 // The official catalog rows the province/ward pickers read. Names are source data and are never
 // translated, so a language switch keeps the same unit name.
@@ -245,20 +245,21 @@ export function SearchIsland({
       : selectedMode
         ? [text.priceUnitVnd]
         : [text.priceUnitVnd, text.priceUnitMonthly];
-  // Whether the panel is holding criteria the loaded catalogue cannot answer - the address's own
-  // submitted query included, because a run carries it. Only these make the submission an advanced
-  // search, so the action names the read it will perform instead of promising a filter. It is
-  // asked of the draft, so an edit is still only an edit: nothing is submitted until the panel is
-  // run.
-  const advancedDraft = draftNeedsAdvancedSearch(
-    {
-      province,
-      ward,
-      contact,
-      order,
-    },
-    query,
-  );
+  // Whether this run reads the database, judged by the same function the list uses on the address it
+  // is handed: a run carries the address's submitted query and the draft's own criteria, so the
+  // action and its hint can never promise a local filter the run does not answer locally. Asking
+  // here is still only asking, so an edit runs nothing until the panel is run.
+  const advancedDraft =
+    resultMode({
+      query,
+      filters: {
+        ...noInventoryFilters,
+        province: province || null,
+        ward: ward || null,
+        contact: contact || null,
+      },
+      sort: order || null,
+    }) === 'advanced';
   // The current filter set stays visible as removable chips, and each chip removes exactly its
   // own condition, so the address is still the only place a filter lives.
   const applied: { key: InventoryFilterKey; label: string }[] = [];
