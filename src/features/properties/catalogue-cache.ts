@@ -24,6 +24,27 @@ function cataloguePageUrl(after: string | null) {
     : `/api/properties/catalogue?after=${encodeURIComponent(after)}`;
 }
 
+// The one browser-cache key for this authorized context: a catalogue is reused only by the same
+// employee and role, the same server-maintained access revision and the same summary shape.
+export function catalogueQueryKey(scope: EmployeeSession) {
+  return [
+    'property-catalogue',
+    renderedSession(scope.employee),
+    scope.accessRevision,
+    CATALOGUE_SCHEMA_VERSION,
+  ];
+}
+
+// One bounded page of the catalogue, read on the caller's own session. It is shared by the cached
+// traversal a first load runs (#188) and by the deliberate replacement read a refresh performs
+// (#190), so both walk exactly the same authorized cursor.
+export function readCataloguePage(
+  after: string | null,
+  signal: AbortSignal,
+): Promise<CataloguePage> {
+  return api<CataloguePage>(cataloguePageUrl(after), undefined, signal);
+}
+
 export type CatalogueLoadOptions = {
   // Every indexed batch is published as it is committed, so the first page is searchable before
   // the traversal finishes and before the authorized total arrives.
@@ -45,12 +66,7 @@ export async function readCatalogue(
   scope: EmployeeSession,
   options: CatalogueLoadOptions,
 ): Promise<ScopedCatalogue> {
-  const queryKey = [
-    'property-catalogue',
-    renderedSession(scope.employee),
-    scope.accessRevision,
-    CATALOGUE_SCHEMA_VERSION,
-  ];
+  const queryKey = catalogueQueryKey(scope);
   client.removeQueries({
     queryKey: ['property-catalogue'],
     predicate: (query) => query.queryHash !== hashKey(queryKey),
@@ -63,8 +79,7 @@ export async function readCatalogue(
       let state = options.resume ?? startCatalogueLoad(options.generationId);
       if (!options.resume) options.publish(state);
       return readEveryCataloguePage({
-        read: (after, pageSignal) =>
-          api<CataloguePage>(cataloguePageUrl(after), undefined, pageSignal),
+        read: readCataloguePage,
         from: state.nextCursor,
         signal: readSignal,
         onPage: (page) => {

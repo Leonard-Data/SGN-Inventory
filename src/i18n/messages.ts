@@ -78,6 +78,22 @@ const vi = {
   catalogueComplete: 'Danh mục đã sẵn sàng · {loaded} bất động sản',
   catalogueSyncedAt: 'Cập nhật lần cuối lúc {time}.',
   catalogueMoreMatches: 'Có thể có thêm kết quả khi quá trình tải tiếp tục.',
+  // The deliberate refresh's own words: the replacement being built is stated separately from the
+  // catalogue the person is still searching, and a stopped refresh says which of the two things
+  // Retry will do rather than reading as a completed load.
+  catalogueRefresh: 'Làm mới danh mục',
+  catalogueRefreshKnown:
+    'Đang làm mới danh mục · {loaded} / {total} bất động sản · khoảng {percent}%',
+  catalogueRefreshUnknown:
+    'Đang làm mới danh mục · đã tải {loaded} bất động sản',
+  catalogueRefreshResumedKnown:
+    'Tiếp tục làm mới danh mục · {loaded} / {total} bất động sản · khoảng {percent}%',
+  catalogueRefreshResumedUnknown:
+    'Tiếp tục làm mới danh mục · đã tải {loaded} bất động sản',
+  catalogueRefreshStopped:
+    'Làm mới danh mục đã dừng · đã tải {loaded} bất động sản. Thử lại sẽ tiếp tục từ đây.',
+  catalogueRefreshFailed:
+    'Làm mới danh mục thất bại. Thử lại sẽ bắt đầu lại từ đầu.',
   vndBillion: ' tỷ',
   vndMillion: ' triệu',
   quickUpload: 'Tải tập tin nhanh',
@@ -927,6 +943,22 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     catalogueComplete: 'Catalogue ready · {loaded} properties',
     catalogueSyncedAt: 'Last updated at {time}.',
     catalogueMoreMatches: 'More matches may appear as loading continues.',
+    // The deliberate refresh's own words: the replacement being built is stated separately from the
+    // catalogue the person is still searching, and a stopped refresh says which of the two things
+    // Retry will do rather than reading as a completed load.
+    catalogueRefresh: 'Refresh catalogue',
+    catalogueRefreshKnown:
+      'Refreshing catalogue · {loaded} / {total} properties · approximately {percent}%',
+    catalogueRefreshUnknown:
+      'Refreshing catalogue · {loaded} properties loaded',
+    catalogueRefreshResumedKnown:
+      'Continuing the catalogue refresh · {loaded} / {total} properties · approximately {percent}%',
+    catalogueRefreshResumedUnknown:
+      'Continuing the catalogue refresh · {loaded} properties loaded',
+    catalogueRefreshStopped:
+      'Catalogue refresh stopped · {loaded} properties loaded. Retry continues from here.',
+    catalogueRefreshFailed:
+      'Catalogue refresh failed. Retry starts again from the beginning.',
     vndBillion: 'bn',
     vndMillion: 'm',
     quickUpload: 'Quick upload',

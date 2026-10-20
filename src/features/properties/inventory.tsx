@@ -28,6 +28,7 @@ import {
   type CatalogueProgressView,
   type EmptyResultSource,
 } from './catalogue-load';
+import type { CatalogueRefreshView } from './catalogue-refresh';
 import { localAddressQuery, matchCatalogue } from './address-index';
 import type { CatalogueMatch } from './address-index';
 import {
@@ -128,6 +129,41 @@ function emptyResultText(
       return text.emptyFiltered;
     case 'inventory':
       return text.empty;
+  }
+}
+
+// The refresh line's own wording: the replacement being loaded is described separately from the
+// catalogue in use, a continued generation says so, and a stopped one states what Retry will do
+// instead of reading as a load that finished.
+function refreshStatusText(
+  text: typeof messages.vi,
+  numberFormat: Intl.NumberFormat,
+  view: CatalogueRefreshView,
+): string {
+  switch (view.status) {
+    case 'idle':
+      return '';
+    case 'failed':
+      return (
+        view.resumable
+          ? text.catalogueRefreshStopped
+          : text.catalogueRefreshFailed
+      ).replace('{loaded}', numberFormat.format(view.loadedCount));
+    case 'refreshing': {
+      const { loadedCount, totalCount, progressPercent, resumed } = view;
+      if (totalCount === null || progressPercent === null)
+        return (
+          resumed
+            ? text.catalogueRefreshResumedUnknown
+            : text.catalogueRefreshUnknown
+        ).replace('{loaded}', numberFormat.format(loadedCount));
+      return (
+        resumed ? text.catalogueRefreshResumedKnown : text.catalogueRefreshKnown
+      )
+        .replace('{loaded}', numberFormat.format(loadedCount))
+        .replace('{total}', numberFormat.format(totalCount))
+        .replace('{percent}', numberFormat.format(progressPercent));
+    }
   }
 }
 
@@ -489,6 +525,9 @@ export function Inventory({
     numberFormat,
     catalogueProgressView(catalogue.progress, catalogueFailed),
   );
+  // The refresh's own line, computed from the replacement generation alone: it never reads the
+  // progress of the catalogue the user is still searching.
+  const refreshText = refreshStatusText(text, numberFormat, catalogue.refresh);
   const emptyText = useMemo(
     () =>
       emptyResultText(
@@ -800,6 +839,53 @@ export function Inventory({
                   {text.retry}
                 </button>
               ) : null}
+              {catalogue.progress.isComplete &&
+              catalogue.refresh.status === 'idle' ? (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  type="button"
+                  onClick={catalogue.refreshCatalogue}
+                >
+                  {text.catalogueRefresh}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {/* The replacement a refresh is building, stated separately from the catalogue above so
+              the person can see that what they are searching is untouched. The progress element is
+              not a live region, so a batch arriving never interrupts a screen reader; a stopped
+              refresh is announced once, when it fails. */}
+          {catalogue.refresh.status === 'refreshing' ? (
+            <div className="catalogue-progress" data-state="refreshing">
+              <progress
+                id="catalogue-refresh-progress"
+                className="catalogue-progress-bar"
+                max={100}
+                {...(catalogue.refresh.progressPercent === null
+                  ? {}
+                  : { value: catalogue.refresh.progressPercent })}
+                aria-labelledby="catalogue-refresh-label"
+              />
+              <p
+                id="catalogue-refresh-label"
+                className="catalogue-progress-text"
+              >
+                {refreshText}
+              </p>
+            </div>
+          ) : null}
+          {catalogue.refresh.status === 'failed' ? (
+            <div className="catalogue-progress" data-state="failed">
+              <p className="catalogue-progress-text" role="alert">
+                {refreshText}
+              </p>
+              <button
+                className="btn btn-ghost btn-sm"
+                type="button"
+                onClick={catalogue.refreshCatalogue}
+              >
+                {text.retry}
+              </button>
             </div>
           ) : null}
           {sort ? <p className="search-hint">{text.ageHint}</p> : null}
