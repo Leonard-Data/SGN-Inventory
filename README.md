@@ -63,8 +63,10 @@ that answers each window. There are no page numbers, no page size and no cursor 
 The address box narrows the catalogue page the browser already holds as a person types, so typing no
 longer reads the database; the search button still searches the whole inventory, and the deliberate
 Refresh control rebuilds that catalogue in the background and swaps it in only once the replacement
-is complete
-([ADR 0003](docs/adr/0003-browser-property-catalogue-and-local-address-search.md)).
+is complete. A saved edit, a create, a merge or a status decision updates the list from the
+server's own answer, so the change itself needs no Refresh
+([ADR 0003](docs/adr/0003-browser-property-catalogue-and-local-address-search.md),
+[ADR 0004](docs/adr/0004-committed-changes-and-the-browser-catalogue.md)).
 
 ### Review and decision queues
 
