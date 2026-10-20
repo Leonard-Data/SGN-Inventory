@@ -2,6 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { matchCatalogue, type CatalogueIndexEntry } from './address-index.ts';
 import {
+  catalogueSummary,
+  type CatalogueAddressRow,
+  type CatalogueRow,
+} from './catalogue.ts';
+import {
   applyServerSummary,
   changedProperty,
   reconcileCatalogue,
@@ -68,6 +73,57 @@ function property(
 const AT = '2026-10-20T00:00:00.000Z';
 const LATER = '2026-10-20T01:00:00.000Z';
 
+// One address row as the catalogue read answers with it, including the version it supersedes.
+function version(
+  id: string,
+  addressText: string,
+  parts: Partial<CatalogueAddressRow> = {},
+): CatalogueAddressRow {
+  return {
+    id,
+    format: 'legacy',
+    address_text: addressText,
+    house_number: null,
+    street: null,
+    commune_text: null,
+    district_text: null,
+    is_primary: true,
+    mapping_status: 'unresolved',
+    supersedes_address_id: null,
+    ...parts,
+  };
+}
+
+// The summary one catalogue row states, so a fixture carries the rows the server really answers
+// with rather than the summary a test wishes it answered with.
+function summaryOf(
+  id: string,
+  addresses: CatalogueAddressRow[],
+  parts: Partial<CatalogueRow> = {},
+): PropertySummary {
+  return catalogueSummary({
+    id,
+    property_code: `BDS-${id}`,
+    listing_mode: 'sale',
+    status: 'available',
+    property_type: 'house',
+    sale_price_vnd: null,
+    monthly_rent_vnd: null,
+    land_area_m2: null,
+    floor_area_m2: null,
+    frontage_m: null,
+    depth_m: null,
+    floors: null,
+    direction: null,
+    access_type: null,
+    cover_file_id: null,
+    created_at: null,
+    updated_at: null,
+    property_addresses: addresses,
+    ...parts,
+  });
+}
+
 // One property at its old address, as a page of the traversal answered with it.
 const OLD = property('1', [
   address('1-legacy', '12 Lê Lợi, Phường 5, Quận 3', {
@@ -86,18 +142,26 @@ const OTHER = property('2', [
 const page: CataloguePage = { properties: [OLD, OTHER], nextCursor: null };
 const load = indexCataloguePage(startCatalogueLoad('generation-1'), page, AT);
 
-// The property after a save moved it: the server answered with its current recorded address.
-const MOVED = property(
+// The property after a correction moved it: the database retained the version the correction
+// replaced and inserted its replacement, so the server's own read answers with both rows.
+const MOVED = summaryOf(
   '1',
   [
-    address('1-current', '99 Hai Bà Trưng, Phường 6, Quận 3', {
+    version('1-legacy', '12 Lê Lợi, Phường 5, Quận 3', {
+      house_number: '12',
+      street: 'Lê Lợi',
+      district_text: 'Quận 3',
+      is_primary: false,
+    }),
+    version('1-current', '99 Hai Bà Trưng, Phường 6, Quận 3', {
       format: 'current',
-      houseNumber: '99',
+      house_number: '99',
       street: 'Hai Bà Trưng',
-      commune: 'Phường 6',
+      commune_text: 'Phường 6',
+      supersedes_address_id: '1-legacy',
     }),
   ],
-  { status: 'negotiating', updatedAt: LATER },
+  { status: 'negotiating', updated_at: LATER },
 );
 
 function ids(index: readonly CatalogueIndexEntry[]): string[] {

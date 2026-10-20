@@ -232,6 +232,7 @@ export function Inventory({
     order,
     error: streamError,
     request,
+    refresh,
     retry,
   } = useInventoryStream({
     source: employee && parsedView.ok ? endpoint : null,
@@ -478,16 +479,17 @@ export function Inventory({
     [sessionKey, setOpened],
   );
   const closeDrawer = useCallback(() => setOpened(null), [setOpened]);
-  // The open row states the status the server just recorded, and the stream re-reads so the list
-  // behind the quick view is not left showing a status the record no longer has.
+  // The open row states the status the server just recorded, and the windows the list shows are
+  // read again - not answered from the rows the page already holds - so the badge and the filter
+  // membership behind the quick view follow the committed change.
   const statusChanged = useCallback(
     (status: string) => {
       setOpened((current) =>
         current ? { ...current, record: { ...current.record, status } } : null,
       );
-      retry();
+      refresh();
     },
-    [setOpened, retry],
+    [setOpened, refresh],
   );
 
   function search(event: FormEvent<HTMLFormElement>) {

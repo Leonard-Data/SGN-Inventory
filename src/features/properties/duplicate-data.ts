@@ -152,11 +152,10 @@ export async function mergeDuplicates(
     const refusal = mergeRefusal(mergeFailure);
     throw refusal ?? new ApiError(503, 'unavailable');
   }
-  // The merge retired the merged records and left the kept one, so the browser's catalogue is told
-  // which rows to drop and is handed the kept property's current authoritative summary.
+  // The merge retired the records `merged` names and left the kept one, so the browser's catalogue
+  // drops them and is handed the kept property's current authoritative summary.
   return {
     ...(report as MergeReport),
-    removed: merge,
     summary: await catalogueSummaryOf(context, id),
   };
 }

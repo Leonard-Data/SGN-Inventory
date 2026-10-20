@@ -8,6 +8,7 @@ import {
   revisions,
   target,
 } from '@/features/property-maintenance/data';
+import { catalogueSummaryOf } from '@/features/properties/catalogue-data';
 function explanation(value: unknown) {
   if (
     typeof value !== 'string' ||
@@ -179,6 +180,22 @@ export async function transitionCorrection(
       p_reason: reason,
     });
     databaseError(error);
+    // An application is the only outcome that changed the property, so it is the only one that
+    // answers with the authoritative summary the browser's catalogue takes.
+    if (body.action === 'apply') {
+      const { data, error: readError } = await context.client
+        .from('correction_requests')
+        .select('property_id')
+        .eq('id', id)
+        .maybeSingle();
+      databaseError(readError);
+      return data
+        ? {
+            ok: true,
+            summary: await catalogueSummaryOf(context, data.property_id),
+          }
+        : { ok: true };
+    }
   }
   return { ok: true };
 }

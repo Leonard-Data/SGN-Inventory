@@ -120,10 +120,9 @@ export type MergeReport = {
     alreadyLinked: number;
     history: number;
   };
-  // The records the merge retired, so the browser's catalogue drops the rows the server no longer
-  // answers with, and the kept property's authoritative summary as the server read it back
-  // (absent when it could not be read at all: the browser then reads the catalogue again).
-  removed?: string[];
+  // The kept property's authoritative summary as the server read it back (absent when it could not
+  // be read at all: the browser then reads the catalogue again). The retired records are the ones
+  // `merged` names, so that one list is what the browser drops.
   summary?: PropertySummary | null;
 };
 // The database returns the disclosure contact and the committed activity reference. A matched

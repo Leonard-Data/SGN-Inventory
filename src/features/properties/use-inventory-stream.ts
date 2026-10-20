@@ -19,6 +19,9 @@ export type InventoryStream = {
   // What the band wants: the windows holding the rows it would show, and the row position it is
   // centred on, which decides which stored windows survive.
   request: (windows: readonly number[], position: number) => void;
+  // Read the band again after a status or an edit behind it moved: the windows it shows are
+  // dropped and read afresh instead of being answered from the rows the page already holds.
+  refresh: () => void;
   retry: () => void;
 };
 
@@ -72,6 +75,7 @@ export function useInventoryStream({
     order: ordered.key === key ? ordered.order : null,
     error: stream.error,
     request: stream.request,
+    refresh: stream.refresh,
     retry: stream.retry,
   };
 }

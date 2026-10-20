@@ -141,8 +141,8 @@ export function SharedAddress({
         keepId,
         others.map((member) => member.id),
       );
-      for (const id of result.removed ?? others.map((member) => member.id))
-        applyChange({ kind: 'remove', id });
+      for (const record of result.merged)
+        applyChange({ kind: 'remove', id: record.id });
       applyServerSummary(applyChange, result, keepId);
       setReport(result);
       setConfirming(false);
