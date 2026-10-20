@@ -191,16 +191,36 @@ test('a server response replaces the cached summary and reindexes its address', 
 
 test('the local filter and ranking follow the change', () => {
   const applied = recordCatalogueChange([], { kind: 'upsert', summary: MOVED });
-  const reconciled = reconcileCatalogue(load.index, applied);
+  // The same page also holds an address beneath the number the query names, so the ranking of the
+  // reconciled rows is observed rather than assumed.
+  const alley = property(
+    '0',
+    [
+      address('0-current', '99/7 Hai Bà Trưng, Phường 6, Quận 3', {
+        format: 'current',
+        houseNumber: '99/7',
+        street: 'Hai Bà Trưng',
+        commune: 'Phường 6',
+      }),
+    ],
+    { updatedAt: LATER },
+  );
+  const loaded = indexCataloguePage(
+    startCatalogueLoad('generation-2'),
+    { properties: [OLD, OTHER, alley], nextCursor: null },
+    LATER,
+  );
+  const reconciled = reconcileCatalogue(loaded.index, applied);
   // A typed query the old address answered is re-evaluated against the new one: a property that
   // no longer matches stops appearing, and one that now matches appears where its new address
   // ranks it rather than where the old address did.
-  assert.deepEqual(found(load.index, 'le loi'), ['1']);
+  assert.deepEqual(found(loaded.index, 'le loi'), ['1']);
   assert.deepEqual(found(reconciled, 'le loi'), []);
-  assert.deepEqual(found(reconciled, 'hai ba trung'), ['1']);
-  // Ranking is recomputed from the reconciled index, so the moved property keeps its place
-  // among the rows while the query that named its old street is answered by nothing.
-  assert.deepEqual(ids(reconciled).length, 2);
+  // The query already answered the address beneath the number; after the change the property that
+  // moved onto the queried number outranks it, even though its identity sorts last, so the order
+  // is the reconciled ranking rather than the identity order.
+  assert.deepEqual(found(loaded.index, '99 hai ba trung'), ['0']);
+  assert.deepEqual(found(reconciled, '99 hai ba trung'), ['1', '0']);
 });
 
 test('a create is appended and searchable without renumbering the loaded rows', () => {

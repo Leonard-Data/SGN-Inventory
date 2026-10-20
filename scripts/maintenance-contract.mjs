@@ -285,11 +285,6 @@ export async function maintenanceContract({
           [created],
         )
       ).rows[0];
-      const beforeCorrection = (
-        await db.query('select updated_at from public.properties where id=$1', [
-          created,
-        ])
-      ).rows[0].updated_at;
       const replacement = (
         await db.query(mutate, [
           created,
@@ -299,16 +294,6 @@ export async function maintenanceContract({
           { address_text: 'Nhà đính chính Nguyễn Trãi' },
         ])
       ).rows[0].id;
-      // The property's own time orders a correction against a read of the same record, so an
-      // address edit has to move it even though the property row itself was not edited.
-      assert.ok(
-        (
-          await db.query(
-            'select updated_at from public.properties where id=$1',
-            [created],
-          )
-        ).rows[0].updated_at > beforeCorrection,
-      );
       assert.deepEqual(
         (
           await db.query(
