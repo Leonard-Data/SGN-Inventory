@@ -2,7 +2,11 @@
 // are an explicit whole-inventory read, so its pages are held under keys of their own - the
 // caller's authorized scope, the submitted criteria, the ordering and the page - and are retained
 // for a bounded time instead of for the browser session the catalogue itself lives for.
-import { filterParams, type InventoryFilters } from './filters.ts';
+import {
+  filterParams,
+  inventoryFilters,
+  type InventoryFilters,
+} from './filters.ts';
 
 // Bounded retention, deliberately separate from the catalogue's own infinity: an advanced result
 // states what the database held when it was read, while the catalogue is the browsing snapshot a
@@ -30,6 +34,18 @@ export const ADVANCED_SEARCH_QUERY_OPTIONS = {
   refetchOnReconnect: false,
   refetchInterval: false,
 } as const;
+
+// The criteria a submitted search's address states. The address is built from exactly these, so
+// reading them back is how the reader keys a search by what it reads rather than by an object a
+// render rebuilt.
+export function searchCriteria(source: string): AdvancedCriteria {
+  const params = new URLSearchParams(source.slice(source.indexOf('?') + 1));
+  return {
+    query: params.get('query') ?? '',
+    filters: inventoryFilters(params),
+    sort: params.get('sort'),
+  };
+}
 
 // One page of one advanced search: the authorized scope, the submitted criteria, the ordering and
 // the page. Two searches that differ in any of these are different entries, so a page is never

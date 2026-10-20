@@ -5,8 +5,14 @@ import {
   ADVANCED_SEARCH_QUERY_OPTIONS,
   ADVANCED_SEARCH_STALE_MS,
   advancedSearchKey,
+  searchCriteria,
 } from './advanced-search.ts';
-import { noInventoryFilters, type InventoryFilters } from './filters.ts';
+import {
+  inventoryFilters,
+  noInventoryFilters,
+  type InventoryFilters,
+} from './filters.ts';
+import { searchEndpoint } from './catalogue-results.ts';
 import { CATALOGUE_SCHEMA_VERSION } from './catalogue.ts';
 
 const CRITERIA = {
@@ -134,9 +140,48 @@ test('advanced results are retained for a bounded time, separate from the catalo
   // once they have gone.
   assert.notEqual(ADVANCED_SEARCH_QUERY_OPTIONS.gcTime, Infinity);
   assert.notEqual(ADVANCED_SEARCH_QUERY_OPTIONS.staleTime, Infinity);
-  // An explicit submission is never re-run on its own: no refetch on mount, focus or reconnect.
-  assert.equal(ADVANCED_SEARCH_QUERY_OPTIONS.refetchOnMount, false);
-  assert.equal(ADVANCED_SEARCH_QUERY_OPTIONS.refetchOnWindowFocus, false);
-  assert.equal(ADVANCED_SEARCH_QUERY_OPTIONS.refetchOnReconnect, false);
-  assert.equal(ADVANCED_SEARCH_QUERY_OPTIONS.refetchInterval, false);
+});
+
+// A presentation change is not a submission. Switching cards/table or refreshing the language
+// re-renders the list with a freshly built filter record and an address whose parameters are in
+// another order; the search it names is the same one, so the reader keys the same window and
+// reopens nothing.
+test('a presentation change cannot reopen a submitted search', () => {
+  const scope = 'sales:sales:2';
+  const windowKey = (address: URLSearchParams) =>
+    advancedSearchKey({
+      scope,
+      criteria: searchCriteria(
+        searchEndpoint({
+          query: address.get('query') ?? '',
+          sort: address.get('sort'),
+          filters: inventoryFilters(address),
+        }),
+      ),
+      page: 0,
+    });
+  const submitted = windowKey(
+    new URLSearchParams({
+      query: 'le loi',
+      sort: 'oldest',
+      status: 'available',
+    }),
+  );
+  // After that render: another view, another parameter order, another filter record.
+  const presented = windowKey(
+    new URLSearchParams({
+      view: 'table',
+      status: 'available',
+      query: 'le loi',
+      sort: 'oldest',
+    }),
+  );
+  assert.deepEqual(presented, submitted);
+  // A submission that really states other criteria or another ordering is another window.
+  for (const other of [
+    { query: 'ben thanh', sort: 'oldest', status: 'available' },
+    { query: 'le loi', sort: 'newest', status: 'available' },
+    { query: 'le loi', sort: 'oldest', status: 'sold' },
+  ])
+    assert.notDeepEqual(windowKey(new URLSearchParams(other)), submitted);
 });

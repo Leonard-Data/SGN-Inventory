@@ -8,10 +8,10 @@ import {
   advancedOrder,
   catalogueMatches,
   draftNeedsAdvancedSearch,
-  inventoryRead,
   matchesLocalFilters,
   orderCatalogue,
   resultMode,
+  searchEndpoint,
 } from './catalogue-results.ts';
 import { noInventoryFilters, type InventoryFilters } from './filters.ts';
 import {
@@ -195,15 +195,42 @@ test('a stated filter set the database read would refuse is never applied locall
       );
 });
 
-test('a catalogue result names no endpoint, so filtering and ordering it read nothing', () => {
-  const endpoint = '/api/properties?query=&status=available';
-  const local = inventoryRead({ mode: 'catalogue', endpoint });
-  assert.deepEqual(local, { kind: 'catalogue' });
-  assert.equal('endpoint' in local, false);
-  assert.deepEqual(inventoryRead({ mode: 'advanced', endpoint }), {
-    kind: 'advanced',
-    endpoint,
+test('a submitted search states its criteria in one address and nothing else', () => {
+  const filters = { ...noInventoryFilters, status: 'available', mode: 'rent' };
+  const endpoint = searchEndpoint({
+    query: 'le loi',
+    sort: 'oldest',
+    filters,
   });
+  const stated = (address: string) =>
+    Object.fromEntries(
+      new URLSearchParams(address.slice(address.indexOf('?') + 1)),
+    );
+  // The read names the submitted criteria and nothing a render chooses: the view, the language and
+  // every other presentation choice are not part of it.
+  assert.deepEqual(stated(endpoint), {
+    query: 'le loi',
+    sort: 'oldest',
+    status: 'available',
+    mode: 'rent',
+  });
+  // A record a render rebuilt names the same address, so it names the same search.
+  assert.equal(
+    searchEndpoint({
+      query: 'le loi',
+      sort: 'oldest',
+      filters: { ...filters },
+    }),
+    endpoint,
+  );
+  // An unstated ordering and an unstated filter stay out of the address rather than naming a
+  // different search.
+  assert.deepEqual(
+    stated(
+      searchEndpoint({ query: '', sort: null, filters: noInventoryFilters }),
+    ),
+    { query: '' },
+  );
 });
 
 // Editing the panel is not a submission: the draft is only classified when the panel is run, and

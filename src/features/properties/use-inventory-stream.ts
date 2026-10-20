@@ -6,7 +6,7 @@ import { useWindowStream } from '@/features/stream/use-windows';
 import {
   ADVANCED_SEARCH_QUERY_OPTIONS,
   advancedSearchKey,
-  type AdvancedCriteria,
+  searchCriteria,
 } from './advanced-search';
 import { streamWindowUrl, type InventoryOrder } from './stream';
 import type { PropertyStream, PropertySummary } from './types';
@@ -39,12 +39,13 @@ export function useInventoryStream({
   source,
   identity,
   scope,
-  criteria,
   onDenied,
 }: {
-  // The one read this stream is a window of; null while the result set is the loaded catalogue,
-  // a chronological ordering or an advanced filter is not stated, or the session is not usable.
-  // A null source reads nothing at all.
+  // The one read this stream is a window of: a submitted search's own address, which states the
+  // criteria it is a window of. Nothing a render chooses - the view, the language, a rebuilt
+  // filter record - is part of it, so no presentation change reopens the search. Null while the
+  // result set is the loaded catalogue, a chronological ordering or an advanced filter is not
+  // stated, or the session is not usable. A null source reads nothing at all.
   source: string | null;
   // Changes when the session's own authority changes, so a window read under the old session
   // never fills the surface the new one is allowed to see.
@@ -52,7 +53,6 @@ export function useInventoryStream({
   // The authorized scope the advanced pages are cached under, with the criteria, ordering and
   // page: another account or another access revision never reads these rows from the other's key.
   scope: string;
-  criteria: AdvancedCriteria | null;
   onDenied: (status: number) => void;
 }): InventoryStream {
   const queryClient = useQueryClient();
@@ -64,10 +64,16 @@ export function useInventoryStream({
   }>({ key: '', order: null });
   const key = `${identity}\n${source ?? ''}`;
   const readWindow = useCallback(
-    async (offset: number) => {
-      if (!source || !criteria) return NO_WINDOW;
+    async (offset: number, signal: AbortSignal) => {
+      if (source === null) return NO_WINDOW;
       const stream = await queryClient.fetchQuery({
-        queryKey: advancedSearchKey({ scope, criteria, page: offset }),
+        // The address states the criteria, so a search is keyed by what it reads rather than by
+        // the object a render built for it.
+        queryKey: advancedSearchKey({
+          scope,
+          criteria: searchCriteria(source),
+          page: offset,
+        }),
         // The query client owns this read's lifecycle: it deduplicates a page already in flight
         // and cancels it when the scope is cleared, so this read carries its own signal rather
         // than the window band's.
@@ -79,14 +85,16 @@ export function useInventoryStream({
           ),
         ...ADVANCED_SEARCH_QUERY_OPTIONS,
       });
-      setOrdered({ key, order: stream.order });
+      // A read the band has already superseded states nothing: its ordering belongs to the search
+      // that replaced it, and publishing it would hide the current search's entry chronology.
+      if (!signal.aborted) setOrdered({ key, order: stream.order });
       return {
         rows: stream.properties,
         total: stream.total,
         more: stream.offset + stream.properties.length < stream.total,
       };
     },
-    [source, criteria, scope, key, queryClient],
+    [source, scope, key, queryClient],
   );
   const stream = useWindowStream<PropertySummary>({
     source,

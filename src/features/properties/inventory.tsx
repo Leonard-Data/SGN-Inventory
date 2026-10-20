@@ -30,11 +30,10 @@ import {
 import type { CatalogueRefreshView } from './catalogue-refresh';
 import {
   catalogueMatches,
-  inventoryRead,
   resultMode,
+  searchEndpoint,
 } from './catalogue-results';
 import type { CatalogueMatch } from './address-index';
-import type { AdvancedCriteria } from './advanced-search';
 import {
   activeFilterCount,
   filterParams,
@@ -196,13 +195,7 @@ export function Inventory({
   // the ordering, the filter island and the view switch all carry the same set.
   const activeFilters = filterParams(filters);
   const filterCount = activeFilterCount(filters);
-  const endpoint =
-    '/api/properties?' +
-    new URLSearchParams({
-      query: initialQuery,
-      ...(sort ? { sort } : {}),
-      ...activeFilters,
-    });
+  const endpoint = searchEndpoint({ query: initialQuery, sort, filters });
   // The session is this surface's own protection: the shell reads it, and the stream below reads
   // nothing until it has answered.
   const {
@@ -242,13 +235,6 @@ export function Inventory({
     sort,
     typing: addressEdited,
   });
-  const read = inventoryRead({ mode, endpoint });
-  // The criteria an advanced page is cached under: a submitted search, with the ordering it was
-  // submitted with (issue #194).
-  const advancedCriteria = useMemo<AdvancedCriteria>(
-    () => ({ query: initialQuery, filters, sort }),
-    [initialQuery, filters, sort],
-  );
   const {
     windows,
     total: matching,
@@ -259,13 +245,9 @@ export function Inventory({
   } = useInventoryStream({
     // A catalogue result names no endpoint at all, so the browser answers from the rows it holds
     // and no search-data request is made until the person runs an advanced search.
-    source:
-      employee && parsedView.ok && read.kind === 'advanced'
-        ? read.endpoint
-        : null,
+    source: employee && parsedView.ok && mode === 'advanced' ? endpoint : null,
     identity: sessionKey ?? 'no-session',
     scope: sessionKey ?? 'no-session',
-    criteria: read.kind === 'advanced' ? advancedCriteria : null,
     onDenied: denyFiles,
   });
   // The text the box narrows the loaded catalogue with, or null while the result set is the

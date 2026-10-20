@@ -569,7 +569,11 @@ export function SearchIsland({
                   >
                     <option value="">{text.sortDefault}</option>
                     <option value="oldest">{text.sortOldest}</option>
-                    <option value="newest">{text.sortNewest}</option>
+                    {/* Reflected for an address that already states it, never offered as a
+                        choice: the chronological orderings are submitted here, not browsed. */}
+                    <option value="newest" hidden>
+                      {text.sortNewest}
+                    </option>
                   </select>
                 </div>
               </div>

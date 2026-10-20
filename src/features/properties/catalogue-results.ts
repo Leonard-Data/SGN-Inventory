@@ -13,6 +13,7 @@ import {
   areaHundredths,
   filterParams,
   parseInventoryFilters,
+  wholeVnd,
   type InventoryFilterKey,
   type InventoryFilters,
 } from './filters.ts';
@@ -103,24 +104,31 @@ export function resultMode({
   return query.trim() === '' ? 'catalogue' : 'advanced';
 }
 
-export type InventoryRead =
-  { kind: 'catalogue' } | { kind: 'advanced'; endpoint: string };
-// The one read a result set performs. A catalogue result names no endpoint at all: the rows are
-// already in the browser, so filtering, ordering and paging them costs no request.
-export function inventoryRead({
-  mode,
-  endpoint,
+// The one address an advanced result reads, which is also the identity of the search it belongs
+// to: the submitted criteria as the search route reads them, and nothing else. The view and every
+// other presentation choice are deliberately absent from it, so switching cards/table or
+// refreshing the page cannot name another search or reopen this one.
+export function searchEndpoint({
+  query,
+  sort,
+  filters,
 }: {
-  mode: ResultMode;
-  endpoint: string;
-}): InventoryRead {
-  return mode === 'advanced'
-    ? { kind: 'advanced', endpoint }
-    : { kind: 'catalogue' };
+  query: string;
+  sort: string | null;
+  filters: InventoryFilters;
+}): string {
+  return (
+    '/api/properties?' +
+    new URLSearchParams({
+      query,
+      ...(sort ? { sort } : {}),
+      ...filterParams(filters),
+    })
+  );
 }
 
-function wholeVnd(value: string): bigint | null {
-  return /^\d{1,18}$/.test(value) ? BigInt(value) : null;
+function wholeVndValue(value: string): bigint | null {
+  return wholeVnd(value) ? BigInt(value) : null;
 }
 
 function hundredths(value: string | null): bigint | null {
@@ -176,9 +184,9 @@ export function matchesLocalFilters(
     const price = boundedPrice(record, filters.mode);
     if (
       !within(
-        price === null ? null : wholeVnd(price),
-        filters.priceMin === null ? null : wholeVnd(filters.priceMin),
-        filters.priceMax === null ? null : wholeVnd(filters.priceMax),
+        price === null ? null : wholeVndValue(price),
+        filters.priceMin === null ? null : wholeVndValue(filters.priceMin),
+        filters.priceMax === null ? null : wholeVndValue(filters.priceMax),
       )
     )
       return false;
