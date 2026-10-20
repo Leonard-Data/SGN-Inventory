@@ -10,7 +10,7 @@ import { InventoryListStateProvider } from '@/features/properties/list-state-pro
 //
 // The property catalogue's loader and cache are mounted here once (ADR 0003), so the
 // list and a property's details share one browser-held page instead of each reading
-// their own. The list's own state (ADR 0004) is mounted beside it for the same reason:
+// their own. The list's own state (ADR 0005) is mounted beside it for the same reason:
 // a visit to a property and back restores the list without reading the catalogue again,
 // and a reload of the application is what starts over. Nothing is prefetched while
 // rendering: the browser is the one initial loading owner, and no authenticated

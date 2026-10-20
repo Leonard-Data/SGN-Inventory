@@ -71,7 +71,7 @@ server's own answer, so the change itself needs no Refresh
 Opening a property from the list and coming back restores the list the person left — the text in
 the box, the filters, the ordering, the view, the position in the stream — without reading the
 catalogue again; a reload of the application starts over
-([ADR 0004](docs/adr/0004-inventory-list-state-across-a-property-visit.md)).
+([ADR 0005](docs/adr/0005-inventory-list-state-across-a-property-visit.md)).
 
 ### Review and decision queues
 
