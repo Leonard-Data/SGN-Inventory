@@ -17,6 +17,7 @@ export const TableChunk = memo(function TableChunk({
   reserved,
   locale,
   resultLocation,
+  matchedFormats,
   onOpen,
   onMeasured,
 }: {
@@ -26,6 +27,8 @@ export const TableChunk = memo(function TableChunk({
   reserved: number;
   locale: Locale;
   resultLocation: string;
+  // The stored address format each property matched through, while a local search is filtering.
+  matchedFormats: ReadonlyMap<string, string>;
   onOpen: (record: PropertySummary, opener: HTMLElement | null) => void;
   onMeasured: (index: number, height: number) => void;
 }) {
@@ -60,6 +63,7 @@ export const TableChunk = memo(function TableChunk({
         const row = propertyTableRow(record, locale, now);
         const price = rowPrice(record);
         const address = record.addresses[0];
+        const matchedFormat = matchedFormats.get(record.id);
         const modified = row.cells.find(
           (cell) => cell.column === 'modifiedTime',
         )!;
@@ -89,7 +93,14 @@ export const TableChunk = memo(function TableChunk({
                   text.unknown}
               </span>
               <small className="inventory-secondary">
-                {[address?.commune, address?.district]
+                {[
+                  [address?.commune, address?.district]
+                    .filter(Boolean)
+                    .join(' · '),
+                  matchedFormat && matchedFormat !== address?.format
+                    ? label(locale, matchedFormat)
+                    : '',
+                ]
                   .filter(Boolean)
                   .join(' · ')}
               </small>
