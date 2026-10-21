@@ -443,11 +443,43 @@ test('the variant that records the old district answers whichever variant is lis
     units: ['Thành phố Hồ Chí Minh', 'Quận Bình Thạnh', 'Phường 13'],
   });
   const column = titledPair({ district: 'Quận Bình Thạnh' });
+  // The house number, the street and the two localities in either order: a word beside the locality
+  // never takes the answer away from the variant that records it.
+  // The house number, the street and the two localities in either order: a word beside the locality
+  // never takes the answer away from the variant that records it.
+  const district = [
+    'quan binh thanh',
+    'binh thanh',
+    '12 quan binh thanh',
+    '12 binh thanh',
+    '12 binh loi binh thanh',
+    'quan binh thanh 12',
+  ];
+  const ward = [
+    'thanh my tay',
+    'phuong thanh my tay',
+    '12 thanh my tay',
+    '12 phuong thanh my tay',
+  ];
   for (const pair of [chosen, column])
     for (const listed of [[...pair], [...pair].reverse()]) {
-      assert.equal(labelFor(listed, 'quan binh thanh'), 'legacy');
-      assert.equal(labelFor(listed, 'binh thanh'), 'legacy');
-      assert.equal(labelFor(listed, 'phuong thanh my tay'), 'current');
-      assert.equal(labelFor(listed, 'thanh my tay'), 'current');
+      for (const query of district)
+        assert.equal(labelFor(listed, query), 'legacy', query);
+      for (const query of ward)
+        assert.equal(labelFor(listed, query), 'current', query);
     }
+  // The pair the earlier tests search without a house number, with the recorded number and street.
+  for (const listed of [
+    [...RECORDED_PAIR.addresses],
+    [...RECORDED_PAIR.addresses].reverse(),
+  ]) {
+    for (const query of [
+      '125 binh thanh',
+      '125 quan binh thanh',
+      '125 nguyen van thuong quan binh thanh',
+    ])
+      assert.equal(labelFor(listed, query), 'legacy', query);
+    for (const query of ['125 thanh my tay', '125 phuong thanh my tay'])
+      assert.equal(labelFor(listed, query), 'current', query);
+  }
 });

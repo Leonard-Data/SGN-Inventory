@@ -218,7 +218,7 @@ const CHOSEN_UNIT = 5;
 const STREET_AND_LOCALITY = 6;
 const ALL_TOKENS = 7;
 
-type Ranked = { rank: number; prefixPenalty: number; stated: boolean };
+type Ranked = { rank: number; prefixPenalty: number; stated: number };
 
 function rankVariant(
   query: Query,
@@ -235,12 +235,13 @@ function rankVariant(
   const prefixPenalty = query.tokens.filter(
     (token) => !variant.tokens.includes(token),
   ).length;
-  // The query is fully explained by the locality this variant itself records, rather than by the
-  // words its address text carries. Both variants of a copied-over pair carry the same text, so
-  // this is what tells the one that recorded the locality from the one that did not.
-  const stated = query.tokens.every((token) =>
+  // The query tokens the locality this variant itself records answers. Both variants of a
+  // copied-over pair carry the same address text, so what the record itself states is what tells
+  // the one that recorded the locality from the one that did not, and a house number or a street
+  // word beside the locality neither adds to it nor cancels it.
+  const stated = query.tokens.filter((token) =>
     variant.statedTokens.some((other) => tokenMatches(token, other)),
-  );
+  ).length;
   if (query.folded === variant.folded)
     return { rank: EXACT_ADDRESS, prefixPenalty, stated };
   const rest = query.houseNumber
@@ -284,12 +285,12 @@ function compareRank(left: Ranked, right: Ranked): number {
   return left.rank - right.rank || left.prefixPenalty - right.prefixPenalty;
 }
 
-// Between two variants of the same property, the one whose own recorded locality answers the query
-// states the property under the label the person searched for.
+// Between two variants of the same property, the one whose own recorded locality answers more of
+// the query states the property under the label the person searched for.
 function compareVariant(left: Ranked, right: Ranked): number {
   return (
     left.rank - right.rank ||
-    Number(right.stated) - Number(left.stated) ||
+    right.stated - left.stated ||
     left.prefixPenalty - right.prefixPenalty
   );
 }
@@ -338,7 +339,7 @@ export function matchCatalogue(
     }
     const code = codeRank(parsed, entry);
     if (code !== null && (!best || code < best.rank)) {
-      best = { rank: code, prefixPenalty: 0, stated: false };
+      best = { rank: code, prefixPenalty: 0, stated: 0 };
       bestFormat = '';
     }
     if (best)
