@@ -35,13 +35,10 @@ export async function propertyDetail(context: RouteContext, id: string) {
   const [addressResult, contactResult, creatorDisplayName] = await Promise.all([
     context.client
       .from('property_addresses')
+      // The official name of each unit the address chose rides on the address read itself, so a
+      // legacy address's hierarchy costs no read of its own.
       .select(
-        'id,revision,format,address_text,house_number,street,province_text,district_text,commune_text,province_unit_id,district_unit_id,commune_unit_id,mapping_status,verification_method,verified_by,verified_at,source_url,effective_on,mapping_evidence,is_primary,supersedes_address_id,' +
-          // The official name of each unit the address chose rides on the address read itself, so a
-          // legacy address's hierarchy costs no read of its own.
-          'province:admin_unit_versions!province_unit_id(name_vi),' +
-          'district:admin_unit_versions!district_unit_id(name_vi),' +
-          'commune:admin_unit_versions!commune_unit_id(name_vi)',
+        `id,revision,format,address_text,house_number,street,province_text,district_text,commune_text,province_unit_id,district_unit_id,commune_unit_id,mapping_status,verification_method,verified_by,verified_at,source_url,effective_on,mapping_evidence,is_primary,supersedes_address_id,province:admin_unit_versions!province_unit_id(name_vi),district:admin_unit_versions!district_unit_id(name_vi),commune:admin_unit_versions!commune_unit_id(name_vi)`,
       )
       .eq('property_id', id)
       .order('is_primary', { ascending: false })
