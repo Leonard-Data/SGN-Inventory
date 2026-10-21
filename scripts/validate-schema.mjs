@@ -841,7 +841,10 @@ await propertyDimensionContract({db,check,employees});
 // The legacy import's placeholder display names: each creator address resolves to the name the
 // archived import rows record for it, and to no invented name where the source names none.
 await legacyCreatorNamesContract({db,root,check});
-const report={checked_at:new Date().toISOString(),engine:'PGlite embedded PostgreSQL plus an embedded real PostgreSQL engine for the two-connection last-admin, property-vendor-link and contact-link races; mocked auth/storage schemas',passed,
+// No run timestamp here: the artifact is committed, so a clock reading makes every branch
+// rewrite it and every pull request conflict with every other one. The run time is printed
+// to the run log instead, where it costs no diff.
+const report={engine:'PGlite embedded PostgreSQL plus an embedded real PostgreSQL engine for the two-connection last-admin, property-vendor-link and contact-link races; mocked auth/storage schemas',passed,
  limitations:['Not a live Supabase integration test','HTTP Auth, presigned R2 URLs, Vercel and browser flows not exercised','Hosted/staging independent-session contention at production load remains an acceptance gate']};
 await fs.writeFile(path.join(root,'docs/validation-results.json'),JSON.stringify(report,null,2)+'\n');
-console.log(`${passed} assertions passed`);await db.close();
+console.log(`${passed} assertions passed at ${new Date().toISOString()}`);await db.close();
