@@ -184,7 +184,8 @@ export async function crosswalkOutcomes(
     const rows = byWard.get(ward) ?? [];
     const row = offeredCrosswalkRow(rows);
     if (row) offered.set(ward, row.to_unit_id);
-    else if (rows.length === 0) outcomes.set(ward, { kind: 'none', targetId: null });
+    else if (rows.length === 0)
+      outcomes.set(ward, { kind: 'none', targetId: null });
     else
       outcomes.set(ward, {
         kind: 'several',
