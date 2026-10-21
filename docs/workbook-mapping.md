@@ -46,9 +46,9 @@ Profiled the complete provided workbook, not just sample rows. The sanitized `wo
 | Tên chủ sở hũu | `contacts.display_name` | Generic names such as owner shorthand do not establish identity |
 | Số điện thoai | `contacts.phones` + `raw_phone_text` | Split multiple values; normalized valid mobile strings; preserve invalid/landline text for review |
 | Địa chỉ dự án | `property_addresses.address_text`, format legacy | Preserve exactly; no automatic new ward |
-| Chiều ngang | `properties.frontage_m` | Positive numeric metres; invalid/zero stays unresolved/null after reviewed disposition |
-| Chiều dài | `properties.depth_m` | Positive numeric metres |
-| Tổng diện tích | `land_area_m2` + `area_raw` | Parse explicit m²/m2; preserve reported area and do not overwrite with width × depth |
+| Chiều ngang | `properties.frontage_m` | Positive numeric metres; a width × depth pair carried by the area text wins over this column when the two disagree, recorded as a `frontage_m:area_text_conflict` issue rather than resolved silently; invalid/zero stays unresolved/null after reviewed disposition |
+| Chiều dài | `properties.depth_m` | Positive numeric metres; same area-text precedence as the frontage (`depth_m:area_text_conflict`) |
+| Tổng diện tích | `land_area_m2` + `area_raw` | Parse explicit m²/m2; preserve reported area and do not overwrite with width × depth. A width × depth pair inside the text is the authority on `frontage_m`/`depth_m` |
 | Loại Hình | `listing_mode` | `caee82465r` → sale; `caee82465b` → rent |
 | Loại Dự án | `access_type` and/or `property_type` | Separate alley/frontage labels from house/land/apartment labels |
 | Tạo mới | `status` | Column actually stores state; use status table below |

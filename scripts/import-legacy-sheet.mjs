@@ -193,6 +193,22 @@ export function parseArea(value, maxValue = null) {
   return { value: measure.value, raw };
 }
 
+/**
+ * The width × depth pair some area texts carry beside the area, e.g. `64m2 (4,5m x16m)`. It keeps
+ * the decimals the separate Chiều ngang and Chiều dài columns were rounded away from, so it is the
+ * authority on both dimensions. A pair the columns cannot store, including a zero, is no pair.
+ */
+export function parseAreaPair(value, maxValue = null) {
+  const match = text(value).match(
+    /\(\s*(\d+(?:[.,]\d+)?)\s*m?\s*[x×]\s*(\d+(?:[.,]\d+)?)\s*m?\s*\)/i,
+  );
+  if (!match) return { frontage_m: null, depth_m: null };
+  const frontage = parseMeasure(match[1], 2, maxValue);
+  const depth = parseMeasure(match[2], 2, maxValue);
+  if (frontage.error || depth.error) return { frontage_m: null, depth_m: null };
+  return { frontage_m: frontage.value, depth_m: depth.value };
+}
+
 /** Split multiple owner phone values, normalising only known mobile shapes. */
 export function parsePhones(value) {
   const raw = text(value);
@@ -1158,13 +1174,25 @@ export function mapMasterRow(row, index, reference, todayIso) {
   mapped.creator_email = value('Email Người Tạo').toLowerCase() || null;
   mapped.editor_email = value('Người chỉnh sửa').toLowerCase() || null;
 
+  // The area text keeps the real pair while the two dimension columns were rounded to whole
+  // metres, so where the area text carries a pair it wins and the disagreement is recorded as an
+  // issue rather than resolved silently. A rejected column value stays rejected.
+  const pair = parseAreaPair(value('Tổng diện tích'), 999999.99);
   for (const [header, column, maxValue] of [
     ['Chiều ngang', 'frontage_m', 999999.99],
     ['Chiều dài', 'depth_m', 999999.99],
   ]) {
     const measure = parseMeasure(value(header), 2, maxValue);
     if (measure.error) issues.push(`${column}:${measure.error}`);
-    else mapped.property[column] = measure.value;
+    else {
+      if (
+        measure.value !== null &&
+        pair[column] !== null &&
+        pair[column] !== measure.value
+      )
+        issues.push(`${column}:area_text_conflict`);
+      mapped.property[column] = pair[column] ?? measure.value;
+    }
   }
 
   const area = parseArea(value('Tổng diện tích'), 9999999999.99);
