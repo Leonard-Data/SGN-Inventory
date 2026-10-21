@@ -12,7 +12,7 @@ import {
 import { isReportDate } from '@/features/employees/report-range';
 import { offeredUnits } from './units';
 import {
-  crosswalkRecorded,
+  crosswalkReport,
   offeredCrosswalkRow,
   type AddressCrosswalk,
   type CrosswalkOutcome,
@@ -111,9 +111,10 @@ export async function savedLegacyAddress(
 ): Promise<{ address?: AddressCrosswalk }> {
   try {
     // Every address of the property travels with the read, because whether the crosswalk's current
-    // address is already recorded is a question about this legacy row's own supersedes chain. The
-    // property's own revision travels with the outcome so the offer carries the context the
-    // database will check, read back rather than assumed from the request.
+    // address is already recorded is a question about this legacy row's own supersedes chain and the
+    // ward it records now: a correction can change that ward, and then the recorded state no longer
+    // answers for it. The property's own revision travels with the outcome so the offer carries the
+    // context the database will check, read back rather than assumed from the request.
     const [property, saved] = await Promise.all([
       context.client
         .from('properties')
@@ -132,13 +133,17 @@ export async function savedLegacyAddress(
         addressId ? rows.filter((row) => row.id === addressId) : rows
       ).find((row) => row.format === 'legacy' && row.commune_unit_id !== null);
     if (!legacy?.commune_unit_id || !property.data) return {};
+    const report = await crosswalkOutcome(context, legacy.commune_unit_id);
     return {
       address: {
         addressId: legacy.id,
         propertyRevision: property.data.revision,
-        crosswalk: crosswalkRecorded(rows, legacy.id)
-          ? { kind: 'recorded' }
-          : await crosswalkOutcome(context, legacy.commune_unit_id),
+        crosswalk: crosswalkReport(
+          rows,
+          legacy.id,
+          report.outcome,
+          report.targetId,
+        ),
       },
     };
   } catch {
@@ -147,10 +152,13 @@ export async function savedLegacyAddress(
     return {};
   }
 }
+// What the crosswalk says about one legacy ward, with the single target unit it names: the recorded
+// check here and the write guard both compare against that target, so the state reported and the
+// state accepted can never describe different wards.
 async function crosswalkOutcome(
   context: RouteContext,
   wardId: string,
-): Promise<CrosswalkOutcome> {
+): Promise<{ outcome: CrosswalkOutcome; targetId: string | null }> {
   const { data, error } = await context.client
     .from('admin_unit_crosswalks')
     .select('relation,to_unit_id')
@@ -161,9 +169,13 @@ async function crosswalkOutcome(
   // A ward with no row, or with something other than one whole/rename row, is reported as it is
   // and offered nothing: a partial transfer needs property-level evidence this read cannot give.
   if (!offered)
-    return rows.length === 0
-      ? { kind: 'none' }
-      : { kind: 'several', count: rows.length };
+    return {
+      outcome:
+        rows.length === 0
+          ? { kind: 'none' }
+          : { kind: 'several', count: rows.length },
+      targetId: null,
+    };
   const { data: target, error: targetError } = await context.client
     .from('admin_unit_versions')
     .select('name_vi,parent_id')
@@ -172,18 +184,29 @@ async function crosswalkOutcome(
   databaseError(targetError);
   // A target that does not resolve to a named current commune inside a named province is not
   // offered, because the message could not name it and the candidate states both.
-  if (!target?.parent_id) return { kind: 'several', count: rows.length };
+  if (!target?.parent_id)
+    return {
+      outcome: { kind: 'several', count: rows.length },
+      targetId: null,
+    };
   const { data: province, error: provinceError } = await context.client
     .from('admin_unit_versions')
     .select('name_vi')
     .eq('id', target.parent_id)
     .maybeSingle();
   databaseError(provinceError);
-  if (!province) return { kind: 'several', count: rows.length };
+  if (!province)
+    return {
+      outcome: { kind: 'several', count: rows.length },
+      targetId: null,
+    };
   return {
-    kind: 'mapped',
-    commune: target.name_vi,
-    province: province.name_vi,
+    outcome: {
+      kind: 'mapped',
+      commune: target.name_vi,
+      province: province.name_vi,
+    },
+    targetId: offered.to_unit_id,
   };
 }
 // The one explicit action behind a legacy save: record the current address the crosswalk names as a

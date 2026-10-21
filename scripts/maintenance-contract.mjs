@@ -1686,6 +1686,24 @@ export async function maintenanceContract({
         [propertyId],
       )
     ).rows.filter((row) => row.format !== 'alternate');
+  // The rule the surface applies, mirrored in SQL: a current address counts as recorded only for the
+  // target the ward the saved row now names maps to, so a chain that recorded another ward's target
+  // answers nothing (issue #236).
+  const recordedFrom = async (propertyId, legacyId, targetId) =>
+    (
+      await db.query(
+        `with recursive family(id,parent_id) as (
+           select a.id,a.supersedes_address_id from public.property_addresses a where a.id=$1
+           union
+           select a.id,a.supersedes_address_id from public.property_addresses a
+             join family f on a.supersedes_address_id=f.id or a.id=f.parent_id
+           where a.property_id=$2 and a.format='legacy')
+         select count(*)::int as recorded from public.property_addresses c
+           join family f on f.id=c.supersedes_address_id
+         where c.property_id=$2 and c.format='current' and c.commune_unit_id=$3`,
+        [legacyId, propertyId, targetId],
+      )
+    ).rows[0].recorded;
   const offered = await wardChain(
     "(select count(*) from public.admin_unit_crosswalks x where x.from_unit_id=w.id)=1 and exists(select 1 from public.admin_unit_crosswalks x where x.from_unit_id=w.id and x.relation in ('whole','rename'))",
   );
@@ -2017,24 +2035,23 @@ export async function maintenanceContract({
         { format: 'legacy', supersedes_address_id: offeredLegacy.id },
       );
       // The corrected row answers recorded through its own chain, so the save reports the state
-      // rather than an action that would only be refused.
-      const recordedFrom = async (legacyId) =>
-        (
-          await db.query(
-            `with recursive family(id,parent_id) as (
-               select a.id,a.supersedes_address_id from public.property_addresses a where a.id=$1
-               union
-               select a.id,a.supersedes_address_id from public.property_addresses a
-                 join family f on a.supersedes_address_id=f.id or a.id=f.parent_id
-               where a.property_id=$2 and a.format='legacy')
-             select count(*)::int as recorded from public.property_addresses c
-               join family f on f.id=c.supersedes_address_id
-             where c.property_id=$2 and c.format='current'`,
-            [legacyId, offeredProperty],
-          )
-        ).rows[0].recorded;
-      assert.equal(await recordedFrom(offeredLegacy.id), 1);
-      assert.equal(await recordedFrom(correctedLegacy), 1);
+      // rather than an action that would only be refused - and it still records the same ward.
+      assert.equal(
+        await recordedFrom(
+          offeredProperty,
+          offeredLegacy.id,
+          offered.crosswalk[0].to_unit_id,
+        ),
+        1,
+      );
+      assert.equal(
+        await recordedFrom(
+          offeredProperty,
+          correctedLegacy,
+          offered.crosswalk[0].to_unit_id,
+        ),
+        1,
+      );
       await refuseWith(
         'select public.record_address_candidate($1,$2,$3)',
         [
@@ -2046,6 +2063,121 @@ export async function maintenanceContract({
         /already recorded from this legacy address/,
       );
       assert.equal((await addressesOf(offeredProperty)).length, 4);
+    },
+  );
+  await check(
+    'a correction that changes the saved ward reports and records that ward mapping once',
+    async () => {
+      // A ward whose crosswalk names a different current ward than the one this chain already
+      // recorded: the saved row's own mapping is what the surface must report, not the recorded state.
+      const changed = await wardChain(
+        `(select count(*) from public.admin_unit_crosswalks x where x.from_unit_id=w.id)=1 and exists(select 1 from public.admin_unit_crosswalks x where x.from_unit_id=w.id and x.relation in ('whole','rename') and x.to_unit_id<>'${offered.crosswalk[0].to_unit_id}')`,
+      );
+      const propertyId = await createLegacy(offered);
+      const legacy = (
+        await db.query(
+          "select id from public.property_addresses where property_id=$1 and format='legacy'",
+          [propertyId],
+        )
+      ).rows[0].id;
+      const firstCandidate = (
+        await db.query(
+          'select public.record_address_candidate($1,$2,$3) as id',
+          [propertyId, legacy, await revision('properties', propertyId)],
+        )
+      ).rows[0].id;
+      // The save that corrects the ward writes the legacy successor the next surface reads.
+      const corrected = (
+        await db.query(mutate, [
+          propertyId,
+          'address',
+          legacy,
+          await revision('property_addresses', legacy),
+          {
+            province_unit_id: changed.province,
+            district_unit_id: changed.district,
+            commune_unit_id: changed.id,
+          },
+        ])
+      ).rows[0].id;
+      assert.deepEqual(
+        (
+          await db.query(
+            'select format,commune_unit_id,supersedes_address_id from public.property_addresses where id=$1',
+            [corrected],
+          )
+        ).rows[0],
+        {
+          format: 'legacy',
+          commune_unit_id: changed.id,
+          supersedes_address_id: legacy,
+        },
+      );
+      // The chain's recorded candidate answers for the ward it was recorded at, which the saved row
+      // no longer names: the surface reports this ward's mapping instead of that recorded state.
+      const recordedTarget = offered.crosswalk[0].to_unit_id,
+        changedTarget = changed.crosswalk[0].to_unit_id;
+      assert.equal(
+        await recordedFrom(propertyId, corrected, recordedTarget),
+        1,
+      );
+      assert.equal(await recordedFrom(propertyId, corrected, changedTarget), 0);
+      // The guard answers the same way: the saved ward records its own target exactly once.
+      const secondCandidate = (
+        await db.query(
+          'select public.record_address_candidate($1,$2,$3) as id',
+          [propertyId, corrected, await revision('properties', propertyId)],
+        )
+      ).rows[0].id;
+      assert.deepEqual(
+        (
+          await db.query(
+            'select format,mapping_status,province_unit_id,commune_unit_id,supersedes_address_id,is_primary from public.property_addresses where id=$1',
+            [secondCandidate],
+          )
+        ).rows[0],
+        {
+          format: 'current',
+          mapping_status: 'candidate',
+          province_unit_id: (
+            await db.query(
+              'select parent_id from public.admin_unit_versions where id=$1',
+              [changedTarget],
+            )
+          ).rows[0].parent_id,
+          commune_unit_id: changedTarget,
+          supersedes_address_id: corrected,
+          is_primary: true,
+        },
+      );
+      assert.equal(await recordedFrom(propertyId, corrected, changedTarget), 1);
+      // A second attempt for that ward is refused, and so is one for the ward the chain recorded first.
+      for (const attempt of [corrected, legacy])
+        await refuseWith(
+          'select public.record_address_candidate($1,$2,$3)',
+          [propertyId, attempt, await revision('properties', propertyId)],
+          '23505',
+          /already recorded from this legacy address/,
+        );
+      // The earlier ward's current address is kept, demoted by the new primary, and the legacy chain
+      // still holds its own rows: one primary per format either way.
+      const addresses = (
+        await db.query(
+          "select id,format,is_primary from public.property_addresses where property_id=$1 and format<>'alternate'",
+          [propertyId],
+        )
+      ).rows;
+      assert.deepEqual(
+        addresses
+          .filter((row) => row.is_primary)
+          .map((row) => row.id)
+          .sort(),
+        [corrected, secondCandidate].sort(),
+      );
+      assert.deepEqual(
+        addresses.filter((row) => row.id === firstCandidate),
+        [{ id: firstCandidate, format: 'current', is_primary: false }],
+      );
     },
   );
   await check(

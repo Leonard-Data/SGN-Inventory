@@ -3,8 +3,9 @@ import type { Locale } from '@/i18n/messages';
 // What the official old -> new crosswalk says about the ward of a saved legacy address. Only a
 // single whole or rename transfer names the current ward; a partial transfer, more than one row,
 // or no row at all says so instead of guessing (D2: a crosswalk is candidate evidence, never a
-// write of its own). A ward whose current address is already recorded says that instead, so the
-// one action is never presented after it has been used.
+// write of its own). The ward whose current address is already recorded says that instead, so the
+// one action is never presented after it has been used - and only that ward, because a correction
+// can change the ward the saved row records (issue #236).
 export type CrosswalkOutcome =
   | { kind: 'mapped'; commune: string; province: string }
   | { kind: 'several'; count: number }
@@ -29,11 +30,14 @@ export function offeredCrosswalkRow<T extends { relation: string }>(
     : null;
 }
 
-// The three outcomes read differently on purpose: only the first offers to write anything. The
+// The four outcomes read differently on purpose: only the first offers to write anything. The
 // wording is this surface's own because each sentence states what the crosswalk does and does not
 // establish, and none of them is a generic label.
 const copy = {
-  mapped: ['Phường/xã cũ đã chuyển thành', 'The old ward became'],
+  mapped: [
+    'Phường/xã cũ đang lưu đã chuyển thành',
+    'The old ward saved here became',
+  ],
   several: [
     'Cần xác minh phường mới: bảng chuyển đổi ghi nhận',
     'The new ward needs verification: the crosswalk records',
@@ -41,12 +45,12 @@ const copy = {
   ward: ['phường/xã mới.', 'new ward.'],
   wards: ['phường/xã mới.', 'new wards.'],
   none: [
-    'Chưa có bảng chuyển đổi cho phường/xã cũ này.',
-    'No crosswalk is available for this old ward.',
+    'Chưa có bảng chuyển đổi cho phường/xã cũ đang lưu.',
+    'No crosswalk is available for the old ward saved here.',
   ],
   recorded: [
-    'Địa chỉ mới cho phường/xã cũ này đã được ghi trước đó.',
-    'The current address for this old ward is already recorded.',
+    'Địa chỉ mới cho phường/xã cũ đang lưu đã được ghi trước đó.',
+    'The current address for the old ward saved here is already recorded.',
   ],
 } as const;
 
@@ -61,16 +65,25 @@ export function crosswalkMessage(locale: Locale, outcome: CrosswalkOutcome) {
         : copy.none[at];
 }
 
-// Whether the current address the crosswalk names is already recorded for this legacy address: a
-// current row linked by supersedes_address_id to the legacy row or to any row of its own chain, so
-// a repeat after a correction of that row is recognised as recorded rather than offered again.
-export function crosswalkRecorded<
+// What the surface reports for a saved legacy row: the recorded state when a current row in that
+// legacy row's own supersedes chain already carries the crosswalk target of the ward the saved row
+// now records, and otherwise what that ward's crosswalk says. A chain that recorded another ward's
+// target does not answer for the ward saved here, because a correction can change it (issue #236),
+// and a ward the crosswalk names no single target for has nothing recorded at all.
+export function crosswalkReport<
   T extends {
     id: string;
     format: string;
+    commune_unit_id: string | null;
     supersedes_address_id: string | null;
   },
->(rows: readonly T[], legacyId: string): boolean {
+>(
+  rows: readonly T[],
+  legacyId: string,
+  outcome: CrosswalkOutcome,
+  targetId: string | null,
+): CrosswalkOutcome {
+  if (!targetId) return outcome;
   const chain = new Set([legacyId]);
   let grew = true;
   while (grew) {
@@ -85,7 +98,10 @@ export function crosswalkRecorded<
   return rows.some(
     (row) =>
       row.format === 'current' &&
+      row.commune_unit_id === targetId &&
       row.supersedes_address_id !== null &&
       chain.has(row.supersedes_address_id),
-  );
+  )
+    ? { kind: 'recorded' }
+    : outcome;
 }
