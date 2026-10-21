@@ -34,7 +34,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       {
         id: 'inventory',
-        label: 'navSearch',
+        label: 'navHome',
         href: '/properties',
         icon: 'search',
         roles: ALL_ROLES,
