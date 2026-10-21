@@ -1,7 +1,6 @@
 import 'server-only';
 import { ApiError, type RouteContext } from '@/lib/supabase/route';
 import type { Database } from '@/types/database';
-import { CURRENT_CATALOG_START } from '@/features/property-maintenance/units';
 import type { AddressSummary, PropertyStream } from './types';
 import { propertyCreators, propertyModifiers } from './creator';
 import {
@@ -184,7 +183,8 @@ function accessError(code: string | undefined): ApiError {
 
 // The province must be a province-level catalog unit and the ward a commune-level unit inside
 // that province, so an address that swaps or mismatches them is refused rather than applied to a
-// different unit.
+// different unit. Units are matched whatever their validity window, because a property recorded in
+// the closed pre-2025 generation is filtered by its own legacy province, district and ward.
 async function assertAreaUnits(
   context: RouteContext,
   filters: InventoryFilters,
@@ -197,10 +197,22 @@ async function assertAreaUnits(
     .in(
       'id',
       [province, ward].filter((id): id is string => id !== null),
-    )
-    .gte('valid_from', CURRENT_CATALOG_START);
+    );
   if (error) throw new ApiError(503, 'unavailable');
-  if (!catalogUnitsMatch(data ?? [], filters))
+  const units = [...(data ?? [])];
+  // A legacy ward's parent is its legacy district, so the province is one hop further and is read
+  // only when it is not already in hand; a current ward's parent is the province itself.
+  const hop = units.find((unit) => unit.id === ward)?.parent_id;
+  if (province !== null && hop && !units.some((unit) => unit.id === hop)) {
+    const district = await context.client
+      .from('admin_unit_versions')
+      .select('id,unit_level,parent_id')
+      .eq('id', hop)
+      .maybeSingle();
+    if (district.error) throw new ApiError(503, 'unavailable');
+    if (district.data) units.push(district.data);
+  }
+  if (!catalogUnitsMatch(units, filters))
     throw new ApiError(400, 'invalid-input');
 }
 

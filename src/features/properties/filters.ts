@@ -165,7 +165,9 @@ export function activeFilterCount(filters: InventoryFilters): number {
 
 // The catalog check the route runs after parsing: a province value must name a province-level
 // unit and a ward value a commune-level one inside the stated province, so absent, out-of-catalog,
-// swapped or mismatched units are refused instead of matching a different inventory.
+// swapped or mismatched units are refused instead of matching a different inventory. A legacy ward
+// hangs under its district rather than the province, so that one hop is followed when the read
+// carries the district; a ward whose district is missing from the list stays mismatched.
 export function catalogUnitsMatch(
   units: readonly {
     id: string;
@@ -181,7 +183,9 @@ export function catalogUnitsMatch(
   if (ward === null) return true;
   const unit = byId.get(ward);
   if (unit?.unit_level !== 'commune') return false;
-  return province === null || unit.parent_id === province;
+  if (province === null || unit.parent_id === province) return true;
+  const parent = unit.parent_id === null ? undefined : byId.get(unit.parent_id);
+  return parent?.unit_level === 'district' && parent.parent_id === province;
 }
 
 export type InventoryFilterArgs = {
