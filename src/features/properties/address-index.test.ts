@@ -345,3 +345,71 @@ test('each variant indexes its carried address parts without changing its source
   assert.equal(indexed[0]?.variants[0]?.addressText, 'Địa chỉ gốc');
   assert.equal(indexed[0]?.variants[1]?.addressText, 'Địa chỉ hiện tại');
 });
+
+// A legacy address and the current candidate recorded from it by the crosswalk action: the legacy
+// ward "Phường 22" in Quận Bình Thạnh became "Phường Thạnh Mỹ Tây", and the candidate row carries
+// the legacy source text over unchanged, so both variants name the old locality in their text. Only
+// the variant that chose it as its own unit records it.
+const RECORDED_PAIR = property('20', [
+  address('legacy', '125 Nguyễn Văn Thương, Phường 22, Quận Bình Thạnh', {
+    houseNumber: '125',
+    street: 'Nguyễn Văn Thương',
+    district: 'Quận Bình Thạnh',
+    units: ['Thành phố Hồ Chí Minh', 'Quận Bình Thạnh', 'Phường 22'],
+  }),
+  address('current', '125 Nguyễn Văn Thương, Phường 22, Quận Bình Thạnh', {
+    houseNumber: '125',
+    street: 'Nguyễn Văn Thương',
+    // The chosen current units, and no district: the current tier has none.
+    units: ['Thành phố Hồ Chí Minh', 'Phường Thạnh Mỹ Tây'],
+  }),
+]);
+// An imported current address: the text was rewritten into the current geography, and the ward
+// exists only as the chosen official unit - the recorded text never spells it.
+const CURRENT_ONLY = property('21', [
+  address('current', '125 Nguyễn Văn Thương, Tổ 12', {
+    houseNumber: '125',
+    street: 'Nguyễn Văn Thương',
+    units: ['Thành phố Hồ Chí Minh', 'Phường Thạnh Mỹ Tây'],
+  }),
+]);
+const RECORDED = [RECORDED_PAIR, CURRENT_ONLY];
+const recordedMatches = (query: string) =>
+  matchCatalogue(buildAddressIndex(RECORDED), query);
+const recordedFound = (query: string) =>
+  recordedMatches(query).map((match) => match.record.id);
+
+test('a legacy district finds the property under its legacy label', () => {
+  // The candidate row carries the legacy text over, so it names the old district too. The variant
+  // that chose that district as its unit is the one that answers, so the result reads as legacy.
+  assert.deepEqual(recordedFound('quan binh thanh'), ['20']);
+  assert.equal(recordedMatches('quan binh thanh')[0]?.format, 'legacy');
+  assert.equal(recordedMatches('binh thanh')[0]?.format, 'legacy');
+});
+
+test('the new ward finds the property under its current label', () => {
+  assert.equal(recordedMatches('phuong thanh my tay')[0]?.format, 'current');
+  // A ward chosen from a list is searchable by its official name even when the recorded text never
+  // spells it, exactly as the database's own address search states it.
+  assert.deepEqual(recordedFound('thanh my tay'), ['20', '21']);
+  assert.deepEqual(recordedFound('phuong thanh my tay'), ['20', '21']);
+});
+
+test('a legacy district never reaches a current ward in the local index', () => {
+  // The imported current address records the new ward alone, so a fragment naming the old district
+  // is not folded into it, and a query mixing the two localities matches no single variant.
+  assert.deepEqual(recordedFound('quan binh thanh'), ['20']);
+  assert.deepEqual(
+    matchCatalogue(
+      buildAddressIndex([CURRENT_ONLY]),
+      'binh thanh thanh my tay',
+    ),
+    [],
+  );
+  // A candidate row keeps the legacy source text as the record it states, so the old words are in
+  // its own data; what the index must not do is answer the district fragment with that row. The
+  // variant that chose the district answers it, and the result reads as legacy above.
+  assert.equal(recordedMatches('binh thanh')[0]?.format, 'legacy');
+  // The legacy hierarchy is still what its own recorded text names.
+  assert.equal(recordedMatches('phuong 22')[0]?.format, 'legacy');
+});

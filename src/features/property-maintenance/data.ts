@@ -154,8 +154,9 @@ export async function savedLegacyAddress(
 }
 // What the crosswalk says about one legacy ward, with the single target unit it names: the recorded
 // check here and the write guard both compare against that target, so the state reported and the
-// state accepted can never describe different wards.
-async function crosswalkOutcome(
+// state accepted can never describe different wards. The detail page shares this read, so a recorded
+// address and a saved one are described by the same wording.
+export async function crosswalkOutcome(
   context: RouteContext,
   wardId: string,
 ): Promise<{ outcome: CrosswalkOutcome; targetId: string | null }> {

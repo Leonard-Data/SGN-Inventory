@@ -46,6 +46,9 @@ const row: CatalogueRow = {
       street: 'Nguyễn Văn Thương',
       commune_text: 'Phường 25',
       district_text: 'Bình Thạnh',
+      province: { name_vi: 'Thành phố Hồ Chí Minh' },
+      district: { name_vi: 'Bình Thạnh' },
+      commune: { name_vi: 'Phường 25' },
       is_primary: true,
       mapping_status: 'unresolved',
       supersedes_address_id: null,
@@ -58,6 +61,9 @@ const row: CatalogueRow = {
       street: 'Nguyễn Văn Thương',
       commune_text: 'Phường 25',
       district_text: null,
+      province: { name_vi: 'Thành phố Hồ Chí Minh' },
+      district: null,
+      commune: { name_vi: 'Phường 25' },
       is_primary: false,
       mapping_status: 'candidate',
       supersedes_address_id: null,
@@ -185,6 +191,17 @@ test('one row becomes the list summary, with the recorded text and both formats'
   );
   assert.equal(summary.addresses[1]?.format, 'current');
   assert.equal(summary.addresses[1]?.district, null);
+  // The official names of the units each variant chose ride beside the recorded text, largest tier
+  // first and without a level the address did not record, so the address index can match them.
+  assert.deepEqual(summary.addresses[0]?.units, [
+    'Thành phố Hồ Chí Minh',
+    'Bình Thạnh',
+    'Phường 25',
+  ]);
+  assert.deepEqual(summary.addresses[1]?.units, [
+    'Thành phố Hồ Chí Minh',
+    'Phường 25',
+  ]);
   // The creator the page resolved rides on the summary, so the ordinary browse keeps the
   // attribution the stream read used to supply; the catalogue states no entry chronology.
   assert.equal(summary.createdBy, 'Nguyễn Thu Hà');
@@ -212,6 +229,9 @@ test('a superseded address version is history, not part of the summary', () => {
           street: 'Lê Lợi',
           commune_text: 'Phường 5',
           district_text: 'Quận 3',
+          province: null,
+          district: null,
+          commune: null,
           is_primary: false,
           mapping_status: 'unresolved',
           supersedes_address_id: null,
@@ -224,6 +244,9 @@ test('a superseded address version is history, not part of the summary', () => {
           street: 'Hai Bà Trưng',
           commune_text: 'Phường 6',
           district_text: 'Quận 3',
+          province: null,
+          district: null,
+          commune: null,
           is_primary: true,
           mapping_status: 'unresolved',
           supersedes_address_id: replaced,
@@ -236,6 +259,9 @@ test('a superseded address version is history, not part of the summary', () => {
           street: 'Hai Bà Trưng',
           commune_text: 'Phường 6',
           district_text: 'Quận 3',
+          province: null,
+          district: null,
+          commune: null,
           is_primary: false,
           mapping_status: 'unresolved',
           supersedes_address_id: null,
@@ -267,6 +293,9 @@ test('a current address recorded from a legacy one keeps the legacy row in the s
           street: 'Lê Lợi',
           commune_text: 'Phường 5',
           district_text: 'Quận 3',
+          province: null,
+          district: null,
+          commune: null,
           is_primary: true,
           mapping_status: 'unresolved',
           supersedes_address_id: null,
@@ -279,6 +308,9 @@ test('a current address recorded from a legacy one keeps the legacy row in the s
           street: 'Lê Lợi',
           commune_text: 'Phường Bến Thành',
           district_text: null,
+          province: null,
+          district: null,
+          commune: null,
           is_primary: true,
           mapping_status: 'candidate',
           supersedes_address_id: legacy,

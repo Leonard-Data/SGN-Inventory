@@ -1,6 +1,9 @@
 import 'server-only';
 import { ApiError, uuid, type RouteContext } from '@/lib/supabase/route';
 import { creatorName } from './creator';
+import { addressNotes } from './address-notes';
+import { crosswalkOutcome } from '@/features/property-maintenance/data';
+
 export async function propertyDetail(context: RouteContext, id: string) {
   if (!uuid(id)) throw new ApiError(400, 'invalid-input');
   // PostgREST casts money before JSON serialization: never round numeric(18,0) in JS.
@@ -52,9 +55,58 @@ export async function propertyDetail(context: RouteContext, id: string) {
   ]);
   if (addressResult.error || contactResult.error)
     throw new ApiError(503, 'unavailable');
+  const addresses = addressResult.data ?? [];
+  // A legacy address reads as the hierarchy it was recorded in: the official names of the units it
+  // chose sit beside the source text, and never replace it. One read covers every unit the
+  // property's addresses name, and a name it does not answer leaves that tier out rather than
+  // failing the page.
+  const unitIds = [
+    ...new Set(
+      addresses.flatMap((address) =>
+        [
+          address.province_unit_id,
+          address.district_unit_id,
+          address.commune_unit_id,
+        ].filter((id): id is string => id !== null),
+      ),
+    ),
+  ];
+  const unitNames = new Map<string, string>();
+  if (unitIds.length) {
+    const { data: units } = await context.client
+      .from('admin_unit_versions')
+      .select('id,name_vi')
+      .in('id', unitIds);
+    for (const unit of units ?? []) unitNames.set(unit.id, unit.name_vi);
+  }
+  // What the official crosswalk says about each recorded legacy ward, in the three outcomes the
+  // save surface reports. Read from the ward's own rows only, and an auxiliary read that fails
+  // leaves the line out instead of turning the whole page into a failure.
+  const legacyWards = [
+    ...new Set(
+      addresses.flatMap((address) =>
+        address.format === 'legacy' && address.commune_unit_id
+          ? [address.commune_unit_id]
+          : [],
+      ),
+    ),
+  ];
+  const outcomes = new Map(
+    await Promise.all(
+      legacyWards.map(
+        async (ward) =>
+          [
+            ward,
+            await crosswalkOutcome(context, ward).catch(() => null),
+          ] as const,
+      ),
+    ),
+  );
   return {
     property,
-    addresses: addressResult.data ?? [],
+    addresses: addresses.map((address) =>
+      addressNotes(address, unitNames, outcomes),
+    ),
     contacts: contactResult.data ?? [],
     // A creator that is missing or was not readable leaves the fact out of the page rather
     // than showing a placeholder or an identifier.

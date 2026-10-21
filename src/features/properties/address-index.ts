@@ -3,7 +3,10 @@
 // the database's own address search documents, kept here so a keystroke reads nothing at all.
 //
 // Each stored variant is indexed and searched on its own, so an old address's district can never
-// be matched against a current address's ward. A house number is a structured value, not a
+// be matched against a current address's ward. A variant is indexed on the recorded text it carries,
+// the address parts beside it and the official names of the units it chose, and a query naming the
+// locality a variant records is answered by that variant rather than by one that only carries the
+// words in a text copied from it. A house number is a structured value, not a
 // substring: 12, 112 and 12/5 are three different places and 12A keeps its letter. Ranking follows
 // the order the specification sets out (issue #186 section 6, issue #191) and the recorded text is
 // kept for display.
@@ -24,6 +27,10 @@ export type CatalogueAddressVariant = {
   mainNumber: string | null;
   streetTokens: string[];
   localityTokens: string[];
+  // The official names of the units this variant chose, normalized. A query token that names one of
+  // them is a statement about this variant's own recorded hierarchy rather than a word it happens to
+  // carry inside an address text copied from another format.
+  officialTokens: string[];
 };
 
 export type CatalogueIndexEntry = {
@@ -118,14 +125,21 @@ function variantOf(address: AddressSummary): CatalogueAddressVariant {
     : headTokens[0] && HOUSE_NUMBER.test(headTokens[0])
       ? headTokens.slice(1)
       : headTokens;
+  // The locality the variant's own columns state, without the words the recorded text adds below.
+  const columnLocalities = tokenize(
+    [address.commune, address.district]
+      .filter((part): part is string => Boolean(part))
+      .join(' '),
+  );
   const localityTokens = [
-    ...tokenize(
-      [address.commune, address.district]
-        .filter((part): part is string => Boolean(part))
-        .join(' '),
-    ),
+    ...columnLocalities,
     ...tokenize(address.addressText.split(',').slice(1).join(' ')),
   ];
+  // The official names of the units the address chose. A unit picked from a list is often named
+  // nowhere in the recorded text, so without these a ward chosen by selection is unsearchable here.
+  const officialTokens = (address.units ?? []).flatMap((name) =>
+    tokenize(name),
+  );
   return {
     format: address.format,
     addressText: address.addressText,
@@ -135,12 +149,13 @@ function variantOf(address: AddressSummary): CatalogueAddressVariant {
     // not reach 12A.
     tokens:
       mainNumber && mainNumber !== houseNumber
-        ? [...textTokens, ...partTokens, mainNumber]
-        : [...textTokens, ...partTokens],
+        ? [...textTokens, ...partTokens, ...officialTokens, mainNumber]
+        : [...textTokens, ...partTokens, ...officialTokens],
     houseNumber,
     mainNumber,
     streetTokens,
     localityTokens,
+    officialTokens,
   };
 }
 
@@ -192,7 +207,11 @@ const EXACT_ADDRESS = 2;
 const NUMBER_AND_STREET = 3;
 const ALLEY_UNDER_NUMBER = 4;
 const STREET_AND_LOCALITY = 5;
-const ALL_TOKENS = 6;
+// A query that names the official unit this variant chose. It sits above the loosest rank so a
+// fragment naming an old district is answered by the variant that records that district, never by a
+// variant that only carries the same words inside an address text copied over from it.
+const CHOSEN_UNIT = 6;
+const ALL_TOKENS = 7;
 
 type Ranked = { rank: number; prefixPenalty: number };
 
@@ -240,6 +259,13 @@ function rankVariant(
     )
   )
     return { rank: STREET_AND_LOCALITY, prefixPenalty };
+  if (
+    variant.officialTokens.length > 0 &&
+    query.tokens.every((token) =>
+      variant.officialTokens.some((other) => tokenMatches(token, other)),
+    )
+  )
+    return { rank: CHOSEN_UNIT, prefixPenalty };
   return { rank: ALL_TOKENS, prefixPenalty };
 }
 
