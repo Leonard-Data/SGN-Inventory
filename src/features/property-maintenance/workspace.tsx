@@ -201,6 +201,7 @@ export function Maintenance({
       },
     );
     applyServerSummary(applyChange, result, facts.id);
+    setCrosswalk(null);
     setFactsSavedRevision(facts.revision);
     return result;
   }
