@@ -10,7 +10,7 @@ import {
   type Target,
 } from './fields';
 import { isReportDate } from '@/features/employees/report-range';
-import { unitOfferedOn } from './units';
+import { offeredUnits } from './units';
 
 export function databaseError(error: { code?: string } | null) {
   if (!error) return;
@@ -193,13 +193,17 @@ export async function listUnits(
 ) {
   const level = params.get('level'),
     parent = params.get('parent'),
-    on = params.get('on');
+    on = params.get('on'),
+    include = params.get('include');
   if (
-    [...params.keys()].some((k) => !['level', 'parent', 'on'].includes(k)) ||
+    [...params.keys()].some(
+      (k) => !['level', 'parent', 'on', 'include'].includes(k),
+    ) ||
     !['province', 'district', 'commune'].includes(level ?? '') ||
-    (level !== 'province' && !uuid(parent)) ||
+    (level !== 'province' && !uuid(parent) && !uuid(include)) ||
     (level === 'province' && parent !== null) ||
-    (on !== null && !isReportDate(on))
+    (on !== null && !isReportDate(on)) ||
+    (include !== null && !uuid(include))
   )
     throw new ApiError(400, 'invalid-input');
   let request = context.client
@@ -210,11 +214,27 @@ export async function listUnits(
     .order('valid_from', { ascending: false })
     .limit(1000);
   if (parent) request = request.eq('parent_id', parent);
+  // A level whose parent is not chosen yet lists nothing; only the recorded unit it names comes
+  // back, which is how a ward recorded under a district the form no longer holds still resolves.
+  else if (level !== 'province' && include) request = request.eq('id', include);
   const { data, error } = await request;
   databaseError(error);
   // The day rule is applied here so it is defined once; shortcut: a level and parent group over
   // 1,000 rows would hit the page cap before the filter, upgrade when one does.
-  return { units: (data ?? []).filter((unit) => unitOfferedOn(unit, on)) };
+  const offers = offeredUnits(data ?? [], on, include);
+  // A recorded identifier that belongs to another generation is in no dated list at all, so its own
+  // row answers with the official name and keeps the value selectable beside the list.
+  if (include && !offers.some((unit) => unit.id === include)) {
+    const { data: recorded, error: lookup } = await context.client
+      .from('admin_unit_versions')
+      .select('id,name_vi,unit_level,parent_id,valid_from,valid_to')
+      .eq('id', include)
+      .eq('unit_level', level!)
+      .maybeSingle();
+    databaseError(lookup);
+    if (recorded) offers.push(recorded);
+  }
+  return { units: offers };
 }
 export async function historyPage(
   context: RouteContext,

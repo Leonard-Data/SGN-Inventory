@@ -17,16 +17,24 @@ export function clearedUnits(): AddressUnits {
   return { province: '', district: '', commune: '' };
 }
 
-// Picking a level clears the levels beneath it: a ward or district from the previous parent would
-// name a unit that no longer hangs off the chosen one.
-export function pickedProvince(province: string): AddressUnits {
-  return { province, district: '', commune: '' };
+// Picking a level clears the levels beneath it once the value actually changes: a ward or district
+// from the previous parent would name a unit that no longer hangs off the chosen one, while
+// re-picking the value already held leaves the recorded units where they are.
+export function pickedProvince(
+  prior: AddressUnits,
+  province: string,
+): AddressUnits {
+  return prior.province === province
+    ? prior
+    : { province, district: '', commune: '' };
 }
 export function pickedDistrict(
   prior: AddressUnits,
   district: string,
 ): AddressUnits {
-  return { ...prior, district, commune: '' };
+  return prior.district === district
+    ? prior
+    : { ...prior, district, commune: '' };
 }
 
 // Which unit a picker narrows by. A legacy ward hangs off its district and never off the province,
@@ -44,12 +52,16 @@ export function unitParent(
   );
 }
 
-// A district pick back-fills the source district text only while that field is blank; a wording a
-// person already recorded stays as it is, and the field stays editable either way.
+// A district pick back-fills the source district text while that field still holds the name the
+// pick wrote last, or nothing; a wording a person recorded stays as it is, and the field stays
+// editable either way.
 export function fillsDistrictText(
   recorded: string | null | undefined,
+  written: string | null | undefined,
 ): boolean {
-  return !String(recorded ?? '').trim();
+  const current = String(recorded ?? '').trim();
+  if (!current) return true;
+  return written != null && current === String(written).trim();
 }
 
 // The one rule every catalog read applies: a stated Vietnam calendar day offers the units whose
@@ -63,6 +75,17 @@ export function unitOfferedOn(
   return day === null
     ? unit.valid_from >= CURRENT_CATALOG_START
     : unit.valid_from <= day && (unit.valid_to === null || unit.valid_to > day);
+}
+
+// What a picker offers: the units whose window covers the stated day, plus the recorded unit's own
+// row whatever generation it belongs to, so an address recorded before this entry still reads and
+// submits the unit it holds.
+export function offeredUnits<
+  T extends { id: string; valid_from: string; valid_to: string | null },
+>(listed: readonly T[], day: string | null, recorded?: string | null): T[] {
+  return listed.filter(
+    (unit) => unit.id === recorded || unitOfferedOn(unit, day),
+  );
 }
 
 // Official unit names are source data: never translated and never rewritten. The dated window

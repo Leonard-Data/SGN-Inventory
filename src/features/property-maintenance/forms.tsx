@@ -274,7 +274,9 @@ function UnitPicker({
     [units, setUnits] = useState<Unit[]>([]),
     [error, setError] = useState(false);
   useEffect(() => {
-    if (level !== 'province' && !parent) return;
+    // A level whose parent is not chosen yet lists nothing, but the recorded unit's own row still
+    // resolves to its official name.
+    if (level !== 'province' && !parent && !value) return;
     const abort = new AbortController();
     void api<{ units: Unit[] }>(
       '/api/admin-units?' +
@@ -282,6 +284,7 @@ function UnitPicker({
           level,
           ...(parent ? { parent } : {}),
           ...(day ? { on: day } : {}),
+          ...(value ? { include: value } : {}),
         }),
       undefined,
       abort.signal,
@@ -299,7 +302,7 @@ function UnitPicker({
         else setError(true);
       });
     return () => abort.abort();
-  }, [level, parent, day, onDenied]);
+  }, [level, parent, day, value, onDenied]);
   const text = maintenanceText(locale);
   return (
     <UnitCombobox
@@ -337,7 +340,8 @@ export function AddressFields({
       district: String(values.district_unit_id ?? ''),
       commune: String(values.commune_unit_id ?? ''),
     }),
-    districtText = useRef<HTMLInputElement>(null);
+    districtText = useRef<HTMLInputElement>(null),
+    districtWritten = useRef<string | null>(null);
   const text = maintenanceText(locale),
     current = variant === 'mapping' || format === 'current',
     // A legacy address is the only one with a district level, and its pickers read the closed
@@ -424,7 +428,7 @@ export function AddressFields({
           level="province"
           day={day}
           value={units.province}
-          onChange={(value) => setUnits(pickedProvince(value))}
+          onChange={(value) => setUnits(pickedProvince(units, value))}
           locale={locale}
           onDenied={onDenied}
         />
@@ -440,7 +444,13 @@ export function AddressFields({
           onChange={(value, unit) => {
             setUnits(pickedDistrict(units, value));
             const field = districtText.current;
-            if (!field || !unit || !fillsDistrictText(field.value)) return;
+            if (
+              !field ||
+              !unit ||
+              !fillsDistrictText(field.value, districtWritten.current)
+            )
+              return;
+            districtWritten.current = unit.name_vi;
             field.value = unit.name_vi;
             // The surrounding form tracks its unsaved state from input events, which a value
             // written this way raises none of.

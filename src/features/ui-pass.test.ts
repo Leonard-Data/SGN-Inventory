@@ -222,14 +222,6 @@ test('the create screen picks its province and commune by typing, not by scrolli
   assert.doesNotMatch(create, /<select/);
   assert.match(forms, /<UnitCombobox/);
   assert.match(forms, /label=\{fields\[name\]!\[locale\]\}/);
-  // The dependency stays intact: the ward list loads only once a province is chosen and is keyed
-  // by it, so changing the province drops a ward chosen under the old one.
-  assert.match(forms, /if \(level !== 'province' && !parent\) return;/);
-  assert.match(
-    forms,
-    /key=\{'commune' \+ units\.province \+ units\.district\}/,
-  );
-  assert.match(forms, /setUnits\(pickedProvince\(value\)\)/);
   // Typing narrows the list and only a listed unit is committed: the identifier reaches the
   // surrounding form through the field it submits, never the typed text.
   assert.match(combobox, /filterUnitOptions\(options, state\.query\)/);

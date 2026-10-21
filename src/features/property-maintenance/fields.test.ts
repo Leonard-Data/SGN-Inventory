@@ -9,7 +9,10 @@ import {
 
 const LEGACY_PROVINCE = '11111111-1111-4111-8111-111111111111',
   LEGACY_DISTRICT = '22222222-2222-4222-8222-222222222222',
-  LEGACY_WARD = '33333333-3333-4333-8333-333333333333';
+  LEGACY_WARD = '33333333-3333-4333-8333-333333333333',
+  CURRENT_PROVINCE = '44444444-4444-4444-8444-444444444444',
+  CURRENT_WARD = '55555555-5555-4555-8555-555555555555',
+  OTHER_WARD = '66666666-6666-4666-8666-666666666666';
 
 function legacyForm() {
   const form = new FormData();
@@ -48,6 +51,25 @@ test('an edited address whose recorded units are unchanged submits nothing', () 
     }),
     {},
   );
+});
+
+test('a legacy address recorded with current-generation units keeps them and saves a change', () => {
+  const recorded = {
+    format: 'legacy',
+    address_text: '12 Nguyễn Du, Quận 1',
+    district_text: 'Quận 1',
+    province_unit_id: CURRENT_PROVINCE,
+    commune_unit_id: CURRENT_WARD,
+  };
+  const form = new FormData();
+  for (const [key, value] of Object.entries(recorded)) form.set(key, value);
+  // Saving without edits submits neither the out-of-generation province nor the recorded ward, so
+  // the row keeps exactly the units it holds.
+  assert.deepEqual(formChanges('address', form, recorded), {});
+  form.set('commune_unit_id', OTHER_WARD);
+  assert.deepEqual(formChanges('address', form, recorded), {
+    commune_unit_id: OTHER_WARD,
+  });
 });
 
 test('a current address still refuses a district id as well as district text', () => {

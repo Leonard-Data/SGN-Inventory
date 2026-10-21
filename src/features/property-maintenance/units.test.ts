@@ -4,6 +4,7 @@ import {
   LEGACY_CATALOG_DAY,
   clearedUnits,
   fillsDistrictText,
+  offeredUnits,
   pickedDistrict,
   pickedProvince,
   unitOfferedOn,
@@ -95,7 +96,7 @@ test('a legacy ward narrows by its district and never by the province', () => {
 });
 
 test('picking a level clears the levels beneath it and a format switch clears them all', () => {
-  assert.deepEqual(pickedProvince('p'), {
+  assert.deepEqual(pickedProvince({ ...clearedUnits() }, 'p'), {
     province: 'p',
     district: '',
     commune: '',
@@ -107,11 +108,70 @@ test('picking a level clears the levels beneath it and a format switch clears th
   assert.deepEqual(clearedUnits(), { province: '', district: '', commune: '' });
 });
 
-test('a district pick fills the district text only where nothing was recorded', () => {
-  assert.equal(fillsDistrictText(''), true);
-  assert.equal(fillsDistrictText(undefined), true);
-  assert.equal(fillsDistrictText('   '), true);
-  assert.equal(fillsDistrictText('Quận 1'), false);
+test('re-picking the unit a level already holds keeps the recorded levels beneath it', () => {
+  const recorded = { province: 'p', district: 'd', commune: 'w' };
+  assert.deepEqual(pickedProvince(recorded, 'p'), recorded);
+  assert.deepEqual(pickedDistrict(recorded, 'd'), recorded);
+  // Only an actual change of value replaces the stored ones.
+  assert.deepEqual(pickedProvince(recorded, 'other'), {
+    province: 'other',
+    district: '',
+    commune: '',
+  });
+  assert.deepEqual(pickedDistrict(recorded, 'other'), {
+    province: 'p',
+    district: 'other',
+    commune: '',
+  });
+});
+
+test('a district pick fills the district text it wrote, never a person\u2019s own wording', () => {
+  assert.equal(fillsDistrictText('', null), true);
+  assert.equal(fillsDistrictText(undefined, null), true);
+  assert.equal(fillsDistrictText('   ', null), true);
+  // The name this pick wrote last is replaced by the next pick, across a province change too.
+  assert.equal(fillsDistrictText('Quận 1', 'Quận 1'), true);
+  assert.equal(fillsDistrictText('Quận 1', null), false);
+  assert.equal(fillsDistrictText('Quận 1, phường Bến Thành', 'Quận 1'), false);
+});
+
+test('a picker offers the unit an address recorded before this entry still holds', () => {
+  const legacyProvince = {
+    id: 'legacy-province',
+    name_vi: 'Tỉnh Bình Dương',
+    valid_from: '2025-01-04',
+    valid_to: '2025-07-01',
+  };
+  const recordedProvince = {
+    id: 'current-province',
+    name_vi: 'Thành phố Hồ Chí Minh',
+    valid_from: '2025-07-01',
+    valid_to: null,
+  };
+  const recordedWard = {
+    id: 'current-ward',
+    name_vi: 'Phường Bến Thành',
+    valid_from: '2025-07-01',
+    valid_to: null,
+  };
+  // The legacy day hides the current generation, but the recorded id stays offered with its own
+  // official name, and it stays the value the form submits.
+  assert.deepEqual(
+    offeredUnits(
+      [legacyProvince, recordedProvince],
+      LEGACY_CATALOG_DAY,
+      recordedProvince.id,
+    ),
+    [legacyProvince, recordedProvince],
+  );
+  assert.deepEqual(
+    offeredUnits([recordedWard], LEGACY_CATALOG_DAY, recordedWard.id),
+    [recordedWard],
+  );
+  assert.deepEqual(
+    offeredUnits([legacyProvince, recordedProvince], LEGACY_CATALOG_DAY, ''),
+    [legacyProvince],
+  );
 });
 
 test('the legacy pickers read the day the pre-2025 list opened', () => {
