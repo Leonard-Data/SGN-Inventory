@@ -9,7 +9,8 @@ import {
   targetFields,
   type Target,
 } from './fields';
-import { isReportDate, vietnamToday } from '@/features/employees/report-range';
+import { isReportDate } from '@/features/employees/report-range';
+import { unitOfferedOn } from './units';
 
 export function databaseError(error: { code?: string } | null) {
   if (!error) return;
@@ -193,31 +194,27 @@ export async function listUnits(
   const level = params.get('level'),
     parent = params.get('parent'),
     on = params.get('on');
-  // The catalog answers for one Vietnam calendar day: a stated `on` names the generation valid
-  // then, an absent one is today, so a caller that states no day keeps the in-force current rows
-  // it had before. Only a unit whose half-open window covers that day is offered.
-  const day = on ?? vietnamToday();
   if (
     [...params.keys()].some((k) => !['level', 'parent', 'on'].includes(k)) ||
     !['province', 'district', 'commune'].includes(level ?? '') ||
     (level !== 'province' && !uuid(parent)) ||
     (level === 'province' && parent !== null) ||
-    !isReportDate(day)
+    (on !== null && !isReportDate(on))
   )
     throw new ApiError(400, 'invalid-input');
   let request = context.client
     .from('admin_unit_versions')
     .select('id,name_vi,unit_level,parent_id,valid_from,valid_to')
     .eq('unit_level', level!)
-    .lte('valid_from', day)
-    .or(`valid_to.is.null,valid_to.gt.${day}`)
     .order('name_vi')
     .order('valid_from', { ascending: false })
     .limit(1000);
   if (parent) request = request.eq('parent_id', parent);
   const { data, error } = await request;
   databaseError(error);
-  return { units: data ?? [] };
+  // The day rule is applied here so it is defined once; shortcut: a level and parent group over
+  // 1,000 rows would hit the page cap before the filter, upgrade when one does.
+  return { units: (data ?? []).filter((unit) => unitOfferedOn(unit, on)) };
 }
 export async function historyPage(
   context: RouteContext,
