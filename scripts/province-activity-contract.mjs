@@ -76,10 +76,12 @@ export async function provinceActivityContract({
   const provinceBName = 'Tỉnh Fixture B';
   const legacyRawProvince = 'Thành phố Hồ Chí Minh';
   const legacyProvinceName = 'Tỉnh Fixture A (cũ)';
-  const legacyDistrictName = 'Quận Fixture Legacy';
-  // Preserved legacy source text, kept apart from every current label.
+  const legacyDistrictName = 'Quận Fixture Legacy (cũ)';
+  const legacyCommuneName = 'Phường Fixture Legacy (cũ)';
+  // Preserved legacy source text, kept apart from every current and legacy catalog label.
   const legacyProvinceText = 'Tỉnh Fixture Legacy';
   const legacyDistrictText = 'Quận Fixture Legacy';
+  const legacyCommuneText = 'Phường Fixture Legacy';
   const [sameDay, laterDay] = ['2026-10-05', '2026-10-06'];
   const quietDay = '2026-10-07';
   const legacyDay = '2026-10-08';
@@ -145,7 +147,7 @@ export async function provinceActivityContract({
       legacyDistrictName,
       legacyProvince,
       legacyCommune,
-      'Phường Fixture Legacy',
+      legacyCommuneName,
     ],
   );
   // The dangerous legacy state: the three-tier unit ids are recorded on the legacy row, with no
@@ -159,7 +161,7 @@ export async function provinceActivityContract({
   );
   try {
     await db.query(
-      "insert into public.property_addresses(property_id,format,address_text,province_text,district_text,commune_text,province_unit_id,district_unit_id,commune_unit_id,mapping_status,verification_method,verified_by,verified_at,source_url,effective_on,mapping_evidence,is_primary) values($1,'legacy','14 Lý Thường Kiệt, Phường Fixture Legacy, Quận Fixture Legacy, Tỉnh Fixture Legacy',$2,$3,'Phường Fixture Legacy',$4,$5,$6,'verified','document',$7,now(),'https://example.test/legacy-evidence','2025-03-01','Legacy source row kept as written by the historical sheet',true)",
+      "insert into public.property_addresses(property_id,format,address_text,province_text,district_text,commune_text,province_unit_id,district_unit_id,commune_unit_id,mapping_status,verification_method,verified_by,verified_at,source_url,effective_on,mapping_evidence,is_primary) values($1,'legacy','14 Lý Thường Kiệt, Phường Fixture Legacy, Quận Fixture Legacy, Tỉnh Fixture Legacy',$2,$3,$8,$4,$5,$6,'verified','document',$7,now(),'https://example.test/legacy-evidence','2025-03-01','Legacy source row kept as written by the historical sheet',true)",
       [
         legacyLocated,
         legacyProvinceText,
@@ -168,6 +170,7 @@ export async function provinceActivityContract({
         legacyDistrict,
         legacyCommune,
         employees[0],
+        legacyCommuneText,
       ],
     );
   } finally {
