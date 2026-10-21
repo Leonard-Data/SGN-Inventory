@@ -11,8 +11,10 @@
 --     its verification provenance;
 --   * the target units come from public.admin_unit_crosswalks, never from the caller: a legacy ward
 --     converts through its single whole or rename row, and a current commune converts back only
---     when exactly one whole or rename row points at it, so a merge of several old wards stays
---     ambiguous and writes nothing;
+--     when exactly one whole or rename row names that unit, so a merge of several old wards stays
+--     ambiguous and writes nothing. A renamed province re-creates its communes in a later validity
+--     window, so both directions are resolved by the unit's official code, never by the one
+--     version row the crosswalk was seeded with;
 --   * the new row is mapping_status='candidate' carrying the crosswalk's effective_on and
 --     source_url. It is never 'verified': D5 keeps verification reviewer-only, and no promotion is
 --     performed here;
@@ -25,7 +27,7 @@ begin;
 create function private.convert_address_format(p_property_id uuid,p_address_id uuid,p_address_revision uuid,p_property_revision uuid) returns uuid
 language plpgsql security definer set search_path='' as $$
 declare source public.property_addresses; prop public.properties; mapping public.admin_unit_crosswalks; ward public.admin_unit_versions;
-  district public.admin_unit_versions; province public.admin_unit_versions; target_format text; rows integer; created uuid;
+  district public.admin_unit_versions; province public.admin_unit_versions; target_format text; source_code text; rows integer; created uuid;
 begin
   if private.employee_id() is null then raise exception 'active employee required' using errcode='42501'; end if;
   if p_address_id is null or p_address_revision is null or p_property_revision is null then raise exception 'address and revisions required' using errcode='23514'; end if;
@@ -54,10 +56,17 @@ begin
     if not found then raise exception 'current ward required' using errcode='PT422'; end if;
   else
     -- The reverse direction is only unambiguous when this current commune came from exactly one old
-    -- ward in full; a commune formed from several old wards names no single legacy ward.
-    select count(*) into rows from public.admin_unit_crosswalks where to_unit_id=source.commune_unit_id;
+    -- ward in full; a commune formed from several old wards names no single legacy ward. A renamed
+    -- unit carries its official code into the later window, so the crosswalk is matched by that
+    -- code rather than by the version row the address happens to record.
+    select c.official_code into source_code from public.admin_unit_versions c where c.id=source.commune_unit_id;
+    select count(*) into rows from public.admin_unit_crosswalks x
+      join public.admin_unit_versions c on c.id=x.to_unit_id and c.unit_level='commune' and c.valid_from>=date '2025-07-01'
+      where c.official_code=source_code;
     if rows<>1 then raise exception 'one whole crosswalk source required' using errcode='PT422'; end if;
-    select * into mapping from public.admin_unit_crosswalks where to_unit_id=source.commune_unit_id;
+    select x.* into mapping from public.admin_unit_crosswalks x
+      join public.admin_unit_versions c on c.id=x.to_unit_id and c.unit_level='commune' and c.valid_from>=date '2025-07-01'
+      where c.official_code=source_code;
     if mapping.relation not in ('whole','rename') then raise exception 'one whole crosswalk source required' using errcode='PT422'; end if;
     select * into ward from public.admin_unit_versions where id=mapping.from_unit_id;
     if not found or ward.unit_level<>'commune' or ward.parent_id is null then raise exception 'legacy ward required' using errcode='PT422'; end if;
@@ -67,9 +76,13 @@ begin
     if not found then raise exception 'legacy province required' using errcode='PT422'; end if;
   end if;
   -- The row this action would write must not repeat territory the property already records in the
-  -- target format, so following the action twice writes nothing the second time.
+  -- target format, so following the action twice writes nothing the second time. The territory is
+  -- the unit's official code in that generation, because a renamed unit has one row per window.
   if exists(select 1 from public.property_addresses a
-      where a.property_id=p_property_id and a.format=target_format and a.commune_unit_id=ward.id)
+      join public.admin_unit_versions recorded on recorded.id=a.commune_unit_id
+      where a.property_id=p_property_id and a.format=target_format
+        and recorded.unit_level='commune' and recorded.official_code=ward.official_code
+        and (recorded.valid_from>=date '2025-07-01')=(ward.valid_from>=date '2025-07-01'))
     then raise exception 'address already recorded in the target format' using errcode='PT423'; end if;
   -- The recorded source text is carried over unchanged: the new row states the same property in the
   -- other geography, and no address text is rewritten or invented. It is inserted with its final

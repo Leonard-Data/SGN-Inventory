@@ -2552,6 +2552,88 @@ export async function maintenanceContract({
       ]);
     },
   );
+  // A renamed province re-creates every commune of its hierarchy in a later validity window, so a
+  // current address recorded there names a version row the crosswalk never points at. Both
+  // directions follow the unit's official code instead.
+  const renamed = (
+    await db.query(
+      `select m.from_unit_id as ward,c.id as current_commune,c.parent_id as current_province
+       from public.admin_unit_crosswalks m
+       join public.admin_unit_versions base on base.id=m.to_unit_id and base.unit_level='commune'
+        and base.valid_from>=date '2025-07-01'
+       join public.admin_unit_versions c on c.unit_level='commune'
+        and c.official_code=base.official_code and c.valid_from>base.valid_from
+       where m.relation in ('whole','rename')
+         and (select count(*) from public.admin_unit_crosswalks x
+              join public.admin_unit_versions v on v.id=x.to_unit_id and v.unit_level='commune'
+               and v.valid_from>=date '2025-07-01'
+              where v.official_code=base.official_code)=1
+       order by m.from_unit_id limit 1`,
+    )
+  ).rows[0];
+  await check(
+    'a current address recorded in a later catalog window converts back, and converting it forward again writes nothing',
+    async () => {
+      const propertyId = await createCurrent({
+        province: renamed.current_province,
+        commune: renamed.current_commune,
+      });
+      const currentId = (
+        await db.query(
+          "select id from public.property_addresses where property_id=$1 and format='current'",
+          [propertyId],
+        )
+      ).rows[0].id;
+      const before = await addressSnapshot(currentId);
+      const legacyId = await convertAs(propertyId, currentId);
+      const legacy = await addressRow(legacyId);
+      const chain = (
+        await db.query(
+          `select d.id as district,p.id as province from public.admin_unit_versions w
+           join public.admin_unit_versions d on d.id=w.parent_id
+           join public.admin_unit_versions p on p.id=d.parent_id
+           where w.id=$1`,
+          [renamed.ward],
+        )
+      ).rows[0];
+      assert.deepEqual(
+        {
+          format: legacy.format,
+          province_unit_id: legacy.province_unit_id,
+          district_unit_id: legacy.district_unit_id,
+          commune_unit_id: legacy.commune_unit_id,
+          mapping_status: legacy.mapping_status,
+          supersedes_address_id: legacy.supersedes_address_id,
+        },
+        {
+          format: 'legacy',
+          province_unit_id: chain.province,
+          district_unit_id: chain.district,
+          commune_unit_id: renamed.ward,
+          mapping_status: 'candidate',
+          supersedes_address_id: currentId,
+        },
+      );
+      assert.deepEqual(await addressSnapshot(currentId), before);
+      // The current row this property keeps names the same commune in its later window, so the
+      // forward direction sees the duplicate rather than writing a second current row.
+      await refuseWith(
+        convert,
+        [
+          propertyId,
+          legacyId,
+          await revision('property_addresses', legacyId),
+          await revision('properties', propertyId),
+        ],
+        'PT423',
+        /already recorded in the target format/,
+      );
+      assert.deepEqual(await addressesOf(propertyId), [
+        { id: legacyId, format: 'legacy', is_primary: true },
+        { id: currentId, format: 'current', is_primary: true },
+      ]);
+    },
+  );
   await check(
     'a conversion records beside the primary the target format already has instead of taking its flag',
     async () => {
