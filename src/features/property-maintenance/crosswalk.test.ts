@@ -124,7 +124,11 @@ test('the saved ward decides the report: its own mapping, or the state recorded 
   // territory is what is recorded, so the reversed conversion's own current row still answers.
   assert.equal(
     crosswalkRecorded(
-      [row('current', 'new-1'), row('legacy', 'ward-1'), row('legacy', 'ward-1')],
+      [
+        row('current', 'new-1'),
+        row('legacy', 'ward-1'),
+        row('legacy', 'ward-1'),
+      ],
       'CODE-1',
       codes,
     ),
@@ -150,7 +154,10 @@ test('the saved ward decides the report: its own mapping, or the state recorded 
     crosswalkRecorded([row('current', 'new-2')], 'CODE-1', codes),
     false,
   );
-  assert.equal(crosswalkRecorded([row('current', 'new-1')], undefined, codes), false);
+  assert.equal(
+    crosswalkRecorded([row('current', 'new-1')], undefined, codes),
+    false,
+  );
   assert.equal(crosswalkRecorded([], 'CODE-1', codes), false);
 });
 
