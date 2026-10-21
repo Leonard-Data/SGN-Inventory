@@ -12,6 +12,7 @@ import {
 import { isReportDate } from '@/features/employees/report-range';
 import { offeredUnits } from './units';
 import {
+  crosswalkRecorded,
   offeredCrosswalkRow,
   type AddressCrosswalk,
   type CrosswalkOutcome,
@@ -109,12 +110,9 @@ export async function savedLegacyAddress(
   addressId?: string,
 ): Promise<{ address?: AddressCrosswalk }> {
   try {
-    let addresses = context.client
-      .from('property_addresses')
-      .select('id,format,commune_unit_id')
-      .eq('property_id', propertyId);
-    if (addressId) addresses = addresses.eq('id', addressId);
-    // The property's own revision travels with the outcome so the offer carries the context the
+    // Every address of the property travels with the read, because whether the crosswalk's current
+    // address is already recorded is a question about this legacy row's own supersedes chain. The
+    // property's own revision travels with the outcome so the offer carries the context the
     // database will check, read back rather than assumed from the request.
     const [property, saved] = await Promise.all([
       context.client
@@ -122,19 +120,25 @@ export async function savedLegacyAddress(
         .select('revision')
         .eq('id', propertyId)
         .maybeSingle(),
-      addresses,
+      context.client
+        .from('property_addresses')
+        .select('id,format,commune_unit_id,supersedes_address_id')
+        .eq('property_id', propertyId),
     ]);
     databaseError(property.error);
     databaseError(saved.error);
-    const legacy = (saved.data ?? []).find(
-      (row) => row.format === 'legacy' && row.commune_unit_id !== null,
-    );
+    const rows = saved.data ?? [],
+      legacy = (
+        addressId ? rows.filter((row) => row.id === addressId) : rows
+      ).find((row) => row.format === 'legacy' && row.commune_unit_id !== null);
     if (!legacy?.commune_unit_id || !property.data) return {};
     return {
       address: {
         addressId: legacy.id,
         propertyRevision: property.data.revision,
-        crosswalk: await crosswalkOutcome(context, legacy.commune_unit_id),
+        crosswalk: crosswalkRecorded(rows, legacy.id)
+          ? { kind: 'recorded' }
+          : await crosswalkOutcome(context, legacy.commune_unit_id),
       },
     };
   } catch {

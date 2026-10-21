@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   crosswalkMessage,
+  crosswalkRecorded,
   offeredCrosswalkRow,
   type CrosswalkOutcome,
 } from './crosswalk.ts';
@@ -71,6 +72,59 @@ test('a ward with no crosswalk row says so plainly', () => {
   assert.equal(
     crosswalkMessage('en', { kind: 'none' }),
     'No crosswalk is available for this old ward.',
+  );
+});
+
+test('a ward whose current address is already recorded says so instead', () => {
+  assert.equal(
+    crosswalkMessage('vi', { kind: 'recorded' }),
+    'Địa chỉ mới cho phường/xã cũ này đã được ghi trước đó.',
+  );
+  assert.equal(
+    crosswalkMessage('en', { kind: 'recorded' }),
+    'The current address for this old ward is already recorded.',
+  );
+});
+
+test('a recorded current address is recognised through the legacy row superseded chain', () => {
+  type Row = {
+    id: string;
+    format: string;
+    supersedes_address_id: string | null;
+  };
+  const row = (
+    id: string,
+    format: string,
+    supersedes_address_id: string | null = null,
+  ): Row => ({ id, format, supersedes_address_id });
+  // One property with two legacy addresses at different wards, each able to record its own
+  // candidate: the link answers for the row it came from, not for the property.
+  const base: Row[] = [
+    row('legacy-a', 'legacy'),
+    row('legacy-b', 'legacy'),
+    row('current-a', 'current', 'legacy-a'),
+  ];
+  assert.equal(crosswalkRecorded(base, 'legacy-a'), true);
+  assert.equal(crosswalkRecorded(base, 'legacy-b'), false);
+  // A correction of the legacy row inserts its successor, which is the row a later save reports:
+  // the recorded state follows the chain in both directions.
+  const corrected = [...base, row('legacy-a2', 'legacy', 'legacy-a')];
+  assert.equal(crosswalkRecorded(corrected, 'legacy-a2'), true);
+  assert.equal(crosswalkRecorded(corrected, 'legacy-a'), true);
+  // An unrelated legacy address stays unrecorded, and nothing is recorded before the action runs.
+  assert.equal(crosswalkRecorded(corrected, 'legacy-b'), false);
+  assert.equal(
+    crosswalkRecorded([row('legacy-a', 'legacy')], 'legacy-a'),
+    false,
+  );
+  assert.equal(crosswalkRecorded([], 'legacy-a'), false);
+  // An alternate variant is not a recorded current address.
+  assert.equal(
+    crosswalkRecorded(
+      [row('legacy-a', 'legacy'), row('alternate-a', 'alternate', 'legacy-a')],
+      'legacy-a',
+    ),
+    false,
   );
 });
 

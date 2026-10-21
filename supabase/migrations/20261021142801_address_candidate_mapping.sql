@@ -157,12 +157,21 @@ begin
   if mapping.relation not in ('whole','rename') then raise exception 'one whole crosswalk target required' using errcode='23514'; end if;
   select * into target from public.admin_unit_versions where id=mapping.to_unit_id;
   if not found or target.unit_level<>'commune' then raise exception 'current ward required' using errcode='23514'; end if;
-  -- Recording is one-shot per property: the current address this action writes is linked to the
-  -- legacy row it came from, so a second run would find it and refuses rather than leaving two
-  -- primary current addresses describing the same ward.
-  if exists(select 1 from public.property_addresses c join public.property_addresses l on l.id=c.supersedes_address_id
-      where c.property_id=p_property_id and c.format='current' and l.property_id=p_property_id and l.format='legacy')
-    then raise exception 'current address already recorded from this legacy address' using errcode='23505'; end if;
+  -- Recording is one-shot per legacy address: the current address this action writes is linked to
+  -- the legacy row it came from, so a repeat for that row - or for a successor a correction of it
+  -- created - is refused rather than leaving a second primary current address. A second legacy
+  -- address at another ward is its own chain and records its own candidate.
+  if exists(
+    with recursive family(id,parent_id) as (
+      select a.id,a.supersedes_address_id from public.property_addresses a
+        where a.id=p_legacy_address_id and a.property_id=p_property_id and a.format='legacy'
+      union
+      select a.id,a.supersedes_address_id from public.property_addresses a join family f on a.supersedes_address_id=f.id or a.id=f.parent_id
+        where a.property_id=p_property_id and a.format='legacy'
+    )
+    select 1 from public.property_addresses c join family f on f.id=c.supersedes_address_id
+      where c.property_id=p_property_id and c.format='current'
+  ) then raise exception 'a current address is already recorded from this legacy address' using errcode='23505'; end if;
   -- The recorded source text is carried over unchanged: this row states the same property in the
   -- current geography, and no address text is rewritten or invented.
   created:=private.maintain_property(p_property_id,'address',null,p_property_revision,

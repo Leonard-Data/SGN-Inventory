@@ -1784,7 +1784,7 @@ export async function maintenanceContract({
           await revision('properties', offeredProperty),
         ],
         '23505',
-        /current address already recorded/,
+        /already recorded from this legacy address/,
       );
       assert.equal((await addressesOf(offeredProperty)).length, 2);
     },
@@ -1992,6 +1992,118 @@ export async function maintenanceContract({
       await asUser(0);
       // Nothing above recorded a further address for this property.
       assert.equal((await addressesOf(offeredProperty)).length, 3);
+    },
+  );
+  await check(
+    'a correction of a legacy row whose candidate is recorded reports that state instead of a dead action',
+    async () => {
+      const correctedLegacy = (
+        await db.query(mutate, [
+          offeredProperty,
+          'address',
+          offeredLegacy.id,
+          await revision('property_addresses', offeredLegacy.id),
+          { address_text: 'Nhà cũ đã sửa theo bảng chuyển đổi' },
+        ])
+      ).rows[0].id;
+      assert.notEqual(correctedLegacy, offeredLegacy.id);
+      assert.deepEqual(
+        (
+          await db.query(
+            'select format,supersedes_address_id from public.property_addresses where id=$1',
+            [correctedLegacy],
+          )
+        ).rows[0],
+        { format: 'legacy', supersedes_address_id: offeredLegacy.id },
+      );
+      // The corrected row answers recorded through its own chain, so the save reports the state
+      // rather than an action that would only be refused.
+      const recordedFrom = async (legacyId) =>
+        (
+          await db.query(
+            `with recursive family(id,parent_id) as (
+               select a.id,a.supersedes_address_id from public.property_addresses a where a.id=$1
+               union
+               select a.id,a.supersedes_address_id from public.property_addresses a
+                 join family f on a.supersedes_address_id=f.id or a.id=f.parent_id
+               where a.property_id=$2 and a.format='legacy')
+             select count(*)::int as recorded from public.property_addresses c
+               join family f on f.id=c.supersedes_address_id
+             where c.property_id=$2 and c.format='current'`,
+            [legacyId, offeredProperty],
+          )
+        ).rows[0].recorded;
+      assert.equal(await recordedFrom(offeredLegacy.id), 1);
+      assert.equal(await recordedFrom(correctedLegacy), 1);
+      await refuseWith(
+        'select public.record_address_candidate($1,$2,$3)',
+        [
+          offeredProperty,
+          correctedLegacy,
+          await revision('properties', offeredProperty),
+        ],
+        '23505',
+        /already recorded from this legacy address/,
+      );
+      assert.equal((await addressesOf(offeredProperty)).length, 4);
+    },
+  );
+  await check(
+    'a second legacy address at another ward records its own candidate',
+    async () => {
+      const secondWard = await wardChain(
+        `w.id<>'${offered.id}' and (select count(*) from public.admin_unit_crosswalks x where x.from_unit_id=w.id)=1 and exists(select 1 from public.admin_unit_crosswalks x where x.from_unit_id=w.id and x.relation in ('whole','rename'))`,
+      );
+      const secondLegacy = (
+        await db.query(mutate, [
+          offeredProperty,
+          'address',
+          null,
+          await revision('properties', offeredProperty),
+          {
+            format: 'legacy',
+            address_text: 'Địa chỉ cũ thứ hai theo bảng chuyển đổi',
+            province_unit_id: secondWard.province,
+            district_unit_id: secondWard.district,
+            commune_unit_id: secondWard.id,
+            is_primary: false,
+          },
+        ])
+      ).rows[0].id;
+      const secondCandidate = (
+        await db.query(
+          'select public.record_address_candidate($1,$2,$3) as id',
+          [
+            offeredProperty,
+            secondLegacy,
+            await revision('properties', offeredProperty),
+          ],
+        )
+      ).rows[0].id;
+      assert.deepEqual(
+        (
+          await db.query(
+            'select format,mapping_status,commune_unit_id,supersedes_address_id from public.property_addresses where id=$1',
+            [secondCandidate],
+          )
+        ).rows[0],
+        {
+          format: 'current',
+          mapping_status: 'candidate',
+          commune_unit_id: secondWard.crosswalk[0].to_unit_id,
+          supersedes_address_id: secondLegacy,
+        },
+      );
+      // Each candidate answers for its own legacy row, so the first one is untouched.
+      assert.equal(
+        (
+          await db.query(
+            'select supersedes_address_id from public.property_addresses where id=$1',
+            [candidateAddress],
+          )
+        ).rows[0].supersedes_address_id,
+        offeredLegacy.id,
+      );
     },
   );
   return created;
