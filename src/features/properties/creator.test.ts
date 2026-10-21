@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { creatorName, propertyCreators } from './creator.ts';
+import { creatorName, propertyCreators, propertyModifiers } from './creator.ts';
 
 test('a resolved creator renders as their display name', () => {
   assert.equal(creatorName('  Nguyễn Thu Hà '), 'Nguyễn Thu Hà');
@@ -37,4 +37,25 @@ test('an email address is never shown as the creator', () => {
     [{ id: 'e1', display_name: 'ha.nguyen@saigonnewhouse.vn' }],
   );
   assert.equal(creators.get('p1'), undefined);
+});
+
+// The modifier is resolved from the summary the list already holds, so the quick view states who
+// last edited the record without a read of its own, and an unresolvable modifier stays absent.
+test('the last modifier resolves to their display name, never to a placeholder', () => {
+  const modifiers = propertyModifiers(
+    [
+      { id: 'p1', updated_by: 'e1' },
+      { id: 'p-none', updated_by: null },
+      { id: 'p-gone', updated_by: 'e-gone' },
+      { id: 'p-address', updated_by: 'e2' },
+    ],
+    [
+      { id: 'e1', display_name: ' Trần Văn Minh ' },
+      { id: 'e2', display_name: 'minh.tran@saigonnewhouse.vn' },
+    ],
+  );
+  assert.equal(modifiers.get('p1'), 'Trần Văn Minh');
+  assert.equal(modifiers.get('p-none'), undefined);
+  assert.equal(modifiers.get('p-gone'), undefined);
+  assert.equal(modifiers.get('p-address'), undefined);
 });

@@ -13,19 +13,19 @@ export const CATALOGUE_PAGE_SIZE = 200;
 
 // The summary shape's own version. A browser-held catalogue is only reused for the same shape, so
 // a later field change starts a new key instead of reading rows of the old one as the new one.
-export const CATALOGUE_SCHEMA_VERSION = 3;
+export const CATALOGUE_SCHEMA_VERSION = 4;
 
 // The one field list a catalogue read carries. Money and measurements are cast to text, so a
 // whole-VND or m² value is never rounded through a JavaScript number, and a property's address
 // variants ride on the same row: the browser never fetches related records per result. Contacts,
 // legal fields, notes and the entry chronology are deliberately absent - they belong to detail and
-// chronological reads. The creator reference rides along so the ordinary browse keeps its
-// attribution; the display name is resolved through the sanctioned employee-name projection.
+// chronological reads. The creator and modifier references ride along so the ordinary browse keeps
+// its attribution; the display names are resolved through the sanctioned employee-name projection.
 export const CATALOGUE_SELECT =
   'id,property_code,listing_mode,status,property_type,' +
   'sale_price_vnd::text,monthly_rent_vnd::text,' +
   'land_area_m2::text,floor_area_m2::text,frontage_m::text,depth_m::text,floors,' +
-  'direction,access_type,cover_file_id,created_at,updated_at,created_by,' +
+  'direction,access_type,cover_file_id,created_at,updated_at,created_by,updated_by,' +
   'property_addresses(id,format,address_text,house_number,street,commune_text,district_text,' +
   'is_primary,mapping_status,supersedes_address_id)';
 
@@ -65,6 +65,7 @@ export type CatalogueRow = {
   created_at: string | null;
   updated_at: string | null;
   created_by: string | null;
+  updated_by: string | null;
   property_addresses: CatalogueAddressRow[] | null;
 };
 
@@ -85,12 +86,13 @@ function catalogueAddress(row: CatalogueAddressRow): AddressSummary {
 }
 
 // The summary one catalogue row states, in the list's own record shape so the list, the quick view
-// and the local address index read the same record they read from the stream. The creator is the
-// display name the page resolved for this row; the entry chronology is not part of the catalogue,
-// because it belongs to the chronological views.
+// and the local address index read the same record they read from the stream. The creator and
+// modifier are the display names the page resolved for this row; the entry chronology is not part
+// of the catalogue, because it belongs to the chronological views.
 export function catalogueSummary(
   row: CatalogueRow,
   createdBy: string | null,
+  modifiedBy: string | null = null,
 ): PropertySummary {
   const versions = row.property_addresses ?? [];
   // A version another version replaced is superseded history, so it is not folded into the summary
@@ -134,6 +136,8 @@ export function catalogueSummary(
     direction: row.direction ?? null,
     accessType: row.access_type ?? null,
     createdBy,
+    // The modifier's display name, resolved beside the creator's from the same names read.
+    updatedBy: modifiedBy,
     // The creator's own identity, which the row already carries: the list's "created by me"
     // selection compares this rather than the display name, which two colleagues can share.
     createdById: row.created_by ?? null,

@@ -165,12 +165,12 @@ test('the drawer panel declares one animation, not a slide plus a fade', () => {
   assert.doesNotMatch(panel, /animation|opacity/);
 });
 
-// The row and the panel opened from it state the same frontage, depth, floors and creator: the
-// panel reads the shared projection instead of phrasing its own copy, and a fact the record does
-// not hold is the explicit marker rather than a line that simply disappears.
+// The row and the panel opened from it state the same frontage, depth, floors and attribution:
+// the panel reads the shared projection instead of phrasing its own copy, and a fact the record
+// does not hold is the explicit marker rather than a line that simply disappears.
 test('the panel states the four facts the row states, unknown ones explicitly', () => {
   assert.match(drawer, /recordFacts\(property, locale\)/);
-  for (const fact of ['frontage', 'depth', 'floors', 'creator'])
+  for (const fact of ['frontage', 'depth', 'floors', 'creator', 'modifier'])
     assert.match(
       drawer,
       new RegExp(`value: shared\\.${fact}\\.text`),
@@ -182,6 +182,13 @@ test('the panel states the four facts the row states, unknown ones explicitly', 
     /label: text\.createdBy,[\s\S]{0,120}known: shared\.creator\.known/,
   );
   assert.doesNotMatch(drawer, /if \(property\.createdBy\)/);
+  // The quick view names both colleagues: who created the record and who last modified it, each
+  // from the summary it already holds rather than from a read of its own.
+  assert.match(
+    drawer,
+    /label: text\.modifiedBy,[\s\S]{0,120}known: shared\.modifier\.known/,
+  );
+  assert.doesNotMatch(drawer, /list_employee_names|updated_by/);
 });
 
 // The drawer box is pinned to the viewport and does not scroll: scrolling inside the panel leaves

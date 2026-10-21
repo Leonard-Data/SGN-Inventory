@@ -13,6 +13,7 @@ import {
 
 const PROPERTY_ID = '3f1c1f0e-2a4b-4c5d-8e6f-7a8b9c0d1e2f';
 const SECOND_ID = '8b2d3e4f-5a6b-4c7d-9e8f-1a2b3c4d5e6f';
+const THIRD_ID = '9c3e4f50-6b7c-4d8e-9f0a-2b3c4d5e6f70';
 
 // One row as the read's own select list shapes it: the summary fields with the address variants
 // flattened into the row, money and measurements already cast to text.
@@ -35,6 +36,7 @@ const row: CatalogueRow = {
   created_at: '2026-10-01T00:00:00Z',
   updated_at: '2026-10-19T04:00:00Z',
   created_by: SECOND_ID,
+  updated_by: THIRD_ID,
   property_addresses: [
     {
       id: SECOND_ID,
@@ -114,6 +116,7 @@ test('the catalogue read names the summary contract and casts its money and meas
     'sale_price_vnd',
     'status',
     'updated_at',
+    'updated_by',
   ]);
   // Money and measurements are cast before serialization, so no numeric(18,0) or m² value is
   // rounded through a JavaScript number; every other field is stated as its own type.
@@ -139,13 +142,14 @@ test('the catalogue read names the summary contract and casts its money and meas
     'created_at',
     'created_by',
     'updated_at',
+    'updated_by',
     'property_addresses',
   ])
     assert.equal(fields.get(field), null, field);
 });
 
 test('one row becomes the list summary, with the recorded text and both formats', () => {
-  const summary = catalogueSummary(row, 'Nguyễn Thu Hà');
+  const summary = catalogueSummary(row, 'Nguyễn Thu Hà', 'Trần Văn Minh');
   assert.deepEqual(Object.keys(summary).sort(), [
     'accessType',
     'addresses',
@@ -167,6 +171,7 @@ test('one row becomes the list summary, with the recorded text and both formats'
     'salePriceVnd',
     'status',
     'updatedAt',
+    'updatedBy',
   ]);
   assert.equal(summary.salePriceVnd, '12500000000');
   assert.equal(summary.landAreaM2, '85.50');
@@ -186,6 +191,9 @@ test('one row becomes the list summary, with the recorded text and both formats'
   // The creator's identity rides on the summary beside the name, so a "created by me" filter
   // compares who created the record rather than the name two colleagues can share.
   assert.equal(summary.createdById, SECOND_ID);
+  // The modifier's resolved name rides on the same summary, so the quick view states both
+  // attributions without a read of its own.
+  assert.equal(summary.updatedBy, 'Trần Văn Minh');
   assert.equal(summary.entryOn, undefined);
 });
 

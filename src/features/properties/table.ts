@@ -87,17 +87,18 @@ export type PropertyTableRow = {
   cells: TableCell[];
 };
 
-// The four recorded facts the list states in its own columns and the quick view states as facts
-// about the record: frontage, depth, floors and the colleague who created it. Both surfaces render
-// these strings, so a row and the panel opened from it cannot disagree, and a fact the record does
-// not hold is the missing-value marker rather than a blank or a zero - an unknown frontage and a
-// recorded frontage of zero are different facts.
+// The recorded facts the list states in its own columns and the quick view states as facts about
+// the record: frontage, depth, floors and the colleagues who created and last modified it. Both
+// surfaces render these strings, so a row and the panel opened from it cannot disagree, and a fact
+// the record does not hold is the missing-value marker rather than a blank or a zero - an unknown
+// frontage and a recorded frontage of zero are different facts, and a creator the summary cannot
+// resolve is not the person who created it.
 export type RecordedFact = { text: string; known: boolean };
 
 export function recordFacts(
   record: Pick<
     PropertySummary,
-    'frontageM' | 'depthM' | 'floors' | 'createdBy'
+    'frontageM' | 'depthM' | 'floors' | 'createdBy' | 'updatedBy'
   >,
   locale: Locale,
 ): {
@@ -105,6 +106,7 @@ export function recordFacts(
   depth: RecordedFact;
   floors: RecordedFact;
   creator: RecordedFact;
+  modifier: RecordedFact;
 } {
   // A measured length is exact text from the database, never a rounded number, and its unit rides
   // with it so the table cell and the panel read the same characters.
@@ -117,12 +119,16 @@ export function recordFacts(
       ? { text: MISSING_VALUE, known: false }
       : { text: formatInteger(value, locale), known: true };
   const creator = record.createdBy?.trim();
+  const modifier = record.updatedBy?.trim();
   return {
     frontage: metres(record.frontageM),
     depth: metres(record.depthM),
     floors: counted(record.floors),
     creator: creator
       ? { text: creator, known: true }
+      : { text: MISSING_VALUE, known: false },
+    modifier: modifier
+      ? { text: modifier, known: true }
       : { text: MISSING_VALUE, known: false },
   };
 }

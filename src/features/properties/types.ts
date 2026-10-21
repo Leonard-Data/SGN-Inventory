@@ -48,6 +48,10 @@ export type PropertySummary = {
   // that employee row. Null when the creator is missing or no longer resolvable, which the
   // card renders as nothing rather than as a placeholder.
   createdBy: string | null;
+  // The display name of the colleague the record references as its last modifier, resolved the
+  // same way and absent for the same reasons as the creator. Carried on the summary so the quick
+  // view states it without a read of its own.
+  updatedBy?: string | null;
   // The creator's employee identity, carried by the reads that return it so a filter can compare
   // who created a record rather than the display name two colleagues can share. Absent when a read
   // states no creator reference at all, which the whole-inventory read does not.
