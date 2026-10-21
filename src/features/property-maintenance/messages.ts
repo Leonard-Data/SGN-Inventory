@@ -4,6 +4,15 @@ const copy = {
   no: ['Không', 'No'],
   unknown: ['Chưa biết', 'Unknown'],
   create: ['Thêm bất động sản', 'Create property'],
+  // The create form's own sections: the record, its address, and the owner the person is
+  // describing at that moment.
+  formRecord: ['Thông tin bất động sản', 'Property facts'],
+  formAddress: ['Địa chỉ', 'Address'],
+  formContact: ['Liên hệ chủ sở hữu', 'Owner contact'],
+  formContactHint: [
+    'Không bắt buộc. Tên và số liên hệ được ghi cùng hồ sơ vừa tạo; để trống cả hai nếu chưa biết.',
+    'Optional. The name and number are recorded with the record; leave both blank if unknown.',
+  ],
   editFacts: ['Sửa thông tin', 'Edit facts'],
   tabFacts: ['Thông tin bất động sản', 'Property facts'],
   tabAddresses: ['Đính chính địa chỉ', 'Address corrections'],

@@ -156,8 +156,17 @@ export function RecordFields({
       : value == null
         ? ''
         : String(value);
+    const wide =
+      ['phones'].includes(field.kind ?? '') ||
+      [
+        'notes',
+        'address_text',
+        'construction_text',
+        'area_raw',
+        'mapping_evidence',
+      ].includes(name);
     return (
-      <div className="field" key={name}>
+      <div className={'field' + (wide ? ' span-all' : '')} key={name}>
         <label className="field-label" htmlFor={id}>
           {text}
         </label>
@@ -193,14 +202,9 @@ export function RecordFields({
                 </option>
               ))}
           </select>
-        ) : ['phones'].includes(field.kind ?? '') ||
-          [
-            'notes',
-            'address_text',
-            'construction_text',
-            'area_raw',
-            'mapping_evidence',
-          ].includes(name) ? (
+        ) : wide ? (
+          // A multi-line field is as wide as the grid it stands in: source text is read, not
+          // scanned in a column beside the other facts.
           <textarea
             id={id}
             className="textarea"
@@ -317,7 +321,7 @@ export function AddressFields({
         <>
           {includes('format') ? (
             <>
-              <p>{text.preserveSource}</p>
+              <p className="span-all">{text.preserveSource}</p>
               <div className="field">
                 <label className="field-label" htmlFor={id}>
                   {fields.format![locale]}
@@ -350,7 +354,7 @@ export function AddressFields({
               </div>
             </>
           ) : null}
-          <p>{text.rawCurrent}</p>
+          <p className="span-all">{text.rawCurrent}</p>
           <RecordFields
             locale={locale}
             values={values}
@@ -365,7 +369,7 @@ export function AddressFields({
         </>
       ) : (
         <>
-          <p>{text.mappingHint}</p>
+          <p className="span-all">{text.mappingHint}</p>
           <RecordFields
             locale={locale}
             values={{ ...values, mapping_status: 'verified' }}

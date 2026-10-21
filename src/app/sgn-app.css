@@ -832,6 +832,9 @@ dialog.sgn-dialog::backdrop { background: color-mix(in oklab, var(--fg) 46%, tra
 
 /* ── create page ────────────────────────────────────────────────────────── */
 .create-grid { display: grid; grid-template-columns: minmax(0, 1fr) 344px; gap: var(--space-8); align-items: start; }
+/* The create form states its own sections and grid, so the auto-fit arrangement that lays out an
+   inline editor's disclosure does not also drive this page. */
+.maintenance fieldset.create-form { display: block; grid-template-columns: none; gap: 0; }
 .create-rail { position: sticky; top: calc(var(--topbar-h) + var(--space-5)); display: flex; flex-direction: column; gap: var(--space-5); }
 @media (max-width: 1100px) { .create-grid { grid-template-columns: minmax(0, 1fr); } .create-rail { position: static; order: -1; } }
 .summary-list { display: flex; flex-direction: column; gap: var(--space-3); }
