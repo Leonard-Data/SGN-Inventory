@@ -12,6 +12,7 @@ import { mayEditProperty } from '@/features/properties/edit-permission';
 import type { ContactDetail } from './data';
 import { MutationForm, RecordFields, AddressFields } from './forms';
 import { CrosswalkOffer } from './crosswalk-offer';
+import { AddressConversion } from './convert-address';
 import type { AddressCrosswalk } from './crosswalk';
 import { LocationEditor } from '@/features/properties/location';
 import { targetFields, type Target, type Changes } from './fields';
@@ -186,6 +187,14 @@ export function Maintenance({
     applyServerSummary(applyChange, result, property.id);
     setCrosswalk(null);
     notify({ saved: true, message: text.crosswalkRecorded });
+    await onSaved();
+  }
+  // The other format's row is written by the database from the official crosswalk; the surface then
+  // re-reads the property so both rows appear with their own format labels.
+  async function converted(result: { summary?: PropertySummary | null }) {
+    applyServerSummary(applyChange, result, property.id);
+    setCrosswalk(null);
+    notify({ saved: true, message: text.converted });
     await onSaved();
   }
   async function saved() {
@@ -388,6 +397,19 @@ export function Maintenance({
                       </button>
                     ) : null}
                   </span>
+                  {/* Format is fixed on an ordinary save; this is the one deliberate switch. */}
+                  <AddressConversion
+                    locale={locale}
+                    propertyId={property.id}
+                    address={{
+                      id: address.id,
+                      revision: address.revision,
+                      propertyRevision: property.revision,
+                    }}
+                    format={address.format}
+                    onDenied={onDenied}
+                    onConverted={converted}
+                  />
                 </div>
               ))}
               {crosswalk ? (

@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  conversionTarget,
   crosswalkMessage,
   crosswalkReport,
   offeredCrosswalkRow,
@@ -176,6 +177,14 @@ test('the saved ward decides the report: its own mapping, or the state recorded 
     ),
     mapped,
   );
+});
+
+test('only the two geographies a crosswalk relates are convertible, and a row offers the other one', () => {
+  assert.equal(conversionTarget('legacy'), 'current');
+  assert.equal(conversionTarget('current'), 'legacy');
+  // An unmatched or alternate row is a source record the crosswalk says nothing about.
+  assert.equal(conversionTarget('alternate'), null);
+  assert.equal(conversionTarget(''), null);
 });
 
 test('the three outcomes are worded distinguishably in both languages', () => {

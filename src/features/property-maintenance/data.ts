@@ -24,6 +24,11 @@ export function databaseError(error: { code?: string } | null) {
   if (code === '42501') throw new ApiError(403, 'access-denied');
   if (code === 'PT403') throw new ApiError(403, 'contact-refusal');
   if (code === 'PT409') throw new ApiError(409, 'stale-edit');
+  // The three reasons an address format conversion refuses to write anything, each stated on its
+  // own so the surface can say which one held.
+  if (code === 'PT421') throw new ApiError(400, 'crosswalk-units-missing');
+  if (code === 'PT422') throw new ApiError(409, 'crosswalk-ambiguous');
+  if (code === 'PT423') throw new ApiError(409, 'address-format-duplicate');
   if (code === '23505') throw new ApiError(409, 'conflict');
   if (
     [
@@ -260,6 +265,30 @@ export async function recordCandidate(
   const { error } = await context.client.rpc('record_address_candidate', {
     p_property_id: id,
     p_legacy_address_id: body.addressId,
+    p_property_revision: body.propertyRevision,
+  });
+  databaseError(error);
+  return { id, summary: await catalogueSummaryOf(context, id) };
+}
+// The one deliberate action that changes an existing address's format: a new row in the other
+// format is written from the official crosswalk, and the row it converts stays as it is.
+export async function convertAddressFormat(
+  context: RouteContext,
+  id: string,
+  body: Record<string, unknown>,
+) {
+  exactKeys(body, ['addressId', 'addressRevision', 'propertyRevision']);
+  if (
+    !uuid(id) ||
+    !uuid(body.addressId) ||
+    !uuid(body.addressRevision) ||
+    !uuid(body.propertyRevision)
+  )
+    throw new ApiError(400, 'invalid-input');
+  const { error } = await context.client.rpc('convert_address_format', {
+    p_property_id: id,
+    p_address_id: body.addressId,
+    p_address_revision: body.addressRevision,
     p_property_revision: body.propertyRevision,
   });
   databaseError(error);

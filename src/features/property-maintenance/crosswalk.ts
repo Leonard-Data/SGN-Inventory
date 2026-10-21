@@ -65,6 +65,16 @@ export function crosswalkMessage(locale: Locale, outcome: CrosswalkOutcome) {
         : copy.none[at];
 }
 
+// The format a deliberate conversion writes for an address row. Only the two geographies a
+// crosswalk relates are convertible: an 'alternate' row is a source record, so it offers nothing.
+export function conversionTarget(format: string): 'legacy' | 'current' | null {
+  return format === 'legacy'
+    ? 'current'
+    : format === 'current'
+      ? 'legacy'
+      : null;
+}
+
 // What the surface reports for a saved legacy row: the recorded state when a current row in that
 // legacy row's own supersedes chain already carries the crosswalk target of the ward the saved row
 // now records, and otherwise what that ward's crosswalk says. A chain that recorded another ward's

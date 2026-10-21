@@ -116,6 +116,10 @@ _Avoid_: Verified match
 A current address recorded from the official old-to-new crosswalk as the unverified statement of where a legacy ward became, kept beside the preserved legacy address it came from rather than replacing it. Any property editor may record one from a single whole or rename target; it states the source and its effective date, carries no reviewer stamp and is not a verification.
 _Avoid_: Verified address, rewritten legacy address, automatic mapping
 
+**Address format conversion**:
+The one deliberate action that records an existing address in the other format beside it, as a candidate derived from the official crosswalk, while the converted address stays present and unmodified. An ordinary save never changes an address's format.
+_Avoid_: Format toggle, rewritten address, automatic conversion
+
 **Property contact link**:
 The recorded relationship between a property and a contact, such as owner or broker. Several contacts may belong to a property, with at most one marked primary.
 _Avoid_: Contact inferred from sheet position

@@ -2054,6 +2054,15 @@ export type Database = {
         };
         Returns: string;
       };
+      convert_address_format: {
+        Args: {
+          p_property_id: string;
+          p_address_id: string;
+          p_address_revision: string;
+          p_property_revision: string;
+        };
+        Returns: string;
+      };
       contact_impact: { Args: { p_contact_id: string }; Returns: Json };
       submit_correction: {
         Args: {
