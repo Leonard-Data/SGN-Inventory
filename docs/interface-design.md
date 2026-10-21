@@ -129,7 +129,7 @@ Opening a property from the list and coming back restores the list the person le
         panel .plate-hero (top of the grid)  → Plate(hero) | stored cover photograph
         panel Facts      → dl.facts with .fact rows; unknown values print Chưa rõ
         panel Price history → two .price-series groups (sale asking price / monthly asking rent) of .price-row (.price-when, .price-change, .price-note, .price-who), newest-first with per-series paging
-        panel Addresses  → .record rows + mapping .badge, .addrNote policy line, then for a shared address the .alert[data-tone="neutral"] count of the other records carrying it with a Compare action (issue #147)
+        panel Addresses  → .record rows + mapping .badge, a legacy address's official province → district → ward line and its own ward's crosswalk state, .addrNote policy line, then for a shared address the .alert[data-tone="neutral"] count of the other records carrying it with a Compare action (issue #147)
         panel Location   → the recorded point on a Leaflet/OpenStreetMap map (.sgn-location/.sgn-map*), its .sgn-map-caption and an "open in map" link, or the explicit no-location line; a tile failure adds the localized notice without unmounting the map or dropping the link
         panel Contacts   → .record rows + owner-contact disclosure (.owner-disclosure/.owner-phone)
         panel Vendors    → .record rows of linked supplier companies, separate from owners and brokers; an active-employee .maintenance disclosure on an unarchived property searches the directory, links one company and confirms removing a mistaken link (issue #74)

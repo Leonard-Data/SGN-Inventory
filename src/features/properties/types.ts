@@ -11,6 +11,10 @@ export type AddressSummary = {
   street: string | null;
   commune: string | null;
   district: string | null;
+  // The official names of the province, district and ward this variant chose, largest tier first.
+  // The catalogue read states them so a chosen unit is searchable by its official name; the stream
+  // read answers a typed query in the database instead and states none.
+  units?: string[];
 };
 import type { InventoryOrder } from './stream';
 

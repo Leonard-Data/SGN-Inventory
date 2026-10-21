@@ -13,7 +13,7 @@ export const CATALOGUE_PAGE_SIZE = 200;
 
 // The summary shape's own version. A browser-held catalogue is only reused for the same shape, so
 // a later field change starts a new key instead of reading rows of the old one as the new one.
-export const CATALOGUE_SCHEMA_VERSION = 4;
+export const CATALOGUE_SCHEMA_VERSION = 5;
 
 // The one field list a catalogue read carries. Money and measurements are cast to text, so a
 // whole-VND or m² value is never rounded through a JavaScript number, and a property's address
@@ -27,7 +27,12 @@ export const CATALOGUE_SELECT =
   'land_area_m2::text,floor_area_m2::text,frontage_m::text,depth_m::text,floors,' +
   'direction,access_type,cover_file_id,created_at,updated_at,created_by,updated_by,' +
   'property_addresses(id,format,address_text,house_number,street,commune_text,district_text,' +
-  'is_primary,mapping_status,supersedes_address_id)';
+  'is_primary,mapping_status,supersedes_address_id,' +
+  // The official names the address chose, read through their own ids, so a unit picked from a list
+  // is matched by its official name even when the recorded text never spells it.
+  'province:admin_unit_versions!province_unit_id(name_vi),' +
+  'district:admin_unit_versions!district_unit_id(name_vi),' +
+  'commune:admin_unit_versions!commune_unit_id(name_vi))';
 
 // One row of the catalogue read, as that read's own select list shapes it: the summary fields with
 // the property's address variants flattened into the row.
@@ -41,6 +46,10 @@ export type CatalogueAddressRow = {
   district_text: string | null;
   is_primary: boolean;
   mapping_status: string;
+  // The official unit this address recorded at each level, when it recorded one.
+  province: { name_vi: string } | null;
+  district: { name_vi: string } | null;
+  commune: { name_vi: string } | null;
   // The version of this property's address this row replaced: a row another row names here is
   // history the database keeps, not part of the address the property is recorded at now.
   supersedes_address_id: string | null;
@@ -82,6 +91,13 @@ function catalogueAddress(row: CatalogueAddressRow): AddressSummary {
     street: row.street,
     commune: row.commune_text,
     district: row.district_text,
+    // Largest tier first, and a level the address did not record contributes nothing: the names
+    // are the recorded choice, never rebuilt from the text.
+    units: [
+      row.province?.name_vi,
+      row.district?.name_vi,
+      row.commune?.name_vi,
+    ].filter((name): name is string => Boolean(name)),
   };
 }
 

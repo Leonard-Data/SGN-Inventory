@@ -24,6 +24,7 @@ import type { PropertyDetail } from './detail-data';
 import type { OwnerContactDisclosure } from './types';
 import { Maintenance } from '@/features/property-maintenance/workspace';
 import { maintenanceText } from '@/features/property-maintenance/messages';
+import { crosswalkMessage } from '@/features/property-maintenance/crosswalk';
 import { History } from '@/features/property-maintenance/history';
 import { PriceHistory } from '@/features/property-maintenance/price-history';
 import { StatusControl, StatusTrail } from '@/features/property-status/status';
@@ -856,6 +857,18 @@ export function Detail({
                             <p className="record-body" translate="no">
                               {address.address_text}
                             </p>
+                            {/* The hierarchy the address was recorded in, in the catalog's own
+                                names, beside the untouched source text. */}
+                            {address.hierarchy ? (
+                              <p className="record-meta" translate="no">
+                                {address.hierarchy}
+                              </p>
+                            ) : null}
+                            {address.crosswalk ? (
+                              <p className="field-hint">
+                                {crosswalkMessage(locale, address.crosswalk)}
+                              </p>
+                            ) : null}
                             <p className="record-meta">
                               {vietnamDate(address.effective_on) ??
                                 text.unknown}{' '}

@@ -54,6 +54,15 @@ export function formatDecimal(value: string, locale: Locale): string {
     (fraction ? (locale === 'vi' ? ',' : '.') + fraction : '')
   );
 }
+// The official hierarchy a recorded legacy address carries, largest tier first - province, district,
+// ward - as the one line that sits under its recorded text. A tier the address does not carry is
+// left out rather than filled in from the recorded text, which is never rewritten from these names.
+export function unitHierarchy(
+  names: readonly (string | null | undefined)[],
+): string {
+  return names.filter((name): name is string => Boolean(name)).join(' · ');
+}
+
 export function vietnamTimestamp(
   value: string | null | undefined,
   locale: Locale,

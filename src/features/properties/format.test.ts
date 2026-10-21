@@ -9,8 +9,24 @@ import {
   relativeTime,
   vietnamDate,
   vietnamTimestamp,
+  unitHierarchy,
   dialableNumber,
 } from './format.ts';
+
+test('the recorded hierarchy reads largest tier first, without a tier it does not carry', () => {
+  // The official names sit beside the recorded text in the order the record states: province,
+  // district, ward. A level the address did not record contributes nothing, so the line never
+  // claims a tier - and never rebuilds one - from the source text.
+  assert.equal(
+    unitHierarchy(['Thành phố Hồ Chí Minh', 'Quận Bình Thạnh', 'Phường 22']),
+    'Thành phố Hồ Chí Minh · Quận Bình Thạnh · Phường 22',
+  );
+  assert.equal(
+    unitHierarchy(['Thành phố Hồ Chí Minh', null, 'Phường Thạnh Mỹ Tây']),
+    'Thành phố Hồ Chí Minh · Phường Thạnh Mỹ Tây',
+  );
+  assert.equal(unitHierarchy([undefined, null, '']), '');
+});
 
 test('compact VND retains every digit and localizes only the presentation', () => {
   assert.equal(compactVnd('25000000000', 'vi'), '25 tỷ ₫');

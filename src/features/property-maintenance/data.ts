@@ -133,17 +133,14 @@ export async function savedLegacyAddress(
         addressId ? rows.filter((row) => row.id === addressId) : rows
       ).find((row) => row.format === 'legacy' && row.commune_unit_id !== null);
     if (!legacy?.commune_unit_id || !property.data) return {};
-    const report = await crosswalkOutcome(context, legacy.commune_unit_id);
+    const report = (
+      await crosswalkOutcomes(context, [legacy.commune_unit_id])
+    ).get(legacy.commune_unit_id)!;
     return {
       address: {
         addressId: legacy.id,
         propertyRevision: property.data.revision,
-        crosswalk: crosswalkReport(
-          rows,
-          legacy.id,
-          report.outcome,
-          report.targetId,
-        ),
+        crosswalk: crosswalkReport(rows, legacy.id, report, report.targetId),
       },
     };
   } catch {
@@ -152,62 +149,103 @@ export async function savedLegacyAddress(
     return {};
   }
 }
-// What the crosswalk says about one legacy ward, with the single target unit it names: the recorded
-// check here and the write guard both compare against that target, so the state reported and the
-// state accepted can never describe different wards.
-async function crosswalkOutcome(
+// Each ward's outcome carries the single target unit it names, because the recorded check and the
+// write guard both compare against that target: the state reported and the state accepted can never
+// describe different wards. A CrosswalkOutcome already, so a surface that only states the outcome
+// reads it as one.
+export type WardCrosswalk = CrosswalkOutcome & { targetId: string | null };
+
+// The three crosswalk outcomes as the official rows state them, for each recorded ward, shared with
+// the property detail page so a recorded address and a saved one are described by the same read and
+// the same wording. Every ward is answered by the same three reads whatever their number, so a page
+// naming several wards costs no more round trips than one.
+export async function crosswalkOutcomes(
   context: RouteContext,
-  wardId: string,
-): Promise<{ outcome: CrosswalkOutcome; targetId: string | null }> {
+  wardIds: readonly string[],
+): Promise<Map<string, WardCrosswalk>> {
+  const outcomes = new Map<string, WardCrosswalk>();
+  const wards = [...new Set(wardIds)];
+  if (!wards.length) return outcomes;
   const { data, error } = await context.client
     .from('admin_unit_crosswalks')
-    .select('relation,to_unit_id')
-    .eq('from_unit_id', wardId);
+    .select('from_unit_id,relation,to_unit_id')
+    .in('from_unit_id', wards);
   databaseError(error);
-  const rows = data ?? [];
-  const offered = offeredCrosswalkRow(rows);
+  const byWard = new Map<string, { relation: string; to_unit_id: string }[]>();
+  for (const row of data ?? []) {
+    const rows = byWard.get(row.from_unit_id);
+    if (rows) rows.push(row);
+    else byWard.set(row.from_unit_id, [row]);
+  }
+  const offered = new Map<string, string>();
   // A ward with no row, or with something other than one whole/rename row, is reported as it is
   // and offered nothing: a partial transfer needs property-level evidence this read cannot give.
-  if (!offered)
-    return {
-      outcome:
-        rows.length === 0
-          ? { kind: 'none' }
-          : { kind: 'several', count: rows.length },
-      targetId: null,
-    };
-  const { data: target, error: targetError } = await context.client
-    .from('admin_unit_versions')
-    .select('name_vi,parent_id')
-    .eq('id', offered.to_unit_id)
-    .maybeSingle();
-  databaseError(targetError);
-  // A target that does not resolve to a named current commune inside a named province is not
-  // offered, because the message could not name it and the candidate states both.
-  if (!target?.parent_id)
-    return {
-      outcome: { kind: 'several', count: rows.length },
-      targetId: null,
-    };
-  const { data: province, error: provinceError } = await context.client
-    .from('admin_unit_versions')
-    .select('name_vi')
-    .eq('id', target.parent_id)
-    .maybeSingle();
-  databaseError(provinceError);
-  if (!province)
-    return {
-      outcome: { kind: 'several', count: rows.length },
-      targetId: null,
-    };
-  return {
-    outcome: {
-      kind: 'mapped',
-      commune: target.name_vi,
-      province: province.name_vi,
-    },
-    targetId: offered.to_unit_id,
-  };
+  for (const ward of wards) {
+    const rows = byWard.get(ward) ?? [];
+    const row = offeredCrosswalkRow(rows);
+    if (row) offered.set(ward, row.to_unit_id);
+    else if (rows.length === 0)
+      outcomes.set(ward, { kind: 'none', targetId: null });
+    else
+      outcomes.set(ward, {
+        kind: 'several',
+        count: rows.length,
+        targetId: null,
+      });
+  }
+  const targetRows = [...new Set(offered.values())];
+  const targets = new Map<
+    string,
+    { name_vi: string; parent_id: string | null }
+  >();
+  if (targetRows.length) {
+    const { data, error } = await context.client
+      .from('admin_unit_versions')
+      .select('id,name_vi,parent_id')
+      .in('id', targetRows);
+    databaseError(error);
+    for (const row of data ?? []) targets.set(row.id, row);
+  }
+  const provinceIds = [
+    ...new Set(
+      [...targets.values()].flatMap((target) =>
+        target.parent_id ? [target.parent_id] : [],
+      ),
+    ),
+  ];
+  const provinces = new Map<string, string>();
+  if (provinceIds.length) {
+    const { data, error } = await context.client
+      .from('admin_unit_versions')
+      .select('id,name_vi')
+      .in('id', provinceIds);
+    databaseError(error);
+    for (const row of data ?? []) provinces.set(row.id, row.name_vi);
+  }
+  for (const [ward, targetId] of offered) {
+    const target = targets.get(targetId);
+    const province = target?.parent_id
+      ? provinces.get(target.parent_id)
+      : undefined;
+    // A target that does not resolve to a current commune inside a named province is not offered,
+    // because the message could not name it and the candidate states both, so it names no target.
+    outcomes.set(
+      ward,
+      target && province
+        ? {
+            kind: 'mapped',
+            commune: target.name_vi,
+            province,
+            targetId,
+          }
+        : {
+            kind: 'several',
+            count: byWard.get(ward)?.length ?? 0,
+            targetId: null,
+          },
+    );
+  }
+  return outcomes;
 }
 // The one explicit action behind a legacy save: record the current address the crosswalk names as a
 // candidate. The database derives the target, date and source from the crosswalk itself.
