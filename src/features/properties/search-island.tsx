@@ -8,10 +8,8 @@ import { formatDecimal, formatVnd } from './format';
 import { api, RequestError } from '@/features/employees/api';
 import { contactName } from '@/features/contacts/directory';
 import { ContactPicker } from '@/features/property-maintenance/contact-picker';
-import {
-  unitOptionLabels,
-  type UnitOption,
-} from '@/features/property-maintenance/units';
+import { UnitCombobox } from '@/features/property-maintenance/unit-combobox';
+import { type UnitOption } from '@/features/property-maintenance/units';
 import {
   INVENTORY_FILTER_KEYS,
   INVENTORY_LISTING_MODES,
@@ -338,8 +336,6 @@ export function SearchIsland({
     view,
     filters: noInventoryFilters,
   });
-  const provinceLabels = unitOptionLabels(provinces);
-  const wardLabels = unitOptionLabels(wards);
   const select = (
     name: keyof InventoryFilters,
     heading: string,
@@ -380,7 +376,10 @@ export function SearchIsland({
     heading: string,
     units: readonly string[],
   ) => (
-    <div className="field" key={`${name}=${filters[name] ?? ''}`}>
+    <div
+      className={invalid ? 'field is-invalid' : 'field'}
+      key={`${name}=${filters[name] ?? ''}`}
+    >
       <label className="field-label" htmlFor={'filter-' + name}>
         {heading}
       </label>
@@ -469,6 +468,13 @@ export function SearchIsland({
             <div className="form-section">
               <div className="form-section-head">
                 <h3>{text.catalogueFiltersHeading}</h3>
+                {/* The section's own note states which of the two groups actually answers the
+                    run, so it sits with the heading rather than after the last control. */}
+                <p className="field-hint">
+                  {advancedDraft
+                    ? text.catalogueFiltersAdvancedHint
+                    : text.catalogueFiltersHint}
+                </p>
               </div>
               <div className="form-grid-3">
                 {select('status', text.status, INVENTORY_STATUSES, true)}
@@ -479,31 +485,35 @@ export function SearchIsland({
                   offered only for a run that stays in it. A whole-inventory search has no creator
                   criterion; a locked field the form cannot submit keeps that run from stating a
                   filter it will not apply. */}
-              <div className="field">
-                <label className="field-label" htmlFor="filter-createdBy">
-                  {text.creatorFilter}
-                </label>
-                <select
-                  id="filter-createdBy"
-                  className="select"
-                  name="createdBy"
-                  value={createdBy}
-                  onChange={(event) => setCreatedBy(event.currentTarget.value)}
-                  disabled={advancedDraft}
-                  aria-describedby={
-                    advancedDraft ? 'filter-createdBy-hint' : undefined
-                  }
-                >
-                  <option value="">{text.filtersAny}</option>
-                  <option value="mine">{text.mine}</option>
-                </select>
-                {advancedDraft ? (
-                  <p className="field-hint" id="filter-createdBy-hint">
-                    {text.creatorFilterCatalogueOnly}
-                  </p>
-                ) : null}
+              <div className="form-grid-3">
+                <div className="field">
+                  <label className="field-label" htmlFor="filter-createdBy">
+                    {text.creatorFilter}
+                  </label>
+                  <select
+                    id="filter-createdBy"
+                    className="select"
+                    name="createdBy"
+                    value={createdBy}
+                    onChange={(event) =>
+                      setCreatedBy(event.currentTarget.value)
+                    }
+                    disabled={advancedDraft}
+                    aria-describedby={
+                      advancedDraft ? 'filter-createdBy-hint' : undefined
+                    }
+                  >
+                    <option value="">{text.filtersAny}</option>
+                    <option value="mine">{text.mine}</option>
+                  </select>
+                  {advancedDraft ? (
+                    <p className="field-hint" id="filter-createdBy-hint">
+                      {text.creatorFilterCatalogueOnly}
+                    </p>
+                  ) : null}
+                </div>
               </div>
-              <div className="filter-range">
+              <div className="field-group">
                 <div className="form-grid">
                   {bound(
                     'priceMin',
@@ -514,118 +524,98 @@ export function SearchIsland({
                 </div>
                 <p className="field-hint">{text.priceFilterHint}</p>
               </div>
-              <div className="filter-range">
+              <div className="field-group">
                 <div className="form-grid">
                   {bound('areaMin', text.areaRangeFrom, ['m²'])}
                   {bound('areaMax', text.areaRangeTo, ['m²'])}
                 </div>
                 <p className="field-hint">{text.areaFilterHint}</p>
               </div>
-              <p className="field-hint">
-                {advancedDraft
-                  ? text.catalogueFiltersAdvancedHint
-                  : text.catalogueFiltersHint}
-              </p>
             </div>
             <div className="form-section">
               <div className="form-section-head">
                 <h3>{text.advancedSearchHeading}</h3>
+                <p className="field-hint">{text.advancedSearchHint}</p>
               </div>
-              <div className="form-grid">
-                <ContactPicker
-                  locale={locale}
-                  selected={contact}
-                  selectedName={
-                    contact === appliedContact ? contactLabel : null
-                  }
-                  onSelected={setContact}
-                  onDenied={onDenied}
-                />
+              {/* Each criterion is one group: its controls and the hint that explains them, so
+                  every hint in the panel sits the same distance from what it explains. */}
+              <div className="field-group">
+                <div className="form-grid">
+                  <ContactPicker
+                    locale={locale}
+                    selected={contact}
+                    selectedName={
+                      contact === appliedContact ? contactLabel : null
+                    }
+                    onSelected={setContact}
+                    onDenied={onDenied}
+                  />
+                </div>
+                <input type="hidden" name="contact" value={contact} />
+                <p className="field-hint">{text.contactFilterHint}</p>
               </div>
-              <input type="hidden" name="contact" value={contact} />
-              <p className="field-hint">{text.contactFilterHint}</p>
-              <div className="form-grid">
-                <div className="field">
-                  <label className="field-label" htmlFor="filter-province">
-                    {text.province}
-                  </label>
-                  <select
+              <div className="field-group">
+                <div className="form-grid">
+                  <UnitCombobox
                     id="filter-province"
-                    className="select"
                     name="province"
+                    label={text.province}
+                    units={provinces}
                     value={province}
-                    onChange={(event) => {
-                      setProvince(event.currentTarget.value);
+                    onChange={(next) => {
+                      setProvince(next);
                       setWard('');
                     }}
-                  >
-                    <option value="">{text.filtersAny}</option>
-                    {province &&
-                    !provinces.some((unit) => unit.id === province) ? (
-                      <option value={province}>{province}</option>
-                    ) : null}
-                    {provinces.map((unit, index) => (
-                      <option key={unit.id} value={unit.id}>
-                        {provinceLabels[index]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {province ? (
-                  <div className="field">
-                    <label className="field-label" htmlFor="filter-ward">
-                      {text.ward}
-                    </label>
-                    <select
+                    anyLabel={text.filtersAny}
+                    noMatch={text.comboboxNoMatch}
+                  />
+                  {/* A ward narrows the chosen province, so the ward picker exists only once
+                    there is a province to narrow. */}
+                  {province ? (
+                    <UnitCombobox
                       id="filter-ward"
-                      className="select"
                       name="ward"
+                      label={text.ward}
+                      units={wards}
                       value={ward}
-                      onChange={(event) => setWard(event.currentTarget.value)}
-                    >
-                      <option value="">{text.filtersAny}</option>
-                      {ward && !wards.some((unit) => unit.id === ward) ? (
-                        <option value={ward}>{ward}</option>
-                      ) : null}
-                      {wards.map((unit, index) => (
-                        <option key={unit.id} value={unit.id}>
-                          {wardLabels[index]}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                      onChange={setWard}
+                      anyLabel={text.filtersAny}
+                      noMatch={text.comboboxNoMatch}
+                    />
+                  ) : null}
+                </div>
+                <p className="field-hint">{text.areaAdminHint}</p>
+                {provinceFailed || wardFailed ? (
+                  <p className="field-error" role="alert">
+                    {text.areaFilterUnavailable}
+                  </p>
                 ) : null}
               </div>
-              <p className="field-hint">{text.areaAdminHint}</p>
-              {provinceFailed || wardFailed ? (
-                <p className="field-error" role="alert">
-                  {text.areaFilterUnavailable}
-                </p>
-              ) : null}
-              <div className="form-grid">
-                <div className="field">
-                  <label className="field-label" htmlFor="filter-sort">
-                    {text.sortLabel}
-                  </label>
-                  <select
-                    id="filter-sort"
-                    className="select"
-                    name="sort"
-                    value={order}
-                    onChange={(event) => setOrder(event.currentTarget.value)}
-                  >
-                    <option value="">{text.sortDefault}</option>
-                    <option value="oldest">{text.sortOldest}</option>
-                    {/* Reflected for an address that already states it, never offered as a
+              <div className="field-group">
+                <div className="form-grid">
+                  <div className="field">
+                    <label className="field-label" htmlFor="filter-sort">
+                      {text.sortLabel}
+                    </label>
+                    <select
+                      id="filter-sort"
+                      className="select"
+                      name="sort"
+                      value={order}
+                      onChange={(event) => setOrder(event.currentTarget.value)}
+                    >
+                      <option value="">{text.sortDefault}</option>
+                      <option value="oldest">{text.sortOldest}</option>
+                      {/* Reflected for an address that already states it, never offered as a
                         choice: the chronological orderings are submitted here, not browsed. */}
-                    <option value="newest" hidden>
-                      {text.sortNewest}
-                    </option>
-                  </select>
+                      <option value="newest" hidden>
+                        {text.sortNewest}
+                      </option>
+                    </select>
+                  </div>
                 </div>
+                {order ? <p className="field-hint">{text.ageHint}</p> : null}
               </div>
-              {order ? <p className="field-hint">{text.ageHint}</p> : null}
-              <p className="field-hint">{text.advancedSearchHint}</p>
             </div>
             {invalid ? (
               <p className="field-error" role="alert">

@@ -257,6 +257,7 @@ button.sgn-nav-item { width: 100%; background: transparent; border: 0; text-alig
 .input::placeholder, .textarea::placeholder { color: var(--muted); }
 .input:hover, .select:hover, .textarea:hover { border-color: var(--fg-2); }
 .input:focus, .select:focus, .textarea:focus { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
+.input:disabled, .select:disabled, .textarea:disabled { background-color: var(--surface-warm); color: var(--muted); border-color: var(--border-soft); cursor: default; }
 .input-sm, .select-sm { min-height: var(--btn-h-sm); font-size: var(--text-sm); }
 .field.is-invalid .input, .field.is-invalid .select, .field.is-invalid .textarea { border-color: var(--danger); }
 .field.is-invalid .input:focus, .field.is-invalid .select:focus, .field.is-invalid .textarea:focus { box-shadow: 0 0 0 4px color-mix(in oklab, var(--danger) 20%, transparent); }
@@ -267,6 +268,18 @@ button.sgn-nav-item { width: 100%; background: transparent; border: 0; text-alig
 .field-unit .input { padding-right: 76px; }
 .field-unit > .field-unit-label { position: absolute; right: var(--space-4); top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; align-items: flex-end; gap: 1px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; color: var(--muted); pointer-events: none; }
 .field-unit-label > span { position: static; transform: none; text-transform: none; }
+
+/* ── unit combobox: a filtered listbox over the field control ─────────────── */
+/* The field keeps the picker's chevron so it still reads as a choice rather than free text. */
+.combobox { position: relative; }
+.combobox .input { padding-right: 44px; background-image: linear-gradient(45deg, transparent 50%, var(--fg-2) 50%), linear-gradient(135deg, var(--fg-2) 50%, transparent 50%); background-position: calc(100% - 22px) 24px, calc(100% - 16px) 24px; background-size: 6px 6px, 6px 6px; background-repeat: no-repeat; }
+.combobox-pop { position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + var(--space-1)); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-raise); overflow: hidden; }
+.combobox-list { max-height: 264px; overflow-y: auto; overscroll-behavior: contain; margin: 0; padding: var(--space-1); list-style: none; }
+.combobox-list:empty { display: none; }
+.combobox-option { padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm); font-size: var(--text-sm); color: var(--fg-2); cursor: pointer; }
+.combobox-option[data-active="true"] { background: var(--surface-warm); color: var(--fg); }
+.combobox-option[aria-selected="true"] { color: var(--accent); font-weight: 500; }
+.combobox-empty { padding: var(--space-3) var(--space-4); font-size: var(--text-xs); color: var(--muted); }
 
 
 .check { display: inline-flex; align-items: center; gap: var(--space-3); min-height: var(--btn-h-sm); font-size: var(--text-sm); color: var(--fg-2); cursor: pointer; }
@@ -654,17 +667,27 @@ dialog.sgn-dialog::backdrop { background: color-mix(in oklab, var(--fg) 46%, tra
 .sgn-dialog-foot { flex-shrink: 0; flex-wrap: wrap; display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); padding: var(--space-5) var(--space-6); border-top: 1px solid var(--border-soft); background: var(--surface); }
 .sgn-dialog-foot .foot-lead { margin-right: auto; font-size: var(--text-xs); color: var(--muted); }
 /* Search-island adaptation: the filter panel is a form whose Clear/Apply pair wraps
-   instead of overflowing when both localized labels cannot share a narrow dialog foot. */
+   instead of overflowing when both localized labels cannot share a narrow dialog foot. The
+   secondary action leads and the primary one closes the foot, so the button that commits the
+   filter set sits in the same place on every open. */
 .sgn-dialog-foot.filter-dialog-foot { flex-wrap: wrap; }
+.sgn-dialog-foot.filter-dialog-foot > :first-child { margin-right: auto; }
 
+/* ── form sections: one vertical rhythm, one gutter, one group gap ──────── */
+/* A section is a stack, so the gap between a group's controls and its hint is the same one the
+   label-to-control gutter uses, and the gap between groups is stated once here rather than as a
+   margin on each child. */
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); }
 .form-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-5); }
 .form-grid .span-all, .form-grid-3 .span-all { grid-column: 1 / -1; }
+.form-section { display: flex; flex-direction: column; gap: var(--space-5); }
 .form-section + .form-section { margin-top: var(--space-8); padding-top: var(--space-6); border-top: 1px solid var(--border-soft); }
-.filter-range + .filter-range { margin-top: var(--space-5); }
-.form-section-head { display: flex; align-items: baseline; gap: var(--space-3); margin-bottom: var(--space-5); }
+/* One gutter between a group's own controls and the hint that explains them, for every group in
+   the panel: the price and area bounds and the contact name search. */
+.field-group { display: flex; flex-direction: column; gap: var(--space-2); }
+.field-group > .btn { align-self: flex-start; }
+.form-section-head { display: flex; flex-direction: column; gap: var(--space-1); }
 .form-section-head h2, .form-section-head h3 { font-family: var(--font-body); font-size: var(--text-base); font-weight: 600; }
-.form-section-head .panel-note { margin-left: auto; }
 @media (max-width: 720px) { .form-grid, .form-grid-3 { grid-template-columns: minmax(0, 1fr); } }
 
 /* ── property detail ────────────────────────────────────────────────────── */

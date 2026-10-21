@@ -79,6 +79,11 @@ const copy = {
     'Chưa có đơn vị phù hợp trong danh mục; giữ nội dung theo nguồn chưa xác minh.',
     'No matching official units available; keep unverified source information.',
   ],
+  // Typed text that names no official unit is never committed, so the picker says so.
+  comboboxNoMatch: [
+    'Không có đơn vị chính thức nào khớp với nội dung đã gõ.',
+    'No official unit matches what you typed.',
+  ],
   contacts: [
     'Bảo trì người liên hệ và liên kết',
     'Maintain contacts and links',

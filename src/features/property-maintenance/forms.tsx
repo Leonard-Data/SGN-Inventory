@@ -12,7 +12,7 @@ import type { Locale } from '@/i18n/messages';
 import { fields, formChanges, type Target, type Changes } from './fields';
 import { maintenanceError, maintenanceText, optionLabel } from './messages';
 import { failureRoute } from './refusal-rules';
-import { unitOptionLabels } from './units';
+import { UnitCombobox } from './unit-combobox';
 import type { Unit } from './data';
 
 export function MutationForm({
@@ -100,6 +100,9 @@ export function MutationForm({
       className={onCancel ? 'editor-form' : undefined}
       onSubmit={submit}
       onChange={draftChanged}
+      // The unit picker commits its identifier by writing the field it submits, which raises no
+      // change event of its own, so the unsaved state also follows plain input events.
+      onInput={draftChanged}
     >
       <div className={onCancel ? 'editor-scroll' : undefined}>
         <fieldset disabled={busy}>{children}</fieldset>
@@ -272,32 +275,19 @@ function UnitPicker({
       });
     return () => abort.abort();
   }, [level, parent, onDenied]);
-  const text = maintenanceText(locale),
-    labels = unitOptionLabels(units);
+  const text = maintenanceText(locale);
   return (
-    <div className="field">
-      <label className="field-label" htmlFor={id}>
-        {fields[name]![locale]}
-      </label>
-      <select
-        id={id}
-        className="select"
-        name={name}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      >
-        <option value="">{text.catalogEmpty}</option>
-        {value && !units.some((u) => u.id === value) ? (
-          <option value={value}>{value}</option>
-        ) : null}
-        {units.map((unit, index) => (
-          <option key={unit.id} value={unit.id}>
-            {labels[index]}
-          </option>
-        ))}
-      </select>
-      {error ? <span role="alert">{text.unavailable}</span> : null}
-    </div>
+    <UnitCombobox
+      id={id}
+      name={name}
+      label={fields[name]![locale]}
+      units={units}
+      value={value}
+      onChange={onChange}
+      anyLabel={text.catalogEmpty}
+      noMatch={text.comboboxNoMatch}
+      error={error ? text.unavailable : undefined}
+    />
   );
 }
 export function AddressFields({

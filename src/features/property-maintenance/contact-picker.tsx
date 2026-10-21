@@ -57,7 +57,7 @@ export function ContactPicker({
     void search();
   }
   return (
-    <div>
+    <div className="field-group">
       <div className="field">
         <label className="field-label" htmlFor={id}>
           {text.contactSearch}
