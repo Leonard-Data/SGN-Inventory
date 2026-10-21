@@ -2758,6 +2758,44 @@ export async function maintenanceContract({
     },
   );
   await check(
+    'a legacy row converted from a current one records no second current address, even after a correction',
+    async () => {
+      // The conversion links the legacy row to the current one, so a correction of that legacy row
+      // inserts a successor and the chain no longer reaches the current row it came from. The
+      // property still records that commune, which is what the recording action refuses on.
+      const corrected = (
+        await db.query(mutate, [
+          reverseProperty,
+          'address',
+          reverseLegacy,
+          await revision('property_addresses', reverseLegacy),
+          { address_text: 'Địa chỉ cũ sau khi đính chính' },
+        ])
+      ).rows[0].id;
+      const before = await addressesOf(reverseProperty);
+      await refuseWith(
+        'select public.record_address_candidate($1,$2,$3) as id',
+        [
+          reverseProperty,
+          corrected,
+          await revision('properties', reverseProperty),
+        ],
+        '23505',
+        /already recorded from this legacy address/,
+      );
+      assert.deepEqual(await addressesOf(reverseProperty), before);
+      assert.equal(
+        (
+          await db.query(
+            "select count(*)::int as n from public.property_addresses where property_id=$1 and format='current'",
+            [reverseProperty],
+          )
+        ).rows[0].n,
+        1,
+      );
+    },
+  );
+  await check(
     'a conversion records beside the primary the target format already has instead of taking its flag',
     async () => {
       // The legacy row here sits at a ward with no crosswalk row at all, so it can never be the

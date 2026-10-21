@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   conversionTarget,
   crosswalkMessage,
-  crosswalkReport,
+  crosswalkRecorded,
   offeredCrosswalkRow,
   type CrosswalkOutcome,
 } from './crosswalk.ts';
@@ -88,95 +88,70 @@ test('a ward whose current address is already recorded says so instead', () => {
 });
 
 test('the saved ward decides the report: its own mapping, or the state recorded for it', () => {
-  type Row = {
-    id: string;
-    format: string;
-    commune_unit_id: string | null;
-    supersedes_address_id: string | null;
-  };
+  // What each recorded unit id is, by official code: a renamed unit keeps its code but gets a new
+  // version row, so two ids can name the same territory.
+  const codes = new Map([
+    ['new-1', 'CODE-1'],
+    ['new-1-later', 'CODE-1'],
+    ['new-2', 'CODE-2'],
+  ]);
   const row = (
-    id: string,
     format: string,
-    commune_unit_id: string | null = null,
-    supersedes_address_id: string | null = null,
-  ): Row => ({ id, format, commune_unit_id, supersedes_address_id });
-  const mapped: CrosswalkOutcome = {
-    kind: 'mapped',
-    commune: 'Phường Bến Thành',
-    province: 'Thành phố Hồ Chí Minh',
-  };
+    commune_unit_id: string | null,
+  ): { format: string; commune_unit_id: string | null } => ({
+    format,
+    commune_unit_id,
+  });
   // One property with two legacy addresses at different wards, each able to record its own
-  // candidate: the link answers for the row it came from, not for the property.
-  const base: Row[] = [
-    row('legacy-a', 'legacy', 'ward-1'),
-    row('legacy-b', 'legacy', 'ward-2'),
-    row('current-a', 'current', 'new-1', 'legacy-a'),
+  // candidate: a recorded current row answers only for the territory its unit names.
+  const rows = [
+    row('legacy', 'ward-1'),
+    row('legacy', 'ward-2'),
+    row('current', 'new-1'),
   ];
-  // The ward the saved row names maps to the target the chain recorded, so the surface says the
+  // The saved ward maps to the territory the property already records, so the surface says the
   // recorded state and offers no action.
-  assert.deepEqual(crosswalkReport(base, 'legacy-a', mapped, 'new-1'), {
-    kind: 'recorded',
-  });
+  assert.equal(crosswalkRecorded(rows, 'CODE-1', codes), true);
+  // A correction of the legacy row inserts a successor that supersedes nothing the current row
+  // names, and the ward a later save reports can be another territory: that ward is its own
+  // candidate, so the action is offered again for it.
   assert.equal(
-    crosswalkMessage('en', crosswalkReport(base, 'legacy-a', mapped, 'new-1')),
-    'The current address for the old ward saved here is already recorded.',
+    crosswalkRecorded([...rows, row('legacy', 'ward-3')], 'CODE-2', codes),
+    false,
   );
-  // A correction of the legacy row inserts its successor, which is the row a later save reports.
-  const corrected: Row[] = [
-    ...base,
-    row('legacy-a2', 'legacy', 'ward-3', 'legacy-a'),
-  ];
-  // The ward the corrected row now names is not the one the chain recorded: the surface reports what
-  // that ward maps to, so its one action is available, and the same state as before is recognised.
-  assert.deepEqual(
-    crosswalkReport(corrected, 'legacy-a2', mapped, 'new-2'),
-    mapped,
-  );
-  assert.deepEqual(crosswalkReport(corrected, 'legacy-a2', mapped, 'new-1'), {
-    kind: 'recorded',
-  });
-  // A ward the crosswalk names no single target for has nothing recorded, and nothing is offered.
-  assert.deepEqual(
-    crosswalkReport(
-      corrected,
-      'legacy-a2',
-      { kind: 'several', count: 2 },
-      null,
+  // A conversion writes the legacy row from the current one, and a correction of that legacy row
+  // moves the supersedes chain on without the current row it came from naming the successor: the
+  // territory is what is recorded, so the reversed conversion's own current row still answers.
+  assert.equal(
+    crosswalkRecorded(
+      [row('current', 'new-1'), row('legacy', 'ward-1'), row('legacy', 'ward-1')],
+      'CODE-1',
+      codes,
     ),
-    { kind: 'several', count: 2 },
+    true,
   );
-  assert.deepEqual(
-    crosswalkReport(corrected, 'legacy-a2', { kind: 'none' }, null),
-    { kind: 'none' },
+  // The target recorded in a later validity window of the same unit is the same territory.
+  assert.equal(
+    crosswalkRecorded([row('current', 'new-1-later')], 'CODE-1', codes),
+    true,
   );
-  // An unrelated legacy address stays unrecorded, nothing is recorded before the action runs, and an
-  // alternate variant is not a recorded current address.
-  assert.deepEqual(
-    crosswalkReport(corrected, 'legacy-b', mapped, 'new-2'),
-    mapped,
+  // Nothing is recorded before the action runs, a legacy or alternate row is never a recorded
+  // current address, another commune is another territory, and a ward the crosswalk names no
+  // single target for records nothing.
+  assert.equal(
+    crosswalkRecorded([row('legacy', 'ward-1')], 'CODE-1', codes),
+    false,
   );
-  assert.deepEqual(
-    crosswalkReport(
-      [row('legacy-a', 'legacy', 'ward-1')],
-      'legacy-a',
-      mapped,
-      'new-1',
-    ),
-    mapped,
+  assert.equal(
+    crosswalkRecorded([row('alternate', 'new-1')], 'CODE-1', codes),
+    false,
   );
-  assert.deepEqual(crosswalkReport([], 'legacy-a', mapped, 'new-1'), mapped);
-  assert.deepEqual(
-    crosswalkReport(
-      [
-        row('legacy-a', 'legacy', 'ward-1'),
-        row('alternate-a', 'alternate', 'new-1', 'legacy-a'),
-      ],
-      'legacy-a',
-      mapped,
-      'new-1',
-    ),
-    mapped,
+  assert.equal(
+    crosswalkRecorded([row('current', 'new-2')], 'CODE-1', codes),
+    false,
   );
+  assert.equal(crosswalkRecorded([row('current', 'new-1')], undefined, codes), false);
+  assert.equal(crosswalkRecorded([], 'CODE-1', codes), false);
 });
 
 test('only the two geographies a crosswalk relates are convertible, and a row offers the other one', () => {

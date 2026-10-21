@@ -12,7 +12,7 @@ import {
 import { isReportDate } from '@/features/employees/report-range';
 import { offeredUnits } from './units';
 import {
-  crosswalkReport,
+  crosswalkRecorded,
   offeredCrosswalkRow,
   type AddressCrosswalk,
   type CrosswalkOutcome,
@@ -119,10 +119,9 @@ export async function savedLegacyAddress(
 ): Promise<{ address?: AddressCrosswalk }> {
   try {
     // Every address of the property travels with the read, because whether the crosswalk's current
-    // address is already recorded is a question about this legacy row's own supersedes chain and the
-    // ward it records now: a correction can change that ward, and then the recorded state no longer
-    // answers for it. The property's own revision travels with the outcome so the offer carries the
-    // context the database will check, read back rather than assumed from the request.
+    // address is already recorded is a question about the territory the property records today. The
+    // property's own revision travels with the outcome so the offer carries the context the
+    // database will check, read back rather than assumed from the request.
     const [property, saved] = await Promise.all([
       context.client
         .from('properties')
@@ -131,7 +130,7 @@ export async function savedLegacyAddress(
         .maybeSingle(),
       context.client
         .from('property_addresses')
-        .select('id,format,commune_unit_id,supersedes_address_id')
+        .select('id,format,commune_unit_id')
         .eq('property_id', propertyId),
     ]);
     databaseError(property.error);
@@ -144,11 +143,27 @@ export async function savedLegacyAddress(
     const report = (
       await crosswalkOutcomes(context, [legacy.commune_unit_id])
     ).get(legacy.commune_unit_id)!;
+    // The recorded check and the action's own guard compare the same territory: the target commune's
+    // official code, whichever current row of the property carries it.
+    const codes = await unitCodes(context, [
+      ...(report.targetId ? [report.targetId] : []),
+      ...rows.flatMap((row) =>
+        row.format === 'current' && row.commune_unit_id
+          ? [row.commune_unit_id]
+          : [],
+      ),
+    ]);
     return {
       address: {
         addressId: legacy.id,
         propertyRevision: property.data.revision,
-        crosswalk: crosswalkReport(rows, legacy.id, report, report.targetId),
+        crosswalk: crosswalkRecorded(
+          rows,
+          report.targetId ? codes.get(report.targetId) : undefined,
+          codes,
+        )
+          ? { kind: 'recorded' }
+          : report,
       },
     };
   } catch {
@@ -156,6 +171,18 @@ export async function savedLegacyAddress(
     // saved address into a failed save.
     return {};
   }
+}
+async function unitCodes(
+  context: RouteContext,
+  ids: readonly string[],
+): Promise<Map<string, string>> {
+  if (!ids.length) return new Map();
+  const { data, error } = await context.client
+    .from('admin_unit_versions')
+    .select('id,official_code')
+    .in('id', ids);
+  databaseError(error);
+  return new Map((data ?? []).map((unit) => [unit.id, unit.official_code]));
 }
 // Each ward's outcome carries the single target unit it names, because the recorded check and the
 // write guard both compare against that target: the state reported and the state accepted can never
