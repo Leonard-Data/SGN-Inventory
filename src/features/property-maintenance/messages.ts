@@ -132,6 +132,10 @@ const copy = {
     'Không chuyển được: địa chỉ này đã được đính chính bởi một bản mới hơn. Hãy chuyển đổi bản mới nhất; chưa có dữ liệu nào được ghi.',
     'Cannot convert: a later correction replaced this address. Convert the newest row instead; nothing was written.',
   ],
+  convertLevelChange: [
+    'Không chuyển được: bảng chuyển đổi ghi nhận đơn vị này ở cấp hành chính khác (ví dụ đặc khu hình thành từ cả một huyện cũ), nên địa chỉ này không diễn đạt được ở dạng còn lại. Địa chỉ đã ghi không sai; chưa có dữ liệu nào được ghi.',
+    'Cannot convert: the crosswalk records this unit at a different administrative level (an island special zone formed from a whole old district, for example), so this address cannot be stated in the other format. The address you have is not wrong; nothing was written.',
+  ],
   openRecord: ['Mở hồ sơ', 'Open record'],
   mappingHint: [
     'Chỉ quản lý/quản trị viên; cần đơn vị, ngày hiệu lực và bằng chứng của bất động sản. Không cần người duyệt thứ hai.',
@@ -334,9 +338,11 @@ export function maintenanceError(locale: Locale, code: string | null) {
                     ? text.convertNoCrosswalk
                     : code === 'address-superseded'
                       ? text.convertSuperseded
-                      : code === 'address-format-duplicate'
-                        ? text.convertDuplicate
-                        : text.unavailable;
+                      : code === 'crosswalk-level-change'
+                        ? text.convertLevelChange
+                        : code === 'address-format-duplicate'
+                          ? text.convertDuplicate
+                          : text.unavailable;
 }
 const values: Record<string, readonly [string, string]> = {
   property: ['Thông tin bất động sản', 'Property facts'],

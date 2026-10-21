@@ -21,11 +21,12 @@
 --     performed here;
 --   * it refuses, with its own code, when the source row records no ward, when the crosswalk has no
 --     row for the recorded unit, when the crosswalk is ambiguous, when the target format already
---     records that same territory, or when a later correction of the same format has superseded the
---     source row.
--- Five codes are distinct rather than the usual 23514 so the surface can state which of those
+--     records that same territory, when a later correction of the same format has superseded the
+--     source row, or when the crosswalk states the unit at another administrative level.
+-- Six codes are distinct rather than the usual 23514 so the surface can state which of those
 -- refused it: PT421 source units absent, PT422 ambiguous crosswalk, PT423 duplicate row, PT424 no
--- crosswalk row for the recorded unit at all, PT425 superseded source row.
+-- crosswalk row for the recorded unit at all, PT425 superseded source row, PT426 crosswalk unit at
+-- another administrative level.
 begin;
 
 create function private.convert_address_format(p_property_id uuid,p_address_id uuid,p_address_revision uuid,p_property_revision uuid) returns uuid
@@ -62,7 +63,8 @@ begin
     select * into mapping from public.admin_unit_crosswalks where from_unit_id=source.commune_unit_id;
     if mapping.relation not in ('whole','rename') then raise exception 'one whole crosswalk target required' using errcode='PT422'; end if;
     select * into ward from public.admin_unit_versions where id=mapping.to_unit_id;
-    if not found or ward.unit_level<>'commune' or ward.parent_id is null then raise exception 'current ward required' using errcode='PT422'; end if;
+    if not found or ward.parent_id is null then raise exception 'current ward required' using errcode='PT422'; end if;
+    if ward.unit_level<>'commune' then raise exception 'crosswalk unit at another administrative level' using errcode='PT426'; end if;
     select * into province from public.admin_unit_versions where id=ward.parent_id and unit_level='province';
     if not found then raise exception 'current ward required' using errcode='PT422'; end if;
   else
@@ -81,7 +83,8 @@ begin
       where c.official_code=source_code;
     if mapping.relation not in ('whole','rename') then raise exception 'one whole crosswalk source required' using errcode='PT422'; end if;
     select * into ward from public.admin_unit_versions where id=mapping.from_unit_id;
-    if not found or ward.unit_level<>'commune' or ward.parent_id is null then raise exception 'legacy ward required' using errcode='PT422'; end if;
+    if not found or ward.parent_id is null then raise exception 'legacy ward required' using errcode='PT422'; end if;
+    if ward.unit_level<>'commune' then raise exception 'crosswalk unit at another administrative level' using errcode='PT426'; end if;
     select * into district from public.admin_unit_versions where id=ward.parent_id and unit_level='district';
     if not found or district.parent_id is null then raise exception 'legacy district required' using errcode='PT422'; end if;
     select * into province from public.admin_unit_versions where id=district.parent_id and unit_level='province';

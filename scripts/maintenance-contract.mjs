@@ -2488,6 +2488,47 @@ export async function maintenanceContract({
     },
   );
   await check(
+    'a crosswalk that states the unit at another administrative level is its own refusal',
+    async () => {
+      // The five island districts became đặc khu communes in full, so the crosswalk names exactly
+      // one unit for such a commune but at the legacy district level: nothing about the address is
+      // ambiguous and correcting it cannot help.
+      const specialZone = (
+        await db.query(
+          `select m.from_unit_id as legacy_district,m.to_unit_id as commune,c.parent_id as province
+           from public.admin_unit_crosswalks m
+           join public.admin_unit_versions d on d.id=m.from_unit_id and d.unit_level='district'
+           join public.admin_unit_versions c on c.id=m.to_unit_id and c.unit_level='commune'
+            and c.valid_from>=date '2025-07-01'
+           where m.relation in ('whole','rename')
+           order by m.to_unit_id limit 1`,
+        )
+      ).rows[0];
+      const propertyId = await createCurrent({
+        province: specialZone.province,
+        commune: specialZone.commune,
+      });
+      const addressId = (
+        await db.query(
+          "select id from public.property_addresses where property_id=$1 and format='current'",
+          [propertyId],
+        )
+      ).rows[0].id;
+      await refuseWith(
+        convert,
+        [
+          propertyId,
+          addressId,
+          await revision('property_addresses', addressId),
+          await revision('properties', propertyId),
+        ],
+        'PT426',
+        /another administrative level/,
+      );
+      assert.equal((await addressesOf(propertyId)).length, 1);
+    },
+  );
+  await check(
     'a corrected address is history: converting the row it replaced is refused and the successor converts once',
     async () => {
       const propertyId = await createLegacy(offered);

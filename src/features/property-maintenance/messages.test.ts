@@ -7,14 +7,16 @@ test('each conversion refusal states its own cause in both languages', () => {
     const missing = maintenanceError(locale, 'crosswalk-missing');
     const ambiguous = maintenanceError(locale, 'crosswalk-ambiguous');
     const superseded = maintenanceError(locale, 'address-superseded');
+    const levelChange = maintenanceError(locale, 'crosswalk-level-change');
+    const causes = [missing, ambiguous, superseded, levelChange];
     // A cause with its own code states its own reason instead of falling back to the generic one,
     // and no two causes read the same.
-    for (const message of [missing, ambiguous, superseded])
+    for (const message of causes)
       assert.notEqual(message, maintenanceError(locale, 'unavailable'));
-    assert.equal(new Set([missing, ambiguous, superseded]).size, 3);
+    assert.equal(new Set(causes).size, causes.length);
     // Reconciling and correcting the address is the remedy only when the crosswalk genuinely names
-    // several units or a partial transfer; a ward with no conversion row yet and a row a correction
-    // replaced both state that no such remedy applies.
+    // several units or a partial transfer; a ward with no conversion row yet, a row a correction
+    // replaced and a unit the crosswalk states at another level all say no such remedy applies.
     const remedy =
       locale === 'vi'
         ? /Hãy đối chiếu và đính chính địa chỉ/
@@ -22,6 +24,7 @@ test('each conversion refusal states its own cause in both languages', () => {
     assert.match(ambiguous, remedy);
     assert.doesNotMatch(missing, remedy);
     assert.doesNotMatch(superseded, remedy);
+    assert.doesNotMatch(levelChange, remedy);
     assert.match(
       missing,
       locale === 'vi'
@@ -33,6 +36,12 @@ test('each conversion refusal states its own cause in both languages', () => {
       locale === 'vi'
         ? /đã được đính chính bởi một bản mới hơn/
         : /later correction replaced this address/,
+    );
+    assert.match(
+      levelChange,
+      locale === 'vi'
+        ? /cấp hành chính khác/
+        : /different administrative level/,
     );
   }
 });
