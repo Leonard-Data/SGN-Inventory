@@ -8,7 +8,7 @@ import {
   nextCatalogueCursor,
   type CatalogueRow,
 } from './catalogue';
-import { propertyCreators } from './creator';
+import { propertyCreators, propertyModifiers } from './creator';
 import type { CataloguePage, PropertySummary } from './types';
 
 // One page of the browser catalogue: the caller's own authorized, unarchived inventory in one
@@ -35,27 +35,38 @@ export async function cataloguePage(
     throw new ApiError(failure.status, failure.code);
   }
   const rows = (data ?? []) as unknown as CatalogueRow[];
-  const creators = await catalogueCreators(context, rows);
+  const attribution = await catalogueAttribution(context, rows);
   return {
     properties: rows.map((row) =>
-      catalogueSummary(row, creators.get(row.id) ?? null),
+      catalogueSummary(
+        row,
+        attribution.creators.get(row.id) ?? null,
+        attribution.modifiers.get(row.id) ?? null,
+      ),
     ),
     nextCursor: nextCatalogueCursor(rows.map((row) => row.id)),
   };
 }
 
-// The creator's display name for the page just read: one names read for the page's distinct
-// creators through the sanctioned employee-name projection, so no colleague's employee row has to
-// be readable. A creator that does not resolve contributes no name, exactly as the stream's own
-// attribution states it.
-async function catalogueCreators(
+// The creator's and the modifier's display names for the page just read: one names read for the
+// page's distinct references through the sanctioned employee-name projection, so no colleague's
+// employee row has to be readable. A reference that does not resolve contributes no name, exactly
+// as the stream's own attribution states it.
+async function catalogueAttribution(
   context: RouteContext,
   rows: readonly CatalogueRow[],
-): Promise<Map<string, string>> {
+): Promise<{
+  creators: Map<string, string>;
+  modifiers: Map<string, string>;
+}> {
   const ids = [
-    ...new Set(rows.flatMap((row) => (row.created_by ? [row.created_by] : []))),
+    ...new Set(
+      rows.flatMap((row) =>
+        [row.created_by, row.updated_by].flatMap((id) => (id ? [id] : [])),
+      ),
+    ),
   ];
-  if (!ids.length) return new Map();
+  if (!ids.length) return { creators: new Map(), modifiers: new Map() };
   const { data, error } = await context.client.rpc('list_employee_names', {
     p_ids: ids,
   });
@@ -63,7 +74,10 @@ async function catalogueCreators(
     const failure = catalogueFailure(error.code);
     throw new ApiError(failure.status, failure.code);
   }
-  return propertyCreators(rows, data ?? []);
+  return {
+    creators: propertyCreators(rows, data ?? []),
+    modifiers: propertyModifiers(rows, data ?? []),
+  };
 }
 
 // The authorized total of the same inventory the pages above carry, read once per load generation.
@@ -104,8 +118,12 @@ export async function catalogueSummaryOf(
   if (error) return undefined;
   if (!data) return null;
   const row = data as unknown as CatalogueRow;
-  // The same attribution the page read states: one names read for this row's creator, so a summary
-  // committed by a change keeps showing who created the property.
-  const creators = await catalogueCreators(context, [row]);
-  return catalogueSummary(row, creators.get(row.id) ?? null);
+  // The same attribution the page read states: one names read for this row's creator and modifier,
+  // so a summary committed by a change keeps showing who created and who last edited the property.
+  const attribution = await catalogueAttribution(context, [row]);
+  return catalogueSummary(
+    row,
+    attribution.creators.get(row.id) ?? null,
+    attribution.modifiers.get(row.id) ?? null,
+  );
 }

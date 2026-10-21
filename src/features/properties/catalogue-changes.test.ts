@@ -121,6 +121,7 @@ function summaryOf(
       created_at: null,
       updated_at: null,
       created_by: null,
+      updated_by: null,
       property_addresses: addresses,
       ...parts,
     },

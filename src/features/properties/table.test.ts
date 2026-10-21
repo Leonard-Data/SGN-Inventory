@@ -36,6 +36,7 @@ function record(overrides: Partial<PropertySummary> = {}): PropertySummary {
     direction: 'east',
     accessType: 'car',
     createdBy: 'Nguyễn Thu Hà',
+    updatedBy: 'Trần Văn Minh',
     ...overrides,
   };
 }
@@ -198,6 +199,7 @@ test("the shared facts state each recorded value in the reader's own numbers", (
   assert.deepEqual(vi.depth, { text: '18 m', known: true });
   assert.deepEqual(vi.floors, { text: '3', known: true });
   assert.deepEqual(vi.creator, { text: 'Nguyễn Thu Hà', known: true });
+  assert.deepEqual(vi.modifier, { text: 'Trần Văn Minh', known: true });
   // English numbers keep the decimal point; the recorded name and the units do not change.
   const en = recordFacts(record({ frontageM: '5.5', depthM: '18' }), 'en');
   assert.equal(en.frontage.text, '5.5 m');
@@ -218,6 +220,7 @@ test('an unknown fact states the marker, and a recorded zero is not unknown', ()
       depthM: null,
       floors: null,
       createdBy: null,
+      updatedBy: null,
     }),
     'vi',
   );
@@ -226,14 +229,21 @@ test('an unknown fact states the marker, and a recorded zero is not unknown', ()
   assert.equal(MISSING_VALUE, '—');
 
   const zero = recordFacts(
-    record({ frontageM: '0', depthM: '0', floors: 0, createdBy: '   ' }),
+    record({
+      frontageM: '0',
+      depthM: '0',
+      floors: 0,
+      createdBy: '   ',
+      updatedBy: '   ',
+    }),
     'vi',
   );
   assert.deepEqual(zero.frontage, { text: '0 m', known: true });
   assert.deepEqual(zero.depth, { text: '0 m', known: true });
   assert.deepEqual(zero.floors, { text: '0', known: true });
-  // A name of nothing but space is no name at all.
+  // A name of nothing but space is no name at all, for either attribution.
   assert.deepEqual(zero.creator, { text: MISSING_VALUE, known: false });
+  assert.deepEqual(zero.modifier, { text: MISSING_VALUE, known: false });
 });
 
 test('total area is the floor area, falling back to the land area when it is absent', () => {

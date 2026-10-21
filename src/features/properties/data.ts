@@ -2,7 +2,7 @@ import 'server-only';
 import { ApiError, type RouteContext } from '@/lib/supabase/route';
 import type { Database } from '@/types/database';
 import type { AddressSummary, PropertyStream } from './types';
-import { propertyCreators } from './creator';
+import { propertyCreators, propertyModifiers } from './creator';
 import {
   catalogUnitsMatch,
   filterRpcArgs,
@@ -100,10 +100,10 @@ export async function browseProperties(
   if (!records.length) return { ...summary, properties: [] };
   const ids = records.map((row) => row.id);
   // Both reads depend only on the window of rows, so they run together: the addresses the rows
-  // draw, and the display name of each record's creator.
-  const [addresses, creators] = await Promise.all([
+  // draw, and the display name of each record's creator and modifier.
+  const [addresses, attribution] = await Promise.all([
     addressSummaries(context, ids, query),
-    creatorNames(context, ids),
+    attributionNames(context, ids),
   ]);
   return {
     ...summary,
@@ -130,39 +130,49 @@ export async function browseProperties(
       entrySource: row.entry_source,
       ageDays: row.age_days ?? null,
       addresses: addresses.get(row.id) ?? [],
-      createdBy: creators.get(row.id) ?? null,
+      createdBy: attribution.creators.get(row.id) ?? null,
+      updatedBy: attribution.modifiers.get(row.id) ?? null,
     })),
   };
 }
 
-// The creator's display name rides on the same page of records rather than on a second
-// source: the page ids address properties the caller may already read, and the employee's
-// display name is the attribution every active employee can read. Nothing here widens who
-// can see what, and a creator that does not resolve simply contributes no entry.
-async function creatorNames(
+// The creator's and the modifier's display names ride on the same page of records rather than on a
+// second source: the page ids address properties the caller may already read, and an employee's
+// display name is the attribution every active employee can read. Nothing here widens who can see
+// what, and a reference that does not resolve simply contributes no entry.
+async function attributionNames(
   context: RouteContext,
   ids: string[],
-): Promise<Map<string, string>> {
+): Promise<{
+  creators: Map<string, string>;
+  modifiers: Map<string, string>;
+}> {
   const { data: records, error } = await context.client
     .from('properties')
-    .select('id,created_by')
+    .select('id,created_by,updated_by')
     .in('id', ids);
   if (error) throw accessError(error.code);
-  // One pass over the page: the creator ids, de-duplicated, without a second traversal.
-  const creatorIds = [
+  // One pass over the page: the referenced ids, de-duplicated, without a second traversal.
+  const referenced = [
     ...new Set(
       (records ?? []).flatMap((record) =>
-        record.created_by ? [record.created_by] : [],
+        [record.created_by, record.updated_by].flatMap((id) =>
+          id ? [id] : [],
+        ),
       ),
     ),
   ];
-  if (!creatorIds.length) return new Map();
+  const empty = { creators: new Map(), modifiers: new Map() };
+  if (!referenced.length) return empty;
   const { data: employees, error: employeeError } = await context.client.rpc(
     'list_employee_names',
-    { p_ids: creatorIds },
+    { p_ids: referenced },
   );
   if (employeeError) throw accessError(employeeError.code);
-  return propertyCreators(records ?? [], employees ?? []);
+  return {
+    creators: propertyCreators(records ?? [], employees ?? []),
+    modifiers: propertyModifiers(records ?? [], employees ?? []),
+  };
 }
 
 function accessError(code: string | undefined): ApiError {

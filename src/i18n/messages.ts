@@ -177,6 +177,7 @@ const vi = {
   emptyFiltered: 'Không có bất động sản khớp bộ lọc.',
   entryDate: 'Ngày nhập kho gốc',
   createdBy: 'Người tạo hồ sơ',
+  modifiedBy: 'Người sửa hồ sơ',
   creatorFilter: 'Người tạo',
   mine: 'Do tôi tạo',
   creatorFilterCatalogueOnly:
@@ -1075,6 +1076,7 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     emptyFiltered: 'No property matches these filters.',
     entryDate: 'Original inventory entry date',
     createdBy: 'Record created by',
+    modifiedBy: 'Record modified by',
     creatorFilter: 'Created by',
     mine: 'Created by me',
     creatorFilterCatalogueOnly:

@@ -557,6 +557,11 @@ function QuickView({
       value: shared.creator.text,
       known: shared.creator.known,
     },
+    {
+      label: text.modifiedBy,
+      value: shared.modifier.text,
+      known: shared.modifier.known,
+    },
   ];
   if (showEntry)
     facts.push({
@@ -648,7 +653,9 @@ function QuickView({
           {facts.map((entry, index) => (
             <div
               className={
-                entry.label === text.createdBy || entry.label === text.updated
+                entry.label === text.createdBy ||
+                entry.label === text.modifiedBy ||
+                entry.label === text.updated
                   ? 'fact span-all'
                   : 'fact'
               }
