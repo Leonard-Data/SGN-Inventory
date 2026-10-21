@@ -84,6 +84,19 @@ const copy = {
     'Open current information (new tab)',
   ],
   mapping: ['Chỉ định ánh xạ từ bằng chứng', 'Designate mapping from evidence'],
+  crosswalkCandidate: [
+    'Ghi địa chỉ mới (đề xuất)',
+    'Record the current address (candidate)',
+  ],
+  crosswalkCandidateHint: [
+    'Chưa xác minh: chỉ ghi sau khi bạn đã đối chiếu. Địa chỉ cũ được giữ nguyên và vẫn là địa chỉ chính.',
+    'Unverified: record only after you have checked. The legacy address is kept and stays primary.',
+  ],
+  crosswalkRecorded: [
+    'Đã ghi địa chỉ mới dưới dạng đề xuất, chưa xác minh.',
+    'Current address recorded as an unverified candidate.',
+  ],
+  openRecord: ['Mở hồ sơ', 'Open record'],
   mappingHint: [
     'Chỉ quản lý/quản trị viên; cần đơn vị, ngày hiệu lực và bằng chứng của bất động sản. Không cần người duyệt thứ hai.',
     'Manager/admin only; requires official units, effective date and property evidence. No second approver.',

@@ -11,6 +11,11 @@ import {
 } from './fields';
 import { isReportDate } from '@/features/employees/report-range';
 import { offeredUnits } from './units';
+import {
+  offeredCrosswalkRow,
+  type AddressCrosswalk,
+  type CrosswalkOutcome,
+} from './crosswalk';
 
 export function databaseError(error: { code?: string } | null) {
   if (!error) return;
@@ -91,6 +96,109 @@ export async function createProperty(
   // The catalogue summary comes from the server's own read of the committed record, never from the
   // submitted facts, so the browser's list can take the change without guessing at it.
   const id = data as string;
+  return {
+    id,
+    summary: await catalogueSummaryOf(context, id),
+    ...(await savedLegacyAddress(context, id)),
+  };
+}
+// What the official crosswalk says about the ward of the legacy address a save just recorded. It is
+// read from the committed row, and only its own ward unit: nothing is inferred from address text.
+async function savedLegacyAddress(
+  context: RouteContext,
+  propertyId: string,
+  addressId?: string,
+): Promise<{ address?: AddressCrosswalk }> {
+  try {
+    let addresses = context.client
+      .from('property_addresses')
+      .select('id,format,commune_unit_id')
+      .eq('property_id', propertyId);
+    if (addressId) addresses = addresses.eq('id', addressId);
+    // The property's own revision travels with the outcome so the offer carries the context the
+    // database will check, read back rather than assumed from the request.
+    const [property, saved] = await Promise.all([
+      context.client
+        .from('properties')
+        .select('revision')
+        .eq('id', propertyId)
+        .maybeSingle(),
+      addresses,
+    ]);
+    databaseError(property.error);
+    databaseError(saved.error);
+    const legacy = (saved.data ?? []).find(
+      (row) => row.format === 'legacy' && row.commune_unit_id !== null,
+    );
+    if (!legacy?.commune_unit_id || !property.data) return {};
+    return {
+      address: {
+        addressId: legacy.id,
+        propertyRevision: property.data.revision,
+        crosswalk: await crosswalkOutcome(context, legacy.commune_unit_id),
+      },
+    };
+  } catch {
+    // The record is committed; reporting the crosswalk is an auxiliary read that never turns a
+    // saved address into a failed save.
+    return {};
+  }
+}
+async function crosswalkOutcome(
+  context: RouteContext,
+  wardId: string,
+): Promise<CrosswalkOutcome> {
+  const { data, error } = await context.client
+    .from('admin_unit_crosswalks')
+    .select('relation,to_unit_id')
+    .eq('from_unit_id', wardId);
+  databaseError(error);
+  const rows = data ?? [];
+  const offered = offeredCrosswalkRow(rows);
+  // A ward with no row, or with something other than one whole/rename row, is reported as it is
+  // and offered nothing: a partial transfer needs property-level evidence this read cannot give.
+  if (!offered)
+    return rows.length === 0
+      ? { kind: 'none' }
+      : { kind: 'several', count: rows.length };
+  const { data: target, error: targetError } = await context.client
+    .from('admin_unit_versions')
+    .select('name_vi,parent_id')
+    .eq('id', offered.to_unit_id)
+    .maybeSingle();
+  databaseError(targetError);
+  // A target that does not resolve to a named current commune inside a named province is not
+  // offered, because the message could not name it and the candidate states both.
+  if (!target?.parent_id) return { kind: 'several', count: rows.length };
+  const { data: province, error: provinceError } = await context.client
+    .from('admin_unit_versions')
+    .select('name_vi')
+    .eq('id', target.parent_id)
+    .maybeSingle();
+  databaseError(provinceError);
+  if (!province) return { kind: 'several', count: rows.length };
+  return {
+    kind: 'mapped',
+    commune: target.name_vi,
+    province: province.name_vi,
+  };
+}
+// The one explicit action behind a legacy save: record the current address the crosswalk names as a
+// candidate. The database derives the target, date and source from the crosswalk itself.
+export async function recordCandidate(
+  context: RouteContext,
+  id: string,
+  body: Record<string, unknown>,
+) {
+  exactKeys(body, ['addressId', 'propertyRevision']);
+  if (!uuid(id) || !uuid(body.addressId) || !uuid(body.propertyRevision))
+    throw new ApiError(400, 'invalid-input');
+  const { error } = await context.client.rpc('record_address_candidate', {
+    p_property_id: id,
+    p_legacy_address_id: body.addressId,
+    p_property_revision: body.propertyRevision,
+  });
+  databaseError(error);
   return { id, summary: await catalogueSummaryOf(context, id) };
 }
 // An optional explanation is a correction note, not another business field: it is only
@@ -136,7 +244,7 @@ export async function maintainProperty(
     rev = revisions(body),
     changed = changes(kind, body.changes),
     explanation = correctionExplanation(body.explanation, kind, changed);
-  const { error } = await context.client.rpc('maintain_property', {
+  const { data, error } = await context.client.rpc('maintain_property', {
     p_property_id: id,
     p_target: kind,
     p_target_id: rev.targetId,
@@ -147,8 +255,15 @@ export async function maintainProperty(
   });
   databaseError(error);
   // An address edit reindexes the same property, so the summary is read back from the server after
-  // the change rather than assembled from what was submitted.
-  return { id, summary: await catalogueSummaryOf(context, id) };
+  // the change rather than assembled from what was submitted. The address operation returns the row
+  // it recorded, whose ward is then reported against the official crosswalk.
+  return {
+    id,
+    summary: await catalogueSummaryOf(context, id),
+    ...(kind === 'address'
+      ? await savedLegacyAddress(context, id, data as string)
+      : {}),
+  };
 }
 export async function contactDetail(context: RouteContext, id: string) {
   if (!uuid(id)) throw new ApiError(400, 'invalid-input');

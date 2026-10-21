@@ -1632,5 +1632,290 @@ export async function maintenanceContract({
       );
     },
   );
+  // Issue #226: a saved legacy ward reports what the official crosswalk says, and the one offered
+  // action records the current address it names as an unverified candidate. The seeded crosswalk is
+  // the fixture, so these cases run against the same rows a person would see.
+  const wardChain = async (condition) => {
+    const ward = (
+      await db.query(
+        `select w.id,w.parent_id as district,d.parent_id as province
+         from public.admin_unit_versions w join public.admin_unit_versions d on d.id=w.parent_id
+         where w.unit_level='commune' and w.valid_from=date '2025-01-04' and ${condition}
+         order by w.official_code limit 1`,
+      )
+    ).rows[0];
+    return {
+      ...ward,
+      crosswalk: (
+        await db.query(
+          'select relation,to_unit_id,effective_on::text as effective_on,source_url from public.admin_unit_crosswalks where from_unit_id=$1',
+          [ward.id],
+        )
+      ).rows,
+    };
+  };
+  const createLegacy = async (chain) =>
+    (
+      await db.query('select public.create_property($1,$2,$3) as id', [
+        'sale',
+        {},
+        {
+          format: 'legacy',
+          address_text: 'Nhà cũ theo bảng chuyển đổi',
+          province_unit_id: chain.province,
+          district_unit_id: chain.district,
+          commune_unit_id: chain.id,
+        },
+      ])
+    ).rows[0].id;
+  const refuseWith = async (sql, params, code, pattern) => {
+    let error;
+    try {
+      await db.query(sql, params);
+    } catch (caught) {
+      error = caught;
+    }
+    assert.ok(error, 'expected the database to refuse the write');
+    assert.equal(error.code, code);
+    if (pattern) assert.match(error.message, pattern);
+  };
+  const addressesOf = async (propertyId) =>
+    (
+      await db.query(
+        'select id,format,is_primary from public.property_addresses where property_id=$1 order by format desc,created_at',
+        [propertyId],
+      )
+    ).rows.filter((row) => row.format !== 'alternate');
+  const offered = await wardChain(
+    "(select count(*) from public.admin_unit_crosswalks x where x.from_unit_id=w.id)=1 and exists(select 1 from public.admin_unit_crosswalks x where x.from_unit_id=w.id and x.relation in ('whole','rename'))",
+  );
+  const several = await wardChain(
+    '(select count(*) from public.admin_unit_crosswalks x where x.from_unit_id=w.id)>1',
+  );
+  const uncovered = await wardChain(
+    'not exists(select 1 from public.admin_unit_crosswalks x where x.from_unit_id=w.id)',
+  );
+  let offeredProperty, offeredLegacy, candidateAddress, candidateRevision;
+  await asUser(0);
+  await check(
+    'an ordinary editor records the crosswalk current ward as a candidate and the legacy address is unchanged',
+    async () => {
+      offeredProperty = await createLegacy(offered);
+      offeredLegacy = (
+        await db.query(
+          "select id,address_text,province_unit_id,district_unit_id,commune_unit_id from public.property_addresses where property_id=$1 and format='legacy'",
+          [offeredProperty],
+        )
+      ).rows[0];
+      const target = offered.crosswalk[0];
+      candidateAddress = (
+        await db.query(
+          'select public.record_address_candidate($1,$2,$3) as id',
+          [
+            offeredProperty,
+            offeredLegacy.id,
+            await revision('properties', offeredProperty),
+          ],
+        )
+      ).rows[0].id;
+      const created2 = (
+        await db.query(
+          'select address_text,province_unit_id,commune_unit_id,district_unit_id,mapping_status,effective_on::text as effective_on,source_url,verification_method,verified_by,verified_at,mapping_evidence,is_primary,supersedes_address_id from public.property_addresses where id=$1',
+          [candidateAddress],
+        )
+      ).rows[0];
+      // The recorded source text is carried over; the target province and commune come from the
+      // crosswalk row itself, its effective date and source URL travel with the candidate, and the
+      // row states no district because the current generation has none.
+      assert.deepEqual(created2, {
+        address_text: 'Nhà cũ theo bảng chuyển đổi',
+        province_unit_id: (
+          await db.query(
+            'select parent_id from public.admin_unit_versions where id=$1',
+            [target.to_unit_id],
+          )
+        ).rows[0].parent_id,
+        commune_unit_id: target.to_unit_id,
+        district_unit_id: null,
+        mapping_status: 'candidate',
+        effective_on: '2025-07-01',
+        source_url: target.source_url,
+        verification_method: null,
+        verified_by: null,
+        verified_at: null,
+        mapping_evidence: null,
+        is_primary: true,
+        supersedes_address_id: null,
+      });
+      // Both rows stay primary: one primary per format, and the legacy record is not touched.
+      assert.deepEqual(await addressesOf(offeredProperty), [
+        { id: offeredLegacy.id, format: 'legacy', is_primary: true },
+        { id: candidateAddress, format: 'current', is_primary: true },
+      ]);
+      assert.deepEqual(
+        (
+          await db.query(
+            'select address_text,province_unit_id,district_unit_id,commune_unit_id,mapping_status from public.property_addresses where id=$1',
+            [offeredLegacy.id],
+          )
+        ).rows[0],
+        {
+          address_text: offeredLegacy.address_text,
+          province_unit_id: offeredLegacy.province_unit_id,
+          district_unit_id: offeredLegacy.district_unit_id,
+          commune_unit_id: offeredLegacy.commune_unit_id,
+          mapping_status: 'unresolved',
+        },
+      );
+      candidateRevision = await revision(
+        'property_addresses',
+        candidateAddress,
+      );
+    },
+  );
+  await check(
+    'the same editor still cannot verify mapping, and a candidate demands its date and source',
+    async () => {
+      await refuseWith(
+        mutate,
+        [
+          offeredProperty,
+          'mapping',
+          candidateAddress,
+          candidateRevision,
+          { mapping_status: 'verified' },
+        ],
+        '42501',
+        /reviewer required for mapping/,
+      );
+      assert.deepEqual(
+        (
+          await db.query(
+            'select mapping_status,verified_by,verified_at,effective_on::text as effective_on from public.property_addresses where id=$1',
+            [candidateAddress],
+          )
+        ).rows[0],
+        {
+          mapping_status: 'candidate',
+          verified_by: null,
+          verified_at: null,
+          effective_on: '2025-07-01',
+        },
+      );
+      // A candidate still has to state when its source took effect and where it came from, so an
+      // unresolved current address cannot simply be marked as one.
+      const plain = (
+        await db.query(mutate, [
+          offeredProperty,
+          'address',
+          null,
+          await revision('properties', offeredProperty),
+          { format: 'current', address_text: 'Địa chỉ hiện tại chưa ánh xạ' },
+        ])
+      ).rows[0].id;
+      await refuseWith(
+        mutate,
+        [
+          offeredProperty,
+          'mapping',
+          plain,
+          await revision('property_addresses', plain),
+          { mapping_status: 'candidate' },
+        ],
+        '23514',
+        /candidate mapping requires an effective date and a source url/,
+      );
+      assert.deepEqual(
+        (
+          await db.query(
+            'select mapping_status,effective_on,source_url from public.property_addresses where id=$1',
+            [plain],
+          )
+        ).rows[0],
+        { mapping_status: 'unresolved', effective_on: null, source_url: null },
+      );
+      // The same state, then, is accepted from that editor once the source is stated, and it still
+      // carries no verification stamp.
+      await db.query(mutate, [
+        offeredProperty,
+        'mapping',
+        plain,
+        await revision('property_addresses', plain),
+        {
+          mapping_status: 'candidate',
+          effective_on: '2025-07-01',
+          source_url: 'https://example.test/official-conversion-table',
+        },
+      ]);
+      assert.deepEqual(
+        (
+          await db.query(
+            'select mapping_status,effective_on::text as effective_on,verified_by,verified_at from public.property_addresses where id=$1',
+            [plain],
+          )
+        ).rows[0],
+        {
+          mapping_status: 'candidate',
+          effective_on: '2025-07-01',
+          verified_by: null,
+          verified_at: null,
+        },
+      );
+    },
+  );
+  await check(
+    'a ward with several crosswalk targets or none writes no current address',
+    async () => {
+      assert.equal(several.crosswalk.length > 1, true);
+      assert.equal(uncovered.crosswalk.length, 0);
+      for (const chain of [several, uncovered]) {
+        const propertyId = await createLegacy(chain);
+        const legacy = (
+          await db.query(
+            "select id from public.property_addresses where property_id=$1 and format='legacy'",
+            [propertyId],
+          )
+        ).rows[0];
+        await refuseWith(
+          'select public.record_address_candidate($1,$2,$3)',
+          [propertyId, legacy.id, await revision('properties', propertyId)],
+          '23514',
+          /one whole crosswalk target required/,
+        );
+        assert.deepEqual(await addressesOf(propertyId), [
+          { id: legacy.id, format: 'legacy', is_primary: true },
+        ]);
+      }
+    },
+  );
+  await check(
+    'a stale property revision or a colleague without edit authority records nothing',
+    async () => {
+      await refuseWith(
+        'select public.record_address_candidate($1,$2,$3)',
+        [
+          offeredProperty,
+          offeredLegacy.id,
+          '90000000-0000-4000-8000-000000000001',
+        ],
+        'PT409',
+        /stale property context/,
+      );
+      await asUser(1);
+      await refuseWith(
+        'select public.record_address_candidate($1,$2,$3)',
+        [
+          offeredProperty,
+          offeredLegacy.id,
+          await revision('properties', offeredProperty),
+        ],
+        '42501',
+        /property edit denied/,
+      );
+      await asUser(0);
+      // Nothing above recorded a further address for this property.
+      assert.equal((await addressesOf(offeredProperty)).length, 3);
+    },
+  );
   return created;
 }

@@ -11,6 +11,8 @@ import type { PropertySummary } from '@/features/properties/types';
 import { mayEditProperty } from '@/features/properties/edit-permission';
 import type { ContactDetail } from './data';
 import { MutationForm, RecordFields, AddressFields } from './forms';
+import { CrosswalkOffer } from './crosswalk-offer';
+import type { AddressCrosswalk } from './crosswalk';
 import { LocationEditor } from '@/features/properties/location';
 import { targetFields, type Target, type Changes } from './fields';
 import { maintenanceError, maintenanceText, optionLabel } from './messages';
@@ -60,6 +62,9 @@ export function Maintenance({
   const [section, setSection] = useState<Section>(DEFAULT_SECTION),
     narrow = useNarrowSections(),
     [editor, setEditor] = useState<Editor | null>(null),
+    // A saved legacy address reports what the crosswalk says about its ward, so the current address
+    // it names can be recorded from here rather than written on the person's behalf.
+    [crosswalk, setCrosswalk] = useState<AddressCrosswalk | null>(null),
     [selected, setSelected] = useState(''),
     [contactBusy, setContactBusy] = useState(false),
     [contactError, setContactError] = useState<string | null>(null);
@@ -154,19 +159,28 @@ export function Maintenance({
   }
   async function save(changes: Changes, explanation?: string) {
     if (!editor) return;
-    const result = await api<{ summary?: PropertySummary | null }>(
-      '/api/properties/' + property.id + '/maintenance',
-      {
-        target: editor.target,
-        targetId: editor.targetId,
-        revision: editor.revision,
-        propertyRevision: editor.propertyRevision,
-        changes,
-        ...(explanation ? { explanation } : {}),
-      },
-    );
+    const result = await api<{
+      summary?: PropertySummary | null;
+      address?: AddressCrosswalk;
+    }>('/api/properties/' + property.id + '/maintenance', {
+      target: editor.target,
+      targetId: editor.targetId,
+      revision: editor.revision,
+      propertyRevision: editor.propertyRevision,
+      changes,
+      ...(explanation ? { explanation } : {}),
+    });
     applyServerSummary(applyChange, result, property.id);
+    if (editor.target === 'address') setCrosswalk(result.address ?? null);
     return result;
+  }
+  async function candidateRecorded(result: {
+    summary?: PropertySummary | null;
+  }) {
+    applyServerSummary(applyChange, result, property.id);
+    setCrosswalk(null);
+    notify({ saved: true, message: text.crosswalkRecorded });
+    await onSaved();
   }
   async function saved() {
     if (!editor) return;
@@ -362,6 +376,15 @@ export function Maintenance({
                   </span>
                 </div>
               ))}
+              {crosswalk ? (
+                <CrosswalkOffer
+                  locale={locale}
+                  propertyId={property.id}
+                  address={crosswalk}
+                  onDenied={onDenied}
+                  onRecorded={candidateRecorded}
+                />
+              ) : null}
               {editor &&
               (editor.target === 'address' || editor.target === 'mapping') &&
               (editor.target !== 'mapping' || reviewer) ? (

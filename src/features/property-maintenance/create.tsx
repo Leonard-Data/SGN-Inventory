@@ -9,6 +9,8 @@ import type { Locale } from '@/i18n/messages';
 import { messages } from '@/i18n/messages';
 import { formChanges, targetFields } from './fields';
 import { AddressFields, RecordFields } from './forms';
+import { CrosswalkOffer } from './crosswalk-offer';
+import type { AddressCrosswalk } from './crosswalk';
 import { maintenanceText, optionLabel } from './messages';
 import { useToast } from '@/features/toasts/toast-host';
 import type { ContactRecord } from './create-contact';
@@ -26,6 +28,12 @@ export function CreateProperty({
     notify = useToast(),
     [busy, setBusy] = useState(false),
     [error, setError] = useState<string | null>(null),
+    // A legacy save holds the page on its own confirmation, because the crosswalk outcome it reports
+    // is the only place the current address can be recorded from.
+    [created, setCreated] = useState<{
+      id: string;
+      address?: AddressCrosswalk;
+    } | null>(null),
     [contactProblem, setContactProblem] = useState<string | null>(null),
     contactNameId = useId(),
     contactPhoneId = useId();
@@ -53,6 +61,7 @@ export function CreateProperty({
         id: string;
         summary?: PropertySummary | null;
         contact?: ContactRecord;
+        address?: AddressCrosswalk;
       }>('/api/properties', {
         mode,
         facts,
@@ -76,6 +85,11 @@ export function CreateProperty({
           message: copy.createContactFailed,
         });
       // The record is committed and the new page opens with its confirmation.
+      if (result.address) {
+        setCreated({ id: result.id, address: result.address });
+        setBusy(false);
+        return;
+      }
       router.push('/properties/' + result.id);
     } catch (failure) {
       if (
@@ -91,6 +105,36 @@ export function CreateProperty({
       setBusy(false);
     }
   }
+  if (created)
+    return (
+      <section className="panel maintenance">
+        <div className="panel-body">
+          <p role="status">{text.propertyCreated}</p>
+          {created.address ? (
+            <CrosswalkOffer
+              locale={locale}
+              propertyId={created.id}
+              address={created.address}
+              onDenied={onDenied}
+              onRecorded={(result) => {
+                applyServerSummary(applyChange, result, created.id);
+                notify({ saved: true, message: text.crosswalkRecorded });
+                router.push('/properties/' + created.id);
+              }}
+            />
+          ) : null}
+          <div className="form-foot">
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => router.push('/properties/' + created.id)}
+            >
+              {text.openRecord}
+            </button>
+          </div>
+        </div>
+      </section>
+    );
   return (
     <section className="panel maintenance">
       <div className="panel-body">
