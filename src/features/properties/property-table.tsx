@@ -3,7 +3,12 @@ import { memo, useId } from 'react';
 import Link from 'next/link';
 import { label, messages, type Locale } from '@/i18n/messages';
 import { LoadingSkeleton } from '@/features/skeleton';
-import { SUMMARY_TABLE_COLUMNS, propertyTableRow, rowPrice } from './table';
+import {
+  SUMMARY_TABLE_COLUMNS,
+  propertyTableRow,
+  recordFacts,
+  rowPrice,
+} from './table';
 import { compactVnd, formatVnd } from './format';
 import { statusTone } from './property-card';
 import { useMeasuredHeight } from '@/features/stream/use-measured';
@@ -61,6 +66,8 @@ export const TableChunk = memo(function TableChunk({
     <tbody ref={element}>
       {rows.map((record) => {
         const row = propertyTableRow(record, locale, now);
+        // The facts the row and the quick view both state come from one projection.
+        const facts = recordFacts(record, locale);
         const price = rowPrice(record);
         const address = record.addresses[0];
         const matchedFormat = matchedFormats.get(record.id);
@@ -127,6 +134,18 @@ export const TableChunk = memo(function TableChunk({
             </td>
             <td className="inventory-cell num" data-column="totalArea">
               {area.text} {area.note}
+            </td>
+            <td className="inventory-cell num" data-column="frontage">
+              {facts.frontage.text}
+            </td>
+            <td className="inventory-cell num" data-column="depth">
+              {facts.depth.text}
+            </td>
+            <td className="inventory-cell num" data-column="floors">
+              {facts.floors.text}
+            </td>
+            <td className="inventory-cell" data-column="creator" translate="no">
+              {facts.creator.text}
             </td>
             <td className="inventory-cell" data-column="status">
               <span className="badge" data-tone={statusTone(record.status)}>
@@ -225,21 +244,26 @@ function RecordMenu({
 
 export function TableHead({ locale }: { locale: Locale }) {
   const text = messages[locale];
-  const headings = [
-    text.columnPropertyId,
-    text.address,
-    text.columnPrice,
-    text.columnTotalArea,
-    text.columnStatus,
-    text.columnModifiedTime,
-    text.recordActions,
-  ];
+  // Keyed by column so a new column cannot shift every heading beside it.
+  const headings: Record<(typeof SUMMARY_TABLE_COLUMNS)[number], string> = {
+    property: text.columnPropertyId,
+    address: text.address,
+    price: text.columnPrice,
+    totalArea: text.columnTotalArea,
+    frontage: text.frontage,
+    depth: text.depth,
+    floors: text.floors,
+    creator: text.createdBy,
+    status: text.columnStatus,
+    modifiedTime: text.columnModifiedTime,
+    actions: text.recordActions,
+  };
   return (
     <thead>
       <tr>
-        {SUMMARY_TABLE_COLUMNS.map((column, index) => (
+        {SUMMARY_TABLE_COLUMNS.map((column) => (
           <th key={column} scope="col" data-column={column}>
-            {headings[index]}
+            {headings[column]}
           </th>
         ))}
       </tr>

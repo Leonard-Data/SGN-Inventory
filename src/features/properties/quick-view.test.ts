@@ -165,6 +165,25 @@ test('the drawer panel declares one animation, not a slide plus a fade', () => {
   assert.doesNotMatch(panel, /animation|opacity/);
 });
 
+// The row and the panel opened from it state the same frontage, depth, floors and creator: the
+// panel reads the shared projection instead of phrasing its own copy, and a fact the record does
+// not hold is the explicit marker rather than a line that simply disappears.
+test('the panel states the four facts the row states, unknown ones explicitly', () => {
+  assert.match(drawer, /recordFacts\(property, locale\)/);
+  for (const fact of ['frontage', 'depth', 'floors', 'creator'])
+    assert.match(
+      drawer,
+      new RegExp(`value: shared\\.${fact}\\.text`),
+      `${fact} reads the shared projection`,
+    );
+  // The creator is a stated fact even when the record names nobody.
+  assert.match(
+    drawer,
+    /label: text\.createdBy,[\s\S]{0,120}known: shared\.creator\.known/,
+  );
+  assert.doesNotMatch(drawer, /if \(property\.createdBy\)/);
+});
+
 // The drawer box is pinned to the viewport and does not scroll: scrolling inside the panel leaves
 // the panel where it is, and the panel body is the drawer's one scroll container. Nothing is
 // unreachable, because the body scrolls its own content inside the panel.

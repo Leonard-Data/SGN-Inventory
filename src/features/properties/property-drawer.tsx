@@ -48,7 +48,7 @@ import {
 import { wholeVnd, squareMetres } from './filters';
 import { detailMessages } from './messages';
 import { statusTone } from './property-card';
-import { MISSING_VALUE, totalAreaM2 } from './table';
+import { MISSING_VALUE, recordFacts, totalAreaM2 } from './table';
 import type { OwnerContactDisclosure, PropertySummary } from './types';
 
 // How many of the most recent comments the quick view repeats; the full record holds the rest.
@@ -455,6 +455,9 @@ function QuickView({
     value !== null
       ? { value, known: true }
       : { value: MISSING_VALUE, known: false };
+  // Frontage, depth, floors and the creator are the same four facts the list states in its own
+  // columns, read from the same projection so the row and this panel agree.
+  const shared = recordFacts(property, locale);
   const facts: { label: string; value: string; known: boolean }[] = [
     {
       label: text.listingMode,
@@ -474,15 +477,29 @@ function QuickView({
       label: text.floorArea,
       ...recorded(property.floorAreaM2 ? m2(property.floorAreaM2) : null),
     },
+    {
+      label: text.frontage,
+      value: shared.frontage.text,
+      known: shared.frontage.known,
+    },
+    {
+      label: text.depth,
+      value: shared.depth.text,
+      known: shared.depth.known,
+    },
+    {
+      label: text.floors,
+      value: shared.floors.text,
+      known: shared.floors.known,
+    },
     { label: text.columnCreatedDate, ...recorded(created) },
     { label: text.updated, ...recorded(updated) },
-  ];
-  if (property.createdBy)
-    facts.push({
+    {
       label: text.createdBy,
-      value: property.createdBy,
-      known: true,
-    });
+      value: shared.creator.text,
+      known: shared.creator.known,
+    },
+  ];
   if (showEntry)
     facts.push({
       label: text.entryDate,

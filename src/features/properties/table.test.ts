@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { messages } from '../../i18n/messages.ts';
 import {
   COLUMN_HEADINGS,
   MISSING_VALUE,
   propertyTableRow,
+  recordFacts,
   rowPrice,
+  SUMMARY_TABLE_COLUMNS,
   TABLE_COLUMNS,
   totalAreaM2,
 } from './table.ts';
@@ -154,6 +157,83 @@ test('a value the record does not have renders as an em dash, never as a blank c
   );
   assert.equal(cell(current, 'district').text, MISSING_VALUE);
   assert.equal(cell(current, 'ward').text, 'Phường Bến Nghé');
+});
+
+// The list states these four facts in their own columns and the quick view states the same four
+// as facts about the record, so both read this one projection and cannot disagree.
+test('the summary table states frontage, depth, floors and the creator beside the area', () => {
+  assert.deepEqual(SUMMARY_TABLE_COLUMNS, [
+    'property',
+    'address',
+    'price',
+    'totalArea',
+    'frontage',
+    'depth',
+    'floors',
+    'creator',
+    'status',
+    'modifiedTime',
+    'actions',
+  ]);
+});
+
+// The row draws its cells in the order the headings and the reserved colSpan count in, so a cell
+// that drifted to another slot would label a whole column with the wrong fact.
+test("the row draws its cells in the columns' own order", () => {
+  const source = readFileSync(
+    new URL('./property-table.tsx', import.meta.url),
+    'utf8',
+  );
+  // Only the row itself: the heading row draws its columns from the list above.
+  const row = source.slice(0, source.indexOf('function RecordMenu'));
+  const drawn = [...row.matchAll(/data-column="([a-zA-Z]+)"/g)].map(
+    (match) => match[1],
+  );
+  assert.deepEqual(drawn, [...SUMMARY_TABLE_COLUMNS]);
+});
+
+test("the shared facts state each recorded value in the reader's own numbers", () => {
+  const vi = recordFacts(record({ frontageM: '5.5', depthM: '18' }), 'vi');
+  assert.deepEqual(vi.frontage, { text: '5,5 m', known: true });
+  assert.deepEqual(vi.depth, { text: '18 m', known: true });
+  assert.deepEqual(vi.floors, { text: '3', known: true });
+  assert.deepEqual(vi.creator, { text: 'Nguyễn Thu Hà', known: true });
+  // English numbers keep the decimal point; the recorded name and the units do not change.
+  const en = recordFacts(record({ frontageM: '5.5', depthM: '18' }), 'en');
+  assert.equal(en.frontage.text, '5.5 m');
+  assert.equal(en.depth.text, '18 m');
+  // A thousands-separated floor count is still just a count.
+  assert.equal(
+    recordFacts(record({ floors: 1200 }), 'en').floors.text,
+    '1,200',
+  );
+});
+
+// A fact the record does not hold is the missing-value marker. Zero is a recorded number, so it is
+// stated as one: an unknown frontage and a frontage of zero are different facts.
+test('an unknown fact states the marker, and a recorded zero is not unknown', () => {
+  const unknown = recordFacts(
+    record({
+      frontageM: null,
+      depthM: null,
+      floors: null,
+      createdBy: null,
+    }),
+    'vi',
+  );
+  for (const [name, fact] of Object.entries(unknown))
+    assert.deepEqual(fact, { text: MISSING_VALUE, known: false }, name);
+  assert.equal(MISSING_VALUE, '—');
+
+  const zero = recordFacts(
+    record({ frontageM: '0', depthM: '0', floors: 0, createdBy: '   ' }),
+    'vi',
+  );
+  assert.deepEqual(zero.frontage, { text: '0 m', known: true });
+  assert.deepEqual(zero.depth, { text: '0 m', known: true });
+  assert.deepEqual(zero.floors, { text: '0', known: true });
+  // A name of nothing but space is no name at all.
+  assert.deepEqual(zero.creator, { text: MISSING_VALUE, known: false });
 });
 
 test('total area is the floor area, falling back to the land area when it is absent', () => {
