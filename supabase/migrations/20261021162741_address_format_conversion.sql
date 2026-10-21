@@ -20,11 +20,12 @@
 --     source_url. It is never 'verified': D5 keeps verification reviewer-only, and no promotion is
 --     performed here;
 --   * it refuses, with its own code, when the source row records no ward, when the crosswalk has no
---     row for the recorded unit, when the crosswalk is ambiguous, or when the target format already
---     records that same territory.
--- Four codes are distinct rather than the usual 23514 so the surface can state which of those
+--     row for the recorded unit, when the crosswalk is ambiguous, when the target format already
+--     records that same territory, or when a later correction of the same format has superseded the
+--     source row.
+-- Five codes are distinct rather than the usual 23514 so the surface can state which of those
 -- refused it: PT421 source units absent, PT422 ambiguous crosswalk, PT423 duplicate row, PT424 no
--- crosswalk row for the recorded unit at all.
+-- crosswalk row for the recorded unit at all, PT425 superseded source row.
 begin;
 
 create function private.convert_address_format(p_property_id uuid,p_address_id uuid,p_address_revision uuid,p_property_revision uuid) returns uuid
@@ -43,6 +44,12 @@ begin
   if not found then raise exception 'address mismatch' using errcode='23514'; end if;
   if source.revision<>p_address_revision then raise exception 'stale address; reload current state' using errcode='PT409'; end if;
   if source.format not in ('legacy','current') then raise exception 'legacy or current address required' using errcode='23514'; end if;
+  -- A corrected address is history: its successor states the text and units the property moved to,
+  -- so converting the row it replaced would record what the property was corrected away from. Only
+  -- a successor of the same format replaces: the other format's row leaves this one in place.
+  if exists(select 1 from public.property_addresses s
+      where s.property_id=p_property_id and s.supersedes_address_id=source.id and s.format=source.format)
+    then raise exception 'superseded address; convert the current row' using errcode='PT425'; end if;
   -- Nothing is inferred from address text: without the recorded ward there is nothing to convert.
   if source.commune_unit_id is null then raise exception 'recorded ward required for conversion' using errcode='PT421'; end if;
   target_format:=case source.format when 'legacy' then 'current' else 'legacy' end;

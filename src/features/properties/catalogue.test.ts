@@ -8,6 +8,7 @@ import {
   catalogueSummary,
   nextCatalogueCursor,
   parseCatalogueCursor,
+  supersededAddressIds,
   type CatalogueRow,
 } from './catalogue.ts';
 
@@ -276,6 +277,30 @@ test('a superseded address version is history, not part of the summary', () => {
     summary.addresses.map((address) => address.id),
     [replacement, PROPERTY_ID],
   );
+});
+
+test('only a row a later same-format correction replaced counts as superseded', () => {
+  const legacy = '4e5f6071-8b9c-4d0e-9f1a-3c4d5e6f7081';
+  const correctedLegacy = '5f607182-9c0d-4e1f-8a2b-4d5e6f708192';
+  const candidate = '60718293-0d1e-4f20-9b3c-5e6f70819203';
+  const superseded = supersededAddressIds([
+    { id: legacy, format: 'legacy', supersedes_address_id: null },
+    {
+      id: correctedLegacy,
+      format: 'legacy',
+      supersedes_address_id: legacy,
+    },
+    {
+      id: candidate,
+      format: 'current',
+      supersedes_address_id: correctedLegacy,
+    },
+  ]);
+  // Only the corrected-away legacy row is history, so its format switch is no longer offered; the
+  // row the property is recorded at and the current row recorded from it both still are.
+  assert.deepEqual([...superseded], [legacy]);
+  assert.equal(superseded.has(correctedLegacy), false);
+  assert.equal(superseded.has(candidate), false);
 });
 
 test('a current address recorded from a legacy one keeps the legacy row in the summary', () => {

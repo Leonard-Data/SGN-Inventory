@@ -1,4 +1,4 @@
-import { label, type Locale } from '@/i18n/messages';
+import { label, type Locale } from '../../i18n/messages.ts';
 const copy = {
   yes: ['Có', 'Yes'],
   no: ['Không', 'No'],
@@ -127,6 +127,10 @@ const copy = {
   convertDuplicate: [
     'Không chuyển được: bất động sản đã có địa chỉ ở dạng này cho cùng địa bàn, nên không ghi thêm bản trùng.',
     'Cannot convert: the property already records an address in this format for the same territory, so no duplicate was written.',
+  ],
+  convertSuperseded: [
+    'Không chuyển được: địa chỉ này đã được đính chính bởi một bản mới hơn. Hãy chuyển đổi bản mới nhất; chưa có dữ liệu nào được ghi.',
+    'Cannot convert: a later correction replaced this address. Convert the newest row instead; nothing was written.',
   ],
   openRecord: ['Mở hồ sơ', 'Open record'],
   mappingHint: [
@@ -328,9 +332,11 @@ export function maintenanceError(locale: Locale, code: string | null) {
                   ? text.convertAmbiguous
                   : code === 'crosswalk-missing'
                     ? text.convertNoCrosswalk
-                    : code === 'address-format-duplicate'
-                      ? text.convertDuplicate
-                      : text.unavailable;
+                    : code === 'address-superseded'
+                      ? text.convertSuperseded
+                      : code === 'address-format-duplicate'
+                        ? text.convertDuplicate
+                        : text.unavailable;
 }
 const values: Record<string, readonly [string, string]> = {
   property: ['Thông tin bất động sản', 'Property facts'],

@@ -2487,6 +2487,62 @@ export async function maintenanceContract({
       assert.equal((await addressesOf(propertyId)).length, 1);
     },
   );
+  await check(
+    'a corrected address is history: converting the row it replaced is refused and the successor converts once',
+    async () => {
+      const propertyId = await createLegacy(offered);
+      const original = (
+        await db.query(
+          "select id from public.property_addresses where property_id=$1 and format='legacy'",
+          [propertyId],
+        )
+      ).rows[0].id;
+      const corrected = (
+        await db.query(mutate, [
+          propertyId,
+          'address',
+          original,
+          await revision('property_addresses', original),
+          { address_text: 'Nhà cũ sau khi đính chính' },
+        ])
+      ).rows[0].id;
+      assert.notEqual(corrected, original);
+      await refuseWith(
+        convert,
+        [
+          propertyId,
+          original,
+          await revision('property_addresses', original),
+          await revision('properties', propertyId),
+        ],
+        'PT425',
+        /superseded address/,
+      );
+      const converted = await convertAs(propertyId, corrected);
+      // The current row states the corrected text, not the text the property moved away from, and
+      // following the action on that row again is refused as a duplicate rather than writing a
+      // second current address for the same territory.
+      assert.equal(
+        (await addressRow(converted)).address_text,
+        'Nhà cũ sau khi đính chính',
+      );
+      assert.deepEqual(
+        (await addressesOf(propertyId)).map((row) => row.format).sort(),
+        ['current', 'legacy', 'legacy'],
+      );
+      await refuseWith(
+        convert,
+        [
+          propertyId,
+          corrected,
+          await revision('property_addresses', corrected),
+          await revision('properties', propertyId),
+        ],
+        'PT423',
+        /already recorded in the target format/,
+      );
+    },
+  );
   // The reverse direction needs a current commune the crosswalk derives from exactly one old ward;
   // a commune merged from several old wards deliberately has none.
   const singleSource = (

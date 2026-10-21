@@ -54,6 +54,9 @@ export function AddressConversion({
           },
         ),
       );
+      // The action is recorded, so the confirmation has nothing left to offer: the row it converted
+      // is now history and a second confirmation could only be refused.
+      setOpen(false);
     } catch (failure) {
       if (
         failure instanceof RequestError &&
