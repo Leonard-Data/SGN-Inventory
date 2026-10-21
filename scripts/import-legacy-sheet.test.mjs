@@ -16,6 +16,7 @@ import {
   listingModeFromLabel,
   mapMasterRow,
   parseArea,
+  parseAreaPair,
   parseMeasure,
   parseMoneyVnd,
   parsePhones,
@@ -82,6 +83,84 @@ test('measurements stay positive decimals and areas need an explicit unit', () =
     parseArea('99999999999999m2', 9999999999.99).error,
     'measure_overflow',
   );
+});
+
+test('the pair an area text carries keeps the decimals the dimension columns rounded', () => {
+  assert.deepEqual(parseAreaPair('80m2 (4,5m x16m)', 999999.99), {
+    frontage_m: '4.5',
+    depth_m: '16',
+  });
+  // No pair, a zero pair and a pair the column cannot hold are all simply no pair.
+  assert.deepEqual(parseAreaPair('47,4m²', 999999.99), {
+    frontage_m: null,
+    depth_m: null,
+  });
+  assert.deepEqual(parseAreaPair('0m2 (0m x0m)', 999999.99), {
+    frontage_m: null,
+    depth_m: null,
+  });
+  assert.deepEqual(parseAreaPair('64m2 (4,555m x16m)', 999999.99), {
+    frontage_m: null,
+    depth_m: null,
+  });
+  assert.deepEqual(parseAreaPair('', 999999.99), {
+    frontage_m: null,
+    depth_m: null,
+  });
+});
+
+test('the area text pair outranks the rounded dimension columns', () => {
+  const headers = ['Tổng diện tích', 'Chiều ngang', 'Chiều dài'];
+  const index = Object.fromEntries(
+    headers.map((header, position) => [header, position]),
+  );
+  const reference = buildReference({});
+
+  const rounded = mapMasterRow(
+    ['80m2 (4,5m x16m)', '5', '16'],
+    index,
+    reference,
+    '2026-10-18',
+  );
+  assert.equal(rounded.mapped.property.frontage_m, '4.5');
+  assert.equal(rounded.mapped.property.depth_m, '16');
+  assert.equal(rounded.mapped.property.land_area_m2, '80');
+  assert.ok(rounded.issues.includes('frontage_m:area_text_conflict'));
+  assert.ok(!rounded.issues.includes('depth_m:area_text_conflict'));
+
+  // Without a pair the columns still decide, and an empty column is filled rather than reported.
+  const columnsOnly = mapMasterRow(
+    ['47,4m²', '5', '9'],
+    index,
+    reference,
+    '2026-10-18',
+  );
+  assert.equal(columnsOnly.mapped.property.frontage_m, '5');
+  assert.equal(columnsOnly.mapped.property.depth_m, '9');
+  assert.ok(
+    !columnsOnly.issues.some((issue) => issue.endsWith('area_text_conflict')),
+  );
+
+  const emptyColumn = mapMasterRow(
+    ['80m2 (4,5m x16m)', '', '16'],
+    index,
+    reference,
+    '2026-10-18',
+  );
+  assert.equal(emptyColumn.mapped.property.frontage_m, '4.5');
+  assert.ok(
+    !emptyColumn.issues.some((issue) => issue.endsWith('area_text_conflict')),
+  );
+
+  // A column value the parser rejects stays rejected: the pair never rescues it.
+  const rejected = mapMasterRow(
+    ['80m2 (4,5m x16m)', '-5', '16'],
+    index,
+    reference,
+    '2026-10-18',
+  );
+  assert.equal(rejected.mapped.property.frontage_m, null);
+  assert.ok(rejected.issues.includes('frontage_m:negative_measure'));
 });
 
 test('phone values are normalised only when they are recognisable mobiles', () => {
