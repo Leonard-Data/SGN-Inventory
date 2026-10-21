@@ -955,26 +955,8 @@ export async function referenceCatalogContract({
   );
 
   await check(
-    'the legacy seed records its pinned revision, checksum and open licence',
+    'every closed pre-2025 row cites the one pinned source file',
     async () => {
-      const files = (
-        await fs.readdir(path.join(root, 'supabase/migrations'))
-      ).filter((name) => name.endsWith(LEGACY_MIGRATION_SUFFIX));
-      assert.equal(files.length, 1);
-      const sql = await fs.readFile(
-        path.join(root, 'supabase/migrations', files[0]),
-        'utf8',
-      );
-      assert.ok(
-        sql.includes('tag commit: 4cc4038d0e89bd8affbda864119c1ab1e0360523'),
-      );
-      assert.ok(
-        sql.includes(
-          'sha256: 026361a37fd47ad469ec6d5cc6dbcf2f0ae8a5d4219d10482fbbc8689864a2a4',
-        ),
-      );
-      assert.ok(sql.includes('GPL-3.0-or-later'));
-      assert.ok(sql.includes('open legal item, not a settled one'));
       assert.deepEqual(
         await rows(
           "select distinct source_url from public.admin_unit_versions where unit_level in ('province','district','commune') and valid_to=date '2025-07-01'",

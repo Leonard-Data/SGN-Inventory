@@ -1,3 +1,7 @@
+// The two-tier catalog is in force from this date; earlier rows belong to the closed pre-2025
+// three-tier generation and are never offered as a current province or commune.
+export const CURRENT_CATALOG_START = '2025-07-01';
+
 // Official unit names are source data: never translated and never rewritten. The dated window
 // only comes back for a name that appears twice in one list, so two windows stay distinguishable.
 export type UnitOption = {

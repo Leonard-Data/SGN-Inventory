@@ -9,6 +9,7 @@ import {
   targetFields,
   type Target,
 } from './fields';
+import { CURRENT_CATALOG_START } from './units';
 
 export function databaseError(error: { code?: string } | null) {
   if (!error) return;
@@ -202,6 +203,7 @@ export async function listUnits(
     .from('admin_unit_versions')
     .select('id,name_vi,unit_level,parent_id,valid_from,valid_to')
     .eq('unit_level', level!)
+    .gte('valid_from', CURRENT_CATALOG_START)
     .order('name_vi')
     .order('valid_from', { ascending: false })
     .limit(1000);
