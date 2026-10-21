@@ -112,6 +112,10 @@ _Avoid_: Fuzzy search, automatic ward mapping
 A legacy-to-current address relationship without sufficient reviewed evidence to identify the current administrative units.
 _Avoid_: Verified match
 
+**Recorded address candidate**:
+A current address recorded from the official old-to-new crosswalk as the unverified statement of where a legacy ward became, kept beside the preserved legacy address it came from rather than replacing it. Any property editor may record one from a single whole or rename target; it states the source and its effective date, carries no reviewer stamp and is not a verification.
+_Avoid_: Verified address, rewritten legacy address, automatic mapping
+
 **Property contact link**:
 The recorded relationship between a property and a contact, such as owner or broker. Several contacts may belong to a property, with at most one marked primary.
 _Avoid_: Contact inferred from sheet position

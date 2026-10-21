@@ -1289,6 +1289,7 @@ export function Detail({
                     employee={employee}
                     locale={locale}
                     onSaved={savedAndClosed}
+                    onRefresh={changed}
                     onDenied={denyFiles}
                   />
                 </DetailActionDialog>

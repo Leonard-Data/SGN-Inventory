@@ -2046,6 +2046,14 @@ export type Database = {
         Returns: Json;
       };
       create_contact: { Args: { p_changes: Json }; Returns: string };
+      record_address_candidate: {
+        Args: {
+          p_property_id: string;
+          p_legacy_address_id: string;
+          p_property_revision: string;
+        };
+        Returns: string;
+      };
       contact_impact: { Args: { p_contact_id: string }; Returns: Json };
       submit_correction: {
         Args: {
