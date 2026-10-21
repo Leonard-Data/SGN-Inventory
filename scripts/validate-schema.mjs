@@ -39,6 +39,7 @@ import { applyEmbeddedSchema } from './embedded-schema.mjs';
 import { provinceActivityContract } from './province-activity-contract.mjs';
 import { addressDuplicateMergeContract } from './address-duplicate-merge-contract.mjs';
 import { statusTrailContract } from './status-trail-contract.mjs';
+import { contactNumberContract } from './contact-number-contract.mjs';
 import { statusRequestContract } from './status-request-contract.mjs';
 const root = process.env.SGN_PROJECT_ROOT || process.cwd();
 const db = new PGlite({extensions:{unaccent,pg_trgm,pgcrypto}});
@@ -829,6 +830,9 @@ await addressDuplicateMergeContract({db,asUser,check,fails,employees,validationK
 await statusTrailContract({db,asUser,check,fails,employees});
 // Ticket #174: sold and rented as a reviewer decision recorded on the same trail.
 await statusRequestContract({db,asUser,check,fails,employees});
+// Recording a contact number on any unarchived property: any active employee may create the
+// contact and its link, while correcting or unlinking it stays staff/manager/admin.
+await contactNumberContract({db,asUser,check,fails,employees,property});
 const report={checked_at:new Date().toISOString(),engine:'PGlite embedded PostgreSQL plus an embedded real PostgreSQL engine for the two-connection last-admin, property-vendor-link and contact-link races; mocked auth/storage schemas',passed,
  limitations:['Not a live Supabase integration test','HTTP Auth, presigned R2 URLs, Vercel and browser flows not exercised','Hosted/staging independent-session contention at production load remains an acceptance gate']};
 await fs.writeFile(path.join(root,'docs/validation-results.json'),JSON.stringify(report,null,2)+'\n');

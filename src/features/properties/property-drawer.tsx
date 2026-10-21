@@ -16,6 +16,7 @@ import { EyeIcon } from '@/features/employees/auth-ui';
 import { messages, label, type Locale } from '@/i18n/messages';
 import { useToast } from '@/features/toasts/toast-host';
 import { contactRows, type ContactRow } from './contact-rows';
+import { AddContactNumber } from './add-contact-number';
 import { loadPropertyDetail, revealOwnerContact } from './detail-loader';
 import { HIDDEN_PHONE, ownerPhoneView } from './owner-phone';
 import {
@@ -188,6 +189,7 @@ function QuickView({
   const notify = useToast();
   const factsId = useId();
   const ownersId = useId();
+  const contactNumberId = useId();
   const uploadId = useId();
   const draftId = useId();
   const statusId = useId();
@@ -199,6 +201,12 @@ function QuickView({
   // null while they are still being read; an empty list is a real answer.
   const [owners, setOwners] = useState<ContactRow[] | null>(null);
   const [ownersFailed, setOwnersFailed] = useState(false);
+  // The newest recorded contact and whether the record still accepts a new one: both come from
+  // the same detail read, so a number recorded here replaces nothing.
+  const [newest, setNewest] = useState<ContactRow | null>(null);
+  // null until the read answers, so an archived record never shows the capture form first.
+  const [archived, setArchived] = useState<boolean | null>(null);
+  const [contactTick, setContactTick] = useState(0);
   // The owner phone is held only after a deliberate disclosure, and hiding it drops the value
   // again, so a hidden number is never in the page text.
   const [disclosure, setDisclosure] = useState<OwnerContactDisclosure | null>(
@@ -251,11 +259,10 @@ function QuickView({
           detail.property.created_by,
           !!detail.property.archived_at,
         );
-        setOwners(
-          contactRows(detail.contacts).filter(
-            (row) => row.relation === 'owner',
-          ),
-        );
+        const rows = contactRows(detail.contacts);
+        setOwners(rows.filter((row) => row.relation === 'owner'));
+        setNewest(rows[0] ?? null);
+        setArchived(!!detail.property.archived_at);
         setOwnersFailed(false);
       })
       .catch((failure) => {
@@ -264,7 +271,7 @@ function QuickView({
         else setOwnersFailed(true);
       });
     return () => abort.abort();
-  }, [propertyId, onDenied, onPermission]);
+  }, [propertyId, onDenied, onPermission, contactTick]);
 
   const phone = ownerPhoneView(disclosure);
 
@@ -613,6 +620,36 @@ function QuickView({
             {revealMessage(revealError)}
           </p>
         ) : null}
+      </section>
+      <section className="quick-view-section" aria-labelledby={contactNumberId}>
+        <h3 id={contactNumberId}>{text.contactNumber}</h3>
+        {ownersFailed ? (
+          <p className="field-hint" role="alert">
+            {text.unavailable}
+          </p>
+        ) : newest ? (
+          <p className="quick-view-owner-phone">
+            <span translate="no">{newest.name ?? text.unknown}</span>
+            {newest.phone.show ? (
+              <>
+                {' '}
+                <span className="num" translate="no">
+                  {newest.phone.text ?? text.unknown}
+                </span>
+              </>
+            ) : null}
+          </p>
+        ) : (
+          <p className="field-hint">{text.noContacts}</p>
+        )}
+        {archived !== false ? null : (
+          <AddContactNumber
+            propertyId={propertyId}
+            locale={locale}
+            onAdded={() => setContactTick((value) => value + 1)}
+            onDenied={onDenied}
+          />
+        )}
       </section>
       <section className="quick-view-section">
         <h3>{text.quickUpload}</h3>

@@ -43,6 +43,9 @@ export async function propertyDetail(context: RouteContext, id: string) {
         'contact_id,revision,relation,is_primary,contacts(id,revision,display_name,phones,raw_phone_text,contact_type,notes)',
       )
       .eq('property_id', id)
+      // Newest first: a newly recorded contact number supersedes nothing, so it is shown above
+      // the earlier contacts the property still keeps.
+      .order('created_at', { referencedTable: 'contacts', ascending: false })
       .order('is_primary', { ascending: false })
       .order('contact_id'),
     creatorRead,

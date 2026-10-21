@@ -224,6 +224,21 @@ const vi = {
   direction: 'Hướng',
   contacts: 'Liên hệ chủ nhà / môi giới',
   noContacts: 'Chưa có liên kết liên hệ được ghi nhận.',
+  // A recorded contact number is a new row beside the earlier ones: the newest is shown first
+  // and nothing already recorded is rewritten.
+  contactNumber: 'Số liên hệ',
+  contactNumberNewest: 'Số liên hệ mới nhất',
+  addContactNumber: 'Thêm số liên hệ',
+  contactNumberName: 'Tên người liên hệ',
+  contactNumberPhone: 'Số điện thoại',
+  contactNumberSave: 'Lưu số liên hệ',
+  contactNumberSaved: 'Đã thêm số liên hệ.',
+  contactNumberNote:
+    'Số mới hiển thị trước; các liên hệ đã ghi trước đó vẫn được giữ nguyên.',
+  contactNumberDenied: 'Bạn không thể thêm số liên hệ cho bất động sản này.',
+  contactNumberInvalid: 'Kiểm tra tên người liên hệ và số điện thoại.',
+  contactNumberFailed:
+    'Chưa xác nhận được kết quả. Đọc lại thông tin hiện tại trước khi thử lại.',
   owner: 'Chủ nhà',
   broker: 'Môi giới',
   representative: 'Đại diện',
@@ -1106,6 +1121,19 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     direction: 'Direction',
     contacts: 'Owner / broker contacts',
     noContacts: 'No recorded contact links.',
+    contactNumber: 'Contact number',
+    contactNumberNewest: 'Newest contact number',
+    addContactNumber: 'Add contact number',
+    contactNumberName: 'Contact name',
+    contactNumberPhone: 'Phone number',
+    contactNumberSave: 'Save contact number',
+    contactNumberSaved: 'Contact number added.',
+    contactNumberNote:
+      'The newest number shows first; earlier recorded contacts are kept as they are.',
+    contactNumberDenied: 'You cannot add a contact number to this property.',
+    contactNumberInvalid: 'Check the contact name and the phone number.',
+    contactNumberFailed:
+      'The outcome could not be confirmed. Read the current information before retrying.',
     owner: 'Owner',
     broker: 'Broker',
     representative: 'Representative',
