@@ -13,7 +13,7 @@ export const CATALOGUE_PAGE_SIZE = 200;
 
 // The summary shape's own version. A browser-held catalogue is only reused for the same shape, so
 // a later field change starts a new key instead of reading rows of the old one as the new one.
-export const CATALOGUE_SCHEMA_VERSION = 4;
+export const CATALOGUE_SCHEMA_VERSION = 5;
 
 // The one field list a catalogue read carries. Money and measurements are cast to text, so a
 // whole-VND or m² value is never rounded through a JavaScript number, and a property's address

@@ -2,7 +2,8 @@ import 'server-only';
 import { ApiError, uuid, type RouteContext } from '@/lib/supabase/route';
 import { creatorName } from './creator';
 import { addressNotes } from './address-notes';
-import { crosswalkOutcome } from '@/features/property-maintenance/data';
+import { crosswalkOutcomes } from '@/features/property-maintenance/data';
+import type { CrosswalkOutcome } from '@/features/property-maintenance/crosswalk';
 
 export async function propertyDetail(context: RouteContext, id: string) {
   if (!uuid(id)) throw new ApiError(400, 'invalid-input');
@@ -35,7 +36,12 @@ export async function propertyDetail(context: RouteContext, id: string) {
     context.client
       .from('property_addresses')
       .select(
-        'id,revision,format,address_text,house_number,street,province_text,district_text,commune_text,province_unit_id,district_unit_id,commune_unit_id,mapping_status,verification_method,verified_by,verified_at,source_url,effective_on,mapping_evidence,is_primary,supersedes_address_id',
+        'id,revision,format,address_text,house_number,street,province_text,district_text,commune_text,province_unit_id,district_unit_id,commune_unit_id,mapping_status,verification_method,verified_by,verified_at,source_url,effective_on,mapping_evidence,is_primary,supersedes_address_id,' +
+          // The official name of each unit the address chose rides on the address read itself, so a
+          // legacy address's hierarchy costs no read of its own.
+          'province:admin_unit_versions!province_unit_id(name_vi),' +
+          'district:admin_unit_versions!district_unit_id(name_vi),' +
+          'commune:admin_unit_versions!commune_unit_id(name_vi)',
       )
       .eq('property_id', id)
       .order('is_primary', { ascending: false })
@@ -57,31 +63,19 @@ export async function propertyDetail(context: RouteContext, id: string) {
     throw new ApiError(503, 'unavailable');
   const addresses = addressResult.data ?? [];
   // A legacy address reads as the hierarchy it was recorded in: the official names of the units it
-  // chose sit beside the source text, and never replace it. One read covers every unit the
-  // property's addresses name, and a name it does not answer leaves that tier out rather than
-  // failing the page.
-  const unitIds = [
-    ...new Set(
-      addresses.flatMap((address) =>
-        [
-          address.province_unit_id,
-          address.district_unit_id,
-          address.commune_unit_id,
-        ].filter((id): id is string => id !== null),
-      ),
-    ),
-  ];
+  // chose sit beside the source text, and never replace it. A name the read does not answer leaves
+  // that tier out rather than failing the page.
   const unitNames = new Map<string, string>();
-  if (unitIds.length) {
-    const { data: units } = await context.client
-      .from('admin_unit_versions')
-      .select('id,name_vi')
-      .in('id', unitIds);
-    for (const unit of units ?? []) unitNames.set(unit.id, unit.name_vi);
-  }
+  for (const address of addresses)
+    for (const [id, unit] of [
+      [address.province_unit_id, address.province],
+      [address.district_unit_id, address.district],
+      [address.commune_unit_id, address.commune],
+    ] as const)
+      if (id && unit) unitNames.set(id, unit.name_vi);
   // What the official crosswalk says about each recorded legacy ward, in the three outcomes the
-  // save surface reports. Read from the ward's own rows only, and an auxiliary read that fails
-  // leaves the line out instead of turning the whole page into a failure.
+  // save surface reports, read for every ward at once. An auxiliary read that fails leaves the line
+  // out instead of turning the whole page into a failure.
   const legacyWards = [
     ...new Set(
       addresses.flatMap((address) =>
@@ -91,16 +85,8 @@ export async function propertyDetail(context: RouteContext, id: string) {
       ),
     ),
   ];
-  const outcomes = new Map(
-    await Promise.all(
-      legacyWards.map(
-        async (ward) =>
-          [
-            ward,
-            await crosswalkOutcome(context, ward).catch(() => null),
-          ] as const,
-      ),
-    ),
+  const outcomes = await crosswalkOutcomes(context, legacyWards).catch(
+    () => new Map<string, CrosswalkOutcome>(),
   );
   return {
     property,

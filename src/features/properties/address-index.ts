@@ -31,6 +31,10 @@ export type CatalogueAddressVariant = {
   // them is a statement about this variant's own recorded hierarchy rather than a word it happens to
   // carry inside an address text copied from another format.
   officialTokens: string[];
+  // The localities this variant itself states: the parts its own columns record and the units it
+  // chose. A query answered by these names the locality this record holds, not only a word its
+  // address text carries.
+  statedTokens: string[];
 };
 
 export type CatalogueIndexEntry = {
@@ -156,6 +160,7 @@ function variantOf(address: AddressSummary): CatalogueAddressVariant {
     streetTokens,
     localityTokens,
     officialTokens,
+    statedTokens: [...columnLocalities, ...officialTokens],
   };
 }
 
@@ -199,21 +204,21 @@ function tokenMatches(queryToken: string, variantToken: string): boolean {
 
 // The ranking the specification sets out, lower first: the exact recorded property code, the exact
 // normalized address, the exact house number with its street, the alley sitting under the queried
-// main number, the street with its locality, and then the looser all-token and prefix matches.
-// `prefixPenalty` counts the query tokens that only matched as a prefix, so an exact token outranks
-// a prefix within a rank.
+// main number, the official unit it chose, the street with its locality, and then the looser
+// all-token and prefix matches. `prefixPenalty` counts the query tokens that only matched as a
+// prefix, so an exact token outranks a prefix within a rank.
 const EXACT_CODE = 1;
 const EXACT_ADDRESS = 2;
 const NUMBER_AND_STREET = 3;
 const ALLEY_UNDER_NUMBER = 4;
-const STREET_AND_LOCALITY = 5;
-// A query that names the official unit this variant chose. It sits above the loosest rank so a
-// fragment naming an old district is answered by the variant that records that district, never by a
-// variant that only carries the same words inside an address text copied over from it.
-const CHOSEN_UNIT = 6;
+// A query that names the official unit this variant chose outranks a street word that happens to
+// match too, so a fragment naming an old district is answered by the variant that records that
+// district, never by a variant that only carries the same words inside a copied address text.
+const CHOSEN_UNIT = 5;
+const STREET_AND_LOCALITY = 6;
 const ALL_TOKENS = 7;
 
-type Ranked = { rank: number; prefixPenalty: number };
+type Ranked = { rank: number; prefixPenalty: number; stated: boolean };
 
 function rankVariant(
   query: Query,
@@ -230,8 +235,14 @@ function rankVariant(
   const prefixPenalty = query.tokens.filter(
     (token) => !variant.tokens.includes(token),
   ).length;
+  // The query is fully explained by the locality this variant itself records, rather than by the
+  // words its address text carries. Both variants of a copied-over pair carry the same text, so
+  // this is what tells the one that recorded the locality from the one that did not.
+  const stated = query.tokens.every((token) =>
+    variant.statedTokens.some((other) => tokenMatches(token, other)),
+  );
   if (query.folded === variant.folded)
-    return { rank: EXACT_ADDRESS, prefixPenalty };
+    return { rank: EXACT_ADDRESS, prefixPenalty, stated };
   const rest = query.houseNumber
     ? query.tokens.filter((token) => token !== query.houseNumber)
     : query.tokens;
@@ -243,13 +254,20 @@ function rankVariant(
       variant.streetTokens.some((other) => tokenMatches(token, other)),
     )
   )
-    return { rank: NUMBER_AND_STREET, prefixPenalty };
+    return { rank: NUMBER_AND_STREET, prefixPenalty, stated };
   if (
     query.houseNumber !== null &&
     variant.mainNumber === query.houseNumber &&
     variant.houseNumber !== variant.mainNumber
   )
-    return { rank: ALLEY_UNDER_NUMBER, prefixPenalty };
+    return { rank: ALLEY_UNDER_NUMBER, prefixPenalty, stated };
+  if (
+    variant.officialTokens.length > 0 &&
+    query.tokens.every((token) =>
+      variant.officialTokens.some((other) => tokenMatches(token, other)),
+    )
+  )
+    return { rank: CHOSEN_UNIT, prefixPenalty, stated };
   if (
     query.tokens.some((token) =>
       variant.streetTokens.some((other) => tokenMatches(token, other)),
@@ -258,19 +276,22 @@ function rankVariant(
       variant.localityTokens.some((other) => tokenMatches(token, other)),
     )
   )
-    return { rank: STREET_AND_LOCALITY, prefixPenalty };
-  if (
-    variant.officialTokens.length > 0 &&
-    query.tokens.every((token) =>
-      variant.officialTokens.some((other) => tokenMatches(token, other)),
-    )
-  )
-    return { rank: CHOSEN_UNIT, prefixPenalty };
-  return { rank: ALL_TOKENS, prefixPenalty };
+    return { rank: STREET_AND_LOCALITY, prefixPenalty, stated };
+  return { rank: ALL_TOKENS, prefixPenalty, stated };
 }
 
 function compareRank(left: Ranked, right: Ranked): number {
   return left.rank - right.rank || left.prefixPenalty - right.prefixPenalty;
+}
+
+// Between two variants of the same property, the one whose own recorded locality answers the query
+// states the property under the label the person searched for.
+function compareVariant(left: Ranked, right: Ranked): number {
+  return (
+    left.rank - right.rank ||
+    Number(right.stated) - Number(left.stated) ||
+    left.prefixPenalty - right.prefixPenalty
+  );
 }
 
 // A stable property identity as the final tie-break, so the same search always returns the same
@@ -310,14 +331,14 @@ export function matchCatalogue(
     for (const variant of entry.variants) {
       const ranked = rankVariant(parsed, variant);
       if (!ranked) continue;
-      if (!best || compareRank(ranked, best) < 0) {
+      if (!best || compareVariant(ranked, best) < 0) {
         best = ranked;
         bestFormat = variant.format;
       }
     }
     const code = codeRank(parsed, entry);
     if (code !== null && (!best || code < best.rank)) {
-      best = { rank: code, prefixPenalty: 0 };
+      best = { rank: code, prefixPenalty: 0, stated: false };
       bestFormat = '';
     }
     if (best)

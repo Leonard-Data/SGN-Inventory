@@ -413,3 +413,41 @@ test('a legacy district never reaches a current ward in the local index', () => 
   // The legacy hierarchy is still what its own recorded text names.
   assert.equal(recordedMatches('phuong 22')[0]?.format, 'legacy');
 });
+
+// The same pairing with a street word that also begins the old district's name, so a query naming
+// the district prefix-matches the street of both variants. Only the variant that records the
+// district in its own unit or column is the one that answers it.
+function titledPair(legacyParts: Partial<AddressSummary>) {
+  return [
+    address('legacy', '12 Bình Lợi, Phường 13, Quận Bình Thạnh', {
+      houseNumber: '12',
+      street: 'Bình Lợi',
+      commune: 'Phường 13',
+      ...legacyParts,
+    }),
+    address('current', '12 Bình Lợi, Phường 13, Quận Bình Thạnh', {
+      houseNumber: '12',
+      street: 'Bình Lợi',
+      units: ['Thành phố Hồ Chí Minh', 'Phường Thạnh Mỹ Tây'],
+    }),
+  ] as const;
+}
+const labelFor = (addresses: readonly AddressSummary[], query: string) =>
+  matchCatalogue(buildAddressIndex([property('23', [...addresses])]), query)[0]
+    ?.format;
+
+test('the variant that records the old district answers whichever variant is listed first', () => {
+  // The district recorded as the chosen unit, and the district recorded only in its column.
+  const chosen = titledPair({
+    district: 'Quận Bình Thạnh',
+    units: ['Thành phố Hồ Chí Minh', 'Quận Bình Thạnh', 'Phường 13'],
+  });
+  const column = titledPair({ district: 'Quận Bình Thạnh' });
+  for (const pair of [chosen, column])
+    for (const listed of [[...pair], [...pair].reverse()]) {
+      assert.equal(labelFor(listed, 'quan binh thanh'), 'legacy');
+      assert.equal(labelFor(listed, 'binh thanh'), 'legacy');
+      assert.equal(labelFor(listed, 'phuong thanh my tay'), 'current');
+      assert.equal(labelFor(listed, 'thanh my tay'), 'current');
+    }
+});
