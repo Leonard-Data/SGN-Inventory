@@ -46,6 +46,7 @@ import { PropertyLocation } from './location';
 import { DetailActionDialog } from './detail-dialog';
 import { SharedAddress } from './duplicates';
 import { contactRows } from './contact-rows';
+import { AddContactNumber } from './add-contact-number';
 import { mayLinkPropertyVendors } from '@/features/vendors/directory';
 import { PropertyVendors } from '@/features/vendors/property-vendors';
 // The record screen groups its content the way the design package does: the record's own
@@ -967,6 +968,17 @@ export function Detail({
                       ) : (
                         <p>{dt.noContacts}</p>
                       )}
+
+                      {/* Recording a number is not a property-fact edit: any active employee
+                          may add one to an unarchived record, and the newest shows first. */}
+                      {employee && !property.archived_at ? (
+                        <AddContactNumber
+                          propertyId={property.id}
+                          locale={locale}
+                          onAdded={changed}
+                          onDenied={denyFiles}
+                        />
+                      ) : null}
 
                       {/* owner-contact disclosure (#56) */}
                       <div className="owner-disclosure">

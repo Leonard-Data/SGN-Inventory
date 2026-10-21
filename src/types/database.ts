@@ -1912,6 +1912,10 @@ export type Database = {
       };
     };
     Functions: {
+      add_property_contact: {
+        Args: { p_property_id: string; p_changes: Json };
+        Returns: string;
+      };
       begin_employee_account_deletion: {
         Args: { p_employee_id: string; p_key: string };
         Returns: Json;
