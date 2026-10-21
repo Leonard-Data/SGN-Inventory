@@ -368,9 +368,10 @@ function sqlString(raw) {
 }
 
 /**
- * Read `admin_unit_versions` content from the seeded migrations. The catalogue is the
- * project's own physical reference data, so the dry run needs no database connection;
- * no district level is seeded because the two-tier catalogue carries none.
+ * Read the current-window province/commune catalogue from the seeded migrations. The
+ * catalogue is the project's own physical reference data, so the dry run needs no database
+ * connection; only the two-tier tuples match this shape, so the pre-2025 three-tier rows are
+ * not read here.
  */
 export function readAdminUnitCatalogue(migrationsDir = MIGRATIONS_DIR) {
   const provinces = new Map();
@@ -2046,7 +2047,7 @@ export function renderReport(report) {
   push(
     `## ${writeSection || partialInvitations ? 13 : 12}. Limits of this run`,
     '',
-    '- `admin_unit_crosswalks` has no reviewed rows and `admin_unit_versions` seeds no district level, so',
+    '- `admin_unit_crosswalks` has no reviewed rows, so',
     '  the fallback conversion uses the published official mapping.',
     '- Property, address and contact rows are written over the administrative (owner) database connection,',
     '  which is not subject to RLS, because the import preserves each legacy author; attachments go through',
@@ -2782,7 +2783,7 @@ export async function run(argv, dependencies = {}) {
         })),
       catalogue_source: catalogue.source,
       crosswalk_note:
-        'public.admin_unit_crosswalks carries no reviewed rows and public.admin_unit_versions seeds no district level, so the fallback mapping is the published official three-tier to two-tier conversion, matched by legacy ward code. Once reviewed crosswalk rows exist they take this fallback role.',
+        'public.admin_unit_crosswalks carries no reviewed rows, so the fallback mapping is the published official three-tier to two-tier conversion, matched by legacy ward code. Once reviewed crosswalk rows exist they take this fallback role.',
     },
     duplicates,
     attachments,

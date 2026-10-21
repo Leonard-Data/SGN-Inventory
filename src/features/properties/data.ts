@@ -1,6 +1,7 @@
 import 'server-only';
 import { ApiError, type RouteContext } from '@/lib/supabase/route';
 import type { Database } from '@/types/database';
+import { CURRENT_CATALOG_START } from '@/features/property-maintenance/units';
 import type { AddressSummary, PropertyStream } from './types';
 import { propertyCreators, propertyModifiers } from './creator';
 import {
@@ -196,7 +197,8 @@ async function assertAreaUnits(
     .in(
       'id',
       [province, ward].filter((id): id is string => id !== null),
-    );
+    )
+    .gte('valid_from', CURRENT_CATALOG_START);
   if (error) throw new ApiError(503, 'unavailable');
   if (!catalogUnitsMatch(data ?? [], filters))
     throw new ApiError(400, 'invalid-input');

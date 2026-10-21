@@ -1,12 +1,16 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { CURRENT_CATALOG_START } from '../src/features/property-maintenance/units.ts';
 
 // Vietnamese province/city and ward/commune reference catalog seeded by
 // 20261014075435_vietnamese_admin_units_reference.sql from
 // thanglequoc/vietnamese-provinces-database: pre-2026 names (upstream v3.0.2)
 // for the 2025-07-01 baseline window, and the v5.2.0 names for the 2026-04-30
 // Đồng Nai, 2026-09-01 Quảng Ninh and 2026-09-20 Bắc Ninh windows.
+// 20261021060602_legacy_admin_units_reference.sql adds the pre-2025 three-tier
+// province/district/ward snapshot from sunshine-tech/VietnamProvinces on the
+// closed [2025-01-04, 2025-07-01) window.
 // It proves the seeded codes, hierarchy, half-open validity windows and counts,
 // the idempotent re-application, and the delivered address paths that consume
 // the catalog (the admin-unit picker query, the verified-mapping guard and the
@@ -15,6 +19,24 @@ import path from 'node:path';
 const SOURCE_URL =
   'https://github.com/thanglequoc/vietnamese-provinces-database/blob/v5.2.0/postgresql/postgres_ImportData_vn_units.sql';
 const MIGRATION_SUFFIX = '_vietnamese_admin_units_reference.sql';
+const LEGACY_SOURCE_URL =
+  'https://github.com/sunshine-tech/VietnamProvinces/blob/4cc4038d0e89bd8affbda864119c1ab1e0360523/dev/seed-data/Pre-2025-07/Xa_2025-01-04.csv';
+const LEGACY_MIGRATION_SUFFIX = '_legacy_admin_units_reference.sql';
+const LEGACY_FROM = '2025-01-04';
+const LEGACY_TO = '2025-07-01';
+// Pre-2025 province codes reused for a different current province, which is why
+// a unit is keyed by (unit_level, official_code, valid_from) and never by code.
+const REUSED_PROVINCE_CODES = {
+  15: ['Tỉnh Yên Bái', 'Tỉnh Lào Cai'],
+  24: ['Tỉnh Bắc Giang', 'Tỉnh Bắc Ninh'],
+  44: ['Tỉnh Quảng Bình', 'Tỉnh Quảng Trị'],
+  52: ['Tỉnh Bình Định', 'Tỉnh Gia Lai'],
+  80: ['Tỉnh Long An', 'Tỉnh Tây Ninh'],
+  82: ['Tỉnh Tiền Giang', 'Tỉnh Đồng Tháp'],
+  91: ['Tỉnh Kiên Giang', 'Tỉnh An Giang'],
+};
+// The five island districts whose 2025-01-04 rows carry no ward.
+const LEGACY_WARDLESS_DISTRICTS = ['318', '471', '498', '536', '755'];
 const DN_CITY_FROM = '2026-04-30';
 const QN_CITY_FROM = '2026-09-01';
 const BN_CITY_FROM = '2026-09-20';
@@ -73,6 +95,13 @@ export async function referenceCatalogContract({
       )
     ).rows[0];
   const window = (row) => [row.name_vi, day(row.valid_from), day(row.valid_to)];
+  const legacyUnit = async (level, code) =>
+    (
+      await db.query(
+        'select id,name_vi,unit_level,parent_id,valid_from,valid_to,source_url from public.admin_unit_versions where source_url=$1 and unit_level=$2 and official_code=$3',
+        [LEGACY_SOURCE_URL, level, code],
+      )
+    ).rows[0];
 
   await check(
     'reference catalog seeds every upstream unit once across its dated versions',
@@ -308,17 +337,52 @@ export async function referenceCatalogContract({
     'province and commune picker queries return the seeded groups',
     async () => {
       const hcmc = await unit('province', '79');
-      const provinces = await rows(
-        "select id from public.admin_unit_versions where unit_level='province' and source_url=$1",
-        [SOURCE_URL],
+      const allProvinces = await rows(
+        "select id,valid_to from public.admin_unit_versions where unit_level='province'",
       );
-      assert.equal(provinces.length, 37);
+      assert.ok(allProvinces.some((row) => day(row.valid_to) === LEGACY_TO));
+      const provinces = await rows(
+        "select id,valid_to,source_url from public.admin_unit_versions where unit_level='province' and valid_from>=$1",
+        [CURRENT_CATALOG_START],
+      );
+      assert.equal(
+        provinces.filter((row) => row.source_url === SOURCE_URL).length,
+        37,
+      );
+      assert.equal(
+        provinces.length,
+        allProvinces.length -
+          allProvinces.filter((row) => day(row.valid_to) === LEGACY_TO).length,
+      );
+      assert.ok(provinces.every((row) => day(row.valid_to) !== LEGACY_TO));
       const communes = await rows(
-        'select id,parent_id from public.admin_unit_versions where unit_level=$1 and parent_id=$2',
-        ['commune', hcmc.id],
+        'select id,parent_id,valid_to from public.admin_unit_versions where unit_level=$1 and parent_id=$2 and valid_from>=$3',
+        ['commune', hcmc.id, CURRENT_CATALOG_START],
       );
       assert.equal(communes.length, 168);
       assert.ok(communes.every((row) => row.parent_id === hcmc.id));
+      assert.ok(communes.every((row) => day(row.valid_to) !== LEGACY_TO));
+      // The closed pre-2025 generation stays in the table but outside both reads, and
+      // the inventory area lookup refuses its province and ward ids the same way.
+      for (const [level, code] of [
+        ['province', '01'],
+        ['commune', '00001'],
+      ]) {
+        const legacy = await legacyUnit(level, code);
+        assert.deepEqual(
+          await rows('select id from public.admin_unit_versions where id=$1', [
+            legacy.id,
+          ]),
+          [{ id: legacy.id }],
+        );
+        assert.deepEqual(
+          await rows(
+            'select id from public.admin_unit_versions where id=$1 and valid_from>=$2',
+            [legacy.id, CURRENT_CATALOG_START],
+          ),
+          [],
+        );
+      }
       const bacNinhBaseline = await unitAt('province', '24', '2025-07-01');
       const bacNinhCurrent = await unitAt('province', '24', BN_CITY_FROM);
       const dongNaiCurrent = await unitAt('province', '75', DN_CITY_FROM);
@@ -710,6 +774,268 @@ export async function referenceCatalogContract({
         ),
         sample,
       );
+      assert.deepEqual(
+        await rows(
+          'select unit_level,official_code,valid_from from public.admin_unit_versions group by unit_level,official_code,valid_from having count(*)>1',
+        ),
+        [],
+      );
+    },
+  );
+
+  await asSystem();
+
+  await check(
+    'legacy catalog seeds the pre-2025 snapshot on the closed window only',
+    async () => {
+      const counts = Object.fromEntries(
+        (
+          await rows(
+            "select unit_level,count(*)::int as n from public.admin_unit_versions where valid_to=date '2025-07-01' group by unit_level",
+          )
+        ).map((row) => [row.unit_level, row.n]),
+      );
+      assert.deepEqual(counts, { district: 696, commune: 10051, province: 63 });
+      const codes = Object.fromEntries(
+        (
+          await rows(
+            'select unit_level,count(distinct official_code)::int as n from public.admin_unit_versions where source_url=$1 group by unit_level',
+            [LEGACY_SOURCE_URL],
+          )
+        ).map((row) => [row.unit_level, row.n]),
+      );
+      assert.deepEqual(codes, { district: 696, commune: 10051, province: 63 });
+      // Every legacy row carries the pinned snapshot as its provenance, opens on
+      // the snapshot date and closes at the rearrangement date: no open sentinel
+      // and no claim outside the source's range.
+      assert.deepEqual(
+        await rows(
+          "select unit_level,official_code from public.admin_unit_versions where source_url=$1 and (valid_from<>date '2025-01-04' or valid_to is distinct from date '2025-07-01')",
+          [LEGACY_SOURCE_URL],
+        ),
+        [],
+      );
+      assert.deepEqual(
+        await rows(
+          "select unit_level,official_code from public.admin_unit_versions where valid_to=date '2025-07-01' and source_url<>$1",
+          [LEGACY_SOURCE_URL],
+        ),
+        [],
+      );
+      assert.deepEqual(window(await legacyUnit('province', '01')), [
+        'Thành phố Hà Nội',
+        LEGACY_FROM,
+        LEGACY_TO,
+      ]);
+      assert.deepEqual(window(await legacyUnit('district', '001')), [
+        'Quận Ba Đình',
+        LEGACY_FROM,
+        LEGACY_TO,
+      ]);
+      assert.deepEqual(window(await legacyUnit('commune', '00001')), [
+        'Phường Phúc Xá',
+        LEGACY_FROM,
+        LEGACY_TO,
+      ]);
+    },
+  );
+
+  await check(
+    'every legacy child is parented inside the same legacy generation',
+    async () => {
+      const wrongParents = await rows(
+        `select c.unit_level,c.official_code from public.admin_unit_versions c
+       left join public.admin_unit_versions p on p.id=c.parent_id
+      where c.source_url=$1
+        and ((c.unit_level='province' and c.parent_id is not null)
+          or (c.unit_level='district' and (p.unit_level is distinct from 'province' or p.source_url is distinct from $1 or p.valid_from is distinct from date '2025-01-04'))
+          or (c.unit_level='commune' and (p.unit_level is distinct from 'district' or p.source_url is distinct from $1 or p.valid_from is distinct from date '2025-01-04')))`,
+        [LEGACY_SOURCE_URL],
+      );
+      assert.deepEqual(wrongParents, []);
+      assert.equal(
+        (await legacyUnit('commune', '00001')).parent_id,
+        (await legacyUnit('district', '001')).id,
+      );
+      assert.equal(
+        (await legacyUnit('district', '001')).parent_id,
+        (await legacyUnit('province', '01')).id,
+      );
+      // The five island districts exist with no wards beneath them.
+      assert.deepEqual(
+        (
+          await rows(
+            `select d.official_code,d.name_vi from public.admin_unit_versions d
+       where d.source_url=$1 and d.unit_level='district'
+         and not exists (select 1 from public.admin_unit_versions c where c.parent_id=d.id)
+      order by d.official_code`,
+            [LEGACY_SOURCE_URL],
+          )
+        ).map((row) => row.official_code),
+        LEGACY_WARDLESS_DISTRICTS,
+      );
+    },
+  );
+
+  await check(
+    'legacy and current generations share a code without overlapping windows',
+    async () => {
+      const overlaps = await rows(
+        `select a.unit_level,a.official_code from public.admin_unit_versions a
+       join public.admin_unit_versions b
+         on b.unit_level=a.unit_level and b.official_code=a.official_code
+        and b.valid_from>a.valid_from
+      where a.valid_to is null or a.valid_to>b.valid_from`,
+      );
+      assert.deepEqual(overlaps, []);
+      for (const [code, [legacyName, currentName]] of Object.entries(
+        REUSED_PROVINCE_CODES,
+      )) {
+        assert.deepEqual(window(await legacyUnit('province', code)), [
+          legacyName,
+          LEGACY_FROM,
+          LEGACY_TO,
+        ]);
+        assert.equal(
+          (await unitAt('province', code, '2025-07-01')).name_vi,
+          currentName,
+        );
+      }
+      // One code names two different units in the two generations; only the
+      // validity window separates them.
+      assert.equal(
+        (await legacyUnit('commune', '00004')).name_vi,
+        'Phường Trúc Bạch',
+      );
+      assert.equal(
+        (await unitAt('commune', '00004', '2025-07-01')).name_vi,
+        'Phường Ba Đình',
+      );
+    },
+  );
+
+  await check(
+    'anonymous callers read no legacy row and employees read all of them',
+    async () => {
+      await asUser(null);
+      await fails(
+        'select count(*) from public.admin_unit_versions where source_url=$1',
+        [LEGACY_SOURCE_URL],
+        '42501',
+      );
+      await asUser(0);
+      assert.equal(
+        (
+          await rows(
+            'select count(*)::int as n from public.admin_unit_versions where source_url=$1',
+            [LEGACY_SOURCE_URL],
+          )
+        )[0].n,
+        10810,
+      );
+      await asSystem();
+    },
+  );
+
+  const legacyProvince = await legacyUnit('province', '01');
+  const legacyDistrict = await legacyUnit('district', '001');
+  const legacyWard = await legacyUnit('commune', '00001');
+  const otherDistrict = await legacyUnit('district', '002');
+  const legacyProperty = '20000000-0000-4000-8000-0000000000f6';
+  const legacyAddressSql =
+    "insert into public.property_addresses(property_id,format,address_text,is_primary,province_unit_id,district_unit_id,commune_unit_id) values($1,'legacy','Số 1 ngõ 2 phố cổ',$2,$3,$4,$5)";
+  await db.query(
+    "insert into public.properties(id,property_code,listing_mode,status,created_by) values($1,'SGN-LEGACY-REF-1','sale','available',$2)",
+    [legacyProperty, employees[0]],
+  );
+  await check(
+    'the address guard accepts a legacy address carrying all three unit ids',
+    async () => {
+      await db.query(legacyAddressSql, [
+        legacyProperty,
+        true,
+        legacyProvince.id,
+        legacyDistrict.id,
+        legacyWard.id,
+      ]);
+      assert.deepEqual(
+        await rows(
+          'select format,province_unit_id,district_unit_id,commune_unit_id from public.property_addresses where property_id=$1',
+          [legacyProperty],
+        ),
+        [
+          {
+            format: 'legacy',
+            province_unit_id: legacyProvince.id,
+            district_unit_id: legacyDistrict.id,
+            commune_unit_id: legacyWard.id,
+          },
+        ],
+      );
+    },
+  );
+  await check(
+    'a legacy ward outside its district is rejected against the seeded chain',
+    () =>
+      fails(
+        legacyAddressSql,
+        [
+          legacyProperty,
+          false,
+          legacyProvince.id,
+          otherDistrict.id,
+          legacyWard.id,
+        ],
+        '23514',
+      ),
+  );
+
+  await check(
+    'every closed pre-2025 row cites the one pinned source file',
+    async () => {
+      assert.deepEqual(
+        await rows(
+          "select distinct source_url from public.admin_unit_versions where unit_level in ('province','district','commune') and valid_to=date '2025-07-01'",
+        ),
+        [{ source_url: LEGACY_SOURCE_URL }],
+      );
+    },
+  );
+
+  await check(
+    're-applying the legacy seed converges without duplicating or re-keying rows',
+    async () => {
+      const before = (
+        await rows(
+          'select count(*)::int as n from public.admin_unit_versions where source_url=$1 union all select count(distinct id)::int from public.admin_unit_versions where source_url=$1',
+          [LEGACY_SOURCE_URL],
+        )
+      ).map((row) => row.n);
+      assert.deepEqual(before, [10810, 10810]);
+      const sampleSql =
+        "select id,unit_level,official_code,parent_id,valid_from,valid_to from public.admin_unit_versions where source_url=$1 and official_code in ('01','001','00001') and valid_from=date '2025-01-04' order by unit_level,official_code";
+      const sample = await rows(sampleSql, [LEGACY_SOURCE_URL]);
+      assert.equal(sample.length, 3);
+      await db.exec(
+        await fs.readFile(
+          path.join(
+            root,
+            'supabase/migrations',
+            (await fs.readdir(path.join(root, 'supabase/migrations'))).find(
+              (name) => name.endsWith(LEGACY_MIGRATION_SUFFIX),
+            ),
+          ),
+          'utf8',
+        ),
+      );
+      const after = (
+        await rows(
+          'select count(*)::int as n from public.admin_unit_versions where source_url=$1 union all select count(distinct id)::int from public.admin_unit_versions where source_url=$1',
+          [LEGACY_SOURCE_URL],
+        )
+      ).map((row) => row.n);
+      assert.deepEqual(after, before);
+      assert.deepEqual(await rows(sampleSql, [LEGACY_SOURCE_URL]), sample);
       assert.deepEqual(
         await rows(
           'select unit_level,official_code,valid_from from public.admin_unit_versions group by unit_level,official_code,valid_from having count(*)>1',

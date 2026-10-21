@@ -101,7 +101,7 @@ A separate address under the applicable province/city and commune/ward structure
 _Avoid_: Translated address, automatically converted address
 
 **Administrative-unit reference catalog**:
-The seeded official province/city and commune/ward list carrying official codes, parent links and one half-open validity window per official name from the pinned upstream dataset. It is a reference list for selection and hierarchy validation, not a property's verified address; a renamed unit reports the name in force on the address date.
+The seeded official province/city, district and commune/ward list carrying official codes, parent links and one half-open validity window per official name from the pinned upstream datasets. It is a reference list for selection and hierarchy validation, not a property's verified address; a renamed unit reports the name in force on the address date.
 _Avoid_: Verified address, property-level mapping
 
 **Address search**:
