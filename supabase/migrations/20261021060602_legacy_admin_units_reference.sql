@@ -8,9 +8,9 @@
 --   tag commit: 4cc4038d0e89bd8affbda864119c1ab1e0360523
 --   data file: dev/seed-data/Pre-2025-07/Xa_2025-01-04.csv
 --   sha256: 026361a37fd47ad469ec6d5cc6dbcf2f0ae8a5d4219d10482fbbc8689864a2a4
---   source rows: 10,056 in Xa_2025-01-04.csv = 10,051 ward rows plus the five
---     island districts (Bạch Long Vĩ, Cồn Cỏ, Hoàng Sa, Lý Sơn, Côn Đảo) whose
---     rows carry no ward
+--   source rows: 10,056 in Xa_2025-01-04.csv = 10,051 ward rows plus five
+--     district-only island rows (Bạch Long Vĩ, Cồn Cỏ, Hoàng Sa, Lý Sơn, Côn Đảo)
+--     that carry no ward
 --   rows seeded: 10,810 = 63 provinces / 696 districts / 10,051 wards
 --
 -- Vendor boundary: only factual rows are copied here - official numeric codes,
