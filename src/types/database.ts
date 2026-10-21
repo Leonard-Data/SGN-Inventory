@@ -272,6 +272,7 @@ export type Database = {
           id: string;
           relation: string;
           resolution_notes: string | null;
+          source_attested: boolean;
           source_url: string;
           to_unit_id: string;
           verified_by: string | null;
@@ -282,6 +283,7 @@ export type Database = {
           id?: string;
           relation: string;
           resolution_notes?: string | null;
+          source_attested?: boolean;
           source_url: string;
           to_unit_id: string;
           verified_by?: string | null;
@@ -292,6 +294,7 @@ export type Database = {
           id?: string;
           relation?: string;
           resolution_notes?: string | null;
+          source_attested?: boolean;
           source_url?: string;
           to_unit_id?: string;
           verified_by?: string | null;

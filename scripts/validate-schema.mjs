@@ -23,6 +23,7 @@ import { vendorContract } from './vendor-contract.mjs';
 import { contactDirectoryContract } from './contact-directory-contract.mjs';
 import { propertyVendorLinkContract } from './property-vendor-links-contract.mjs';
 import { referenceCatalogContract } from './reference-catalog-contract.mjs';
+import { legacyCrosswalkContract } from './legacy-crosswalk-contract.mjs';
 import { saleCompletionContract } from './sale-completion-contract.mjs';
 import { employeeDeactivationContract } from './employee-deactivation-contract.mjs';
 import { employeeAccountDeletionContract } from './employee-account-deletion-contract.mjs';
@@ -792,6 +793,8 @@ await inventoryPagingContract({db,asUser,check,fails,employees});
 await inventoryStreamContract({db,asUser,check,fails,employees});
 // Seeded Vietnamese province/city and ward/commune reference catalogue.
 await referenceCatalogContract({db,asUser,check,fails,employees,root});
+// Issue #223: the official old-to-new crosswalk and the attested whole-mapping evidence.
+await legacyCrosswalkContract({db,asUser,check,fails,employees,root});
 // Ticket #35: reviewer-only province activity grouped by latest verified primary province.
 await provinceActivityContract({db,asUser,check,fails,employees});
 // Issue #38: one reviewed logical sale completion and the completed-sale ranking.
