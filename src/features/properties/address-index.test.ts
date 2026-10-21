@@ -445,8 +445,6 @@ test('the variant that records the old district answers whichever variant is lis
   const column = titledPair({ district: 'Quận Bình Thạnh' });
   // The house number, the street and the two localities in either order: a word beside the locality
   // never takes the answer away from the variant that records it.
-  // The house number, the street and the two localities in either order: a word beside the locality
-  // never takes the answer away from the variant that records it.
   const district = [
     'quan binh thanh',
     'binh thanh',
@@ -482,4 +480,51 @@ test('the variant that records the old district answers whichever variant is lis
     for (const query of ['125 thanh my tay', '125 phuong thanh my tay'])
       assert.equal(labelFor(listed, query), 'current', query);
   }
+});
+
+// The seeded mapping where the new ward carries the old district's own words: the wards of 'Quận
+// Bình Thạnh' became the current 'Phường Bình Thạnh', and the candidate row the crosswalk action
+// records carries the legacy text over, so both variants contain the district's words somewhere.
+const BINH_THANH_TEXT = '12 Bình Lợi, Phường 26, Quận Bình Thạnh';
+function coincidentPair(legacyParts: Partial<AddressSummary>) {
+  return [
+    address('legacy', BINH_THANH_TEXT, {
+      houseNumber: '12',
+      street: 'Bình Lợi',
+      ...legacyParts,
+    }),
+    address('current', BINH_THANH_TEXT, {
+      houseNumber: '12',
+      street: 'Bình Lợi',
+      units: ['Thành phố Hồ Chí Minh', 'Phường Bình Thạnh'],
+    }),
+  ] as const;
+}
+
+test('a current ward named after the old district answers each name under its own label', () => {
+  // The district carried as a chosen unit beside its column, as an imported row's unit alone, and as
+  // the recorded column alone: each answer holds whichever variant is listed first.
+  const shapes = [
+    coincidentPair({
+      commune: 'Phường 26',
+      district: 'Quận Bình Thạnh',
+      units: ['Thành phố Hồ Chí Minh', 'Quận Bình Thạnh', 'Phường 26'],
+    }),
+    coincidentPair({
+      units: ['Thành phố Hồ Chí Minh', 'Quận Bình Thạnh', 'Phường 26'],
+    }),
+    coincidentPair({ commune: 'Phường 26', district: 'Quận Bình Thạnh' }),
+  ];
+  for (const pair of shapes)
+    for (const listed of [[...pair], [...pair].reverse()]) {
+      for (const query of [
+        'quan binh thanh',
+        'binh thanh',
+        '12 binh thanh',
+        '12 quan binh thanh',
+      ])
+        assert.equal(labelFor(listed, query), 'legacy', query);
+      for (const query of ['phuong binh thanh', '12 phuong binh thanh'])
+        assert.equal(labelFor(listed, query), 'current', query);
+    }
 });

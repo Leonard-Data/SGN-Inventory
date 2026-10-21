@@ -31,10 +31,11 @@ export type CatalogueAddressVariant = {
   // them is a statement about this variant's own recorded hierarchy rather than a word it happens to
   // carry inside an address text copied from another format.
   officialTokens: string[];
-  // The localities this variant itself states: the parts its own columns record and the units it
-  // chose. A query answered by these names the locality this record holds, not only a word its
-  // address text carries.
-  statedTokens: string[];
+  // The localities this variant itself states, each recorded column and each chosen unit on its own,
+  // with whether that locality is one of the address's own recorded columns. A query is answered by
+  // the one locality that states it rather than by words assembled out of several, and a recorded
+  // column outranks an official unit name that only contains the same words.
+  statedLocalities: { tokens: string[]; column: boolean }[];
 };
 
 export type CatalogueIndexEntry = {
@@ -144,6 +145,15 @@ function variantOf(address: AddressSummary): CatalogueAddressVariant {
   const officialTokens = (address.units ?? []).flatMap((name) =>
     tokenize(name),
   );
+  const statedLocalities = [
+    ...([address.commune, address.district] as const).flatMap((part) =>
+      part ? [{ tokens: tokenize(part), column: true }] : [],
+    ),
+    ...(address.units ?? []).map((name) => ({
+      tokens: tokenize(name),
+      column: false,
+    })),
+  ];
   return {
     format: address.format,
     addressText: address.addressText,
@@ -160,7 +170,7 @@ function variantOf(address: AddressSummary): CatalogueAddressVariant {
     streetTokens,
     localityTokens,
     officialTokens,
-    statedTokens: [...columnLocalities, ...officialTokens],
+    statedLocalities,
   };
 }
 
@@ -218,7 +228,14 @@ const CHOSEN_UNIT = 5;
 const STREET_AND_LOCALITY = 6;
 const ALL_TOKENS = 7;
 
-type Ranked = { rank: number; prefixPenalty: number; stated: number };
+type Ranked = {
+  rank: number;
+  prefixPenalty: number;
+  // The most query tokens one locality this variant itself states answers, and whether that locality
+  // is a recorded column rather than an official unit name.
+  stated: number;
+  column: boolean;
+};
 
 function rankVariant(
   query: Query,
@@ -235,15 +252,28 @@ function rankVariant(
   const prefixPenalty = query.tokens.filter(
     (token) => !variant.tokens.includes(token),
   ).length;
-  // The query tokens the locality this variant itself records answers. Both variants of a
-  // copied-over pair carry the same address text, so what the record itself states is what tells
-  // the one that recorded the locality from the one that did not, and a house number or a street
-  // word beside the locality neither adds to it nor cancels it.
-  const stated = query.tokens.filter((token) =>
-    variant.statedTokens.some((other) => tokenMatches(token, other)),
-  ).length;
+  // The single locality this variant itself states that answers most of the query. Both variants of
+  // a copied-over pair carry the same address text, so what each record itself states is what tells
+  // them apart, and a house number or a street word beside the locality neither adds to it nor
+  // cancels it.
+  let stated = 0;
+  let column = false;
+  for (const locality of variant.statedLocalities) {
+    const matched = query.tokens.filter((token) =>
+      locality.tokens.some((other) => tokenMatches(token, other)),
+    ).length;
+    if (matched === 0) continue;
+    if (
+      matched > stated ||
+      (matched === stated && locality.column && !column)
+    ) {
+      stated = matched;
+      column = locality.column;
+    }
+  }
+  const evidence = { stated, column };
   if (query.folded === variant.folded)
-    return { rank: EXACT_ADDRESS, prefixPenalty, stated };
+    return { rank: EXACT_ADDRESS, prefixPenalty, ...evidence };
   const rest = query.houseNumber
     ? query.tokens.filter((token) => token !== query.houseNumber)
     : query.tokens;
@@ -255,20 +285,20 @@ function rankVariant(
       variant.streetTokens.some((other) => tokenMatches(token, other)),
     )
   )
-    return { rank: NUMBER_AND_STREET, prefixPenalty, stated };
+    return { rank: NUMBER_AND_STREET, prefixPenalty, ...evidence };
   if (
     query.houseNumber !== null &&
     variant.mainNumber === query.houseNumber &&
     variant.houseNumber !== variant.mainNumber
   )
-    return { rank: ALLEY_UNDER_NUMBER, prefixPenalty, stated };
+    return { rank: ALLEY_UNDER_NUMBER, prefixPenalty, ...evidence };
   if (
     variant.officialTokens.length > 0 &&
     query.tokens.every((token) =>
       variant.officialTokens.some((other) => tokenMatches(token, other)),
     )
   )
-    return { rank: CHOSEN_UNIT, prefixPenalty, stated };
+    return { rank: CHOSEN_UNIT, prefixPenalty, ...evidence };
   if (
     query.tokens.some((token) =>
       variant.streetTokens.some((other) => tokenMatches(token, other)),
@@ -277,20 +307,22 @@ function rankVariant(
       variant.localityTokens.some((other) => tokenMatches(token, other)),
     )
   )
-    return { rank: STREET_AND_LOCALITY, prefixPenalty, stated };
-  return { rank: ALL_TOKENS, prefixPenalty, stated };
+    return { rank: STREET_AND_LOCALITY, prefixPenalty, ...evidence };
+  return { rank: ALL_TOKENS, prefixPenalty, ...evidence };
 }
 
 function compareRank(left: Ranked, right: Ranked): number {
   return left.rank - right.rank || left.prefixPenalty - right.prefixPenalty;
 }
 
-// Between two variants of the same property, the one whose own recorded locality answers more of
-// the query states the property under the label the person searched for.
+// Between two variants of the same property, the one that states more of the query in a single
+// locality of its own is the one whose label answers it: a recorded column outranks an official
+// unit name that only contains the same words.
 function compareVariant(left: Ranked, right: Ranked): number {
   return (
-    left.rank - right.rank ||
     right.stated - left.stated ||
+    Number(right.column) - Number(left.column) ||
+    left.rank - right.rank ||
     left.prefixPenalty - right.prefixPenalty
   );
 }
@@ -327,25 +359,35 @@ export function matchCatalogue(
     }));
   const found: { ranked: Ranked; match: CatalogueMatch }[] = [];
   for (const entry of index) {
+    // The property's strongest match orders the results; the variant that states the searched
+    // locality itself states the format label, so the label never hides a stronger match.
     let best: Ranked | null = null;
-    let bestFormat = '';
+    let label: Ranked | null = null;
+    let labelFormat = '';
     for (const variant of entry.variants) {
       const ranked = rankVariant(parsed, variant);
       if (!ranked) continue;
-      if (!best || compareVariant(ranked, best) < 0) {
-        best = ranked;
-        bestFormat = variant.format;
+      if (!best || compareRank(ranked, best) < 0) best = ranked;
+      const order = label === null ? -1 : compareVariant(ranked, label);
+      // A locality both variants state equally answers with the source record, so the label never
+      // depends on which address the summary happens to list first.
+      if (
+        order < 0 ||
+        (order === 0 && variant.format === 'legacy' && labelFormat !== 'legacy')
+      ) {
+        label = ranked;
+        labelFormat = variant.format;
       }
     }
     const code = codeRank(parsed, entry);
     if (code !== null && (!best || code < best.rank)) {
-      best = { rank: code, prefixPenalty: 0, stated: 0 };
-      bestFormat = '';
+      best = { rank: code, prefixPenalty: 0, stated: 0, column: false };
+      labelFormat = '';
     }
     if (best)
       found.push({
         ranked: best,
-        match: { record: entry.record, format: bestFormat },
+        match: { record: entry.record, format: labelFormat },
       });
   }
   found.sort(
