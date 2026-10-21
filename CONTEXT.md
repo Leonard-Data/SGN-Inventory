@@ -101,8 +101,16 @@ A separate address under the applicable province/city and commune/ward structure
 _Avoid_: Translated address, automatically converted address
 
 **Administrative-unit reference catalog**:
-The seeded official province/city, district and commune/ward list carrying official codes, parent links and one half-open validity window per official name from the pinned upstream datasets. It is a reference list for selection and hierarchy validation, not a property's verified address; a renamed unit reports the name in force on the address date.
+The seeded official province/city, district and commune/ward list carrying official codes, parent links and one half-open validity window per official name, from two pinned upstream datasets that never share a source URL: the current two-tier generation from thanglequoc/vietnamese-provinces-database and the closed `[2025-01-04, 2025-07-01)` legacy generation from sunshine-tech/VietnamProvinces, whose declared GPL-3.0-or-later licence with no LICENSE file is an open legal item rather than a settled one. It is a reference list for selection and hierarchy validation, not a property's verified address; a renamed unit reports the name in force on the address date, and a legacy address older than the snapshot date names a ward the catalog cannot offer and keeps its recorded text instead.
 _Avoid_: Verified address, property-level mapping
+
+**Legacy administrative-unit catalog**:
+The pre-2025 three-tier province → district → ward generation, seeded on its closed `[2025-01-04, 2025-07-01)` window so a legacy address can be looked up at all three levels. Separate from the current two-tier catalog because the two are different generations of the same official codes, and separate from the crosswalk below because it states what a unit was called, not what it became.
+_Avoid_: Merged catalog, current hierarchy
+
+**Administrative-unit crosswalk**:
+The official old-to-new unit mapping, stating for each legacy unit whether it became one whole unit, a rename, or part of one or more successors. Seeded in full by migration and migration-only: no client writes it, and a row is candidate evidence for a property's address, never a verification of one, so nothing is mapped automatically and a partial transition still needs property-level evidence.
+_Avoid_: Verification, property-level mapping
 
 **Address search**:
 A match of a literal, accent-insensitive contiguous fragment against recorded addresses; `%` and `_` are ordinary characters.
