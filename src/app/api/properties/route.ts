@@ -1,16 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runRoute, objectBody } from '@/lib/supabase/route';
 import { createProperty } from '@/features/property-maintenance/data';
+import { createWithContact } from '@/features/property-maintenance/create-contact';
 import { activeEmployee } from '@/features/employees/access';
+import {
+  addContactNumber,
+  contactChanges,
+} from '@/features/properties/contact-number';
 import { browseProperties } from '@/features/properties/data';
 export function POST(request: NextRequest) {
   return runRoute(request, async (context) => {
     await activeEmployee(context);
+    const body = await objectBody(request, context, 256 * 1024);
+    // The owner's contact details travel with the create but are not a property fact: they are
+    // read here and recorded once the record exists, by the same operation the record's own
+    // capture form submits.
+    const contact = contactChanges(body.contact);
+    delete body.contact;
+    if (!contact)
+      return NextResponse.json(await createProperty(context, body), {
+        status: 201,
+      });
+    const { created, contact: recorded } = await createWithContact(
+      () => createProperty(context, body),
+      (propertyId) =>
+        addContactNumber(context, propertyId, { changes: contact }).then(
+          (recorded) => recorded.id,
+        ),
+    );
     return NextResponse.json(
-      await createProperty(
-        context,
-        await objectBody(request, context, 256 * 1024),
-      ),
+      { ...created, contact: recorded },
       { status: 201 },
     );
   });

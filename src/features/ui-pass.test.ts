@@ -177,3 +177,59 @@ test('the stacked mobile table keeps the access cell inside its row', () => {
   // The value wraps between its badges, never inside one.
   assert.match(css, /\.badge \{[^}]*white-space: nowrap/);
 });
+
+test('the create form holds the same grid as the rest of the application', () => {
+  const css = source('../app/sgn-app.css');
+  const create = source('./property-maintenance/create.tsx');
+  // The inline editor's auto-fit arrangement lays out one disclosure's fields. The create page is
+  // a whole form, so it states its own sections and grid instead of inheriting that arrangement.
+  assert.match(
+    css,
+    /\.maintenance fieldset\.create-form \{ display: block; grid-template-columns: none; gap: 0; \}/,
+  );
+  assert.match(create, /className="create-form"/);
+  assert.doesNotMatch(create, /className="stack-4"/);
+  // One section per subject, each on the shared two-column grid that collapses to one column at
+  // the narrow width, so no control stretches across a wide page or overflows a narrow one.
+  assert.equal((create.match(/className="form-section"/g) ?? []).length, 3);
+  assert.equal((create.match(/className="form-grid"/g) ?? []).length, 3);
+  for (const heading of ['formRecord', 'formAddress', 'formContact'])
+    assert.match(create, new RegExp(`\\{text\\.${heading}\\}`));
+  assert.match(
+    css,
+    /\.form-grid \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); gap: var\(--space-5\); \}/,
+  );
+  assert.match(
+    css,
+    /@media \(max-width: 720px\) \{ \.form-grid, \.form-grid-3 \{ grid-template-columns: minmax\(0, 1fr\); \} \}/,
+  );
+  // A multi-line field takes the full width of that grid rather than one cell of it.
+  const forms = source('./property-maintenance/forms.tsx');
+  assert.match(forms, /'field' \+ \(wide \? ' span-all' : ''\)/);
+  assert.match(
+    css,
+    /\.form-grid \.span-all, \.form-grid-3 \.span-all \{ grid-column: 1 \/ -1; \}/,
+  );
+});
+
+test('the create screen picks its province and commune by typing, not by scrolling', () => {
+  const create = source('./property-maintenance/create.tsx');
+  const forms = source('./property-maintenance/forms.tsx');
+  const combobox = source('./property-maintenance/unit-combobox.tsx');
+  // The create screen states no picker of its own: it renders the shared address fields, whose
+  // unit picker is the searchable combobox the filter panel introduced.
+  assert.match(create, /<AddressFields/);
+  assert.doesNotMatch(create, /<select/);
+  assert.match(forms, /<UnitCombobox/);
+  assert.match(forms, /label=\{fields\[name\]!\[locale\]\}/);
+  // The dependency stays intact: the ward list loads only once a province is chosen and is keyed
+  // by it, so changing the province drops a ward chosen under the old one.
+  assert.match(forms, /if \(level !== 'province' && !parent\) return;/);
+  assert.match(forms, /key=\{'commune' \+ province\}/);
+  assert.match(forms, /setProvince\(value\);\s*setCommune\(''\);/);
+  // Typing narrows the list and only a listed unit is committed: the identifier reaches the
+  // surrounding form through the field it submits, never the typed text.
+  assert.match(combobox, /filterUnitOptions\(options, state\.query\)/);
+  assert.match(combobox, /comboboxKey\(/);
+  assert.match(combobox, /ref=\{hidden\}/);
+});

@@ -243,6 +243,9 @@ const vi = {
   contactNumberInvalid: 'Kiểm tra tên người liên hệ và số điện thoại.',
   contactNumberFailed:
     'Chưa xác nhận được kết quả. Đọc lại thông tin hiện tại trước khi thử lại.',
+  // The record is committed and the contact is not: the two outcomes are stated separately.
+  createContactFailed:
+    'Đã tạo bất động sản nhưng chưa ghi được số liên hệ. Thêm số liên hệ trong hồ sơ vừa tạo.',
   owner: 'Chủ nhà',
   broker: 'Môi giới',
   representative: 'Đại diện',
@@ -1141,6 +1144,8 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     contactNumberInvalid: 'Check the contact name and the phone number.',
     contactNumberFailed:
       'The outcome could not be confirmed. Read the current information before retrying.',
+    createContactFailed:
+      'Property created, but the contact number was not recorded. Add it on the record you just created.',
     owner: 'Owner',
     broker: 'Broker',
     representative: 'Representative',
