@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   crosswalkMessage,
-  crosswalkRecorded,
+  crosswalkReport,
   offeredCrosswalkRow,
   type CrosswalkOutcome,
 } from './crosswalk.ts';
@@ -32,11 +32,11 @@ test('the single target is named with its current ward and province', () => {
   };
   assert.equal(
     crosswalkMessage('vi', outcome),
-    'Phường/xã cũ đã chuyển thành Phường Bến Thành, Thành phố Hồ Chí Minh.',
+    'Phường/xã cũ đang lưu đã chuyển thành Phường Bến Thành, Thành phố Hồ Chí Minh.',
   );
   assert.equal(
     crosswalkMessage('en', outcome),
-    'The old ward became Phường Bến Thành, Thành phố Hồ Chí Minh.',
+    'The old ward saved here became Phường Bến Thành, Thành phố Hồ Chí Minh.',
   );
   // Official unit names are source data: neither language translates or rewrites them.
   for (const locale of ['vi', 'en'] as const)
@@ -67,64 +67,114 @@ test('several targets are reported with the count and nothing is offered', () =>
 test('a ward with no crosswalk row says so plainly', () => {
   assert.equal(
     crosswalkMessage('vi', { kind: 'none' }),
-    'Chưa có bảng chuyển đổi cho phường/xã cũ này.',
+    'Chưa có bảng chuyển đổi cho phường/xã cũ đang lưu.',
   );
   assert.equal(
     crosswalkMessage('en', { kind: 'none' }),
-    'No crosswalk is available for this old ward.',
+    'No crosswalk is available for the old ward saved here.',
   );
 });
 
 test('a ward whose current address is already recorded says so instead', () => {
   assert.equal(
     crosswalkMessage('vi', { kind: 'recorded' }),
-    'Địa chỉ mới cho phường/xã cũ này đã được ghi trước đó.',
+    'Địa chỉ mới cho phường/xã cũ đang lưu đã được ghi trước đó.',
   );
   assert.equal(
     crosswalkMessage('en', { kind: 'recorded' }),
-    'The current address for this old ward is already recorded.',
+    'The current address for the old ward saved here is already recorded.',
   );
 });
 
-test('a recorded current address is recognised through the legacy row superseded chain', () => {
+test('the saved ward decides the report: its own mapping, or the state recorded for it', () => {
   type Row = {
     id: string;
     format: string;
+    commune_unit_id: string | null;
     supersedes_address_id: string | null;
   };
   const row = (
     id: string,
     format: string,
+    commune_unit_id: string | null = null,
     supersedes_address_id: string | null = null,
-  ): Row => ({ id, format, supersedes_address_id });
+  ): Row => ({ id, format, commune_unit_id, supersedes_address_id });
+  const mapped: CrosswalkOutcome = {
+    kind: 'mapped',
+    commune: 'Phường Bến Thành',
+    province: 'Thành phố Hồ Chí Minh',
+  };
   // One property with two legacy addresses at different wards, each able to record its own
   // candidate: the link answers for the row it came from, not for the property.
   const base: Row[] = [
-    row('legacy-a', 'legacy'),
-    row('legacy-b', 'legacy'),
-    row('current-a', 'current', 'legacy-a'),
+    row('legacy-a', 'legacy', 'ward-1'),
+    row('legacy-b', 'legacy', 'ward-2'),
+    row('current-a', 'current', 'new-1', 'legacy-a'),
   ];
-  assert.equal(crosswalkRecorded(base, 'legacy-a'), true);
-  assert.equal(crosswalkRecorded(base, 'legacy-b'), false);
-  // A correction of the legacy row inserts its successor, which is the row a later save reports:
-  // the recorded state follows the chain in both directions.
-  const corrected = [...base, row('legacy-a2', 'legacy', 'legacy-a')];
-  assert.equal(crosswalkRecorded(corrected, 'legacy-a2'), true);
-  assert.equal(crosswalkRecorded(corrected, 'legacy-a'), true);
-  // An unrelated legacy address stays unrecorded, and nothing is recorded before the action runs.
-  assert.equal(crosswalkRecorded(corrected, 'legacy-b'), false);
+  // The ward the saved row names maps to the target the chain recorded, so the surface says the
+  // recorded state and offers no action.
+  assert.deepEqual(crosswalkReport(base, 'legacy-a', mapped, 'new-1'), {
+    kind: 'recorded',
+  });
   assert.equal(
-    crosswalkRecorded([row('legacy-a', 'legacy')], 'legacy-a'),
-    false,
+    crosswalkMessage('en', crosswalkReport(base, 'legacy-a', mapped, 'new-1')),
+    'The current address for the old ward saved here is already recorded.',
   );
-  assert.equal(crosswalkRecorded([], 'legacy-a'), false);
-  // An alternate variant is not a recorded current address.
-  assert.equal(
-    crosswalkRecorded(
-      [row('legacy-a', 'legacy'), row('alternate-a', 'alternate', 'legacy-a')],
-      'legacy-a',
+  // A correction of the legacy row inserts its successor, which is the row a later save reports.
+  const corrected: Row[] = [
+    ...base,
+    row('legacy-a2', 'legacy', 'ward-3', 'legacy-a'),
+  ];
+  // The ward the corrected row now names is not the one the chain recorded: the surface reports what
+  // that ward maps to, so its one action is available, and the same state as before is recognised.
+  assert.deepEqual(
+    crosswalkReport(corrected, 'legacy-a2', mapped, 'new-2'),
+    mapped,
+  );
+  assert.deepEqual(crosswalkReport(corrected, 'legacy-a2', mapped, 'new-1'), {
+    kind: 'recorded',
+  });
+  // A ward the crosswalk names no single target for has nothing recorded, and nothing is offered.
+  assert.deepEqual(
+    crosswalkReport(
+      corrected,
+      'legacy-a2',
+      { kind: 'several', count: 2 },
+      null,
     ),
-    false,
+    { kind: 'several', count: 2 },
+  );
+  assert.deepEqual(
+    crosswalkReport(corrected, 'legacy-a2', { kind: 'none' }, null),
+    { kind: 'none' },
+  );
+  // An unrelated legacy address stays unrecorded, nothing is recorded before the action runs, and an
+  // alternate variant is not a recorded current address.
+  assert.deepEqual(
+    crosswalkReport(corrected, 'legacy-b', mapped, 'new-2'),
+    mapped,
+  );
+  assert.deepEqual(
+    crosswalkReport(
+      [row('legacy-a', 'legacy', 'ward-1')],
+      'legacy-a',
+      mapped,
+      'new-1',
+    ),
+    mapped,
+  );
+  assert.deepEqual(crosswalkReport([], 'legacy-a', mapped, 'new-1'), mapped);
+  assert.deepEqual(
+    crosswalkReport(
+      [
+        row('legacy-a', 'legacy', 'ward-1'),
+        row('alternate-a', 'alternate', 'new-1', 'legacy-a'),
+      ],
+      'legacy-a',
+      mapped,
+      'new-1',
+    ),
+    mapped,
   );
 });
 
