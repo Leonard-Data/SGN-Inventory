@@ -171,7 +171,7 @@ export function Maintenance({
       ...(explanation ? { explanation } : {}),
     });
     applyServerSummary(applyChange, result, property.id);
-    if (editor.target === 'address') setCrosswalk(result.address ?? null);
+    setCrosswalk(result.address ?? null);
     return result;
   }
   async function candidateRecorded(result: {

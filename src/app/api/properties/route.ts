@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runRoute, objectBody } from '@/lib/supabase/route';
-import { createProperty } from '@/features/property-maintenance/data';
+import {
+  createProperty,
+  savedLegacyAddress,
+} from '@/features/property-maintenance/data';
 import { createWithContact } from '@/features/property-maintenance/create-contact';
 import { activeEmployee } from '@/features/employees/access';
 import {
@@ -17,19 +20,21 @@ export function POST(request: NextRequest) {
     // capture form submits.
     const contact = contactChanges(body.contact);
     delete body.contact;
-    if (!contact)
-      return NextResponse.json(await createProperty(context, body), {
-        status: 201,
-      });
-    const { created, contact: recorded } = await createWithContact(
-      () => createProperty(context, body),
-      (propertyId) =>
-        addContactNumber(context, propertyId, { changes: contact }).then(
-          (recorded) => recorded.id,
-        ),
-    );
+    const saved = contact
+      ? await createWithContact(
+          () => createProperty(context, body),
+          (propertyId) =>
+            addContactNumber(context, propertyId, { changes: contact }).then(
+              (recorded) => recorded.id,
+            ),
+        )
+      : { created: await createProperty(context, body) };
     return NextResponse.json(
-      { ...created, contact: recorded },
+      {
+        ...saved.created,
+        ...(await savedLegacyAddress(context, saved.created.id)),
+        ...('contact' in saved ? { contact: saved.contact } : {}),
+      },
       { status: 201 },
     );
   });

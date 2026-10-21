@@ -63,6 +63,9 @@ begin
     end if;
     if p_target='mapping' then
       if addr.format<>'current' then raise exception 'current mapping required' using errcode='23514'; end if;
+      -- A verified mapping is a reviewer's record: moving it to another state, or repointing its
+      -- units, is refused for every other role instead of silently un-verifying it.
+      if addr.mapping_status='verified' and not private.is_reviewer() then raise exception 'reviewer required for mapping' using errcode='42501'; end if;
       addr:=jsonb_populate_record(addr,p_changes);
       if addr.mapping_status not in ('verified','candidate','unresolved') or addr.mapping_status is null then raise exception 'invalid mapping' using errcode='23514'; end if;
       -- Recording a candidate from the official crosswalk is an ordinary property edit (D5).

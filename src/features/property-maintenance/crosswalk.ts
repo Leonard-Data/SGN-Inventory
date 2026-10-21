@@ -36,6 +36,7 @@ const copy = {
     'Cần xác minh phường mới: bảng chuyển đổi ghi nhận',
     'The new ward needs verification: the crosswalk records',
   ],
+  ward: ['phường/xã mới.', 'new ward.'],
   wards: ['phường/xã mới.', 'new wards.'],
   none: [
     'Chưa có bảng chuyển đổi cho phường/xã cũ này.',
@@ -48,6 +49,6 @@ export function crosswalkMessage(locale: Locale, outcome: CrosswalkOutcome) {
   return outcome.kind === 'mapped'
     ? `${copy.mapped[at]} ${outcome.commune}, ${outcome.province}.`
     : outcome.kind === 'several'
-      ? `${copy.several[at]} ${outcome.count} ${copy.wards[at]}`
+      ? `${copy.several[at]} ${outcome.count} ${(outcome.count === 1 ? copy.ward : copy.wards)[at]}`
       : copy.none[at];
 }

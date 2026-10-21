@@ -99,12 +99,11 @@ export async function createProperty(
   return {
     id,
     summary: await catalogueSummaryOf(context, id),
-    ...(await savedLegacyAddress(context, id)),
   };
 }
 // What the official crosswalk says about the ward of the legacy address a save just recorded. It is
 // read from the committed row, and only its own ward unit: nothing is inferred from address text.
-async function savedLegacyAddress(
+export async function savedLegacyAddress(
   context: RouteContext,
   propertyId: string,
   addressId?: string,

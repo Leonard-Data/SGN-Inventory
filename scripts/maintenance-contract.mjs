@@ -1864,6 +1864,67 @@ export async function maintenanceContract({
     },
   );
   await check(
+    'a verified mapping is a reviewer record: an ordinary editor cannot un-verify it or repoint it',
+    async () => {
+      await asUser(2);
+      await db.query(mutate, [
+        offeredProperty,
+        'mapping',
+        candidateAddress,
+        await revision('property_addresses', candidateAddress),
+        {
+          mapping_status: 'verified',
+          verification_method: 'manual',
+          effective_on: '2025-07-01',
+          source_url: 'https://example.test/property-evidence',
+          mapping_evidence:
+            'The property parcel boundary establishes this commune',
+        },
+      ]);
+      const verifiedRow =
+        'select province_unit_id,commune_unit_id,mapping_status,verified_by,verified_at,effective_on,source_url from public.property_addresses where id=$1';
+      const verified = (await db.query(verifiedRow, [candidateAddress]))
+        .rows[0];
+      assert.equal(verified.mapping_status, 'verified');
+      assert.equal(verified.verified_by, employees[2]);
+      // The editor who may record a candidate on an unverified row is refused the moment that row
+      // is a reviewer's verification: demoting it to a candidate, or repointing the units it
+      // verified, is not recording a candidate.
+      await asUser(0);
+      for (const changes of [
+        {
+          mapping_status: 'candidate',
+          effective_on: '2025-07-01',
+          source_url: 'https://example.test/official-conversion-table',
+        },
+        {
+          mapping_status: 'candidate',
+          commune_unit_id: '50000000-0000-4000-8000-000000000003',
+          effective_on: '2025-07-01',
+          source_url: 'https://example.test/official-conversion-table',
+        },
+        { mapping_status: 'verified' },
+      ]) {
+        await refuseWith(
+          mutate,
+          [
+            offeredProperty,
+            'mapping',
+            candidateAddress,
+            await revision('property_addresses', candidateAddress),
+            changes,
+          ],
+          '42501',
+          /reviewer required for mapping/,
+        );
+      }
+      assert.deepEqual(
+        (await db.query(verifiedRow, [candidateAddress])).rows[0],
+        verified,
+      );
+    },
+  );
+  await check(
     'a ward with several crosswalk targets or none writes no current address',
     async () => {
       assert.equal(several.crosswalk.length > 1, true);
