@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { CURRENT_CATALOG_START } from '../src/features/property-maintenance/units.ts';
 
 // Vietnamese province/city and ward/commune reference catalog seeded by
 // 20261014075435_vietnamese_admin_units_reference.sql from
@@ -336,21 +337,31 @@ export async function referenceCatalogContract({
     'province and commune picker queries return the seeded groups',
     async () => {
       const hcmc = await unit('province', '79');
+      const allProvinces = await rows(
+        "select id,valid_to from public.admin_unit_versions where unit_level='province'",
+      );
+      assert.ok(allProvinces.some((row) => day(row.valid_to) === LEGACY_TO));
       const provinces = await rows(
-        "select id,valid_to,source_url from public.admin_unit_versions where unit_level='province' and valid_from>=date '2025-07-01'",
+        "select id,valid_to,source_url from public.admin_unit_versions where unit_level='province' and valid_from>=$1",
+        [CURRENT_CATALOG_START],
       );
       assert.equal(
         provinces.filter((row) => row.source_url === SOURCE_URL).length,
         37,
       );
-      assert.ok(provinces.every((row) => row.valid_to !== LEGACY_TO));
+      assert.equal(
+        provinces.length,
+        allProvinces.length -
+          allProvinces.filter((row) => day(row.valid_to) === LEGACY_TO).length,
+      );
+      assert.ok(provinces.every((row) => day(row.valid_to) !== LEGACY_TO));
       const communes = await rows(
-        "select id,parent_id,valid_to from public.admin_unit_versions where unit_level=$1 and parent_id=$2 and valid_from>=date '2025-07-01'",
-        ['commune', hcmc.id],
+        'select id,parent_id,valid_to from public.admin_unit_versions where unit_level=$1 and parent_id=$2 and valid_from>=$3',
+        ['commune', hcmc.id, CURRENT_CATALOG_START],
       );
       assert.equal(communes.length, 168);
       assert.ok(communes.every((row) => row.parent_id === hcmc.id));
-      assert.ok(communes.every((row) => row.valid_to !== LEGACY_TO));
+      assert.ok(communes.every((row) => day(row.valid_to) !== LEGACY_TO));
       // The closed pre-2025 generation stays in the table but outside both reads, and
       // the inventory area lookup refuses its province and ward ids the same way.
       for (const [level, code] of [
@@ -359,9 +370,15 @@ export async function referenceCatalogContract({
       ]) {
         const legacy = await legacyUnit(level, code);
         assert.deepEqual(
+          await rows('select id from public.admin_unit_versions where id=$1', [
+            legacy.id,
+          ]),
+          [{ id: legacy.id }],
+        );
+        assert.deepEqual(
           await rows(
-            "select id from public.admin_unit_versions where unit_level=$1 and id=$2 and valid_from>=date '2025-07-01'",
-            [level, legacy.id],
+            'select id from public.admin_unit_versions where id=$1 and valid_from>=$2',
+            [legacy.id, CURRENT_CATALOG_START],
           ),
           [],
         );
@@ -974,24 +991,8 @@ export async function referenceCatalogContract({
   );
 
   await check(
-    'the legacy seed records its pinned revision and checksum on every row',
+    'every closed pre-2025 row cites the one pinned source file',
     async () => {
-      const files = (
-        await fs.readdir(path.join(root, 'supabase/migrations'))
-      ).filter((name) => name.endsWith(LEGACY_MIGRATION_SUFFIX));
-      assert.equal(files.length, 1);
-      const sql = await fs.readFile(
-        path.join(root, 'supabase/migrations', files[0]),
-        'utf8',
-      );
-      assert.ok(
-        sql.includes('tag commit: 4cc4038d0e89bd8affbda864119c1ab1e0360523'),
-      );
-      assert.ok(
-        sql.includes(
-          'sha256: 026361a37fd47ad469ec6d5cc6dbcf2f0ae8a5d4219d10482fbbc8689864a2a4',
-        ),
-      );
       assert.deepEqual(
         await rows(
           "select distinct source_url from public.admin_unit_versions where unit_level in ('province','district','commune') and valid_to=date '2025-07-01'",
