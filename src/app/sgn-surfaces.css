@@ -186,7 +186,8 @@
 }
 .inventory-table {
   width: 100%;
-  min-width: 1120px;
+  /* The eleven columns need this much; below it the stream scrolls sideways, never the page. */
+  min-width: 1600px;
   table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
@@ -235,24 +236,37 @@
   width: 150px;
 }
 .inventory-table [data-column='address'] {
-  width: 26%;
+  width: 22%;
 }
 .inventory-table [data-column='price'] {
-  width: 210px;
+  width: 190px;
   text-align: right;
 }
 .inventory-table [data-column='totalArea'] {
-  width: 105px;
+  width: 100px;
   text-align: right;
 }
+/* Frontage, depth and floors are measured numbers, so they line up with the area beside them. */
+.inventory-table [data-column='frontage'],
+.inventory-table [data-column='depth'] {
+  width: 90px;
+  text-align: right;
+}
+.inventory-table [data-column='floors'] {
+  width: 85px;
+  text-align: right;
+}
+.inventory-table [data-column='creator'] {
+  width: 140px;
+}
 .inventory-table [data-column='status'] {
-  width: 125px;
+  width: 120px;
 }
 .inventory-table [data-column='modifiedTime'] {
-  width: 135px;
+  width: 125px;
 }
 .inventory-table [data-column='actions'] {
-  width: 160px;
+  width: 150px;
 }
 .inventory-secondary {
   display: block;

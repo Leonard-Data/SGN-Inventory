@@ -7,7 +7,12 @@ import {
   type Locale,
   type MessageKey,
 } from '../../i18n/messages.ts';
-import { formatDecimal, relativeTime, vietnamDate } from './format.ts';
+import {
+  formatDecimal,
+  formatInteger,
+  relativeTime,
+  vietnamDate,
+} from './format.ts';
 import type { PropertySummary } from './types.ts';
 
 // Exactly the ten columns the captain asked for, in this order.
@@ -31,6 +36,10 @@ export const SUMMARY_TABLE_COLUMNS = [
   'address',
   'price',
   'totalArea',
+  'frontage',
+  'depth',
+  'floors',
+  'creator',
   'status',
   'modifiedTime',
   'actions',
@@ -77,6 +86,46 @@ export type PropertyTableRow = {
   title: string;
   cells: TableCell[];
 };
+
+// The four recorded facts the list states in its own columns and the quick view states as facts
+// about the record: frontage, depth, floors and the colleague who created it. Both surfaces render
+// these strings, so a row and the panel opened from it cannot disagree, and a fact the record does
+// not hold is the missing-value marker rather than a blank or a zero - an unknown frontage and a
+// recorded frontage of zero are different facts.
+export type RecordedFact = { text: string; known: boolean };
+
+export function recordFacts(
+  record: Pick<
+    PropertySummary,
+    'frontageM' | 'depthM' | 'floors' | 'createdBy'
+  >,
+  locale: Locale,
+): {
+  frontage: RecordedFact;
+  depth: RecordedFact;
+  floors: RecordedFact;
+  creator: RecordedFact;
+} {
+  // A measured length is exact text from the database, never a rounded number, and its unit rides
+  // with it so the table cell and the panel read the same characters.
+  const metres = (value: string | null | undefined): RecordedFact =>
+    value === null || value === undefined
+      ? { text: MISSING_VALUE, known: false }
+      : { text: `${formatDecimal(value, locale)} m`, known: true };
+  const counted = (value: number | null | undefined): RecordedFact =>
+    value === null || value === undefined
+      ? { text: MISSING_VALUE, known: false }
+      : { text: formatInteger(value, locale), known: true };
+  const creator = record.createdBy?.trim();
+  return {
+    frontage: metres(record.frontageM),
+    depth: metres(record.depthM),
+    floors: counted(record.floors),
+    creator: creator
+      ? { text: creator, known: true }
+      : { text: MISSING_VALUE, known: false },
+  };
+}
 
 // Total area means the floor area where it is recorded and the land area otherwise, exactly as
 // the captain settled it: the row states one area, never a sum and never both.
