@@ -11,7 +11,6 @@ import {
   type FormEvent,
 } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { messages, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { renderedSession } from '@/features/employees/protected-load';
@@ -30,14 +29,14 @@ import {
   type EmptyResultSource,
 } from './catalogue-load';
 import type { CatalogueRefreshView } from './catalogue-refresh';
-import { matchCatalogue, type CatalogueMatch } from './address-index';
-import { useListStateCarrier } from './list-state-provider';
 import {
-  listRun,
-  positionReady,
-  readListState,
-  writeListState,
-} from './list-state';
+  catalogueMatches,
+  resultMode,
+  searchEndpoint,
+} from './catalogue-results';
+import type { CatalogueMatch } from './address-index';
+import { useListStateCarrier } from './list-state-provider';
+import { positionReady, readListState, writeListState } from './list-state';
 import {
   activeFilterCount,
   filterParams,
@@ -54,7 +53,6 @@ import {
   shownInventoryView,
 } from './view';
 import {
-  isInventoryOrder,
   localStreamWindows,
   STREAM_CHUNK_ROWS,
   STREAM_ESTIMATE_PX,
@@ -65,7 +63,6 @@ import {
   streamChunkRows,
   streamOffsets,
   streamWindows,
-  type InventoryOrder,
 } from './stream';
 import { SUMMARY_TABLE_COLUMNS } from './table';
 import type { PropertySummary } from './types';
@@ -188,7 +185,6 @@ export function Inventory({
 }) {
   const text = messages[initialLocale];
   const locale = initialLocale;
-  const router = useRouter();
   const parsedView = parseInventoryView(view);
   const requestedView = parsedView.ok
     ? parsedView.view
@@ -211,13 +207,7 @@ export function Inventory({
     view: requestedView,
     filters,
   });
-  const endpoint =
-    '/api/properties?' +
-    new URLSearchParams({
-      query: initialQuery,
-      ...(sort ? { sort } : {}),
-      ...activeFilters,
-    });
+  const endpoint = searchEndpoint({ query: initialQuery, sort, filters });
   // The session is this surface's own protection: the shell reads it, and the stream below reads
   // nothing until it has answered.
   const {
@@ -237,23 +227,6 @@ export function Inventory({
     },
     [clear],
   );
-  const catalogue = useCatalogue(session);
-  const sessionKey = session
-    ? `${renderedSession(session.employee)}:${session.accessRevision}:${catalogue.progress.generationId}`
-    : null;
-  const {
-    windows,
-    total: matching,
-    order,
-    error: streamError,
-    request,
-    refresh,
-    retry,
-  } = useInventoryStream({
-    source: employee && parsedView.ok ? endpoint : null,
-    identity: sessionKey ?? 'no-session',
-    onDenied: denyFiles,
-  });
   const [searchError, setSearchError] = useState(false);
   // The list the person left, read once for the address this list is opened at: the text the
   // address box held (typed, and not necessarily submitted), whether it was edited at all, and
@@ -266,23 +239,43 @@ export function Inventory({
   const [addressEdited, setAddressEdited] = useState(
     () => restored?.edited ?? false,
   );
-  // What the list runs: the text the box is filtering the loaded catalogue with, or null when it
-  // is not filtering at all, and the ordering the read states. The rules live in `address-index.ts`
-  // and `stream.ts` so they are tested without a browser, and they are applied together here so a
-  // state read back out of the carrier runs the same list it was written from. Local filtering is
-  // offered for the ordinary browse only, because a chronological ordering or a filter set names a
-  // result set the loaded page cannot state (issue #194).
+  const catalogue = useCatalogue(session);
+  // The authorization scope: the employee, their role and the server-maintained access revision.
+  // A replacement catalogue is not a new authority, so it neither reopens a submitted search nor
+  // closes the quick view of a record that is still readable.
+  const sessionKey = session
+    ? `${renderedSession(session.employee)}:${session.accessRevision}`
+    : null;
+  // Which result set the address describes: the filters, the ordering and the paging the loaded
+  // catalogue can answer are computed in the browser, and a criterion the catalogue has no field
+  // for is an explicit whole-inventory search (issue #194). The split is `catalogue-results.ts`,
+  // so which filters are offered locally and which route to advanced search is tested without a
+  // browser.
+  const mode = resultMode({ query: initialQuery, filters, sort });
+  const {
+    windows,
+    total: matching,
+    order,
+    error: streamError,
+    request,
+    refresh,
+    retry,
+  } = useInventoryStream({
+    // A catalogue result names no endpoint at all, so the browser answers from the rows it holds
+    // and no search-data request is made until the person runs an advanced search.
+    source: employee && parsedView.ok && mode === 'advanced' ? endpoint : null,
+    scope: sessionKey ?? 'no-session',
+    onDenied: denyFiles,
+  });
+  // The text the box narrows the loaded catalogue with, or null while the result set is the
+  // advanced search's. Every catalogue result - the ordinary browse, a supported filter, a typed
+  // query - is filtered, ordered and paged from rows the browser already holds and reads nothing.
   //
   // The typed value renders immediately and the heavier local match runs at a lower priority, so
-  // Vietnamese text composition stays responsive and no request is made either way. Measurement
-  // decides whether the work later moves to a Web Worker (#195).
+  // Vietnamese text composition stays responsive. Measurement decides whether the work later
+  // moves to a Web Worker (#195).
   const deferredTyped = useDeferredValue(typed);
-  const run = listRun(
-    { text: deferredTyped, edited: addressEdited },
-    { sort, filters: filterCount },
-  );
-  const localQuery = run.localQuery;
-  const activeOrder = run.order;
+  const localQuery = mode === 'catalogue' ? deferredTyped.trim() : null;
   const localActive = localQuery !== null;
   // The local answer exists as soon as any batch is indexed, so the first page is searchable
   // before the traversal finishes and before the authorized total arrives. A catalogue with
@@ -294,9 +287,9 @@ export function Inventory({
   const matches = useMemo(() => {
     if (!localActive) return null;
     return localReady
-      ? matchCatalogue(catalogue.index, localQuery)
+      ? catalogueMatches(catalogue.index, { query: localQuery, filters })
       : NO_MATCHES;
-  }, [localActive, localReady, catalogue.index, localQuery]);
+  }, [localActive, localReady, catalogue.index, localQuery, filters]);
   // The rows the local answer holds, and the stored format each one matched through. The format is
   // only stated while a query is actually filtering: an empty box lists every loaded property and
   // has no match to explain.
@@ -363,7 +356,13 @@ export function Inventory({
   );
   const [width, setWidth] = useState(0);
   const total = matches !== null ? matches.length : (matching ?? 0);
-  const ready = matches !== null || matching !== null;
+  // A catalogue result is ready once any batch is indexed, or once the load ended without one: the
+  // list states the load itself rather than an empty inventory before that, and never presents a
+  // filtered view of the rows it happens to hold as a search of the whole inventory.
+  const ready =
+    matches !== null
+      ? localReady || catalogue.progress.isComplete || catalogueFailed
+      : matching !== null;
   // What the results area holds: the locally matched rows of the loaded catalogue, or the server
   // stream. Both are one total order the page draws as chunks of rows, so the area below has one
   // shape either way.
@@ -713,23 +712,9 @@ export function Inventory({
       setSearchError(false);
     }
   }
-  // Changing the ordering starts the stream over; the ordering never rewrites the search, the
-  // filters or the view.
-  function orderHref(next: InventoryOrder | null) {
-    return inventoryHref({
-      query: initialQuery,
-      sort: next,
-      view: requestedView,
-      filters,
-    });
-  }
-  const orders: { value: InventoryOrder | null; label: string }[] = [
-    { value: null, label: text.sortDefault },
-    { value: 'oldest', label: text.sortOldest },
-    ...(activeOrder === 'newest'
-      ? [{ value: 'newest' as const, label: text.sortNewest }]
-      : []),
-  ];
+  // The ordering is not offered beside the box any more: the chronological orderings the database
+  // answers are advanced criteria, and they are submitted from the filter panel with the rest of
+  // them instead of running the moment a control changes (issue #194).
   // What the progress indicator states, and where an empty result area may draw its own wording
   // from. Both are decided by the catalogue module so the honest-coverage rules are tested rather
   // than buried in a render branch.
@@ -885,29 +870,6 @@ export function Inventory({
                 <input key={name} type="hidden" name={name} value={value} />
               ))}
             </form>
-            <label className="sr" htmlFor="inventory-sort">
-              {text.sortLabel}
-            </label>
-            <select
-              id="inventory-sort"
-              className="select toolbar-sort"
-              key={sort ?? 'default'}
-              defaultValue={sort ?? ''}
-              onChange={(event) => {
-                const next = event.currentTarget.value;
-                router.push(orderHref(isInventoryOrder(next) ? next : null));
-              }}
-            >
-              {orders.map((order) => (
-                <option
-                  key={order.value ?? 'default'}
-                  value={order.value ?? ''}
-                  hidden={order.value === 'newest'}
-                >
-                  {order.label}
-                </option>
-              ))}
-            </select>
             <button
               className="btn btn-secondary btn-sm"
               type="button"
@@ -1013,7 +975,12 @@ export function Inventory({
                   <p className="search-hint">{text.catalogueMoreMatches}</p>
                 ) : null}
               </>
-            ) : null}
+            ) : (
+              // The advanced result is the database's answer for the whole inventory: the note
+              // says so, so a result the browser could not have produced is never read as a local
+              // filter over the loaded rows.
+              <p className="search-hint">{text.advancedSearchNote}</p>
+            )}
             <p className="search-hint">{text.inventorySearchHint}</p>
             <details>
               <summary>{text.searchHelp}</summary>
@@ -1164,7 +1131,7 @@ export function Inventory({
         {busy ? <SkeletonCards label={text.loading} /> : null}
 
         <div ref={surface} hidden={!employee || busy}>
-          {ready && streamError && total === 0 ? (
+          {streamError && total === 0 ? (
             <div className="panel">
               <div className="state-panel" data-tone="danger">
                 <h3>{failureMessage(streamError)}</h3>
@@ -1199,6 +1166,24 @@ export function Inventory({
                   </svg>
                 </span>
                 <h3>{emptyText}</h3>
+                {local && localQuery ? (
+                  <>
+                    <p className="search-hint">
+                      {text.catalogueSearchWholeNote}
+                    </p>
+                    <Link
+                      className="btn btn-secondary btn-sm"
+                      href={inventoryHref({
+                        query: localQuery,
+                        sort,
+                        view: requestedView,
+                        filters,
+                      })}
+                    >
+                      {text.catalogueSearchWhole}
+                    </Link>
+                  </>
+                ) : null}
               </div>
             </div>
           ) : null}

@@ -34,6 +34,7 @@ const row: CatalogueRow = {
   cover_file_id: null,
   created_at: '2026-10-01T00:00:00Z',
   updated_at: '2026-10-19T04:00:00Z',
+  created_by: SECOND_ID,
   property_addresses: [
     {
       id: SECOND_ID,
@@ -90,12 +91,14 @@ function selected(select: string): Map<string, string | null> {
 
 test('the catalogue read names the summary contract and casts its money and measurements', () => {
   const fields = selected(CATALOGUE_SELECT);
-  // Exactly this set: contacts, legal fields, notes, coordinates, the creator and the entry
-  // chronology belong to the detail and chronological reads, which authorize them separately.
+  // Exactly this set: contacts, legal fields, notes, coordinates and the entry chronology belong
+  // to the detail and chronological reads, which authorize them separately. The creator reference
+  // is carried so the ordinary browse keeps its attribution.
   assert.deepEqual([...fields.keys()].sort(), [
     'access_type',
     'cover_file_id',
     'created_at',
+    'created_by',
     'depth_m',
     'direction',
     'floor_area_m2',
@@ -134,6 +137,7 @@ test('the catalogue read names the summary contract and casts its money and meas
     'access_type',
     'cover_file_id',
     'created_at',
+    'created_by',
     'updated_at',
     'property_addresses',
   ])
@@ -141,7 +145,7 @@ test('the catalogue read names the summary contract and casts its money and meas
 });
 
 test('one row becomes the list summary, with the recorded text and both formats', () => {
-  const summary = catalogueSummary(row);
+  const summary = catalogueSummary(row, 'Nguyễn Thu Hà');
   assert.deepEqual(Object.keys(summary).sort(), [
     'accessType',
     'addresses',
@@ -175,55 +179,59 @@ test('one row becomes the list summary, with the recorded text and both formats'
   );
   assert.equal(summary.addresses[1]?.format, 'current');
   assert.equal(summary.addresses[1]?.district, null);
-  // The catalogue states no attribution and no entry chronology.
-  assert.equal(summary.createdBy, null);
+  // The creator the page resolved rides on the summary, so the ordinary browse keeps the
+  // attribution the stream read used to supply; the catalogue states no entry chronology.
+  assert.equal(summary.createdBy, 'Nguyễn Thu Hà');
   assert.equal(summary.entryOn, undefined);
 });
 
 test('a superseded address version is history, not part of the summary', () => {
   const replaced = '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
   const replacement = '1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e';
-  const summary = catalogueSummary({
-    ...row,
-    property_addresses: [
-      {
-        id: replaced,
-        format: 'legacy',
-        address_text: '12 Lê Lợi, Phường 5, Quận 3',
-        house_number: '12',
-        street: 'Lê Lợi',
-        commune_text: 'Phường 5',
-        district_text: 'Quận 3',
-        is_primary: false,
-        mapping_status: 'unresolved',
-        supersedes_address_id: null,
-      },
-      {
-        id: replacement,
-        format: 'legacy',
-        address_text: '99 Hai Bà Trưng, Phường 6, Quận 3',
-        house_number: '99',
-        street: 'Hai Bà Trưng',
-        commune_text: 'Phường 6',
-        district_text: 'Quận 3',
-        is_primary: true,
-        mapping_status: 'unresolved',
-        supersedes_address_id: replaced,
-      },
-      {
-        id: PROPERTY_ID,
-        format: 'alternate',
-        address_text: '99 Hai Bà Trưng, Phường 6, Quận 3 (hẻm 7)',
-        house_number: '99',
-        street: 'Hai Bà Trưng',
-        commune_text: 'Phường 6',
-        district_text: 'Quận 3',
-        is_primary: false,
-        mapping_status: 'unresolved',
-        supersedes_address_id: null,
-      },
-    ],
-  });
+  const summary = catalogueSummary(
+    {
+      ...row,
+      property_addresses: [
+        {
+          id: replaced,
+          format: 'legacy',
+          address_text: '12 Lê Lợi, Phường 5, Quận 3',
+          house_number: '12',
+          street: 'Lê Lợi',
+          commune_text: 'Phường 5',
+          district_text: 'Quận 3',
+          is_primary: false,
+          mapping_status: 'unresolved',
+          supersedes_address_id: null,
+        },
+        {
+          id: replacement,
+          format: 'legacy',
+          address_text: '99 Hai Bà Trưng, Phường 6, Quận 3',
+          house_number: '99',
+          street: 'Hai Bà Trưng',
+          commune_text: 'Phường 6',
+          district_text: 'Quận 3',
+          is_primary: true,
+          mapping_status: 'unresolved',
+          supersedes_address_id: replaced,
+        },
+        {
+          id: PROPERTY_ID,
+          format: 'alternate',
+          address_text: '99 Hai Bà Trưng, Phường 6, Quận 3 (hẻm 7)',
+          house_number: '99',
+          street: 'Hai Bà Trưng',
+          commune_text: 'Phường 6',
+          district_text: 'Quận 3',
+          is_primary: false,
+          mapping_status: 'unresolved',
+          supersedes_address_id: null,
+        },
+      ],
+    },
+    null,
+  );
   // The retained row the replacement superseded is not folded into the summary, while the current
   // recorded address and a variant nobody superseded both are.
   assert.deepEqual(
@@ -233,15 +241,20 @@ test('a superseded address version is history, not part of the summary', () => {
 });
 
 test('a row with no address or no facts states the gap rather than inventing one', () => {
-  const summary = catalogueSummary({
-    ...row,
-    sale_price_vnd: null,
-    floors: null,
-    property_addresses: null,
-  });
+  const summary = catalogueSummary(
+    {
+      ...row,
+      sale_price_vnd: null,
+      floors: null,
+      property_addresses: null,
+    },
+    null,
+  );
   assert.deepEqual(summary.addresses, []);
   assert.equal(summary.salePriceVnd, null);
   assert.equal(summary.floors, null);
+  // A creator that did not resolve states nothing at all, exactly as the stream's attribution does.
+  assert.equal(summary.createdBy, null);
 });
 
 const cursor = (values: Record<string, string>) =>

@@ -101,27 +101,31 @@ function summaryOf(
   addresses: CatalogueAddressRow[],
   parts: Partial<CatalogueRow> = {},
 ): PropertySummary {
-  return catalogueSummary({
-    id,
-    property_code: `BDS-${id}`,
-    listing_mode: 'sale',
-    status: 'available',
-    property_type: 'house',
-    sale_price_vnd: null,
-    monthly_rent_vnd: null,
-    land_area_m2: null,
-    floor_area_m2: null,
-    frontage_m: null,
-    depth_m: null,
-    floors: null,
-    direction: null,
-    access_type: null,
-    cover_file_id: null,
-    created_at: null,
-    updated_at: null,
-    property_addresses: addresses,
-    ...parts,
-  });
+  return catalogueSummary(
+    {
+      id,
+      property_code: `BDS-${id}`,
+      listing_mode: 'sale',
+      status: 'available',
+      property_type: 'house',
+      sale_price_vnd: null,
+      monthly_rent_vnd: null,
+      land_area_m2: null,
+      floor_area_m2: null,
+      frontage_m: null,
+      depth_m: null,
+      floors: null,
+      direction: null,
+      access_type: null,
+      cover_file_id: null,
+      created_at: null,
+      updated_at: null,
+      created_by: null,
+      property_addresses: addresses,
+      ...parts,
+    },
+    null,
+  );
 }
 
 // One property at its old address, as a page of the traversal answered with it.

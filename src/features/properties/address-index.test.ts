@@ -3,7 +3,6 @@ import test from 'node:test';
 import {
   buildAddressIndex,
   foldAddress,
-  localAddressQuery,
   matchCatalogue,
 } from './address-index.ts';
 import type { AddressSummary, PropertySummary } from './types';
@@ -273,6 +272,28 @@ test('ranking follows exact address, exact number and street, street and localit
   assert.deepEqual(found('le loi'), ['2', '3', '4', '5']);
 });
 
+test('a property code is matched beside the address, and an exact code ranks first', () => {
+  // The database's own text search matches the recorded property code beside the address, so the
+  // browser matches it too instead of answering a code with an empty local result.
+  const exactAddress = property('8', [address('legacy', 'Lê Lợi')]);
+  const coded: PropertySummary = {
+    ...property('9', [address('legacy', '99 Nguyễn Huệ')]),
+    propertyCode: 'LE-LOI',
+  };
+  const numbered = property('7', [address('legacy', '7 Trần Hưng Đạo')]);
+  const indexed = buildAddressIndex([exactAddress, coded, numbered]);
+  const ids = (query: string) =>
+    matchCatalogue(indexed, query).map((match) => match.record.id);
+  // An exact code is the strongest result there is: above even an exactly recorded address that
+  // states the same text.
+  assert.deepEqual(ids('LE-LOI'), ['9', '8']);
+  // A code typed in full finds its row, a fragment of it does, and neither claims a recorded
+  // address format for the match.
+  assert.deepEqual(ids('BDS-7'), ['7']);
+  assert.deepEqual(ids('DS-7'), ['7']);
+  assert.equal(matchCatalogue(indexed, 'BDS-7')[0]?.format, '');
+});
+
 test('the same search always returns the same order', () => {
   const reversed = buildAddressIndex([...RECORDS].reverse());
   assert.deepEqual(
@@ -289,38 +310,6 @@ test('a query the loaded page does not answer is an empty result, never an error
   assert.deepEqual(found(''), ['1', '2', '3', '4', '5', '6', '7']);
   assert.deepEqual(found('   '), ['1', '2', '3', '4', '5', '6', '7']);
   assert.deepEqual(matchCatalogue([], 'le loi'), []);
-});
-
-test('an unedited or submitted search stays on its server result', () => {
-  for (const query of ['', 'le loi', '  le loi  '])
-    assert.equal(localAddressQuery(query, false, null, 0), null);
-});
-
-test('editing, restoring and clearing a basic search stays local until submission', () => {
-  for (const [typed, expected, ids] of [
-    ['le loi', 'le loi', ['2', '3', '4', '5']],
-    ['  le loi  ', 'le loi', ['2', '3', '4', '5']],
-    ['missing street', 'missing street', []],
-    ['', '', ['1', '2', '3', '4', '5', '6', '7']],
-    ['   ', '', ['1', '2', '3', '4', '5', '6', '7']],
-    ['le loi', 'le loi', ['2', '3', '4', '5']],
-  ] as const) {
-    const query = localAddressQuery(typed, true, null, 0);
-    assert.equal(query, expected);
-    assert.deepEqual(
-      matchCatalogue(index, query!).map((match) => match.record.id),
-      ids,
-    );
-  }
-  assert.equal(localAddressQuery('le loi', false, null, 0), null);
-});
-
-test('chronology and advanced filters keep the server result while typing', () => {
-  for (const typed of ['le loi', '', '   ']) {
-    assert.equal(localAddressQuery(typed, true, 'oldest', 0), null);
-    assert.equal(localAddressQuery(typed, true, 'newest', 0), null);
-    assert.equal(localAddressQuery(typed, true, null, 2), null);
-  }
 });
 
 test('each variant indexes its carried address parts without changing its source text', () => {

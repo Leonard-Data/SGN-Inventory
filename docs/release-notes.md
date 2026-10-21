@@ -13,6 +13,80 @@ shipped is implemented in the code on `main`; where a real-browser or hosted acc
 executed, that is stated in the entry rather than left implied. Correspondence between a feature and
 what was *verified* is in [testing.md](testing.md).
 
+## 21 October 2026 — the inventory list answers from the browser
+
+### The catalogue answers the list, and the database answers only what it cannot (#188–#194)
+
+The properties list no longer reads the database to filter itself. The browser holds a compact,
+user-scoped catalogue of the authorized inventory — summary fields only, one page at a time through
+`GET /api/properties/catalogue` on the caller's own session client, so Row Level Security still
+decides every row — and the search box, the status, listing-mode, type, asking-price and area
+filters, the result paging and the newest-created ordering are computed over those rows in the
+browser, issuing no request at all. The slices landed on `main` on 20 and 21 October; this entry
+covers them as the one change a person using the list experiences.
+
+With it:
+
+- **Progressive loading with honest progress** (#189). After the first page the loader follows the
+  endpoint's own cursor to the end of the authorized inventory, deduplicating and indexing each
+  batch, and a line beside the search states the loaded count, the authorized total and an
+  approximate percentage — held below 100% until the last batch is indexed — or the loaded count
+  alone when the total is not known. An interrupted load keeps what it has and offers Retry, and
+  while it is incomplete an empty result reads as "no matches in the loaded properties", never as an
+  empty inventory.
+- **Deliberate Refresh as a replacement catalogue** (#190). Once the catalogue is complete, Refresh
+  builds a replacement beside the one in use: the working catalogue stays searchable throughout, the
+  replacement states its own progress and total separately, and it is swapped in only when every
+  cursor has been traversed and every received row indexed — so deleted or newly inaccessible
+  properties disappear. A stopped refresh keeps the previous catalogue, its last-updated time and
+  its rows, and offers Retry.
+- **Vietnamese matching that respects house numbers** (#191). Matching folds accents, `đ` and case,
+  expands the controlled abbreviations (`P.`, `Q.`, `TP.` and the rest) and treats a house number as
+  a structure rather than a substring, so 12 does not find 112 or 12A, 12A keeps its letter, and
+  12/5 stays an alley under 12. Each stored address variant is searched on its own, so a query can
+  never match an old district against a current ward, and the ranking runs from the exact recorded
+  address down to the loosest prefix match. A recorded property code is matched beside the address —
+  in full, which ranks first, or as a fragment at the loosest rank — because the database's own
+  search matches both fields.
+- **The list survives a property visit** (#192). Opening a property and coming back restores the
+  text in the box (typed and never submitted, so it was never in the address), the filters, the
+  ordering, the view and the position in the list, without reading the catalogue again; a reload of
+  the application starts over.
+- **A committed change updates the list from the server's own answer** (#193). A saved edit, a create,
+  a merge, a status decision or an applied correction answers with the affected property's summary
+  read back from the server after it committed, and the browser applies that answer over the
+  catalogue instead of merging the submitted values into the loaded rows, so a page or a refresh that
+  started before the change cannot overwrite it. The rows follow the server: a confirmed change re-reads the list's own
+  windows where the list is drawn from them, and a lock or approval refusal that means the committed
+  state moved on makes the panel re-read the property. Locking and approval remain the database's
+  decision, and the cached status never authorizes either.
+- **Local filters and the advanced-search split** (#194). Status, listing mode, type, the
+  asking-price and area ranges and the typed address or property code are answered from the loaded
+  rows; the province/city and commune/ward selects, the linked contact and the original entry-date
+  ordering are a whole-inventory search the person runs from the filter panel, because the summaries
+  carry no field for them — and that ordering is also the narrower `available`/`negotiating`
+  database view rather than a reordering of the loaded rows. Editing a control runs nothing; only
+  running the panel reads. The panel names its action "Run advanced search" when that is what it
+  will do, the list states which of the two answered it, and an advanced page is cached under its own
+  key (account, submitted criteria, ordering and page) with a bounded lifetime separate from the
+  catalogue's. A typed text the browser matches nothing for states the fields it did match and
+  offers the whole-inventory search for that text instead of leaving an empty local answer.
+
+_Why it matters:_ searching and filtering the inventory used to be database reads, and a remount or
+a return from a property read the same rows again. The list now answers from memory, and the reads
+that remain are the ones a person asks for. Just as importantly, the label on the result says what
+was really searched: a locally filtered view of the loaded properties is never presented as a search
+of the whole inventory, which is what people make decisions on.
+
+_Known gap:_ all of it is verified by unit and embedded tests, not by a browser. These lanes had no
+browser and no hosted Supabase, so the absence of a request per keystroke, the reused advanced page,
+the restored position, the post-swap and post-commit rows and the VI/EN rendering all remain
+staging gates in [testing.md](testing.md). Two things are worth stating plainly: no slice of this work
+was exercised in a real browser before it was reported done, and the review rounds that followed
+found defects — a failed first read of an advanced search that rendered nothing, a view switch that
+could restart a submitted search after it had been idle, and notes that named fields the browser
+already matches — after earlier rounds had reported the work clean.
+
 ## 20 October 2026 — a rewritten README, a release record, and three directory defects
 
 ### The README describes the application that exists, and these notes begin (#183, #184)

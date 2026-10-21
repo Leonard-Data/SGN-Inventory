@@ -75,8 +75,11 @@ export function recordCatalogueChange(
 // rest of the catalogue is untouched and the affected addresses are reindexed from the recorded
 // text the server answered with.
 export function catalogueEntry(summary: PropertySummary): CatalogueIndexEntry {
+  // One property folds to exactly one entry, so the first is the only one; the entry carries the
+  // folded code beside its variants, which is why it is built rather than assembled by hand.
   const [entry] = buildAddressIndex([summary]);
-  return entry ?? { record: summary, variants: [] };
+  if (!entry) throw new Error('a summary always folds to one catalogue entry');
+  return entry;
 }
 
 // Whether the row a read answered with is newer than the change the browser applied. The property's

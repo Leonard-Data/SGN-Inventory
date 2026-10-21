@@ -4,8 +4,11 @@
 // rule keeps a window offset out of it, so this is the rest. It is held in browser memory above the
 // route for the session: a visit to a property and back finds it, and a reload of the application
 // starts it over.
-import { localAddressQuery } from './address-index.ts';
-import { isInventoryOrder, type InventoryOrder } from './stream.ts';
+//
+// Restoring a position is all this module does. Which read a result set is - the loaded catalogue or
+// an advanced search - is decided once, from the address, by `resultMode` in `catalogue-results.ts`,
+// and this state only supplies the box the person left: a restored list is the list they left
+// because the address is the same, not because a second classifier agreed.
 import type { InventoryView } from './view.ts';
 
 export type InventoryListState = {
@@ -54,30 +57,6 @@ export function writeListState(
 ): void {
   carrier.address = address;
   carrier.state = { ...state };
-}
-
-// What one result set runs, from what the address states and what the box holds: the text the
-// loaded catalogue is filtered with (null when the box filters nothing) and the ordering the read
-// states. Reading a state back out of the carrier has to describe the same run it was written
-// from - that is what makes a restored list the list the person left.
-export type InventoryListRun = {
-  localQuery: string | null;
-  order: InventoryOrder | null;
-};
-
-export function listRun(
-  state: Pick<InventoryListState, 'text' | 'edited'>,
-  address: { sort: string | null; filters: number },
-): InventoryListRun {
-  return {
-    localQuery: localAddressQuery(
-      state.text,
-      state.edited,
-      address.sort,
-      address.filters,
-    ),
-    order: isInventoryOrder(address.sort) ? address.sort : null,
-  };
 }
 
 // Whether the stream has rendered enough to put a position on: the read has stated the total the

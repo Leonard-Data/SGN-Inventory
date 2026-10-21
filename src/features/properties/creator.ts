@@ -15,7 +15,7 @@ export function creatorName(
 // Property id → creator display name, for the page of records a read just returned. Built
 // once so each card is an O(1) lookup, and it holds only the names that resolve.
 export function propertyCreators(
-  properties: { id: string; created_by: string | null }[],
+  properties: readonly { id: string; created_by: string | null }[],
   employees: { id: string; display_name: string | null }[],
 ): Map<string, string> {
   const byId = new Map(employees.map((row) => [row.id, row.display_name]));

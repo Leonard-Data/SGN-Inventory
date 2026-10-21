@@ -1,13 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  listRun,
   newListStateCarrier,
   positionReady,
   readListState,
   writeListState,
   type InventoryListState,
 } from './list-state.ts';
+import { resultMode } from './catalogue-results.ts';
+import { noInventoryFilters } from './filters.ts';
+
+const PROVINCE = '11111111-1111-4111-8111-111111111111';
 
 const address =
   '/properties?' +
@@ -59,71 +62,42 @@ test('a list is written whole, so nothing reaches it after the write', () => {
   assert.deepEqual(readListState(carrier, address), left);
 });
 
-// What a restored list has to reproduce: the run it was written from. A state read back out of the
-// carrier decides the same local query and the same ordering, whatever the address states.
-test('a restored list runs the same query and ordering it was written from', () => {
+// This test asserted this ticket's own classifier (`listRun`, which decided a local query from an
+// `edited` flag and a filter count) until issue #194 single-sourced that decision in `resultMode`,
+// because two classifiers let the panel promise one kind of read and the list perform the other.
+// The assertion moved with the decision: what a restored list owes is the box the person left, and
+// the read is the address's, so the rule is asked of `resultMode` rather than re-stated here.
+test('a restored list carries the box, and the address alone decides the read', () => {
   const carrier = newListStateCarrier();
   writeListState(carrier, address, left);
   const restored = readListState(carrier, address);
   assert.notEqual(restored, null);
-  for (const sort of [null, 'oldest', 'newest']) {
-    for (const filters of [0, 1, 4]) {
-      const before = listRun(left, { sort, filters });
-      const after = listRun(restored!, { sort, filters });
-      assert.deepEqual(after, before);
-      // The ordering is the one the address states, and it survives the round trip.
-      assert.equal(after.order, sort);
-    }
-  }
-  // The restored text and the restored edit state are the ones that were typed, not the address's
-  // own submitted search.
-  assert.deepEqual(listRun(restored!, { sort: null, filters: 0 }), {
-    localQuery: 'nguyen van thuong binh thanh',
-    order: null,
-  });
-});
-
-// A result set the carrier holds nothing for is the list the address states: this is what a reload
-// of the application starts from, and it is the same run as an untouched box on that address.
-test('an address with no entry runs the address alone', () => {
-  const carrier = newListStateCarrier();
-  const restored = readListState(carrier, address);
-  assert.equal(restored, null);
-  const fresh = { text: 'le loi', edited: false };
-  assert.deepEqual(listRun(fresh, { sort: null, filters: 0 }), {
-    localQuery: null,
-    order: null,
-  });
-  assert.deepEqual(listRun(fresh, { sort: 'oldest', filters: 0 }), {
-    localQuery: null,
-    order: 'oldest',
-  });
-});
-
-// What the box holds decides the local query, and a chronological ordering or a filter set names a
-// result set the loaded page cannot state, so neither filters locally (issue #194).
-test('the box filters locally only for the ordinary browse', () => {
-  assert.deepEqual(
-    listRun({ text: ' le loi ', edited: true }, { sort: null, filters: 0 }),
-    {
-      localQuery: 'le loi',
-      order: null,
-    },
+  assert.equal(restored?.text, left.text);
+  assert.equal(restored?.edited, left.edited);
+  // The one rule, asked of the address: the restored box cannot change which read it is.
+  assert.equal(
+    resultMode({ query: '', filters: noInventoryFilters, sort: null }),
+    'catalogue',
   );
   assert.equal(
-    listRun({ text: 'le loi', edited: false }, { sort: null, filters: 0 })
-      .localQuery,
-    null,
+    resultMode({
+      query: restored!.text,
+      filters: noInventoryFilters,
+      sort: null,
+    }),
+    'advanced',
   );
   assert.equal(
-    listRun({ text: 'le loi', edited: true }, { sort: 'newest', filters: 0 })
-      .localQuery,
-    null,
+    resultMode({ query: '', filters: noInventoryFilters, sort: 'oldest' }),
+    'advanced',
   );
   assert.equal(
-    listRun({ text: 'le loi', edited: true }, { sort: null, filters: 1 })
-      .localQuery,
-    null,
+    resultMode({
+      query: '',
+      filters: { ...noInventoryFilters, province: PROVINCE },
+      sort: null,
+    }),
+    'advanced',
   );
 });
 

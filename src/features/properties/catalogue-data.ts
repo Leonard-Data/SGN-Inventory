@@ -8,6 +8,7 @@ import {
   nextCatalogueCursor,
   type CatalogueRow,
 } from './catalogue';
+import { propertyCreators } from './creator';
 import type { CataloguePage, PropertySummary } from './types';
 
 // One page of the browser catalogue: the caller's own authorized, unarchived inventory in one
@@ -34,10 +35,35 @@ export async function cataloguePage(
     throw new ApiError(failure.status, failure.code);
   }
   const rows = (data ?? []) as unknown as CatalogueRow[];
+  const creators = await catalogueCreators(context, rows);
   return {
-    properties: rows.map(catalogueSummary),
+    properties: rows.map((row) =>
+      catalogueSummary(row, creators.get(row.id) ?? null),
+    ),
     nextCursor: nextCatalogueCursor(rows.map((row) => row.id)),
   };
+}
+
+// The creator's display name for the page just read: one names read for the page's distinct
+// creators through the sanctioned employee-name projection, so no colleague's employee row has to
+// be readable. A creator that does not resolve contributes no name, exactly as the stream's own
+// attribution states it.
+async function catalogueCreators(
+  context: RouteContext,
+  rows: readonly CatalogueRow[],
+): Promise<Map<string, string>> {
+  const ids = [
+    ...new Set(rows.flatMap((row) => (row.created_by ? [row.created_by] : []))),
+  ];
+  if (!ids.length) return new Map();
+  const { data, error } = await context.client.rpc('list_employee_names', {
+    p_ids: ids,
+  });
+  if (error) {
+    const failure = catalogueFailure(error.code);
+    throw new ApiError(failure.status, failure.code);
+  }
+  return propertyCreators(rows, data ?? []);
 }
 
 // The authorized total of the same inventory the pages above carry, read once per load generation.
@@ -76,5 +102,10 @@ export async function catalogueSummaryOf(
     .is('archived_at', null)
     .maybeSingle();
   if (error) return undefined;
-  return data ? catalogueSummary(data as unknown as CatalogueRow) : null;
+  if (!data) return null;
+  const row = data as unknown as CatalogueRow;
+  // The same attribution the page read states: one names read for this row's creator, so a summary
+  // committed by a change keeps showing who created the property.
+  const creators = await catalogueCreators(context, [row]);
+  return catalogueSummary(row, creators.get(row.id) ?? null);
 }

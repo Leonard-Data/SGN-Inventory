@@ -47,19 +47,22 @@ planned but not built; nothing links to them.
 
 ### Inventory
 
-| Route                | What a user does there                                                                                                                                                                                                                                                    |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/properties`        | The inventory list: search the legacy and the current address, filter (status, listing mode, type, asking-price range, land/floor area in m², province and commune, linked contact), order by newest-created or by original entry date, and read the matching total       |
-| `/properties` (view) | The same result set as cards or as a table of ten columns; the view travels in the address so switching it keeps the search, ordering and filters. The table is not offered at phone width                                                                                |
-| `/properties` (row)  | Click, Enter or Space opens the row's quick view: key metadata, the status control, a comment box, one attachment through the normal upload path, and a link into the full record. Escape closes it and returns focus to the row                                          |
-| `/properties/new`    | Create a property from a known address                                                                                                                                                                                                                                    |
-| `/properties/[id]`   | The full record: legacy and current address, facts, map point, cover photo and private documents, contacts and vendor links, asking-price history, status trail, owner-contact disclosure, discussion, reservations, sale completion, corrections and page-view recording |
+| Route                | What a user does there                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/properties`        | The inventory list: search the legacy and the current address or the property code, and read the matching total. Status, listing mode, type, asking-price range and land/floor area filter the copy the browser already holds, instantly and without a request; province and commune, a linked contact and the original entry date are a whole-inventory search run from the filter panel |
+| `/properties` (view) | The same result set as cards or as a table of ten columns; the view travels in the address so switching it keeps the search, ordering and filters. The table is not offered at phone width                                                                                                                                                                                                |
+| `/properties` (row)  | Click, Enter or Space opens the row's quick view: key metadata, the status control, a comment box, one attachment through the normal upload path, and a link into the full record. Escape closes it and returns focus to the row                                                                                                                                                          |
+| `/properties/new`    | Create a property from a known address                                                                                                                                                                                                                                                                                                                                                    |
+| `/properties/[id]`   | The full record: legacy and current address, facts, map point, cover photo and private documents, contacts and vendor links, asking-price history, status trail, owner-contact disclosure, discussion, reservations, sale completion, corrections and page-view recording                                                                                                                 |
 
-The list is one stream, not pages: it is ordered by the server and read window by window as the
-stream scrolls, only the rows near the viewport are mounted, and the matching count comes from the
-same read that answers each window. There are no page numbers, no page size and no cursor trail
-([ADR 0002](docs/adr/0002-inventory-list-stream-and-table-view.md)).
-
+The list is one continuous result set, not pages: the plain browse and every filter the catalogue
+holds the fields for are ordered, filtered and paged in the browser from the loaded rows and issue no
+request at all, while a whole-inventory search is read window by window from the server as the page
+scrolls. Only the rows near the viewport are mounted, and the matching count comes from the same rows
+the browser holds or from the read that answers each window. There are no page numbers, no page size
+and no cursor trail
+([ADR 0002](docs/adr/0002-inventory-list-stream-and-table-view.md),
+[ADR 0003](docs/adr/0003-browser-property-catalogue-and-local-address-search.md)).
 The address box narrows the catalogue page the browser already holds as a person types, so typing no
 longer reads the database; the search button still searches the whole inventory, and the deliberate
 Refresh control rebuilds that catalogue in the background and swaps it in only once the replacement

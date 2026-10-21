@@ -54,16 +54,19 @@ const vi = {
   relativeDaysAgo: '{n} ngày trước',
   quickView: 'Xem nhanh',
   recordActions: 'Thao tác',
-  inventorySearchHint: 'Tìm theo địa chỉ, không cần dấu.',
+  inventorySearchHint: 'Tìm theo địa chỉ hoặc mã hồ sơ, không cần dấu.',
   searchHelp: 'Cách tìm kiếm',
   inventorySearchHelp:
-    'Tìm theo một đoạn địa chỉ liên tiếp. Dấu % và _ được tìm như ký tự thường. Dùng bộ lọc để giới hạn giá, diện tích và khu vực.',
+    'Tìm theo một đoạn địa chỉ liên tiếp hoặc một mã hồ sơ. Dấu % và _ được tìm như ký tự thường. Dùng bộ lọc để giới hạn giá, diện tích và khu vực.',
   // The address box narrows the page the browser already holds, so what the person sees is stated
   // as the loaded catalogue and never as a search of the whole inventory.
   catalogueLocalCount:
     'Trong danh mục đã tải: {matches} / {loaded} bất động sản phù hợp.',
   catalogueLocalNote:
-    'Kết quả lọc trong danh mục đã tải; nhấn nút tìm kiếm để tìm toàn bộ kho.',
+    'Kết quả lọc trong danh mục đã tải theo mã bất động sản và các phần địa chỉ đã ghi; nhấn nút tìm kiếm để tìm toàn bộ kho, nơi cũng tìm theo tên tỉnh/thành phố đã ghi và tên chính thức của các đơn vị hành chính mà trang đã tải không giữ.',
+  catalogueSearchWholeNote:
+    'Trình duyệt chỉ so khớp mã bất động sản và các phần địa chỉ đã tải, nên tên tỉnh/thành phố đã ghi hay tên chính thức của các đơn vị hành chính chỉ được tìm khi tìm toàn bộ kho.',
+  catalogueSearchWhole: 'Tìm toàn bộ kho theo nội dung này',
   catalogueLocalLoading:
     'Đang tải danh mục. Nhấn nút tìm kiếm để tìm toàn bộ kho.',
   catalogueLocalFailed:
@@ -117,20 +120,29 @@ const vi = {
   rented: 'Đã cho thuê',
   withdrawn: 'Ngừng chào',
   archived: 'Hồ sơ lưu trữ — chỉ người quản lý xem',
-  search: 'Tìm địa chỉ',
+  search: 'Tìm địa chỉ hoặc mã hồ sơ',
   searchHint:
-    'Nhập một đoạn địa chỉ liền nhau; không cần dấu. % và _ là ký tự thường, không phải ký tự đại diện.',
-  queryTooLong: 'Địa chỉ tìm kiếm tối đa 120 ký tự.',
+    'Nhập một đoạn địa chỉ liền nhau hoặc một mã hồ sơ; không cần dấu. % và _ là ký tự thường, không phải ký tự đại diện.',
+  queryTooLong: 'Địa chỉ hoặc mã hồ sơ tìm kiếm tối đa 120 ký tự.',
   sortLabel: 'Thứ tự',
   sortDefault: 'Mới tạo gần đây',
   sortOldest: 'Ngày nhập kho: cũ nhất trước',
   sortNewest: 'Ngày nhập kho: mới nhất trước',
-  orderReverse: 'Đảo chiều',
-  orderReverseHint: 'Chọn thứ tự theo ngày nhập kho để đảo chiều thứ tự.',
   ageHint:
     'Chỉ gồm hồ sơ đang chào hoặc đang thương lượng, chưa lưu trữ. Thứ tự dùng ngày nhập kho gốc, không đổi khi cập nhật, đổi giá hoặc đăng lại. Hồ sơ chưa xác định ngày nhập kho được liệt kê sau cùng, không bị ẩn.',
   filters: 'Bộ lọc',
   filtersApply: 'Áp dụng bộ lọc',
+  catalogueFiltersHeading: 'Bộ lọc trong danh mục đã tải',
+  catalogueFiltersHint:
+    'Các bộ lọc này chạy ngay trên danh mục đã tải trong trình duyệt và không gửi yêu cầu nào.',
+  catalogueFiltersAdvancedHint:
+    'Địa chỉ bạn đã tìm hoặc bất kỳ tiêu chí toàn kho nào trong bảng này khiến lần chạy trở thành một lần tìm từ cơ sở dữ liệu, và chính yêu cầu đó áp dụng cả các bộ lọc này.',
+  advancedSearchHeading: 'Tìm kiếm toàn kho',
+  advancedSearchHint:
+    'Tỉnh/thành phố, xã/phường, người liên hệ và thứ tự theo ngày nhập kho không có trong danh mục đã tải, nên chúng chỉ được tìm khi bạn bấm nút bên dưới. Kết quả khi đó là câu trả lời của toàn kho, không phải của danh mục đã tải.',
+  advancedSearchRun: 'Tìm toàn kho',
+  advancedSearchNote:
+    'Kết quả tìm kiếm trên toàn kho, không phải danh mục đã tải.',
   filtersClear: 'Xoá bộ lọc',
   filtersRemove: 'Bỏ điều kiện lọc',
   filtersAny: 'Tất cả',
@@ -914,16 +926,20 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     relativeDaysAgo: '{n} days ago',
     quickView: 'Quick view',
     recordActions: 'Actions',
-    inventorySearchHint: 'Search by address; accents are optional.',
+    inventorySearchHint:
+      'Search by address or property code; accents are optional.',
     searchHelp: 'Search help',
     inventorySearchHelp:
-      'Search for a continuous address fragment. The % and _ characters are literal. Use filters to narrow the price, area and location.',
+      'Search for a continuous address fragment or a property code. The % and _ characters are literal. Use filters to narrow the price, area and location.',
     // The address box narrows the page the browser already holds, so what the person sees is
     // stated as the loaded catalogue and never as a search of the whole inventory.
     catalogueLocalCount:
       'In the loaded catalogue: {matches} of {loaded} properties match.',
     catalogueLocalNote:
-      'Matches are filtered within the loaded catalogue; use the search button to search the whole inventory.',
+      'Matches are filtered in the loaded catalogue on the property code and the recorded address parts; use the search button to search the whole inventory, which also matches the recorded province label and the official unit names the loaded page does not carry.',
+    catalogueSearchWholeNote:
+      'The browser matches only the property code and the address parts it holds, so a province label or an official unit name is searched only by the whole-inventory search.',
+    catalogueSearchWhole: 'Search the whole inventory for this text',
     catalogueLocalLoading:
       'Loading the catalogue. Use the search button to search the whole inventory.',
     catalogueLocalFailed:
@@ -977,20 +993,30 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     rented: 'Rented',
     withdrawn: 'Withdrawn',
     archived: 'Archived record — reviewers only',
-    search: 'Search address',
+    search: 'Search address or property code',
     searchHint:
-      'Enter a contiguous address fragment; accents are optional. % and _ are literal characters, not wildcards.',
-    queryTooLong: 'Search addresses must be at most 120 characters.',
+      'Enter a contiguous address fragment or a property code; accents are optional. % and _ are literal characters, not wildcards.',
+    queryTooLong:
+      'Search addresses or property codes must be at most 120 characters.',
     sortLabel: 'Order',
     sortDefault: 'Newest created first',
     sortOldest: 'Oldest inventory entry first',
     sortNewest: 'Newest first',
-    orderReverse: 'Reverse',
-    orderReverseHint: 'Choose an entry-date order to reverse it.',
     ageHint:
       'Available and negotiating unarchived inventory only. Order uses the original inventory entry date and does not change on update, price edit or relisting. Records with an unknown entry date are listed last, never hidden.',
     filters: 'Filters',
     filtersApply: 'Apply filters',
+    catalogueFiltersHeading: 'Filters in the loaded catalogue',
+    catalogueFiltersHint:
+      'These filters run on the loaded catalogue in the browser and send no request.',
+    catalogueFiltersAdvancedHint:
+      'The address you submitted, or any whole-inventory criterion in this panel, makes the run one database search, and that request applies these filters too.',
+    advancedSearchHeading: 'Whole-inventory search',
+    advancedSearchHint:
+      'Province/city, commune/ward, contact and the inventory-entry order are not in the loaded catalogue, so they are searched only when you press the button below. Those results are the whole inventory, not the loaded catalogue.',
+    advancedSearchRun: 'Run advanced search',
+    advancedSearchNote:
+      'These results come from a whole-inventory search, not from the loaded catalogue.',
     filtersClear: 'Clear filters',
     filtersRemove: 'Remove filter',
     filtersAny: 'Any',
