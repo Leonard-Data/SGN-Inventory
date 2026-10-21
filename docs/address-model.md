@@ -47,7 +47,7 @@ Migration `20261014075435_vietnamese_admin_units_reference.sql` seeds the nation
 
 The catalog is a reference list, not a property-level verification. Selecting a province and commune from it does not establish a property's current address; a manager/admin still records evidence before `mapping_status = 'verified'`. The seed is idempotent and never rewrites a recorded address string.
 
-Not seeded by this package: any district-level catalog (the upstream two-tier release carries none, so the address form has no district picker and a historical district stays the free-text `district_text` label), any old→new crosswalk or blanket mapping, and any HCMC-specific transition. Crosswalks remain reviewed evidence under the verification workflow above.
+Not seeded by this package: any old→new crosswalk or blanket mapping, and any HCMC-specific transition. Crosswalks remain reviewed evidence under the verification workflow above. A district-level catalog **is** seeded, but only for the pre-2025 window: migration `20261021060602_legacy_admin_units_reference.sql` adds the 63 legacy provinces, 696 legacy districts and 10,051 legacy wards of the pinned VietnamProvinces snapshot on the closed `[2025-01-04, 2025-07-01)` window, so a legacy ward has a real district parent. No picker, form or mapping reads those rows yet, so the address form still has no district picker and a historical district stays the free-text `district_text` label.
 
 ## Analytics and search
 

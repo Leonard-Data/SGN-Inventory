@@ -76,7 +76,7 @@ erDiagram
 
 `properties`, `property_addresses`, `contacts` and `property_contacts` each carry a `revision` UUID that guards stale maintenance saves; `property_vendors` carries one that guards a stale vendor-link correction. Issue #7's maintenance RPCs, correction lifecycle and history rules are in [maintenance-contract.md](maintenance-contract.md).
 
-The seeded province/commune catalog is a reference list, not a property-level verification: it supplies selectable official units and the hierarchy/date guard behind a verified current address, but a property's mapping still needs recorded evidence. No district catalog or old→new crosswalk is seeded; see [address-model.md](address-model.md#seeded-reference-catalog).
+The seeded province/commune catalog is a reference list, not a property-level verification: it supplies selectable official units and the hierarchy/date guard behind a verified current address, but a property's mapping still needs recorded evidence. No old→new crosswalk is seeded; the pre-2025 three-tier catalog (63 legacy provinces, 696 legacy districts and 10,051 legacy wards) is seeded on its closed `[2025-01-04, 2025-07-01)` window by `20261021060602_legacy_admin_units_reference.sql`, but no picker or mapping reads it yet. See [address-model.md](address-model.md#seeded-reference-catalog).
 
 ## Rental tables (migration 4)
 
