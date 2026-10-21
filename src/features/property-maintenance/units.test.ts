@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   LEGACY_CATALOG_DAY,
   clearedUnits,
-  fillsDistrictText,
+  filledDistrictText,
   offeredUnits,
   pickedDistrict,
   pickedProvince,
@@ -125,14 +125,23 @@ test('re-picking the unit a level already holds keeps the recorded levels beneat
   });
 });
 
-test('a district pick fills the district text it wrote, never a person\u2019s own wording', () => {
-  assert.equal(fillsDistrictText('', null), true);
-  assert.equal(fillsDistrictText(undefined, null), true);
-  assert.equal(fillsDistrictText('   ', null), true);
-  // The name this pick wrote last is replaced by the next pick, across a province change too.
-  assert.equal(fillsDistrictText('Quận 1', 'Quận 1'), true);
-  assert.equal(fillsDistrictText('Quận 1', null), false);
-  assert.equal(fillsDistrictText('Quận 1, phường Bến Thành', 'Quận 1'), false);
+test('a picker rewrites the district text it wrote and keeps a person\u2019s wording', () => {
+  // Nothing recorded yet: a pick fills the field.
+  assert.equal(filledDistrictText('', undefined, 'Quận 1'), 'Quận 1');
+  assert.equal(filledDistrictText('   ', undefined, 'Quận 1'), 'Quận 1');
+  // The recorded text already reads the official name of the district the address records, so the
+  // picker wrote it, in this form or an earlier one, and a pick replaces it.
+  assert.equal(filledDistrictText('Quận 1', 'Quận 1', 'Quận 3'), 'Quận 3');
+  // A province change clears that picker-written label with its district id.
+  assert.equal(filledDistrictText('Quận 1', 'Quận 1', ''), '');
+  // A person's own wording is never rewritten, and a pick already held changes nothing.
+  assert.equal(
+    filledDistrictText('Quận 1, phường Bến Thành', 'Quận 1', 'Quận 3'),
+    null,
+  );
+  assert.equal(filledDistrictText('Quận 1', undefined, 'Quận 3'), null);
+  assert.equal(filledDistrictText('Quận 3', 'Quận 1', 'Quận 3'), null);
+  assert.equal(filledDistrictText('', undefined, ''), null);
 });
 
 test('a picker offers the unit an address recorded before this entry still holds', () => {

@@ -17,7 +17,7 @@ import { UnitCombobox, type UnitChoice } from './unit-combobox';
 import {
   LEGACY_CATALOG_DAY,
   clearedUnits,
-  fillsDistrictText,
+  filledDistrictText,
   pickedDistrict,
   pickedProvince,
   unitParent,
@@ -259,6 +259,7 @@ function UnitPicker({
   onChange,
   locale,
   onDenied,
+  listed,
 }: {
   name: string;
   level: string;
@@ -269,6 +270,8 @@ function UnitPicker({
   onChange: (value: string, unit?: UnitChoice) => void;
   locale: Locale;
   onDenied: (status: number) => void;
+  // The list this picker loaded, so a caller can read the official name of a recorded unit.
+  listed?: { current: Unit[] };
 }) {
   const id = useId(),
     [units, setUnits] = useState<Unit[]>([]),
@@ -290,7 +293,9 @@ function UnitPicker({
       abort.signal,
     )
       .then((result) => {
-        if (!abort.signal.aborted) setUnits(result.units);
+        if (abort.signal.aborted) return;
+        setUnits(result.units);
+        if (listed) listed.current = result.units;
       })
       .catch((failure) => {
         if (abort.signal.aborted) return;
@@ -302,7 +307,7 @@ function UnitPicker({
         else setError(true);
       });
     return () => abort.abort();
-  }, [level, parent, day, value, onDenied]);
+  }, [level, parent, day, value, onDenied, listed]);
   const text = maintenanceText(locale);
   return (
     <UnitCombobox
@@ -341,7 +346,7 @@ export function AddressFields({
       commune: String(values.commune_unit_id ?? ''),
     }),
     districtText = useRef<HTMLInputElement>(null),
-    districtWritten = useRef<string | null>(null);
+    districtList = useRef<Unit[]>([]);
   const text = maintenanceText(locale),
     current = variant === 'mapping' || format === 'current',
     // A legacy address is the only one with a district level, and its pickers read the closed
@@ -349,6 +354,24 @@ export function AddressFields({
     legacy = variant === 'address' && format === 'legacy',
     generation = legacy ? 'legacy' : 'current',
     day = legacy ? LEGACY_CATALOG_DAY : undefined;
+  // The district list the picker loaded states the official name of the district the address
+  // records, so a text that reads exactly that name is the picker's own wording, not a person's.
+  function setDistrictText(next: string) {
+    const field = districtText.current,
+      value = field
+        ? filledDistrictText(
+            field.value,
+            districtList.current.find((unit) => unit.id === units.district)
+              ?.name_vi,
+            next,
+          )
+        : null;
+    if (!field || value === null) return;
+    field.value = value;
+    // The surrounding form tracks its unsaved state from input events, which a value written this
+    // way raises none of.
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+  }
   return (
     <>
       {variant === 'address' ? (
@@ -428,7 +451,12 @@ export function AddressFields({
           level="province"
           day={day}
           value={units.province}
-          onChange={(value) => setUnits(pickedProvince(units, value))}
+          onChange={(value) => {
+            // A district id from the previous province is cleared with it, so the text the picker
+            // wrote for that district has nothing left to describe.
+            if (value !== units.province) setDistrictText('');
+            setUnits(pickedProvince(units, value));
+          }}
           locale={locale}
           onDenied={onDenied}
         />
@@ -441,20 +469,10 @@ export function AddressFields({
           parent={unitParent('legacy', 'district', units)}
           day={LEGACY_CATALOG_DAY}
           value={units.district}
+          listed={districtList}
           onChange={(value, unit) => {
             setUnits(pickedDistrict(units, value));
-            const field = districtText.current;
-            if (
-              !field ||
-              !unit ||
-              !fillsDistrictText(field.value, districtWritten.current)
-            )
-              return;
-            districtWritten.current = unit.name_vi;
-            field.value = unit.name_vi;
-            // The surrounding form tracks its unsaved state from input events, which a value
-            // written this way raises none of.
-            field.dispatchEvent(new Event('input', { bubbles: true }));
+            if (unit) setDistrictText(unit.name_vi);
           }}
           locale={locale}
           onDenied={onDenied}
