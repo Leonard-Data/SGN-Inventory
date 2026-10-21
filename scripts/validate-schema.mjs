@@ -41,6 +41,7 @@ import { addressDuplicateMergeContract } from './address-duplicate-merge-contrac
 import { statusTrailContract } from './status-trail-contract.mjs';
 import { contactNumberContract } from './contact-number-contract.mjs';
 import { propertyDimensionContract } from './property-dimension-contract.mjs';
+import { legacyCreatorNamesContract } from './legacy-creator-names-contract.mjs';
 import { statusRequestContract } from './status-request-contract.mjs';
 const root = process.env.SGN_PROJECT_ROOT || process.cwd();
 const db = new PGlite({extensions:{unaccent,pg_trgm,pgcrypto}});
@@ -837,6 +838,9 @@ await contactNumberContract({db,asUser,check,fails,employees,property});
 // A stored frontage or depth contradicting its own area text: the rounding the legacy sheet's
 // dimension columns lost, reported by row so the operator sees which records are wrong.
 await propertyDimensionContract({db,check,employees});
+// The legacy import's placeholder display names: each creator address resolves to the name the
+// archived import rows record for it, and to no invented name where the source names none.
+await legacyCreatorNamesContract({db,root,check});
 const report={checked_at:new Date().toISOString(),engine:'PGlite embedded PostgreSQL plus an embedded real PostgreSQL engine for the two-connection last-admin, property-vendor-link and contact-link races; mocked auth/storage schemas',passed,
  limitations:['Not a live Supabase integration test','HTTP Auth, presigned R2 URLs, Vercel and browser flows not exercised','Hosted/staging independent-session contention at production load remains an acceptance gate']};
 await fs.writeFile(path.join(root,'docs/validation-results.json'),JSON.stringify(report,null,2)+'\n');
