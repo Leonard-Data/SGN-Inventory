@@ -31,6 +31,10 @@ const copy = {
     'Địa chỉ hiện tại không có quận/huyện. Nếu chưa có đơn vị chính thức, lưu nội dung theo nguồn chưa xác minh.',
     'Current addresses have no district. Missing official units do not prevent saving unverified source information.',
   ],
+  legacyHint: [
+    'Địa chỉ cũ dùng danh mục trước 2025: chọn tỉnh/thành, quận/huyện, rồi xã/phường cũ. Nội dung địa chỉ đã ghi vẫn được giữ nguyên.',
+    'Legacy addresses use the pre-2025 catalog: choose the old province/city, district, then ward. Recorded address text is kept as it was.',
+  ],
   optional: [
     'Để trống thông tin chưa biết. VND nguyên; số đo dùng dấu chấm thập phân, không dấu phân cách hàng nghìn.',
     'Leave unknown facts blank. Whole VND; dimensions use a decimal point without thousands separators.',

@@ -260,8 +260,7 @@ export function correctionFieldNames({
       (staff || !['contact_id', 'remove'].includes(name)) &&
       !(name === 'status' && ['sold', 'rented'].includes(propertyStatus)) &&
       !(
-        target === 'address' &&
-        ['province_text', 'commune_text', 'district_unit_id'].includes(name)
+        target === 'address' && ['province_text', 'commune_text'].includes(name)
       ) &&
       !(
         target === 'address' &&

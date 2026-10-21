@@ -1,6 +1,126 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateChanges, formChanges } from './fields.ts';
+import {
+  validateChanges,
+  formChanges,
+  correctionFieldNames,
+  targetFields,
+} from './fields.ts';
+
+const LEGACY_PROVINCE = '11111111-1111-4111-8111-111111111111',
+  LEGACY_DISTRICT = '22222222-2222-4222-8222-222222222222',
+  LEGACY_WARD = '33333333-3333-4333-8333-333333333333',
+  CURRENT_PROVINCE = '44444444-4444-4444-8444-444444444444',
+  CURRENT_WARD = '55555555-5555-4555-8555-555555555555',
+  OTHER_WARD = '66666666-6666-4666-8666-666666666666';
+
+function legacyForm() {
+  const form = new FormData();
+  form.set('format', 'legacy');
+  form.set('address_text', '12 Nguyễn Du, Quận 1');
+  form.set('district_text', 'Quận 1');
+  form.set('province_unit_id', LEGACY_PROVINCE);
+  form.set('district_unit_id', LEGACY_DISTRICT);
+  form.set('commune_unit_id', LEGACY_WARD);
+  return form;
+}
+
+test('a legacy address saves all three unit ids and its district text', () => {
+  assert.deepEqual(formChanges('address', legacyForm()), {
+    format: 'legacy',
+    address_text: '12 Nguyễn Du, Quận 1',
+    district_text: 'Quận 1',
+    province_unit_id: LEGACY_PROVINCE,
+    district_unit_id: LEGACY_DISTRICT,
+    commune_unit_id: LEGACY_WARD,
+  });
+  // mapping_status is not an address field: the column default records an unresolved mapping, so
+  // a legacy address can never be saved as verified through the form.
+  assert.equal(targetFields.address.includes('mapping_status'), false);
+});
+
+test('an edited address whose recorded units are unchanged submits nothing', () => {
+  assert.deepEqual(
+    formChanges('address', legacyForm(), {
+      format: 'legacy',
+      address_text: '12 Nguyễn Du, Quận 1',
+      district_text: 'Quận 1',
+      province_unit_id: LEGACY_PROVINCE,
+      district_unit_id: LEGACY_DISTRICT,
+      commune_unit_id: LEGACY_WARD,
+    }),
+    {},
+  );
+});
+
+test('a legacy address recorded with current-generation units keeps them and saves a change', () => {
+  const recorded = {
+    format: 'legacy',
+    address_text: '12 Nguyễn Du, Quận 1',
+    district_text: 'Quận 1',
+    province_unit_id: CURRENT_PROVINCE,
+    commune_unit_id: CURRENT_WARD,
+  };
+  const form = new FormData();
+  for (const [key, value] of Object.entries(recorded)) form.set(key, value);
+  // Saving without edits submits neither the out-of-generation province nor the recorded ward, so
+  // the row keeps exactly the units it holds.
+  assert.deepEqual(formChanges('address', form, recorded), {});
+  form.set('commune_unit_id', OTHER_WARD);
+  assert.deepEqual(formChanges('address', form, recorded), {
+    commune_unit_id: OTHER_WARD,
+  });
+});
+
+test('a current address still refuses a district id as well as district text', () => {
+  for (const changes of [
+    {
+      format: 'current',
+      address_text: '12 Nguyễn Du',
+      district_unit_id: LEGACY_DISTRICT,
+    },
+    {
+      format: 'current',
+      address_text: '12 Nguyễn Du',
+      district_text: 'Quận 1',
+    },
+  ])
+    assert.throws(() => validateChanges('address', changes));
+  // A legacy address with a district is valid.
+  assert.deepEqual(
+    validateChanges('address', {
+      format: 'legacy',
+      address_text: '12 Nguyễn Du, Quận 1',
+      district_unit_id: LEGACY_DISTRICT,
+    }),
+    {
+      format: 'legacy',
+      address_text: '12 Nguyễn Du, Quận 1',
+      district_unit_id: LEGACY_DISTRICT,
+    },
+  );
+});
+
+test('a staff address correction can name the legacy district unit', () => {
+  const names = correctionFieldNames({
+    target: 'address',
+    staff: true,
+    propertyStatus: 'available',
+  });
+  for (const name of ['address_text', 'district_text', 'district_unit_id'])
+    assert.ok(names.includes(name), name);
+  // The source labels stay provenance and are never an editable replacement.
+  for (const name of ['province_text', 'commune_text'])
+    assert.equal(names.includes(name), false);
+  // A current address has no district level at all, so it offers no district field.
+  const current = correctionFieldNames({
+    target: 'address',
+    staff: true,
+    propertyStatus: 'available',
+    observedFormat: 'current',
+  });
+  for (const name of current) assert.equal(name.startsWith('district_'), false);
+});
 
 test('maintenance boundary preserves exact money, decimals and source phone/text', () => {
   assert.deepEqual(
