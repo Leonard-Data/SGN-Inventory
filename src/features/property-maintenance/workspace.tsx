@@ -8,6 +8,7 @@ import { applyServerSummary } from '@/features/properties/catalogue-changes';
 import { useCatalogueChange } from '@/features/properties/catalogue-provider';
 import type { PropertyDetail } from '@/features/properties/detail-data';
 import type { PropertySummary } from '@/features/properties/types';
+import { mayEditProperty } from '@/features/properties/edit-permission';
 import type { ContactDetail } from './data';
 import { MutationForm, RecordFields, AddressFields } from './forms';
 import { LocationEditor } from '@/features/properties/location';
@@ -49,8 +50,10 @@ export function Maintenance({
     property = detail.property,
     staff = ['staff', 'manager', 'admin'].includes(employee.role),
     reviewer = ['manager', 'admin'].includes(employee.role),
-    canEdit =
-      !property.archived_at && (staff || property.created_by === employee.id),
+    canEdit = mayEditProperty(employee, {
+      createdBy: property.created_by,
+      archived: !!property.archived_at,
+    }),
     // Shared-contact detail correction is its own permission: any live employee on a readable
     // property, independent of property-fact authority. Links, creation and unlink stay staff-only.
     canEditContact = !property.archived_at || reviewer;

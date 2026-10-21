@@ -516,6 +516,16 @@ dialog.sgn-dialog[data-size='drawer']::backdrop {
   font-weight: 600;
   color: var(--fg);
 }
+/* The quick view's price edit is one block inside the panel, not a dialog of its own: its fields
+   keep the section's spacing and its actions sit inline under them. */
+.quick-view-section .editor-scroll {
+  padding: 0;
+}
+.quick-view-section .sgn-dialog-foot {
+  padding: 0;
+  border-top: 0;
+  background: none;
+}
 /* Long source values get the full line; compact facts can share a row. */
 .quick-view .facts {
   grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -212,7 +212,7 @@ What the properties list holds beyond the result set the address names: the text
 _Avoid_: Second result set, address-carried page number or window offset, persisted list state
 
 **Property quick view**:
-The right-hand panel a list row opens without leaving the list: the record's key metadata, a comment composer, one attachment through the existing upload path and its limits, and a link into the full detail page for everything else. The row is a real keyboard-reachable control; Escape closes the panel and focus returns to the row that opened it. It is not an edit form and grants no authority the full record does not have.
+The right-hand panel a list row opens without leaving the list: the record's key metadata, the recorded asking prices with the one edit it carries, a comment composer, one attachment through the existing upload path and its limits, and a link into the full detail page for everything else. The asking-price edit is offered exactly where the full record editor is offered and goes through that editor's own write path, so it records the same price, refuses for the same reasons and keeps the same history; it grants no authority the full record does not have. The row is a real keyboard-reachable control; Escape closes the panel and focus returns to the row that opened it.
 _Avoid_: Detail page, inline edit, side form
 
 ### Vendors

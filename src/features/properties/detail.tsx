@@ -48,6 +48,7 @@ import { SharedAddress } from './duplicates';
 import { contactRows } from './contact-rows';
 import { AddContactNumber } from './add-contact-number';
 import { mayLinkPropertyVendors } from '@/features/vendors/directory';
+import { mayEditProperty } from './edit-permission';
 import { PropertyVendors } from '@/features/vendors/property-vendors';
 // The record screen groups its content the way the design package does: the record's own
 // facts, its documents and its discussion.
@@ -398,12 +399,10 @@ export function Detail({
     [clear],
   );
   const property = data?.property;
-  const canEdit =
-    !!employee &&
-    !!property &&
-    !property.archived_at &&
-    (employee.id === property.created_by ||
-      ['staff', 'manager', 'admin'].includes(employee.role));
+  const canEdit = mayEditProperty(employee, {
+    createdBy: property?.created_by ?? null,
+    archived: !!property?.archived_at,
+  });
   useEffect(() => {
     if (canEdit && window.location.hash === '#edit-property') {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- an authorized quick-view edit link opens the existing editor

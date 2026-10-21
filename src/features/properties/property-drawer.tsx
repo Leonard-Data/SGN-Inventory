@@ -17,7 +17,17 @@ import { messages, label, type Locale } from '@/i18n/messages';
 import { useToast } from '@/features/toasts/toast-host';
 import { contactRows, type ContactRow } from './contact-rows';
 import { AddContactNumber } from './add-contact-number';
+import { applyServerSummary } from './catalogue-changes';
+import { useCatalogueChange } from './catalogue-provider';
+import type { PropertyDetail } from './detail-data';
 import { loadPropertyDetail, revealOwnerContact } from './detail-loader';
+import { mayEditProperty } from './edit-permission';
+import {
+  MutationForm,
+  RecordFields,
+} from '@/features/property-maintenance/forms';
+import type { Changes } from '@/features/property-maintenance/fields';
+import { maintenanceText } from '@/features/property-maintenance/messages';
 import { HIDDEN_PHONE, ownerPhoneView } from './owner-phone';
 import {
   quickComment,
@@ -54,6 +64,9 @@ import type { OwnerContactDisclosure, PropertySummary } from './types';
 
 // How many of the most recent comments the quick view repeats; the full record holds the rest.
 const RECENT_COMMENTS = 5;
+// The facts the quick view's own price edit states, named by the same field record the full
+// record's editor reads them through.
+const PRICE_FIELDS = ['sale_price_vnd', 'monthly_rent_vnd'] as const;
 
 type UploadRow = {
   id: string;
@@ -94,12 +107,7 @@ export function PropertyDrawer({
   const permission = useCallback(
     (id: string, creator: string | null, archived: boolean) => {
       setEditable(
-        employee &&
-          !archived &&
-          (employee.id === creator ||
-            ['staff', 'manager', 'admin'].includes(employee.role))
-          ? id
-          : null,
+        mayEditProperty(employee, { createdBy: creator, archived }) ? id : null,
       );
     },
     [employee],
@@ -156,6 +164,7 @@ export function PropertyDrawer({
         <QuickView
           key={property.id}
           property={property}
+          employee={employee}
           locale={locale}
           showEntry={showEntry}
           onDenied={onDenied}
@@ -169,6 +178,7 @@ export function PropertyDrawer({
 
 function QuickView({
   property,
+  employee,
   locale,
   showEntry,
   onDenied,
@@ -176,6 +186,7 @@ function QuickView({
   onPermission,
 }: {
   property: PropertySummary;
+  employee: Employee | null;
   locale: Locale;
   showEntry: boolean;
   onDenied: (status: number) => void;
@@ -193,6 +204,7 @@ function QuickView({
   const uploadId = useId();
   const draftId = useId();
   const statusId = useId();
+  const priceId = useId();
   const hintId = useId();
   // null while the newest comments are still being read; an empty list is a real answer.
   const [comments, setComments] = useState<QuickComment[] | null>(null);
@@ -207,6 +219,12 @@ function QuickView({
   // null until the read answers, so an archived record never shows the capture form first.
   const [archived, setArchived] = useState<boolean | null>(null);
   const [contactTick, setContactTick] = useState(0);
+  // The record's own row as the server states it: the prices the panel shows and the revision the
+  // price edit is decided against. The summary the list handed over is a snapshot taken when the
+  // row was opened, so the panel reads the record itself rather than editing what it remembers.
+  const [record, setRecord] = useState<PropertyDetail['property'] | null>(null);
+  const [editingPrice, setEditingPrice] = useState(false);
+  const priceButton = useRef<HTMLButtonElement | null>(null);
   // The owner phone is held only after a deliberate disclosure, and hiding it drops the value
   // again, so a hidden number is never in the page text.
   const [disclosure, setDisclosure] = useState<OwnerContactDisclosure | null>(
@@ -263,6 +281,7 @@ function QuickView({
         setOwners(rows.filter((row) => row.relation === 'owner'));
         setNewest(rows[0] ?? null);
         setArchived(!!detail.property.archived_at);
+        setRecord(detail.property);
         setOwnersFailed(false);
       })
       .catch((failure) => {
@@ -449,6 +468,38 @@ function QuickView({
   }
 
   const area = totalAreaM2(property);
+  // The recorded prices the panel states: the record's own row once it has been read, and the
+  // list's summary until then. A committed price edit is read back into the same state, so the
+  // panel never states a price the database has already moved past.
+  const prices = record ?? {
+    sale_price_vnd: property.salePriceVnd,
+    monthly_rent_vnd: property.monthlyRentVnd,
+  };
+  // The edit is offered once the record itself has been read: the permission is the record's own
+  // (its creator and whether it is archived), not the summary's.
+  const canEdit =
+    record !== null &&
+    mayEditProperty(employee, {
+      createdBy: record.created_by,
+      archived: !!record.archived_at,
+    });
+  // A committed price moves the property's revision, so the panel reads the record again rather
+  // than editing against the snapshot it opened on.
+  function closePriceEdit() {
+    setEditingPrice(false);
+    // The control that opened the editor is still on the page: focus returns to it, as it does
+    // when the panel itself closes.
+    requestAnimationFrame(() => priceButton.current?.focus());
+  }
+  function priceSaved() {
+    closePriceEdit();
+    void loadPropertyDetail(propertyId, new AbortController().signal)
+      .then((detail) => setRecord(detail.property))
+      .catch(() => {
+        // The edit is committed: a panel that cannot read the record back keeps the values it
+        // holds, and the next open reads them again.
+      });
+  }
   const entryDate = property.entryOn ? vietnamDate(property.entryOn) : null;
   const created = vietnamDate(property.createdAt);
   const updated = vietnamTimestamp(property.updatedAt, locale);
@@ -516,23 +567,65 @@ function QuickView({
   return (
     <div className="quick-view">
       <dl className="quick-view-summary facts">
-        {property.salePriceVnd !== null ? (
-          <div className="fact span-all">
-            <dt>{text.salePrice}</dt>
-            <dd className="num">{vnd(property.salePriceVnd)}</dd>
-          </div>
-        ) : null}
-        {property.monthlyRentVnd !== null ? (
-          <div className="fact span-all">
-            <dt>{text.monthlyRent}</dt>
-            <dd className="num">{vnd(property.monthlyRentVnd)}</dd>
-          </div>
-        ) : null}
+        {/* A price the record does not hold states the missing value the full record states, so a
+            property in negotiation with no number reads the same on both surfaces. */}
+        <div className="fact span-all">
+          <dt>{text.salePrice}</dt>
+          <dd className={prices.sale_price_vnd === null ? 'is-unknown' : 'num'}>
+            {prices.sale_price_vnd === null
+              ? text.unknown
+              : vnd(prices.sale_price_vnd)}
+          </dd>
+        </div>
+        <div className="fact span-all">
+          <dt>{text.monthlyRent}</dt>
+          <dd
+            className={prices.monthly_rent_vnd === null ? 'is-unknown' : 'num'}
+          >
+            {prices.monthly_rent_vnd === null
+              ? text.unknown
+              : vnd(prices.monthly_rent_vnd)}
+          </dd>
+        </div>
         <div className="fact">
           <dt>{text.columnTotalArea}</dt>
           <dd className="num">{area ? m2(area) : MISSING_VALUE}</dd>
         </div>
       </dl>
+      {/* The price a salesperson learns on the phone is updated here, through the same editor the
+          full record uses: one write path, one set of refusals, one history. */}
+      {canEdit ? (
+        <section
+          className="quick-view-section"
+          aria-labelledby={priceId}
+          data-od-id="quick-view-price"
+        >
+          <h3 id={priceId}>{text.columnPrice}</h3>
+          {/* The control stays in place while the editor is open, so focus has somewhere to be
+              returned to when the editor closes. */}
+          <div className="quick-view-line">
+            <button
+              className="btn btn-sm btn-secondary"
+              ref={priceButton}
+              type="button"
+              aria-expanded={editingPrice}
+              onClick={() => setEditingPrice((open) => !open)}
+            >
+              {text.editPrice}
+            </button>
+          </div>
+          {editingPrice && record ? (
+            <PriceEditor
+              propertyId={propertyId}
+              record={record}
+              locale={locale}
+              onDenied={onDenied}
+              onDone={priceSaved}
+              onCancel={closePriceEdit}
+            />
+          ) : null}
+        </section>
+      ) : null}
       {/* The status a salesperson learns on the phone is recorded here without leaving the list.
           An applied change moves the row; a sold or rented request waits for a manager decision. */}
       <section
@@ -770,5 +863,60 @@ function denied(failure: unknown): failure is RequestError {
   return (
     failure instanceof RequestError &&
     (failure.status === 401 || failure.status === 403)
+  );
+}
+
+// The quick view's price edit. It names the same target, the same field record and the same write
+// path the full record's editor uses, so a price saved here records what a price saved there
+// records - the same validation, the same refusal and the same history - and it reports the
+// server's own answer to the browser's catalogue exactly as that editor does, so the list row
+// behind the panel takes the new price without a reload.
+function PriceEditor({
+  propertyId,
+  record,
+  locale,
+  onDenied,
+  onDone,
+  onCancel,
+}: {
+  propertyId: string;
+  record: PropertyDetail['property'];
+  locale: Locale;
+  onDenied: (status: number) => void;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const applyChange = useCatalogueChange();
+  const notify = useToast();
+  const maintenance = maintenanceText(locale);
+  async function save(changes: Changes) {
+    const result = await api<{ summary?: PropertySummary | null }>(
+      `/api/properties/${propertyId}/maintenance`,
+      {
+        target: 'property',
+        targetId: propertyId,
+        revision: record.revision,
+        propertyRevision: record.revision,
+        changes,
+      },
+    );
+    applyServerSummary(applyChange, result, propertyId);
+    return result;
+  }
+  return (
+    <MutationForm
+      locale={locale}
+      target="property"
+      values={record}
+      save={save}
+      onSaved={() => {
+        notify({ saved: true, message: maintenance.propertySaved });
+        onDone();
+      }}
+      onDenied={onDenied}
+      onCancel={onCancel}
+    >
+      <RecordFields locale={locale} values={record} names={PRICE_FIELDS} />
+    </MutationForm>
   );
 }
