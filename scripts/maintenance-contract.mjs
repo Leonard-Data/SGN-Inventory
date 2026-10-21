@@ -2238,5 +2238,668 @@ export async function maintenanceContract({
       );
     },
   );
+  // Issue #234: an existing address switches format only through the deliberate conversion action.
+  // The crosswalk rows are the fixture, so these cases read the same evidence a person would see,
+  // and every refusal is checked to leave the property's addresses exactly as they were.
+  const convert = 'select public.convert_address_format($1,$2,$3,$4) as id';
+  const addressRow = async (id) =>
+    (
+      await db.query(
+        'select address_text,format,province_unit_id,district_unit_id,commune_unit_id,mapping_status,effective_on::text as effective_on,source_url,verification_method,verified_by,verified_at,mapping_evidence,is_primary,supersedes_address_id from public.property_addresses where id=$1',
+        [id],
+      )
+    ).rows[0];
+  // A whole-row snapshot, so "unmodified in every field" is proven rather than sampled.
+  const addressSnapshot = async (id) =>
+    (
+      await db.query(
+        'select to_jsonb(a) as row from public.property_addresses a where id=$1',
+        [id],
+      )
+    ).rows[0].row;
+  const convertAs = async (propertyId, addressId, opts = {}) =>
+    (
+      await db.query(convert, [
+        propertyId,
+        addressId,
+        opts.addressRevision ??
+          (await revision('property_addresses', addressId)),
+        opts.propertyRevision ?? (await revision('properties', propertyId)),
+      ])
+    ).rows[0].id;
+  const createCurrent = async (units) =>
+    (
+      await db.query('select public.create_property($1,$2,$3) as id', [
+        'sale',
+        {},
+        {
+          format: 'current',
+          address_text: 'Địa chỉ hiện tại cần chuyển',
+          province_unit_id: units.province,
+          commune_unit_id: units.commune,
+        },
+      ])
+    ).rows[0].id;
+  let convertedProperty, convertedLegacy, convertedCurrent;
+  await asUser(0);
+  await check(
+    'an ordinary editor converts a legacy address to the current format by the crosswalk, and the legacy row is untouched',
+    async () => {
+      convertedProperty = await createLegacy(offered);
+      convertedLegacy = (
+        await db.query(
+          "select id from public.property_addresses where property_id=$1 and format='legacy'",
+          [convertedProperty],
+        )
+      ).rows[0].id;
+      const before = await addressSnapshot(convertedLegacy);
+      convertedCurrent = await convertAs(convertedProperty, convertedLegacy);
+      const target = offered.crosswalk[0];
+      // The units, the effective date and the source come from the crosswalk row, and the new row
+      // is a candidate: it cites its evidence and states no verification stamp of its own.
+      assert.deepEqual(await addressRow(convertedCurrent), {
+        address_text: 'Nhà cũ theo bảng chuyển đổi',
+        format: 'current',
+        province_unit_id: (
+          await db.query(
+            'select parent_id from public.admin_unit_versions where id=$1',
+            [target.to_unit_id],
+          )
+        ).rows[0].parent_id,
+        district_unit_id: null,
+        commune_unit_id: target.to_unit_id,
+        mapping_status: 'candidate',
+        effective_on: '2025-07-01',
+        source_url: target.source_url,
+        verification_method: null,
+        verified_by: null,
+        verified_at: null,
+        mapping_evidence: null,
+        is_primary: true,
+        supersedes_address_id: convertedLegacy,
+      });
+      assert.deepEqual(await addressSnapshot(convertedLegacy), before);
+      // Both rows stay primary, one per format.
+      assert.deepEqual(await addressesOf(convertedProperty), [
+        { id: convertedLegacy, format: 'legacy', is_primary: true },
+        { id: convertedCurrent, format: 'current', is_primary: true },
+      ]);
+    },
+  );
+  await check(
+    'the converted property is found by either format label, because both rows are indexed',
+    async () => {
+      const names = (
+        await db.query(
+          `select (select name_vi from public.admin_unit_versions where id=$1) as legacy_ward,
+             (select name_vi from public.admin_unit_versions where id=$2) as current_commune`,
+          [offered.id, offered.crosswalk[0].to_unit_id],
+        )
+      ).rows[0];
+      for (const name of [names.legacy_ward, names.current_commune]) {
+        const found = (
+          await db.query(
+            'select id from public.page_inventory(p_query => $1)',
+            [name],
+          )
+        ).rows.map((row) => row.id);
+        assert.ok(found.includes(convertedProperty), name);
+      }
+    },
+  );
+  await check(
+    'conversion is not a toggle: an ordinary save still refuses to change the format it offers',
+    async () => {
+      await refuseWith(
+        mutate,
+        [
+          convertedProperty,
+          'address',
+          convertedCurrent,
+          await revision('property_addresses', convertedCurrent),
+          { format: 'legacy' },
+        ],
+        '23514',
+        /address format immutable/,
+      );
+      assert.equal((await addressesOf(convertedProperty)).length, 2);
+    },
+  );
+  await check(
+    'converting the same address twice writes nothing, because the target format already holds that territory',
+    async () => {
+      const before = await addressesOf(convertedProperty);
+      await refuseWith(
+        convert,
+        [
+          convertedProperty,
+          convertedLegacy,
+          await revision('property_addresses', convertedLegacy),
+          await revision('properties', convertedProperty),
+        ],
+        'PT423',
+        /already recorded in the target format/,
+      );
+      assert.deepEqual(await addressesOf(convertedProperty), before);
+    },
+  );
+  await check(
+    'the conversion is refused when the recorded units are absent, in either direction',
+    async () => {
+      for (const format of ['legacy', 'current']) {
+        const propertyId = (
+          await db.query('select public.create_property($1,$2,$3) as id', [
+            'sale',
+            {},
+            {
+              format,
+              address_text: 'Địa chỉ chưa ghi đơn vị chính thức',
+            },
+          ])
+        ).rows[0].id;
+        const addressId = (
+          await db.query(
+            'select id from public.property_addresses where property_id=$1',
+            [propertyId],
+          )
+        ).rows[0].id;
+        await refuseWith(
+          convert,
+          [
+            propertyId,
+            addressId,
+            await revision('property_addresses', addressId),
+            await revision('properties', propertyId),
+          ],
+          'PT421',
+          /recorded ward required for conversion/,
+        );
+        assert.equal((await addressesOf(propertyId)).length, 1);
+      }
+    },
+  );
+  await check(
+    'the conversion is refused in both directions when the crosswalk names no single unit',
+    async () => {
+      // A legacy ward with several crosswalk rows, and a current commune formed from several old
+      // wards, both lack the one whole or rename unit the target row would have to state.
+      const mergedCurrent = (
+        await db.query(
+          `select m.to_unit_id as commune,p.id as province
+           from public.admin_unit_crosswalks m
+           join public.admin_unit_versions c on c.id=m.to_unit_id and c.unit_level='commune'
+           join public.admin_unit_versions p on p.id=c.parent_id and p.unit_level='province'
+           group by m.to_unit_id,p.id having count(*)>1 order by m.to_unit_id limit 1`,
+        )
+      ).rows[0];
+      for (const [chain, format] of [
+        [several, 'legacy'],
+        [mergedCurrent, 'current'],
+      ]) {
+        const propertyId =
+          format === 'legacy'
+            ? await createLegacy(chain)
+            : await createCurrent(chain);
+        const addressId = (
+          await db.query(
+            'select id from public.property_addresses where property_id=$1',
+            [propertyId],
+          )
+        ).rows[0].id;
+        await refuseWith(
+          convert,
+          [
+            propertyId,
+            addressId,
+            await revision('property_addresses', addressId),
+            await revision('properties', propertyId),
+          ],
+          'PT422',
+          /one whole crosswalk (target|source) required/,
+        );
+        assert.equal((await addressesOf(propertyId)).length, 1);
+      }
+    },
+  );
+  await check(
+    'a ward the crosswalk has no row for is refused as a missing conversion row, not as an ambiguity',
+    async () => {
+      // Nothing about this address is ambiguous and correcting it would change nothing: the ward
+      // simply has no conversion row yet, which is its own refusal code and its own wording.
+      const propertyId = await createLegacy(uncovered);
+      const addressId = (
+        await db.query(
+          "select id from public.property_addresses where property_id=$1 and format='legacy'",
+          [propertyId],
+        )
+      ).rows[0].id;
+      await refuseWith(
+        convert,
+        [
+          propertyId,
+          addressId,
+          await revision('property_addresses', addressId),
+          await revision('properties', propertyId),
+        ],
+        'PT424',
+        /no crosswalk row for the recorded unit/,
+      );
+      assert.equal((await addressesOf(propertyId)).length, 1);
+    },
+  );
+  await check(
+    'a crosswalk that states the unit at another administrative level is its own refusal',
+    async () => {
+      // The five island districts became đặc khu communes in full, so the crosswalk names exactly
+      // one unit for such a commune but at the legacy district level: nothing about the address is
+      // ambiguous and correcting it cannot help.
+      const specialZone = (
+        await db.query(
+          `select m.from_unit_id as legacy_district,m.to_unit_id as commune,c.parent_id as province
+           from public.admin_unit_crosswalks m
+           join public.admin_unit_versions d on d.id=m.from_unit_id and d.unit_level='district'
+           join public.admin_unit_versions c on c.id=m.to_unit_id and c.unit_level='commune'
+            and c.valid_from>=date '2025-07-01'
+           where m.relation in ('whole','rename')
+           order by m.to_unit_id limit 1`,
+        )
+      ).rows[0];
+      const propertyId = await createCurrent({
+        province: specialZone.province,
+        commune: specialZone.commune,
+      });
+      const addressId = (
+        await db.query(
+          "select id from public.property_addresses where property_id=$1 and format='current'",
+          [propertyId],
+        )
+      ).rows[0].id;
+      await refuseWith(
+        convert,
+        [
+          propertyId,
+          addressId,
+          await revision('property_addresses', addressId),
+          await revision('properties', propertyId),
+        ],
+        'PT426',
+        /another administrative level/,
+      );
+      assert.equal((await addressesOf(propertyId)).length, 1);
+    },
+  );
+  await check(
+    'a corrected address is history: converting the row it replaced is refused and the successor converts once',
+    async () => {
+      const propertyId = await createLegacy(offered);
+      const original = (
+        await db.query(
+          "select id from public.property_addresses where property_id=$1 and format='legacy'",
+          [propertyId],
+        )
+      ).rows[0].id;
+      const corrected = (
+        await db.query(mutate, [
+          propertyId,
+          'address',
+          original,
+          await revision('property_addresses', original),
+          { address_text: 'Nhà cũ sau khi đính chính' },
+        ])
+      ).rows[0].id;
+      assert.notEqual(corrected, original);
+      await refuseWith(
+        convert,
+        [
+          propertyId,
+          original,
+          await revision('property_addresses', original),
+          await revision('properties', propertyId),
+        ],
+        'PT425',
+        /superseded address/,
+      );
+      const converted = await convertAs(propertyId, corrected);
+      // The current row states the corrected text, not the text the property moved away from, and
+      // following the action on that row again is refused as a duplicate rather than writing a
+      // second current address for the same territory.
+      assert.equal(
+        (await addressRow(converted)).address_text,
+        'Nhà cũ sau khi đính chính',
+      );
+      assert.deepEqual(
+        (await addressesOf(propertyId)).map((row) => row.format).sort(),
+        ['current', 'legacy', 'legacy'],
+      );
+      await refuseWith(
+        convert,
+        [
+          propertyId,
+          corrected,
+          await revision('property_addresses', corrected),
+          await revision('properties', propertyId),
+        ],
+        'PT423',
+        /already recorded in the target format/,
+      );
+    },
+  );
+  // The reverse direction needs a current commune the crosswalk derives from exactly one old ward;
+  // a commune merged from several old wards deliberately has none.
+  const singleSource = (
+    await db.query(
+      `select m.from_unit_id as ward,m.to_unit_id as commune,c.parent_id as current_province
+       from public.admin_unit_crosswalks m join public.admin_unit_versions w on w.id=m.from_unit_id
+       join public.admin_unit_versions d on d.id=w.parent_id
+       join public.admin_unit_versions p on p.id=d.parent_id and p.unit_level='province'
+       join public.admin_unit_versions c on c.id=m.to_unit_id and c.unit_level='commune'
+       where m.relation in ('whole','rename') and w.unit_level='commune' and d.unit_level='district'
+         and (select count(*) from public.admin_unit_crosswalks x where x.to_unit_id=m.to_unit_id)=1
+       order by m.from_unit_id limit 1`,
+    )
+  ).rows[0];
+  let reverseProperty, reverseCurrent, reverseLegacy;
+  await check(
+    'a reviewer verifies the current address that will be converted back, and the conversion keeps that row and its provenance',
+    async () => {
+      reverseProperty = await createCurrent({
+        province: singleSource.current_province,
+        commune: singleSource.commune,
+      });
+      reverseCurrent = (
+        await db.query(
+          "select id from public.property_addresses where property_id=$1 and format='current'",
+          [reverseProperty],
+        )
+      ).rows[0].id;
+      await asUser(2);
+      await db.query(mutate, [
+        reverseProperty,
+        'mapping',
+        reverseCurrent,
+        await revision('property_addresses', reverseCurrent),
+        {
+          mapping_status: 'verified',
+          verification_method: 'manual',
+          effective_on: '2025-07-01',
+          source_url: 'https://example.test/property-evidence',
+          mapping_evidence:
+            'The property parcel boundary establishes this commune',
+        },
+      ]);
+      const verified = await addressRow(reverseCurrent);
+      assert.equal(verified.mapping_status, 'verified');
+      assert.equal(verified.verified_by, employees[2]);
+      await asUser(0);
+      const before = await addressSnapshot(reverseCurrent);
+      reverseLegacy = await convertAs(reverseProperty, reverseCurrent);
+      // The converted row is a candidate with the crosswalk's date and source, and it names the old
+      // ward, its district and that district's province rather than anything the caller stated.
+      assert.deepEqual(await addressRow(reverseLegacy), {
+        address_text: 'Địa chỉ hiện tại cần chuyển',
+        format: 'legacy',
+        province_unit_id: (
+          await db.query(
+            'select parent_id from public.admin_unit_versions where id=(select parent_id from public.admin_unit_versions where id=$1)',
+            [singleSource.ward],
+          )
+        ).rows[0].parent_id,
+        district_unit_id: (
+          await db.query(
+            'select parent_id from public.admin_unit_versions where id=$1',
+            [singleSource.ward],
+          )
+        ).rows[0].parent_id,
+        commune_unit_id: singleSource.ward,
+        mapping_status: 'candidate',
+        effective_on: '2025-07-01',
+        source_url: (
+          await db.query(
+            'select source_url from public.admin_unit_crosswalks where from_unit_id=$1',
+            [singleSource.ward],
+          )
+        ).rows[0].source_url,
+        verification_method: null,
+        verified_by: null,
+        verified_at: null,
+        mapping_evidence: null,
+        is_primary: true,
+        supersedes_address_id: reverseCurrent,
+      });
+      // Converting a verified row back never downgrades it: every field, its verification stamp
+      // and its evidence included, is the row it was.
+      assert.deepEqual(await addressSnapshot(reverseCurrent), before);
+      assert.deepEqual(await addressesOf(reverseProperty), [
+        { id: reverseLegacy, format: 'legacy', is_primary: true },
+        { id: reverseCurrent, format: 'current', is_primary: true },
+      ]);
+    },
+  );
+  // A renamed province re-creates every commune of its hierarchy in a later validity window, so a
+  // current address recorded there names a version row the crosswalk never points at. Both
+  // directions follow the unit's official code instead.
+  const renamed = (
+    await db.query(
+      `select m.from_unit_id as ward,c.id as current_commune,c.parent_id as current_province
+       from public.admin_unit_crosswalks m
+       join public.admin_unit_versions base on base.id=m.to_unit_id and base.unit_level='commune'
+        and base.valid_from>=date '2025-07-01'
+       join public.admin_unit_versions c on c.unit_level='commune'
+        and c.official_code=base.official_code and c.valid_from>base.valid_from
+       where m.relation in ('whole','rename')
+         and (select count(*) from public.admin_unit_crosswalks x
+              join public.admin_unit_versions v on v.id=x.to_unit_id and v.unit_level='commune'
+               and v.valid_from>=date '2025-07-01'
+              where v.official_code=base.official_code)=1
+       order by m.from_unit_id limit 1`,
+    )
+  ).rows[0];
+  await check(
+    'a current address recorded in a later catalog window converts back, and converting it forward again writes nothing',
+    async () => {
+      const propertyId = await createCurrent({
+        province: renamed.current_province,
+        commune: renamed.current_commune,
+      });
+      const currentId = (
+        await db.query(
+          "select id from public.property_addresses where property_id=$1 and format='current'",
+          [propertyId],
+        )
+      ).rows[0].id;
+      const before = await addressSnapshot(currentId);
+      const legacyId = await convertAs(propertyId, currentId);
+      const legacy = await addressRow(legacyId);
+      const chain = (
+        await db.query(
+          `select d.id as district,p.id as province from public.admin_unit_versions w
+           join public.admin_unit_versions d on d.id=w.parent_id
+           join public.admin_unit_versions p on p.id=d.parent_id
+           where w.id=$1`,
+          [renamed.ward],
+        )
+      ).rows[0];
+      assert.deepEqual(
+        {
+          format: legacy.format,
+          province_unit_id: legacy.province_unit_id,
+          district_unit_id: legacy.district_unit_id,
+          commune_unit_id: legacy.commune_unit_id,
+          mapping_status: legacy.mapping_status,
+          supersedes_address_id: legacy.supersedes_address_id,
+        },
+        {
+          format: 'legacy',
+          province_unit_id: chain.province,
+          district_unit_id: chain.district,
+          commune_unit_id: renamed.ward,
+          mapping_status: 'candidate',
+          supersedes_address_id: currentId,
+        },
+      );
+      assert.deepEqual(await addressSnapshot(currentId), before);
+      // The current row this property keeps names the same commune in its later window, so the
+      // forward direction sees the duplicate rather than writing a second current row.
+      await refuseWith(
+        convert,
+        [
+          propertyId,
+          legacyId,
+          await revision('property_addresses', legacyId),
+          await revision('properties', propertyId),
+        ],
+        'PT423',
+        /already recorded in the target format/,
+      );
+      assert.deepEqual(await addressesOf(propertyId), [
+        { id: legacyId, format: 'legacy', is_primary: true },
+        { id: currentId, format: 'current', is_primary: true },
+      ]);
+    },
+  );
+  await check(
+    'a legacy row converted from a current one records no second current address, even after a correction',
+    async () => {
+      // The conversion links the legacy row to the current one, so a correction of that legacy row
+      // inserts a successor and the chain no longer reaches the current row it came from. The
+      // property still records that commune, which is what the recording action refuses on.
+      const corrected = (
+        await db.query(mutate, [
+          reverseProperty,
+          'address',
+          reverseLegacy,
+          await revision('property_addresses', reverseLegacy),
+          { address_text: 'Địa chỉ cũ sau khi đính chính' },
+        ])
+      ).rows[0].id;
+      const before = await addressesOf(reverseProperty);
+      await refuseWith(
+        'select public.record_address_candidate($1,$2,$3) as id',
+        [
+          reverseProperty,
+          corrected,
+          await revision('properties', reverseProperty),
+        ],
+        '23505',
+        /already recorded from this legacy address/,
+      );
+      assert.deepEqual(await addressesOf(reverseProperty), before);
+      assert.equal(
+        (
+          await db.query(
+            "select count(*)::int as n from public.property_addresses where property_id=$1 and format='current'",
+            [reverseProperty],
+          )
+        ).rows[0].n,
+        1,
+      );
+    },
+  );
+  await check(
+    'a conversion records beside the primary the target format already has instead of taking its flag',
+    async () => {
+      // The legacy row here sits at a ward with no crosswalk row at all, so it can never be the
+      // ward the reverse conversion resolves to: the two rows are genuinely different addresses.
+      const sideBySide = await createLegacy(uncovered);
+      const existingLegacy = (
+        await db.query(
+          "select id from public.property_addresses where property_id=$1 and format='legacy'",
+          [sideBySide],
+        )
+      ).rows[0].id;
+      const existingBefore = await addressSnapshot(existingLegacy);
+      const addedCurrent = (
+        await db.query(mutate, [
+          sideBySide,
+          'address',
+          null,
+          await revision('properties', sideBySide),
+          {
+            format: 'current',
+            address_text: 'Địa chỉ hiện tại cạnh địa chỉ cũ',
+            province_unit_id: singleSource.current_province,
+            commune_unit_id: singleSource.commune,
+          },
+        ])
+      ).rows[0].id;
+      const added = await convertAs(sideBySide, addedCurrent);
+      const convertedRow = await addressRow(added);
+      assert.equal(convertedRow.format, 'legacy');
+      assert.equal(convertedRow.mapping_status, 'candidate');
+      // The legacy format already had its primary, so the new record stays beside it and the
+      // other row is not touched at all.
+      assert.equal(convertedRow.is_primary, false);
+      assert.deepEqual(await addressSnapshot(existingLegacy), existingBefore);
+      assert.deepEqual(await addressesOf(sideBySide), [
+        { id: existingLegacy, format: 'legacy', is_primary: true },
+        { id: added, format: 'legacy', is_primary: false },
+        { id: addedCurrent, format: 'current', is_primary: true },
+      ]);
+    },
+  );
+  await check(
+    'a stale revision or a colleague without edit authority converts nothing',
+    async () => {
+      const before = await addressesOf(reverseProperty);
+      await refuseWith(
+        convert,
+        [
+          reverseProperty,
+          reverseLegacy,
+          '90000000-0000-4000-8000-000000000001',
+          await revision('properties', reverseProperty),
+        ],
+        'PT409',
+        /stale address/,
+      );
+      await refuseWith(
+        convert,
+        [
+          reverseProperty,
+          reverseLegacy,
+          await revision('property_addresses', reverseLegacy),
+          '90000000-0000-4000-8000-000000000001',
+        ],
+        'PT409',
+        /stale property context/,
+      );
+      await asUser(1);
+      await refuseWith(
+        convert,
+        [
+          reverseProperty,
+          reverseLegacy,
+          await revision('property_addresses', reverseLegacy),
+          await revision('properties', reverseProperty),
+        ],
+        '42501',
+        /property edit denied/,
+      );
+      await asUser(0);
+      assert.deepEqual(await addressesOf(reverseProperty), before);
+      // A reviewer may also convert, and the row it writes is still only a candidate.
+      const reviewerProperty = await createLegacy(offered);
+      const reviewerLegacy = (
+        await db.query(
+          "select id from public.property_addresses where property_id=$1 and format='legacy'",
+          [reviewerProperty],
+        )
+      ).rows[0].id;
+      await asUser(2);
+      const reviewerConverted = await convertAs(
+        reviewerProperty,
+        reviewerLegacy,
+      );
+      assert.deepEqual(
+        {
+          format: (await addressRow(reviewerConverted)).format,
+          mapping_status: (await addressRow(reviewerConverted)).mapping_status,
+          verified_by: (await addressRow(reviewerConverted)).verified_by,
+        },
+        { format: 'current', mapping_status: 'candidate', verified_by: null },
+      );
+      await asUser(0);
+    },
+  );
   return created;
 }

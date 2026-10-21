@@ -101,6 +101,31 @@ function catalogueAddress(row: CatalogueAddressRow): AddressSummary {
   };
 }
 
+// A version another version replaced is superseded history, so it is not folded into the summary
+// and the address index never matches the address a property moved from. Only a successor of the
+// same format replaces: a legacy row corrected into another legacy row, or a current row into
+// another current one. A current address recorded from a legacy one states the same property in
+// today's geography and leaves the legacy row it came from in place.
+export function supersededAddressIds(
+  versions: readonly {
+    id: string;
+    format: string;
+    supersedes_address_id: string | null;
+  }[],
+): Set<string> {
+  const formats = new Map(
+    versions.map((address): [string, string] => [address.id, address.format]),
+  );
+  return new Set(
+    versions.flatMap((address) =>
+      address.supersedes_address_id &&
+      formats.get(address.supersedes_address_id) === address.format
+        ? [address.supersedes_address_id]
+        : [],
+    ),
+  );
+}
+
 // The summary one catalogue row states, in the list's own record shape so the list, the quick view
 // and the local address index read the same record they read from the stream. The creator and
 // modifier are the display names the page resolved for this row; the entry chronology is not part
@@ -111,22 +136,7 @@ export function catalogueSummary(
   modifiedBy: string | null = null,
 ): PropertySummary {
   const versions = row.property_addresses ?? [];
-  // A version another version replaced is superseded history, so it is not folded into the summary
-  // and the address index never matches the address a property moved from. Only a successor of the
-  // same format replaces: a legacy row corrected into another legacy row, or a current row into
-  // another current one. A current address recorded from a legacy one states the same property in
-  // today's geography and leaves the legacy row it came from in place.
-  const formats = new Map(
-    versions.map((address): [string, string] => [address.id, address.format]),
-  );
-  const superseded = new Set(
-    versions.flatMap((address) =>
-      address.supersedes_address_id &&
-      formats.get(address.supersedes_address_id) === address.format
-        ? [address.supersedes_address_id]
-        : [],
-    ),
-  );
+  const superseded = supersededAddressIds(versions);
   return {
     id: row.id,
     propertyCode: row.property_code,

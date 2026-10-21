@@ -5,6 +5,7 @@ import type { Employee } from '@/features/employees/types';
 import { api, RequestError } from '@/features/employees/api';
 import { LoadingSkeleton } from '@/features/skeleton';
 import { applyServerSummary } from '@/features/properties/catalogue-changes';
+import { supersededAddressIds } from '@/features/properties/catalogue';
 import { useCatalogueChange } from '@/features/properties/catalogue-provider';
 import type { PropertyDetail } from '@/features/properties/detail-data';
 import type { PropertySummary } from '@/features/properties/types';
@@ -12,6 +13,7 @@ import { mayEditProperty } from '@/features/properties/edit-permission';
 import type { ContactDetail } from './data';
 import { MutationForm, RecordFields, AddressFields } from './forms';
 import { CrosswalkOffer } from './crosswalk-offer';
+import { AddressConversion } from './convert-address';
 import type { AddressCrosswalk } from './crosswalk';
 import { LocationEditor } from '@/features/properties/location';
 import { targetFields, type Target, type Changes } from './fields';
@@ -74,6 +76,9 @@ export function Maintenance({
     [contactBusy, setContactBusy] = useState(false),
     [contactError, setContactError] = useState<string | null>(null);
   const notify = useToast();
+  // A correction inserts a successor and leaves the row it replaced in the list, so the format
+  // switch is offered on the rows the property is still recorded at, never on superseded history.
+  const superseded = supersededAddressIds(detail.addresses);
   // Every committed edit reports what the server now holds for this property, so the browser's
   // catalogue follows a changed address or fact instead of keeping the record it had.
   const applyChange = useCatalogueChange();
@@ -186,6 +191,14 @@ export function Maintenance({
     applyServerSummary(applyChange, result, property.id);
     setCrosswalk(null);
     notify({ saved: true, message: text.crosswalkRecorded });
+    await onSaved();
+  }
+  // The other format's row is written by the database from the official crosswalk; the surface then
+  // re-reads the property so both rows appear with their own format labels.
+  async function converted(result: { summary?: PropertySummary | null }) {
+    applyServerSummary(applyChange, result, property.id);
+    setCrosswalk(null);
+    notify({ saved: true, message: text.converted });
     await onSaved();
   }
   async function saved() {
@@ -388,6 +401,23 @@ export function Maintenance({
                       </button>
                     ) : null}
                   </span>
+                  {/* Format is fixed on an ordinary save; this is the one deliberate switch, offered
+                      on the row the property is recorded at now rather than one a correction
+                      replaced. */}
+                  {superseded.has(address.id) ? null : (
+                    <AddressConversion
+                      locale={locale}
+                      propertyId={property.id}
+                      address={{
+                        id: address.id,
+                        revision: address.revision,
+                        propertyRevision: property.revision,
+                      }}
+                      format={address.format}
+                      onDenied={onDenied}
+                      onConverted={converted}
+                    />
+                  )}
                 </div>
               ))}
               {crosswalk ? (

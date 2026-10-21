@@ -12,7 +12,7 @@ import {
 import { isReportDate } from '@/features/employees/report-range';
 import { offeredUnits } from './units';
 import {
-  crosswalkReport,
+  crosswalkRecorded,
   offeredCrosswalkRow,
   type AddressCrosswalk,
   type CrosswalkOutcome,
@@ -24,6 +24,14 @@ export function databaseError(error: { code?: string } | null) {
   if (code === '42501') throw new ApiError(403, 'access-denied');
   if (code === 'PT403') throw new ApiError(403, 'contact-refusal');
   if (code === 'PT409') throw new ApiError(409, 'stale-edit');
+  // The six reasons an address format conversion refuses to write anything, each stated on its own
+  // so the surface can say which one held.
+  if (code === 'PT421') throw new ApiError(400, 'crosswalk-units-missing');
+  if (code === 'PT422') throw new ApiError(409, 'crosswalk-ambiguous');
+  if (code === 'PT423') throw new ApiError(409, 'address-format-duplicate');
+  if (code === 'PT424') throw new ApiError(409, 'crosswalk-missing');
+  if (code === 'PT425') throw new ApiError(409, 'address-superseded');
+  if (code === 'PT426') throw new ApiError(409, 'crosswalk-level-change');
   if (code === '23505') throw new ApiError(409, 'conflict');
   if (
     [
@@ -111,10 +119,9 @@ export async function savedLegacyAddress(
 ): Promise<{ address?: AddressCrosswalk }> {
   try {
     // Every address of the property travels with the read, because whether the crosswalk's current
-    // address is already recorded is a question about this legacy row's own supersedes chain and the
-    // ward it records now: a correction can change that ward, and then the recorded state no longer
-    // answers for it. The property's own revision travels with the outcome so the offer carries the
-    // context the database will check, read back rather than assumed from the request.
+    // address is already recorded is a question about the territory the property records today. The
+    // property's own revision travels with the outcome so the offer carries the context the
+    // database will check, read back rather than assumed from the request.
     const [property, saved] = await Promise.all([
       context.client
         .from('properties')
@@ -123,7 +130,7 @@ export async function savedLegacyAddress(
         .maybeSingle(),
       context.client
         .from('property_addresses')
-        .select('id,format,commune_unit_id,supersedes_address_id')
+        .select('id,format,commune_unit_id')
         .eq('property_id', propertyId),
     ]);
     databaseError(property.error);
@@ -136,11 +143,27 @@ export async function savedLegacyAddress(
     const report = (
       await crosswalkOutcomes(context, [legacy.commune_unit_id])
     ).get(legacy.commune_unit_id)!;
+    // The recorded check and the action's own guard compare the same territory: the target commune's
+    // official code, whichever current row of the property carries it.
+    const codes = await unitCodes(context, [
+      ...(report.targetId ? [report.targetId] : []),
+      ...rows.flatMap((row) =>
+        row.format === 'current' && row.commune_unit_id
+          ? [row.commune_unit_id]
+          : [],
+      ),
+    ]);
     return {
       address: {
         addressId: legacy.id,
         propertyRevision: property.data.revision,
-        crosswalk: crosswalkReport(rows, legacy.id, report, report.targetId),
+        crosswalk: crosswalkRecorded(
+          rows,
+          report.targetId ? codes.get(report.targetId) : undefined,
+          codes,
+        )
+          ? { kind: 'recorded' }
+          : report,
       },
     };
   } catch {
@@ -148,6 +171,18 @@ export async function savedLegacyAddress(
     // saved address into a failed save.
     return {};
   }
+}
+async function unitCodes(
+  context: RouteContext,
+  ids: readonly string[],
+): Promise<Map<string, string>> {
+  if (!ids.length) return new Map();
+  const { data, error } = await context.client
+    .from('admin_unit_versions')
+    .select('id,official_code')
+    .in('id', ids);
+  databaseError(error);
+  return new Map((data ?? []).map((unit) => [unit.id, unit.official_code]));
 }
 // Each ward's outcome carries the single target unit it names, because the recorded check and the
 // write guard both compare against that target: the state reported and the state accepted can never
@@ -260,6 +295,30 @@ export async function recordCandidate(
   const { error } = await context.client.rpc('record_address_candidate', {
     p_property_id: id,
     p_legacy_address_id: body.addressId,
+    p_property_revision: body.propertyRevision,
+  });
+  databaseError(error);
+  return { id, summary: await catalogueSummaryOf(context, id) };
+}
+// The one deliberate action that changes an existing address's format: a new row in the other
+// format is written from the official crosswalk, and the row it converts stays as it is.
+export async function convertAddressFormat(
+  context: RouteContext,
+  id: string,
+  body: Record<string, unknown>,
+) {
+  exactKeys(body, ['addressId', 'addressRevision', 'propertyRevision']);
+  if (
+    !uuid(id) ||
+    !uuid(body.addressId) ||
+    !uuid(body.addressRevision) ||
+    !uuid(body.propertyRevision)
+  )
+    throw new ApiError(400, 'invalid-input');
+  const { error } = await context.client.rpc('convert_address_format', {
+    p_property_id: id,
+    p_address_id: body.addressId,
+    p_address_revision: body.addressRevision,
     p_property_revision: body.propertyRevision,
   });
   databaseError(error);

@@ -65,43 +65,37 @@ export function crosswalkMessage(locale: Locale, outcome: CrosswalkOutcome) {
         : copy.none[at];
 }
 
-// What the surface reports for a saved legacy row: the recorded state when a current row in that
-// legacy row's own supersedes chain already carries the crosswalk target of the ward the saved row
-// now records, and otherwise what that ward's crosswalk says. A chain that recorded another ward's
-// target does not answer for the ward saved here, because a correction can change it (issue #236),
-// and a ward the crosswalk names no single target for has nothing recorded at all.
-export function crosswalkReport<
-  T extends {
-    id: string;
+// The format a deliberate conversion writes for an address row. Only the two geographies a
+// crosswalk relates are convertible: an 'alternate' row is a source record, so it offers nothing.
+export function conversionTarget(format: string): 'legacy' | 'current' | null {
+  return format === 'legacy'
+    ? 'current'
+    : format === 'current'
+      ? 'legacy'
+      : null;
+}
+
+// Whether the property already records a current address for the territory the crosswalk names.
+// One current address per commune is the rule the recording guard and the format conversion both
+// hold, so this is their comparison: the unit's official code inside the current generation,
+// whichever validity window each row's own version belongs to, and whichever way the row arrived -
+// a conversion writes the legacy row, and a correction of that row moves the supersedes chain on
+// without the current row it came from ever naming the successor.
+export function crosswalkRecorded(
+  rows: readonly {
     format: string;
     commune_unit_id: string | null;
-    supersedes_address_id: string | null;
-  },
->(
-  rows: readonly T[],
-  legacyId: string,
-  outcome: CrosswalkOutcome,
-  targetId: string | null,
-): CrosswalkOutcome {
-  if (!targetId) return outcome;
-  const chain = new Set([legacyId]);
-  let grew = true;
-  while (grew) {
-    grew = false;
-    for (const row of rows) {
-      if (row.format !== 'legacy' || !row.supersedes_address_id) continue;
-      if (chain.has(row.id) === chain.has(row.supersedes_address_id)) continue;
-      chain.add(row.id).add(row.supersedes_address_id);
-      grew = true;
-    }
-  }
-  return rows.some(
-    (row) =>
-      row.format === 'current' &&
-      row.commune_unit_id === targetId &&
-      row.supersedes_address_id !== null &&
-      chain.has(row.supersedes_address_id),
-  )
-    ? { kind: 'recorded' }
-    : outcome;
+  }[],
+  targetCode: string | undefined,
+  codes: ReadonlyMap<string, string>,
+): boolean {
+  return (
+    targetCode !== undefined &&
+    rows.some(
+      (row) =>
+        row.format === 'current' &&
+        row.commune_unit_id !== null &&
+        codes.get(row.commune_unit_id) === targetCode,
+    )
+  );
 }
