@@ -142,6 +142,10 @@ begin
   if private.employee_id() is null then raise exception 'active employee required' using errcode='42501'; end if;
   if p_legacy_address_id is null or p_property_revision is null then raise exception 'legacy address and property revision required' using errcode='23514'; end if;
   if not private.can_edit_property(p_property_id) then raise exception 'property edit denied' using errcode='42501'; end if;
+  -- The revision this action was offered with is checked before anything else about the record, so
+  -- a stale context is its own refusal even once a candidate has been recorded from it.
+  if not exists(select 1 from public.properties where id=p_property_id and revision=p_property_revision)
+    then raise exception 'stale property context; reload current state' using errcode='PT409'; end if;
   select * into legacy from public.property_addresses where id=p_legacy_address_id and property_id=p_property_id;
   if not found or legacy.format<>'legacy' then raise exception 'legacy address required' using errcode='23514'; end if;
   if legacy.commune_unit_id is null then raise exception 'legacy ward required' using errcode='23514'; end if;
@@ -153,12 +157,19 @@ begin
   if mapping.relation not in ('whole','rename') then raise exception 'one whole crosswalk target required' using errcode='23514'; end if;
   select * into target from public.admin_unit_versions where id=mapping.to_unit_id;
   if not found or target.unit_level<>'commune' then raise exception 'current ward required' using errcode='23514'; end if;
+  -- Recording is one-shot per property: the current address this action writes is linked to the
+  -- legacy row it came from, so a second run would find it and refuses rather than leaving two
+  -- primary current addresses describing the same ward.
+  if exists(select 1 from public.property_addresses c join public.property_addresses l on l.id=c.supersedes_address_id
+      where c.property_id=p_property_id and c.format='current' and l.property_id=p_property_id and l.format='legacy')
+    then raise exception 'current address already recorded from this legacy address' using errcode='23505'; end if;
   -- The recorded source text is carried over unchanged: this row states the same property in the
   -- current geography, and no address text is rewritten or invented.
   created:=private.maintain_property(p_property_id,'address',null,p_property_revision,
     jsonb_build_object('format','current','address_text',legacy.address_text,'house_number',legacy.house_number,
       'street',legacy.street,'province_unit_id',target.parent_id,'commune_unit_id',target.id,'is_primary',true),
     p_property_revision);
+  update public.property_addresses set supersedes_address_id=legacy.id where id=created;
   select revision into created_revision from public.property_addresses where id=created;
   -- The address insert flags the record for review, which advances the property revision, so the
   -- second operation is checked against the revision this transaction now holds.

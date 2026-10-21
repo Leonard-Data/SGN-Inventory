@@ -252,6 +252,49 @@ test('a superseded address version is history, not part of the summary', () => {
   );
 });
 
+test('a current address recorded from a legacy one keeps the legacy row in the summary', () => {
+  const legacy = '2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f';
+  const candidate = '3d4e5f60-7a8b-4c9d-8e0f-2b3c4d5e6f70';
+  const summary = catalogueSummary(
+    {
+      ...row,
+      property_addresses: [
+        {
+          id: legacy,
+          format: 'legacy',
+          address_text: '12 Lê Lợi, Phường 5, Quận 3',
+          house_number: '12',
+          street: 'Lê Lợi',
+          commune_text: 'Phường 5',
+          district_text: 'Quận 3',
+          is_primary: true,
+          mapping_status: 'unresolved',
+          supersedes_address_id: null,
+        },
+        {
+          id: candidate,
+          format: 'current',
+          address_text: '12 Lê Lợi, Phường Bến Thành, Thành phố Hồ Chí Minh',
+          house_number: '12',
+          street: 'Lê Lợi',
+          commune_text: 'Phường Bến Thành',
+          district_text: null,
+          is_primary: true,
+          mapping_status: 'candidate',
+          supersedes_address_id: legacy,
+        },
+      ],
+    },
+    null,
+  );
+  // The legacy row is where the property is still recorded, not a version the candidate replaced:
+  // both stay primary and searchable in their own format.
+  assert.deepEqual(
+    summary.addresses.map((address) => address.id + ':' + address.format),
+    [legacy + ':legacy', candidate + ':current'],
+  );
+});
+
 test('a row with no address or no facts states the gap rather than inventing one', () => {
   const summary = catalogueSummary(
     {

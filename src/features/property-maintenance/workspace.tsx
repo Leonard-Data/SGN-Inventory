@@ -40,12 +40,14 @@ export function Maintenance({
   employee,
   locale,
   onSaved,
+  onRefresh,
   onDenied,
 }: {
   detail: PropertyDetail;
   employee: Employee;
   locale: Locale;
   onSaved: () => void | Promise<void>;
+  onRefresh: () => void | Promise<void>;
   onDenied: (status: number) => void;
 }) {
   const text = maintenanceText(locale),
@@ -65,6 +67,9 @@ export function Maintenance({
     // A saved legacy address reports what the crosswalk says about its ward, so the current address
     // it names can be recorded from here rather than written on the person's behalf.
     [crosswalk, setCrosswalk] = useState<AddressCrosswalk | null>(null),
+    // A save whose answer carries a crosswalk offer holds the editor open on that report instead of
+    // closing it before the person can read the outcome or use the one action it offers.
+    offerSaved = useRef(false),
     [selected, setSelected] = useState(''),
     [contactBusy, setContactBusy] = useState(false),
     [contactError, setContactError] = useState<string | null>(null);
@@ -172,6 +177,7 @@ export function Maintenance({
     });
     applyServerSummary(applyChange, result, property.id);
     setCrosswalk(result.address ?? null);
+    offerSaved.current = !!result.address;
     return result;
   }
   async function candidateRecorded(result: {
@@ -186,6 +192,13 @@ export function Maintenance({
     if (!editor) return;
     setEditor((current) => (current === editor ? null : current));
     notify({ saved: true, message: targetSaved[editor.target] });
+    // The offer is the point of this save, so the surface that reports it stays open readable
+    // while the record itself is still re-read behind it.
+    if (offerSaved.current) {
+      offerSaved.current = false;
+      await onRefresh();
+      return;
+    }
     await onSaved();
   }
   async function saveFacts(changes: Changes, explanation?: string) {

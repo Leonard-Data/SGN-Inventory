@@ -1745,7 +1745,7 @@ export async function maintenanceContract({
         verified_at: null,
         mapping_evidence: null,
         is_primary: true,
-        supersedes_address_id: null,
+        supersedes_address_id: offeredLegacy.id,
       });
       // Both rows stay primary: one primary per format, and the legacy record is not touched.
       assert.deepEqual(await addressesOf(offeredProperty), [
@@ -1771,6 +1771,22 @@ export async function maintenanceContract({
         'property_addresses',
         candidateAddress,
       );
+    },
+  );
+  await check(
+    'the offered action is recorded once: following it again writes nothing',
+    async () => {
+      await refuseWith(
+        'select public.record_address_candidate($1,$2,$3)',
+        [
+          offeredProperty,
+          offeredLegacy.id,
+          await revision('properties', offeredProperty),
+        ],
+        '23505',
+        /current address already recorded/,
+      );
+      assert.equal((await addressesOf(offeredProperty)).length, 2);
     },
   );
   await check(

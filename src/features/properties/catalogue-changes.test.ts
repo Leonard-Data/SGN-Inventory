@@ -158,8 +158,7 @@ const MOVED = summaryOf(
       district_text: 'Quận 3',
       is_primary: false,
     }),
-    version('1-current', '99 Hai Bà Trưng, Phường 6, Quận 3', {
-      format: 'current',
+    version('1-legacy-2', '99 Hai Bà Trưng, Phường 6, Quận 3', {
       house_number: '99',
       street: 'Hai Bà Trưng',
       commune_text: 'Phường 6',

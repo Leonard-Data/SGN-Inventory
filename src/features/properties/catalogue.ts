@@ -96,10 +96,19 @@ export function catalogueSummary(
 ): PropertySummary {
   const versions = row.property_addresses ?? [];
   // A version another version replaced is superseded history, so it is not folded into the summary
-  // and the address index never matches the address a property moved from.
+  // and the address index never matches the address a property moved from. Only a successor of the
+  // same format replaces: a legacy row corrected into another legacy row, or a current row into
+  // another current one. A current address recorded from a legacy one states the same property in
+  // today's geography and leaves the legacy row it came from in place.
+  const formats = new Map(
+    versions.map((address): [string, string] => [address.id, address.format]),
+  );
   const superseded = new Set(
     versions.flatMap((address) =>
-      address.supersedes_address_id ? [address.supersedes_address_id] : [],
+      address.supersedes_address_id &&
+      formats.get(address.supersedes_address_id) === address.format
+        ? [address.supersedes_address_id]
+        : [],
     ),
   );
   return {
