@@ -125,6 +125,8 @@ function emptyResultText(
   switch (emptyResultWording(source)) {
     case 'catalogue-no-matches':
       return text.catalogueLocalEmpty;
+    case 'catalogue-none-created':
+      return text.catalogueLocalNoneCreated;
     case 'catalogue-failed':
       return text.catalogueLocalFailed;
     case 'catalogue-loading':
@@ -284,12 +286,26 @@ export function Inventory({
   const localReady = localActive && catalogue.index.length > 0;
   const catalogueFailed =
     catalogue.status === 'failed' && !catalogue.progress.isComplete;
+  // The employee the creator selection compares against; the list reads nothing until the session
+  // has answered, so an absent one matches nothing rather than everyone.
+  const employeeId = session?.employee.id ?? null;
   const matches = useMemo(() => {
     if (!localActive) return null;
     return localReady
-      ? catalogueMatches(catalogue.index, { query: localQuery, filters })
+      ? catalogueMatches(catalogue.index, {
+          query: localQuery,
+          filters,
+          employeeId,
+        })
       : NO_MATCHES;
-  }, [localActive, localReady, catalogue.index, localQuery, filters]);
+  }, [
+    localActive,
+    localReady,
+    catalogue.index,
+    localQuery,
+    filters,
+    employeeId,
+  ]);
   // The rows the local answer holds, and the stored format each one matched through. The format is
   // only stated while a query is actually filtering: an empty box lists every loaded property and
   // has no match to explain.
@@ -736,6 +752,7 @@ export function Inventory({
               loaded: localReady,
               complete: catalogue.progress.isComplete,
               failed: catalogueFailed,
+              createdByMine: filters.createdBy !== null,
             }
           : { from: 'inventory', filterCount },
       ),
@@ -746,6 +763,7 @@ export function Inventory({
       catalogue.progress.isComplete,
       catalogueFailed,
       filterCount,
+      filters.createdBy,
     ],
   );
   // What the address box's own filtering states: how much of the loaded catalogue matches, or the

@@ -36,9 +36,15 @@ export const INVENTORY_FILTER_KEYS = [
   'province',
   'ward',
   'contact',
+  'createdBy',
 ] as const;
 export type InventoryFilterKey = (typeof INVENTORY_FILTER_KEYS)[number];
 export type InventoryFilters = Record<InventoryFilterKey, string | null>;
+
+// The one creator selection the list offers. It names no employee: the filter compares each
+// record's creator with the employee reading the list, so the address carries a fixed token rather
+// than an identity that a shared link would filter somebody else's inventory by.
+export const INVENTORY_CREATOR_MINE = 'mine';
 
 export const noInventoryFilters: InventoryFilters = {
   status: null,
@@ -51,6 +57,7 @@ export const noInventoryFilters: InventoryFilters = {
   province: null,
   ward: null,
   contact: null,
+  createdBy: null,
 };
 
 const WHOLE_VND = /^\d{1,18}$/;
@@ -81,6 +88,7 @@ export function inventoryFilters(params: URLSearchParams): InventoryFilters {
     province: read('province'),
     ward: read('ward'),
     contact: read('contact'),
+    createdBy: read('createdBy'),
   };
 }
 
@@ -102,11 +110,14 @@ export function parseInventoryFilters(
     province,
     ward,
     contact,
+    createdBy,
   } = filters;
   if (status !== null && !includes(INVENTORY_STATUSES, status)) return refuse();
   if (mode !== null && !includes(INVENTORY_LISTING_MODES, mode))
     return refuse();
   if (type !== null && !includes(INVENTORY_PROPERTY_TYPES, type))
+    return refuse();
+  if (createdBy !== null && createdBy !== INVENTORY_CREATOR_MINE)
     return refuse();
   // A unit value is an official catalog identity and the contact is a recorded identity, so a
   // malformed value is refused here; an out-of-catalog or wrong-level unit and an unknown or
@@ -201,6 +212,9 @@ export function filterRpcArgs(filters: InventoryFilters): InventoryFilterArgs {
   const areaId = filters.ward ?? filters.province;
   if (areaId) args.p_area_id = areaId;
   if (filters.contact) args.p_contact_id = filters.contact;
+  // The creator selection has no argument here on purpose: the whole-inventory read carries no
+  // creator criterion, so that selection is answered from the loaded catalogue alone
+  // (`catalogue-results.ts`) and never reaches this read.
   return args;
 }
 

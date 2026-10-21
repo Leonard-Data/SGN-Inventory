@@ -72,6 +72,9 @@ const vi = {
   catalogueLocalFailed:
     'Không tải được danh mục. Nhấn nút tìm kiếm để tìm toàn bộ kho.',
   catalogueLocalEmpty: 'Không có kết quả trong các bất động sản đã tải.',
+  // An empty list narrowed to the reader's own records says something about their own work, not
+  // about the inventory, so it never reads as "there is nothing here".
+  catalogueLocalNoneCreated: 'Không có hồ sơ nào bạn tạo khớp bộ lọc này.',
   // The progressive load's own words: the loaded count is always stated, and the authorized total
   // and an approximate percentage only when the count is known and the load can state one.
   catalogueLoadingKnown:
@@ -173,6 +176,10 @@ const vi = {
   emptyFiltered: 'Không có bất động sản khớp bộ lọc.',
   entryDate: 'Ngày nhập kho gốc',
   createdBy: 'Người tạo hồ sơ',
+  creatorFilter: 'Người tạo',
+  mine: 'Do tôi tạo',
+  creatorFilterCatalogueOnly:
+    'Bộ lọc này chỉ chạy trên danh mục đã tải. Lần tìm toàn kho không lọc theo người tạo, nên ô này tạm khoá.',
   entryDateUnknown: 'Chưa xác định',
   entryDateLegacy: 'Theo hồ sơ gốc',
   entrySourceRecorded: 'Ghi nhận khi tạo hồ sơ',
@@ -945,6 +952,9 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     catalogueLocalFailed:
       'The catalogue could not be loaded. Use the search button to search the whole inventory.',
     catalogueLocalEmpty: 'No matches in the loaded properties.',
+    // An empty list narrowed to the reader's own records says something about their own work, not
+    // about the inventory, so it never reads as "there is nothing here".
+    catalogueLocalNoneCreated: 'No property you created matches this filter.',
     // The progressive load's own words: the loaded count is always stated, and the authorized
     // total and an approximate percentage only when the count is known and the load can state one.
     catalogueLoadingKnown:
@@ -1048,6 +1058,10 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     emptyFiltered: 'No property matches these filters.',
     entryDate: 'Original inventory entry date',
     createdBy: 'Record created by',
+    creatorFilter: 'Created by',
+    mine: 'Created by me',
+    creatorFilterCatalogueOnly:
+      'Only the loaded catalogue can answer this filter. A whole-inventory search does not filter by creator, so this field is locked for it.',
     entryDateUnknown: 'Unknown',
     entryDateLegacy: 'From the legacy record',
     entrySourceRecorded: 'Recorded when the record was created',

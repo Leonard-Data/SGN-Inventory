@@ -28,6 +28,7 @@ test('a complete filter set is applied exactly as the address stated it', () => 
     province: '11111111-1111-4111-8111-111111111111',
     ward: '22222222-2222-4222-8222-222222222222',
     contact: '33333333-3333-4333-8333-333333333333',
+    createdBy: 'mine',
   });
   assert.ok(result.ok);
   assert.deepEqual(result.filters, {
@@ -41,7 +42,22 @@ test('a complete filter set is applied exactly as the address stated it', () => 
     province: '11111111-1111-4111-8111-111111111111',
     ward: '22222222-2222-4222-8222-222222222222',
     contact: '33333333-3333-4333-8333-333333333333',
+    createdBy: 'mine',
   });
+});
+
+test('the creator selection is the one token, and nothing else', () => {
+  assert.equal(parse({ createdBy: 'mine' }).ok, true);
+  assert.equal(parse({ createdBy: '' }).ok, true);
+  // It names no employee, so an identifier or any other word is refused rather than applied as a
+  // different selection.
+  for (const value of [
+    '1',
+    'Mine',
+    '33333333-3333-4333-8333-333333333333',
+    'not-mine',
+  ])
+    assert.equal(parse({ createdBy: value }).ok, false, value);
 });
 
 test('an unset or blank address value is no bound, not an invalid one', () => {
@@ -175,6 +191,11 @@ test('a contact value is a recorded identity, independent of the area filters', 
 
 test('only set filters become link and RPC parameters', () => {
   assert.deepEqual(filterParams(noInventoryFilters), {});
+  // The creator selection travels in the address like every other filter, so the link, the chip and
+  // the control all read the one place a filter lives.
+  assert.deepEqual(filterParams({ ...noInventoryFilters, createdBy: 'mine' }), {
+    createdBy: 'mine',
+  });
   assert.deepEqual(
     filterParams({ ...noInventoryFilters, mode: 'sale', areaMax: '80' }),
     { mode: 'sale', areaMax: '80' },
@@ -189,6 +210,12 @@ test('only set filters become link and RPC parameters', () => {
     2,
   );
   assert.deepEqual(filterRpcArgs(noInventoryFilters), {});
+  // The creator selection names no parameter of this read: the whole-inventory search has no
+  // creator criterion, and the selection is answered from the loaded catalogue alone.
+  assert.deepEqual(
+    filterRpcArgs({ ...noInventoryFilters, createdBy: 'mine' }),
+    {},
+  );
   assert.deepEqual(
     filterRpcArgs({
       ...noInventoryFilters,

@@ -186,11 +186,20 @@ export function catalogueProgressView(
 // matched: while the catalogue is incomplete that is never the whole inventory, and even a
 // complete catalogue states the loaded properties it actually searched.
 export type EmptyResultSource =
-  | { from: 'catalogue'; loaded: boolean; complete: boolean; failed: boolean }
+  | {
+      from: 'catalogue';
+      loaded: boolean;
+      complete: boolean;
+      failed: boolean;
+      // Whether the list is narrowed to the reader's own records: that empty state says something
+      // about the reader's work rather than about the inventory, so it gets its own wording.
+      createdByMine?: boolean;
+    }
   | { from: 'inventory'; filterCount: number };
 
 export type EmptyResultWording =
   | 'catalogue-no-matches'
+  | 'catalogue-none-created'
   | 'catalogue-failed'
   | 'catalogue-loading'
   | 'filtered'
@@ -203,6 +212,9 @@ export function emptyResultWording(
     return source.filterCount > 0 ? 'filtered' : 'inventory';
   // A completed catalogue that indexed nothing has answered for the whole inventory it may read,
   // so its empty result is definitive for that scope rather than a load still in progress.
-  if (source.loaded || source.complete) return 'catalogue-no-matches';
+  if (source.loaded || source.complete)
+    return source.createdByMine
+      ? 'catalogue-none-created'
+      : 'catalogue-no-matches';
   return source.failed ? 'catalogue-failed' : 'catalogue-loading';
 }

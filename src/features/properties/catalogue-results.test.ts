@@ -204,6 +204,18 @@ test('a submitted search states its criteria in one address and nothing else', (
     ),
     { query: '' },
   );
+  // The creator selection is answered from the loaded catalogue alone, so it never becomes a
+  // criterion this read is asked to apply and then cannot.
+  assert.deepEqual(
+    stated(
+      searchEndpoint({
+        query: 'le loi',
+        sort: 'oldest',
+        filters: { ...filters, createdBy: 'mine' },
+      }),
+    ),
+    stated(endpoint),
+  );
 });
 
 test('a local filter is applied to the recorded fields exactly as the database read applies it', () => {
@@ -266,6 +278,88 @@ test('a local filter is applied to the recorded fields exactly as the database r
   );
   assert.equal(kept({ areaMin: '300' }, measured), false);
   assert.equal(kept({ areaMin: '10' }, unclassified), false);
+});
+
+test('the creator selection compares who created the record, not their name', () => {
+  const employee = '99999999-9999-4999-8999-999999999999';
+  const colleague = '88888888-8888-4888-8888-888888888888';
+  const mine = property('mine', {
+    createdById: employee,
+    createdBy: 'Nguyễn Thu Hà',
+  });
+  // The same display name can belong to two colleagues, so the name never decides this.
+  const theirs = property('theirs', {
+    createdById: colleague,
+    createdBy: 'Nguyễn Thu Hà',
+  });
+  const unstated = property('unstated');
+  const filters = { ...noInventoryFilters, createdBy: 'mine' };
+  const kept = (
+    record: PropertySummary,
+    employeeId: string | null = employee,
+  ) => matchesLocalFilters(record, filters, employeeId);
+  assert.equal(kept(mine), true);
+  assert.equal(kept(theirs), false);
+  // A summary that states no creator identity, and a list read without an employee, never match.
+  assert.equal(kept(unstated), false);
+  assert.equal(kept(mine, null), false);
+  // Without the selection the same records are all kept, so the filter narrows rather than hides.
+  assert.equal(matchesLocalFilters(theirs, noInventoryFilters, employee), true);
+});
+
+test('the creator selection composes with the other filters and the address search', () => {
+  const employee = '99999999-9999-4999-8999-999999999999';
+  const colleague = '88888888-8888-4888-8888-888888888888';
+  const index = buildAddressIndex([
+    property('mine-available', {
+      createdById: employee,
+      createdAt: '2026-05-01T00:00:00.000Z',
+    }),
+    property('mine-sold', {
+      createdById: employee,
+      status: 'sold',
+      createdAt: '2026-04-01T00:00:00.000Z',
+    }),
+    property('theirs-available', {
+      createdById: colleague,
+      createdAt: '2026-03-01T00:00:00.000Z',
+    }),
+  ]);
+  const ids = (
+    query: string,
+    stated: Partial<InventoryFilters>,
+    employeeId: string | null = employee,
+  ) =>
+    catalogueMatches(index, {
+      query,
+      filters: { ...noInventoryFilters, ...stated },
+      employeeId,
+    })
+      .map((match) => match.record.id)
+      .sort();
+  // The selection narrows the browse to the reader's own records.
+  assert.deepEqual(ids('', { createdBy: 'mine' }), [
+    'mine-available',
+    'mine-sold',
+  ]);
+  // A second filter still applies on top of it, and the selection on top of the second filter.
+  assert.deepEqual(ids('', { createdBy: 'mine', status: 'available' }), [
+    'mine-available',
+  ]);
+  assert.deepEqual(ids('', { status: 'available' }), [
+    'mine-available',
+    'theirs-available',
+  ]);
+  // The typed address search keeps its ranking and is narrowed by the same selection.
+  assert.deepEqual(ids('le loi', { createdBy: 'mine' }), [
+    'mine-available',
+    'mine-sold',
+  ]);
+  assert.deepEqual(ids('le loi', {}), [
+    'mine-available',
+    'mine-sold',
+    'theirs-available',
+  ]);
 });
 
 test('the catalogue orders newest-created first, then identity descending', () => {
