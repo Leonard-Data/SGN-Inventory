@@ -32,7 +32,9 @@ export function UnitCombobox({
   label: string;
   units: readonly UnitChoice[];
   value: string;
-  onChange: (value: string) => void;
+  // The committed identifier, and the unit behind it when the list carries one, so a caller can
+  // read the official name without a second lookup.
+  onChange: (value: string, unit?: UnitChoice) => void;
   // Given only where "all units" is a condition the surrounding filter set can state.
   anyLabel?: string;
   noMatch: string;
@@ -83,7 +85,10 @@ export function UnitCombobox({
   function commit(next: string) {
     // The form field carries the identifier from this moment on, before anything reads it.
     if (hidden.current) hidden.current.value = next;
-    onChange(next);
+    onChange(
+      next,
+      units.find((unit) => unit.id === next),
+    );
     setState(closedCombobox);
     // A surrounding form tracks its unsaved state from its own events, and a field written this
     // way raises none, so the commit announces itself now that the field it reads is current.

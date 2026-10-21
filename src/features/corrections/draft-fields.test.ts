@@ -31,7 +31,10 @@ test('address corrections keep their existing field boundaries', () => {
   });
   assert.ok(names.includes('address_text'));
   assert.ok(names.includes('district_text'));
-  for (const name of ['province_text', 'commune_text', 'district_unit_id'])
+  // The legacy district is a picker now, so a staff correction can name it; the source labels stay
+  // provenance and are never edited.
+  assert.ok(names.includes('district_unit_id'));
+  for (const name of ['province_text', 'commune_text'])
     assert.equal(names.includes(name), false);
 
   const current = correctionFieldNames({

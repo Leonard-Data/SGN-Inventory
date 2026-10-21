@@ -6,13 +6,23 @@ import {
   useState,
   type FormEvent,
   type ReactNode,
+  type Ref,
 } from 'react';
 import { api, RequestError } from '@/features/employees/api';
 import type { Locale } from '@/i18n/messages';
 import { fields, formChanges, type Target, type Changes } from './fields';
 import { maintenanceError, maintenanceText, optionLabel } from './messages';
 import { failureRoute } from './refusal-rules';
-import { UnitCombobox } from './unit-combobox';
+import { UnitCombobox, type UnitChoice } from './unit-combobox';
+import {
+  LEGACY_CATALOG_DAY,
+  clearedUnits,
+  fillsDistrictText,
+  pickedDistrict,
+  pickedProvince,
+  unitParent,
+  type AddressUnits,
+} from './units';
 import type { Unit } from './data';
 
 export function MutationForm({
@@ -139,10 +149,13 @@ export function RecordFields({
   names,
   values = {},
   locale,
+  refs,
 }: {
   names: readonly string[];
   values?: Record<string, unknown>;
   locale: Locale;
+  // A caller that needs to write into one of these fields while it stays uncontrolled.
+  refs?: Record<string, Ref<HTMLInputElement>>;
 }) {
   const prefix = useId(),
     copy = maintenanceText(locale);
@@ -219,6 +232,7 @@ export function RecordFields({
             id={id}
             className="input"
             name={name}
+            ref={refs?.[name]}
             type={field.kind === 'date' ? 'date' : 'text'}
             inputMode={
               field.kind === 'money' || field.kind === 'count'
@@ -240,6 +254,7 @@ function UnitPicker({
   name,
   level,
   parent,
+  day,
   value,
   onChange,
   locale,
@@ -248,8 +263,10 @@ function UnitPicker({
   name: string;
   level: string;
   parent?: string;
+  // The catalog day this level reads; no day reads the current generation.
+  day?: string;
   value: string;
-  onChange: (value: string) => void;
+  onChange: (value: string, unit?: UnitChoice) => void;
   locale: Locale;
   onDenied: (status: number) => void;
 }) {
@@ -261,7 +278,11 @@ function UnitPicker({
     const abort = new AbortController();
     void api<{ units: Unit[] }>(
       '/api/admin-units?' +
-        new URLSearchParams({ level, ...(parent ? { parent } : {}) }),
+        new URLSearchParams({
+          level,
+          ...(parent ? { parent } : {}),
+          ...(day ? { on: day } : {}),
+        }),
       undefined,
       abort.signal,
     )
@@ -278,7 +299,7 @@ function UnitPicker({
         else setError(true);
       });
     return () => abort.abort();
-  }, [level, parent, onDenied]);
+  }, [level, parent, day, onDenied]);
   const text = maintenanceText(locale);
   return (
     <UnitCombobox
@@ -311,10 +332,19 @@ export function AddressFields({
     includes = (name: string) => selected === null || selected.has(name),
     id = useId(),
     [format, setFormat] = useState(String(values.format ?? '')),
-    [province, setProvince] = useState(String(values.province_unit_id ?? '')),
-    [commune, setCommune] = useState(String(values.commune_unit_id ?? ''));
+    [units, setUnits] = useState<AddressUnits>({
+      province: String(values.province_unit_id ?? ''),
+      district: String(values.district_unit_id ?? ''),
+      commune: String(values.commune_unit_id ?? ''),
+    }),
+    districtText = useRef<HTMLInputElement>(null);
   const text = maintenanceText(locale),
-    current = variant === 'mapping' || format === 'current';
+    current = variant === 'mapping' || format === 'current',
+    // A legacy address is the only one with a district level, and its pickers read the closed
+    // pre-2025 three-tier list, where a ward hangs off its district rather than the province.
+    legacy = variant === 'address' && format === 'legacy',
+    generation = legacy ? 'legacy' : 'current',
+    day = legacy ? LEGACY_CATALOG_DAY : undefined;
   return (
     <>
       {variant === 'address' ? (
@@ -334,7 +364,9 @@ export function AddressFields({
                   value={format}
                   onChange={(event) => {
                     setFormat(event.target.value);
-                    setCommune('');
+                    // The two formats read different catalog generations, so no recorded unit is
+                    // carried into a list that may not hold it.
+                    setUnits(clearedUnits());
                   }}
                   disabled={!!values.id}
                 >
@@ -354,10 +386,13 @@ export function AddressFields({
               </div>
             </>
           ) : null}
-          <p className="span-all">{text.rawCurrent}</p>
+          <p className="span-all">
+            {legacy ? text.legacyHint : text.rawCurrent}
+          </p>
           <RecordFields
             locale={locale}
             values={values}
+            refs={{ district_text: districtText }}
             names={[
               'address_text',
               'house_number',
@@ -387,10 +422,29 @@ export function AddressFields({
         <UnitPicker
           name="province_unit_id"
           level="province"
-          value={province}
-          onChange={(value) => {
-            setProvince(value);
-            setCommune('');
+          day={day}
+          value={units.province}
+          onChange={(value) => setUnits(pickedProvince(value))}
+          locale={locale}
+          onDenied={onDenied}
+        />
+      ) : null}
+      {legacy && includes('district_unit_id') ? (
+        <UnitPicker
+          key={'district' + units.province}
+          name="district_unit_id"
+          level="district"
+          parent={unitParent('legacy', 'district', units)}
+          day={LEGACY_CATALOG_DAY}
+          value={units.district}
+          onChange={(value, unit) => {
+            setUnits(pickedDistrict(units, value));
+            const field = districtText.current;
+            if (!field || !unit || !fillsDistrictText(field.value)) return;
+            field.value = unit.name_vi;
+            // The surrounding form tracks its unsaved state from input events, which a value
+            // written this way raises none of.
+            field.dispatchEvent(new Event('input', { bubbles: true }));
           }}
           locale={locale}
           onDenied={onDenied}
@@ -398,12 +452,13 @@ export function AddressFields({
       ) : null}
       {variant === 'mapping' || includes('commune_unit_id') ? (
         <UnitPicker
-          key={'commune' + province}
+          key={'commune' + units.province + units.district}
           name="commune_unit_id"
           level="commune"
-          parent={province}
-          value={commune}
-          onChange={setCommune}
+          parent={unitParent(generation, 'commune', units)}
+          day={day}
+          value={units.commune}
+          onChange={(value) => setUnits({ ...units, commune: value })}
           locale={locale}
           onDenied={onDenied}
         />
