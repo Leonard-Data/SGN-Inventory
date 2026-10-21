@@ -83,14 +83,15 @@ export function searchEndpoint({
   sort: string | null;
   filters: InventoryFilters;
 }): string {
-  return (
-    '/api/properties?' +
-    new URLSearchParams({
-      query,
-      ...(sort ? { sort } : {}),
-      ...filterParams(filters),
-    })
-  );
+  const params: Record<string, string> = {
+    query,
+    ...(sort ? { sort } : {}),
+    ...filterParams(filters),
+  };
+  // The creator selection is never stated to this read: the whole-inventory search has no creator
+  // criterion, and a selection the catalogue answers alone must not become one that ignores it.
+  delete params.createdBy;
+  return '/api/properties?' + new URLSearchParams(params);
 }
 
 function wholeVndValue(value: string): bigint | null {
@@ -133,10 +134,19 @@ function boundedPrice(
 // One property against the filters the catalogue answers, mirroring the database read's own
 // predicate: a `both` listing matches either stated mode, a range with neither bound stated is
 // skipped rather than applied as a zero, and a null recorded value never satisfies a stated bound.
+// The creator selection is the one criterion with no database counterpart: it compares the
+// record's creator identity with the employee reading the list, so a summary that states no such
+// identity - or an unstated employee - never satisfies it.
 export function matchesLocalFilters(
   record: PropertySummary,
   filters: InventoryFilters,
+  employeeId: string | null = null,
 ): boolean {
+  if (
+    filters.createdBy !== null &&
+    (employeeId === null || record.createdById !== employeeId)
+  )
+    return false;
   if (filters.status !== null && record.status !== filters.status) return false;
   if (
     filters.mode !== null &&
@@ -201,10 +211,19 @@ function compareDesc(left: string, right: string): number {
 // the list states its coverage separately rather than presenting that as an empty inventory.
 export function catalogueMatches(
   index: readonly CatalogueIndexEntry[],
-  { query, filters }: { query: string; filters: InventoryFilters },
+  {
+    query,
+    filters,
+    employeeId = null,
+  }: {
+    query: string;
+    filters: InventoryFilters;
+    // The signed-in employee, which the creator selection compares identity against.
+    employeeId?: string | null;
+  },
 ): CatalogueMatch[] {
   const matched = matchCatalogue(index, query).filter((match) =>
-    matchesLocalFilters(match.record, filters),
+    matchesLocalFilters(match.record, filters, employeeId),
   );
   return query.trim() === '' ? orderCatalogue(matched) : matched;
 }

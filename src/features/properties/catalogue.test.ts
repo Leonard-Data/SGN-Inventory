@@ -152,6 +152,7 @@ test('one row becomes the list summary, with the recorded text and both formats'
     'coverFileId',
     'createdAt',
     'createdBy',
+    'createdById',
     'depthM',
     'direction',
     'floorAreaM2',
@@ -182,6 +183,9 @@ test('one row becomes the list summary, with the recorded text and both formats'
   // The creator the page resolved rides on the summary, so the ordinary browse keeps the
   // attribution the stream read used to supply; the catalogue states no entry chronology.
   assert.equal(summary.createdBy, 'Nguyễn Thu Hà');
+  // The creator's identity rides on the summary beside the name, so a "created by me" filter
+  // compares who created the record rather than the name two colleagues can share.
+  assert.equal(summary.createdById, SECOND_ID);
   assert.equal(summary.entryOn, undefined);
 });
 

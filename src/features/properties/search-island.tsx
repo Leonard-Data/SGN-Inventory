@@ -62,6 +62,7 @@ export function SearchIsland({
   const appliedProvince = filters.province ?? '';
   const appliedWard = filters.ward ?? '';
   const appliedContact = filters.contact ?? '';
+  const appliedCreatedBy = filters.createdBy ?? '';
   // The stated ordering, when the address carries one. A chronological ordering is an advanced
   // criterion: it names the eligible-status database view, which the loaded catalogue cannot
   // state, so it is submitted from this panel rather than run as soon as a control changes.
@@ -80,6 +81,7 @@ export function SearchIsland({
   const [province, setProvince] = useState(appliedProvince);
   const [ward, setWard] = useState(appliedWard);
   const [contact, setContact] = useState(appliedContact);
+  const [createdBy, setCreatedBy] = useState(appliedCreatedBy);
   const [contactLabel, setContactLabel] = useState<string | null>(null);
   const [provinces, setProvinces] = useState<AdminUnit[]>([]);
   const [wards, setWards] = useState<AdminUnit[]>([]);
@@ -94,6 +96,7 @@ export function SearchIsland({
     setProvince(appliedProvince);
     setWard(appliedWard);
     setContact(appliedContact);
+    setCreatedBy(appliedCreatedBy);
   }
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -112,12 +115,14 @@ export function SearchIsland({
     setProvince(appliedProvince);
     setWard(appliedWard);
     setContact(appliedContact);
+    setCreatedBy(appliedCreatedBy);
   }, [
     appliedMode,
     appliedOrder,
     appliedProvince,
     appliedWard,
     appliedContact,
+    appliedCreatedBy,
     appliedStateKey,
   ]);
   // The catalog is the same official list the address form reads. A denial clears the protected
@@ -278,6 +283,10 @@ export function SearchIsland({
       key: 'type',
       label: `${text.propertyType}: ${label(locale, filters.type)}`,
     });
+  // The creator selection is its own condition, so the chip states it directly rather than as a
+  // heading with the same words repeated after it.
+  if (filters.createdBy)
+    applied.push({ key: 'createdBy', label: label(locale, filters.createdBy) });
   const unitName = (units: readonly AdminUnit[], id: string) =>
     units.find((unit) => unit.id === id)?.name_vi ?? id;
   if (filters.province)
@@ -465,6 +474,34 @@ export function SearchIsland({
                 {select('status', text.status, INVENTORY_STATUSES, true)}
                 {select('mode', text.listingMode, INVENTORY_LISTING_MODES)}
                 {select('type', text.propertyType, INVENTORY_PROPERTY_TYPES)}
+              </div>
+              {/* The creator selection is answered from the loaded catalogue alone, so it is
+                  offered only for a run that stays in it. A whole-inventory search has no creator
+                  criterion; a locked field the form cannot submit keeps that run from stating a
+                  filter it will not apply. */}
+              <div className="field">
+                <label className="field-label" htmlFor="filter-createdBy">
+                  {text.creatorFilter}
+                </label>
+                <select
+                  id="filter-createdBy"
+                  className="select"
+                  name="createdBy"
+                  value={createdBy}
+                  onChange={(event) => setCreatedBy(event.currentTarget.value)}
+                  disabled={advancedDraft}
+                  aria-describedby={
+                    advancedDraft ? 'filter-createdBy-hint' : undefined
+                  }
+                >
+                  <option value="">{text.filtersAny}</option>
+                  <option value="mine">{text.mine}</option>
+                </select>
+                {advancedDraft ? (
+                  <p className="field-hint" id="filter-createdBy-hint">
+                    {text.creatorFilterCatalogueOnly}
+                  </p>
+                ) : null}
               </div>
               <div className="filter-range">
                 <div className="form-grid">

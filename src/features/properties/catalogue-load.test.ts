@@ -316,4 +316,26 @@ test('an empty result from an incomplete catalogue is never the inventory is emp
     emptyResultWording({ from: 'inventory', filterCount: 1 }),
     'filtered',
   );
+  // A list narrowed to the reader's own records says that nothing they created matched, which is
+  // a different fact from the inventory holding nothing.
+  assert.equal(
+    emptyResultWording({
+      from: 'catalogue',
+      loaded: true,
+      complete: false,
+      failed: false,
+      createdByMine: true,
+    }),
+    'catalogue-none-created',
+  );
+  assert.equal(
+    emptyResultWording({
+      from: 'catalogue',
+      loaded: false,
+      complete: true,
+      failed: false,
+      createdByMine: true,
+    }),
+    'catalogue-none-created',
+  );
 });

@@ -48,6 +48,10 @@ export type PropertySummary = {
   // that employee row. Null when the creator is missing or no longer resolvable, which the
   // card renders as nothing rather than as a placeholder.
   createdBy: string | null;
+  // The creator's employee identity, carried by the reads that return it so a filter can compare
+  // who created a record rather than the display name two colleagues can share. Absent when a read
+  // states no creator reference at all, which the whole-inventory read does not.
+  createdById?: string | null;
 };
 // One page of the browser catalogue: the summaries this page carries and the cursor the page after
 // it starts after, or null when this page ended the traversal. The cursor is a position in one

@@ -13,7 +13,7 @@ export const CATALOGUE_PAGE_SIZE = 200;
 
 // The summary shape's own version. A browser-held catalogue is only reused for the same shape, so
 // a later field change starts a new key instead of reading rows of the old one as the new one.
-export const CATALOGUE_SCHEMA_VERSION = 2;
+export const CATALOGUE_SCHEMA_VERSION = 3;
 
 // The one field list a catalogue read carries. Money and measurements are cast to text, so a
 // whole-VND or m² value is never rounded through a JavaScript number, and a property's address
@@ -134,6 +134,9 @@ export function catalogueSummary(
     direction: row.direction ?? null,
     accessType: row.access_type ?? null,
     createdBy,
+    // The creator's own identity, which the row already carries: the list's "created by me"
+    // selection compares this rather than the display name, which two colleagues can share.
+    createdById: row.created_by ?? null,
   };
 }
 
