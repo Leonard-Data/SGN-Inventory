@@ -24,6 +24,8 @@ const LEGACY_SOURCE_URL =
 const LEGACY_MIGRATION_SUFFIX = '_legacy_admin_units_reference.sql';
 const LEGACY_FROM = '2025-01-04';
 const LEGACY_TO = '2025-07-01';
+// The day the date-aware catalog read was accepted, standing in for an absent `on`.
+const CURRENT_READ_DAY = '2026-10-21';
 // Pre-2025 province codes reused for a different current province, which is why
 // a unit is keyed by (unit_level, official_code, valid_from) and never by code.
 const REUSED_PROVINCE_CODES = {
@@ -102,6 +104,15 @@ export async function referenceCatalogContract({
         [LEGACY_SOURCE_URL, level, code],
       )
     ).rows[0];
+  // The predicate the date-aware catalog read applies: a unit is offered on the day its half-open
+  // window covers, so one day answers one generation. Counted on the two seeded sources alone, so
+  // fixture units from other contract checks never answer for the catalog.
+  const inForceOn = async (on) =>
+    rows(
+      `select id,unit_level,parent_id from public.admin_unit_versions
+        where source_url in ($2,$3) and valid_from<=$1 and (valid_to is null or valid_to>$1)`,
+      [on, SOURCE_URL, LEGACY_SOURCE_URL],
+    );
 
   await check(
     'reference catalog seeds every upstream unit once across its dated versions',
@@ -362,26 +373,18 @@ export async function referenceCatalogContract({
       assert.equal(communes.length, 168);
       assert.ok(communes.every((row) => row.parent_id === hcmc.id));
       assert.ok(communes.every((row) => day(row.valid_to) !== LEGACY_TO));
-      // The closed pre-2025 generation stays in the table but outside both reads, and
-      // the inventory area lookup refuses its province and ward ids the same way.
+      // The closed pre-2025 generation stays in the table and is what the date-aware read answers
+      // for a legacy date, while today's read never offers it; the inventory area lookup accepts
+      // those same ids because it validates any recorded catalog unit, not a generation.
+      const legacyDate = await inForceOn('2025-06-30');
+      const currentDate = await inForceOn(CURRENT_READ_DAY);
       for (const [level, code] of [
         ['province', '01'],
         ['commune', '00001'],
       ]) {
         const legacy = await legacyUnit(level, code);
-        assert.deepEqual(
-          await rows('select id from public.admin_unit_versions where id=$1', [
-            legacy.id,
-          ]),
-          [{ id: legacy.id }],
-        );
-        assert.deepEqual(
-          await rows(
-            'select id from public.admin_unit_versions where id=$1 and valid_from>=$2',
-            [legacy.id, CURRENT_CATALOG_START],
-          ),
-          [],
-        );
+        assert.ok(legacyDate.some((row) => row.id === legacy.id));
+        assert.ok(!currentDate.some((row) => row.id === legacy.id));
       }
       const bacNinhBaseline = await unitAt('province', '24', '2025-07-01');
       const bacNinhCurrent = await unitAt('province', '24', BN_CITY_FROM);
@@ -410,6 +413,58 @@ export async function referenceCatalogContract({
         const child = currentChildren.find((row) => row.official_code === code);
         assert.equal(child.name_vi, `Phường ${name}`);
       }
+      await asSystem();
+    },
+  );
+
+  await check(
+    'the catalog read answers the generation in force on the stated day',
+    async () => {
+      const counts = async (on) => {
+        const inForce = await inForceOn(on);
+        return {
+          province: inForce.filter((row) => row.unit_level === 'province')
+            .length,
+          district: inForce.filter((row) => row.unit_level === 'district')
+            .length,
+          commune: inForce.filter((row) => row.unit_level === 'commune').length,
+        };
+      };
+      // A legacy day answers the closed three-tier snapshot and today answers the two-tier rows.
+      assert.deepEqual(await counts('2025-06-30'), {
+        province: 63,
+        district: 696,
+        commune: 10051,
+      });
+      assert.deepEqual(await counts(CURRENT_READ_DAY), {
+        province: 34,
+        district: 0,
+        commune: 3321,
+      });
+      // A legacy province's districts and a legacy district's wards are one parent hop apart.
+      const legacyDate = await inForceOn('2025-06-30');
+      const legacyProvince = await legacyUnit('province', '01');
+      const districts = legacyDate.filter(
+        (row) =>
+          row.unit_level === 'district' && row.parent_id === legacyProvince.id,
+      );
+      assert.ok(districts.length > 0);
+      assert.ok(
+        legacyDate.some(
+          (row) =>
+            row.unit_level === 'commune' && row.parent_id === districts[0].id,
+        ),
+      );
+      // No picker page reaches the read's 1,000-unit limit, whatever the day.
+      assert.ok(
+        (
+          await rows(
+            `select max(n)::int as n from (
+               select count(*) as n from public.admin_unit_versions
+                where unit_level='commune' group by parent_id) counted`,
+          )
+        )[0].n <= 1000,
+      );
       await asSystem();
     },
   );

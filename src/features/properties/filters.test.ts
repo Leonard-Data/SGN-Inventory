@@ -318,3 +318,54 @@ test('the catalog check refuses an absent or wrong-level unit', () => {
     'a ward from a different province',
   );
 });
+
+test('the catalog check follows a legacy ward through its district', () => {
+  const province = '11111111-1111-4111-8111-111111111111';
+  const otherProvince = '44444444-4444-4444-8444-444444444444';
+  const district = '55555555-5555-4555-8555-555555555555';
+  const otherDistrict = '66666666-6666-4666-8666-666666666666';
+  const ward = '22222222-2222-4222-8222-222222222222';
+  const units = [
+    { id: province, unit_level: 'province', parent_id: null },
+    { id: otherProvince, unit_level: 'province', parent_id: null },
+    { id: district, unit_level: 'district', parent_id: province },
+    { id: otherDistrict, unit_level: 'district', parent_id: otherProvince },
+    { id: ward, unit_level: 'commune', parent_id: district },
+  ];
+  assert.equal(
+    catalogUnitsMatch(units, { ...noInventoryFilters, province, ward }),
+    true,
+    'the legacy ward, its district and the legacy province the district names',
+  );
+  assert.equal(
+    catalogUnitsMatch(units, { ...noInventoryFilters, province }),
+    true,
+    'the legacy province alone',
+  );
+  assert.equal(
+    catalogUnitsMatch(units, {
+      ...noInventoryFilters,
+      province: otherProvince,
+      ward,
+    }),
+    false,
+    'a legacy ward under a district of a different legacy province',
+  );
+  assert.equal(
+    catalogUnitsMatch(units, { ...noInventoryFilters, province: district }),
+    false,
+    'a district value in the province slot',
+  );
+  assert.equal(
+    catalogUnitsMatch(
+      units.filter((unit) => unit.id !== district),
+      {
+        ...noInventoryFilters,
+        province,
+        ward,
+      },
+    ),
+    false,
+    'a legacy ward whose district was not read',
+  );
+});
