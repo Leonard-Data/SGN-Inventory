@@ -120,6 +120,10 @@ const copy = {
     'Không chuyển được: bảng chuyển đổi không nêu một đơn vị duy nhất cho địa chỉ này (chuyển một phần hoặc nhiều đơn vị). Hãy đối chiếu và đính chính địa chỉ; chưa có dữ liệu nào được ghi.',
     'Cannot convert: the crosswalk names no single unit for this address (a partial transfer, or several units). Reconcile the address and correct it instead; nothing was written.',
   ],
+  convertNoCrosswalk: [
+    'Không chuyển được: phường/xã đã ghi chưa có dòng nào trong bảng chuyển đổi chính thức, nên chưa có đơn vị ở dạng còn lại để ghi. Địa chỉ đã ghi không sai; chưa có dữ liệu nào được ghi.',
+    'Cannot convert: the recorded ward has no row in the official crosswalk yet, so there is no unit in the other format to record. The address you have is not wrong; nothing was written.',
+  ],
   convertDuplicate: [
     'Không chuyển được: bất động sản đã có địa chỉ ở dạng này cho cùng địa bàn, nên không ghi thêm bản trùng.',
     'Cannot convert: the property already records an address in this format for the same territory, so no duplicate was written.',
@@ -322,9 +326,11 @@ export function maintenanceError(locale: Locale, code: string | null) {
                 ? text.convertUnitsMissing
                 : code === 'crosswalk-ambiguous'
                   ? text.convertAmbiguous
-                  : code === 'address-format-duplicate'
-                    ? text.convertDuplicate
-                    : text.unavailable;
+                  : code === 'crosswalk-missing'
+                    ? text.convertNoCrosswalk
+                    : code === 'address-format-duplicate'
+                      ? text.convertDuplicate
+                      : text.unavailable;
 }
 const values: Record<string, readonly [string, string]> = {
   property: ['Thông tin bất động sản', 'Property facts'],

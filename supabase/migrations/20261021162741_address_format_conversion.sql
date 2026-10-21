@@ -13,15 +13,18 @@
 --     converts through its single whole or rename row, and a current commune converts back only
 --     when exactly one whole or rename row names that unit, so a merge of several old wards stays
 --     ambiguous and writes nothing. A renamed province re-creates its communes in a later validity
---     window, so both directions are resolved by the unit's official code, never by the one
---     version row the crosswalk was seeded with;
+--     window, so the reverse lookup matches the crosswalk by the recorded unit's official code in
+--     the current generation, while the forward row cites the crosswalk's own current row, the one
+--     valid on its effective_on;
 --   * the new row is mapping_status='candidate' carrying the crosswalk's effective_on and
 --     source_url. It is never 'verified': D5 keeps verification reviewer-only, and no promotion is
 --     performed here;
---   * it refuses, with its own code, when the source row records no ward, when the crosswalk is
---     ambiguous, or when the target format already records that same territory.
--- Three codes are distinct rather than the usual 23514 so the surface can state which of those
--- three refused it: PT421 source units absent, PT422 ambiguous crosswalk, PT423 duplicate row.
+--   * it refuses, with its own code, when the source row records no ward, when the crosswalk has no
+--     row for the recorded unit, when the crosswalk is ambiguous, or when the target format already
+--     records that same territory.
+-- Four codes are distinct rather than the usual 23514 so the surface can state which of those
+-- refused it: PT421 source units absent, PT422 ambiguous crosswalk, PT423 duplicate row, PT424 no
+-- crosswalk row for the recorded unit at all.
 begin;
 
 create function private.convert_address_format(p_property_id uuid,p_address_id uuid,p_address_revision uuid,p_property_revision uuid) returns uuid
@@ -47,6 +50,7 @@ begin
     -- One whole or rename row names the current ward. A partial transfer, or several rows, needs
     -- property-level evidence this action cannot produce, so it is reported rather than guessed.
     select count(*) into rows from public.admin_unit_crosswalks where from_unit_id=source.commune_unit_id;
+    if rows=0 then raise exception 'no crosswalk row for the recorded unit' using errcode='PT424'; end if;
     if rows<>1 then raise exception 'one whole crosswalk target required' using errcode='PT422'; end if;
     select * into mapping from public.admin_unit_crosswalks where from_unit_id=source.commune_unit_id;
     if mapping.relation not in ('whole','rename') then raise exception 'one whole crosswalk target required' using errcode='PT422'; end if;
@@ -63,6 +67,7 @@ begin
     select count(*) into rows from public.admin_unit_crosswalks x
       join public.admin_unit_versions c on c.id=x.to_unit_id and c.unit_level='commune' and c.valid_from>=date '2025-07-01'
       where c.official_code=source_code;
+    if rows=0 then raise exception 'no crosswalk row for the recorded unit' using errcode='PT424'; end if;
     if rows<>1 then raise exception 'one whole crosswalk source required' using errcode='PT422'; end if;
     select x.* into mapping from public.admin_unit_crosswalks x
       join public.admin_unit_versions c on c.id=x.to_unit_id and c.unit_level='commune' and c.valid_from>=date '2025-07-01'

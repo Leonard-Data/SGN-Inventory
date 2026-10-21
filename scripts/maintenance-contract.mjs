@@ -2461,6 +2461,32 @@ export async function maintenanceContract({
       }
     },
   );
+  await check(
+    'a ward the crosswalk has no row for is refused as a missing conversion row, not as an ambiguity',
+    async () => {
+      // Nothing about this address is ambiguous and correcting it would change nothing: the ward
+      // simply has no conversion row yet, which is its own refusal code and its own wording.
+      const propertyId = await createLegacy(uncovered);
+      const addressId = (
+        await db.query(
+          "select id from public.property_addresses where property_id=$1 and format='legacy'",
+          [propertyId],
+        )
+      ).rows[0].id;
+      await refuseWith(
+        convert,
+        [
+          propertyId,
+          addressId,
+          await revision('property_addresses', addressId),
+          await revision('properties', propertyId),
+        ],
+        'PT424',
+        /no crosswalk row for the recorded unit/,
+      );
+      assert.equal((await addressesOf(propertyId)).length, 1);
+    },
+  );
   // The reverse direction needs a current commune the crosswalk derives from exactly one old ward;
   // a commune merged from several old wards deliberately has none.
   const singleSource = (

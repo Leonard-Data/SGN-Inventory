@@ -24,11 +24,12 @@ export function databaseError(error: { code?: string } | null) {
   if (code === '42501') throw new ApiError(403, 'access-denied');
   if (code === 'PT403') throw new ApiError(403, 'contact-refusal');
   if (code === 'PT409') throw new ApiError(409, 'stale-edit');
-  // The three reasons an address format conversion refuses to write anything, each stated on its
+  // The four reasons an address format conversion refuses to write anything, each stated on its
   // own so the surface can say which one held.
   if (code === 'PT421') throw new ApiError(400, 'crosswalk-units-missing');
   if (code === 'PT422') throw new ApiError(409, 'crosswalk-ambiguous');
   if (code === 'PT423') throw new ApiError(409, 'address-format-duplicate');
+  if (code === 'PT424') throw new ApiError(409, 'crosswalk-missing');
   if (code === '23505') throw new ApiError(409, 'conflict');
   if (
     [
