@@ -951,7 +951,7 @@ export function Inventory({
             {local ? (
               <>
                 <p className="search-hint">{text.catalogueLocalNote}</p>
-                {!catalogue.progress.isComplete ? (
+                {!catalogue.progress.isComplete && !catalogueFailed ? (
                   <p className="search-hint">{text.catalogueMoreMatches}</p>
                 ) : null}
               </>
