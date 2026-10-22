@@ -154,6 +154,9 @@ export function SearchIsland({
   // two-tier list a current one names. A cleared format filter states no condition, so it keeps the
   // legacy generation the panel opens on, where the district level exists at all.
   const legacyUnits = format !== 'current';
+  // A cleared format states no generation, so there the applied unit keeps its own row in the
+  // list; a stated format reads that generation's units alone.
+  const includeAppliedUnit = format === INVENTORY_ADDRESS_FORMAT_ANY;
   // A denial clears the protected surface through the handler the inventory list already uses.
   useEffect(() => {
     setProvinces([]);
@@ -161,7 +164,8 @@ export function SearchIsland({
     const abort = new AbortController();
     const params = new URLSearchParams({ level: 'province' });
     if (legacyUnits) params.set('on', LEGACY_CATALOG_DAY);
-    if (appliedProvince) params.set('include', appliedProvince);
+    if (includeAppliedUnit && appliedProvince)
+      params.set('include', appliedProvince);
     void api<{ units: AdminUnit[] }>(
       '/api/admin-units?' + params,
       undefined,
@@ -182,7 +186,7 @@ export function SearchIsland({
         else setProvinceFailed(true);
       });
     return () => abort.abort();
-  }, [legacyUnits, appliedProvince, onDenied]);
+  }, [legacyUnits, includeAppliedUnit, appliedProvince, onDenied]);
   // The district level exists only in the legacy generation, and only inside the chosen province.
   useEffect(() => {
     setDistricts([]);
@@ -194,7 +198,8 @@ export function SearchIsland({
       parent: province,
       on: LEGACY_CATALOG_DAY,
     });
-    if (appliedDistrict) params.set('include', appliedDistrict);
+    if (includeAppliedUnit && appliedDistrict)
+      params.set('include', appliedDistrict);
     void api<{ units: AdminUnit[] }>(
       '/api/admin-units?' + params,
       undefined,
@@ -215,19 +220,20 @@ export function SearchIsland({
         else setDistrictFailed(true);
       });
     return () => abort.abort();
-  }, [legacyUnits, province, appliedDistrict, onDenied]);
+  }, [legacyUnits, province, includeAppliedUnit, appliedDistrict, onDenied]);
   // A legacy ward hangs off its district and a current commune off its province, so the ward list
   // narrows by the level the chosen generation has above it.
   useEffect(() => {
     setWards([]);
     setWardFailed(false);
     const parent = legacyUnits ? district : province;
-    if (!parent && !appliedWard) return;
+    const include = includeAppliedUnit ? appliedWard : '';
+    if (!parent && !include) return;
     const abort = new AbortController();
     const params = new URLSearchParams({ level: 'commune' });
     if (parent) params.set('parent', parent);
     if (legacyUnits) params.set('on', LEGACY_CATALOG_DAY);
-    if (appliedWard) params.set('include', appliedWard);
+    if (include) params.set('include', include);
     void api<{ units: AdminUnit[] }>(
       '/api/admin-units?' + params,
       undefined,
@@ -248,7 +254,14 @@ export function SearchIsland({
         else setWardFailed(true);
       });
     return () => abort.abort();
-  }, [legacyUnits, district, province, appliedWard, onDenied]);
+  }, [
+    legacyUnits,
+    district,
+    province,
+    includeAppliedUnit,
+    appliedWard,
+    onDenied,
+  ]);
   // The contact filter lists only identities the caller may read, through the bounded name
   // search and paging the property maintenance picker already uses: a page at a time on
   // request, never a walk over the whole directory. The applied filter's label is the one
