@@ -208,8 +208,8 @@ test('a submitted search states its criteria in one address and nothing else', (
     ),
     { query: '', addressFormat: 'legacy' },
   );
-  // The creator selection is answered from the loaded catalogue alone, so it never becomes a
-  // criterion this read is asked to apply and then cannot.
+  // The creator selection travels in the address of the read like the other filters, so a
+  // whole-inventory search is narrowed by it rather than ignoring it.
   assert.deepEqual(
     stated(
       searchEndpoint({
@@ -218,7 +218,7 @@ test('a submitted search states its criteria in one address and nothing else', (
         filters: { ...filters, createdBy: 'mine' },
       }),
     ),
-    stated(endpoint),
+    { ...stated(endpoint), createdBy: 'mine' },
   );
 });
 

@@ -286,11 +286,11 @@ test('only set filters become link and RPC parameters', () => {
   assert.deepEqual(filterRpcArgs(noInventoryFilters), {
     p_address_format: 'legacy',
   });
-  // The creator selection names no parameter of this read: the whole-inventory search has no
-  // creator criterion, and the selection is answered from the loaded catalogue alone.
+  // The creator selection is one more criterion of the address, so the same read that applies the
+  // others applies it; the token names no employee, and the read resolves who it means.
   assert.deepEqual(
     filterRpcArgs({ ...noInventoryFilters, createdBy: 'mine' }),
-    { p_address_format: 'legacy' },
+    { p_address_format: 'legacy', p_created_by: 'mine' },
   );
   assert.deepEqual(
     filterRpcArgs({

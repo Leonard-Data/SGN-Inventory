@@ -193,8 +193,6 @@ const vi = {
   modifiedBy: 'Người sửa hồ sơ',
   creatorFilter: 'Người tạo',
   mine: 'Do tôi tạo',
-  creatorFilterCatalogueOnly:
-    'Bộ lọc này chỉ chạy trên danh mục đã tải. Lần tìm toàn kho không lọc theo người tạo, nên ô này tạm khoá.',
   entryDateUnknown: 'Chưa xác định',
   entryDateLegacy: 'Theo hồ sơ gốc',
   entrySourceRecorded: 'Ghi nhận khi tạo hồ sơ',
@@ -1108,8 +1106,6 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     modifiedBy: 'Record modified by',
     creatorFilter: 'Created by',
     mine: 'Created by me',
-    creatorFilterCatalogueOnly:
-      'Only the loaded catalogue can answer this filter. A whole-inventory search does not filter by creator, so this field is locked for it.',
     entryDateUnknown: 'Unknown',
     entryDateLegacy: 'From the legacy record',
     entrySourceRecorded: 'Recorded when the record was created',

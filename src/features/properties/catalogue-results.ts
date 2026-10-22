@@ -95,9 +95,6 @@ export function searchEndpoint({
     ...(sort ? { sort } : {}),
     ...filterParams(filters),
   };
-  // The creator selection is never stated to this read: the whole-inventory search has no creator
-  // criterion, and a selection the catalogue answers alone must not become one that ignores it.
-  delete params.createdBy;
   return '/api/properties?' + new URLSearchParams(params);
 }
 
@@ -141,9 +138,9 @@ function boundedPrice(
 // One property against the filters the catalogue answers, mirroring the database read's own
 // predicate: a `both` listing matches either stated mode, a range with neither bound stated is
 // skipped rather than applied as a zero, and a null recorded value never satisfies a stated bound.
-// The creator selection is the one criterion with no database counterpart: it compares the
-// record's creator identity with the employee reading the list, so a summary that states no such
-// identity - or an unstated employee - never satisfies it.
+// The creator selection compares the record's creator identity with the employee reading the list,
+// which is who the whole-inventory read resolves too, so a summary that states no such identity -
+// or an unstated employee - never satisfies it.
 export function matchesLocalFilters(
   record: PropertySummary,
   filters: InventoryFilters,

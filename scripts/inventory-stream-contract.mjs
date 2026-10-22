@@ -87,11 +87,12 @@ export async function inventoryStreamContract({
     province = null,
     district = null,
     commune = null,
+    createdBy = null,
   } = {}) {
     const result = await db.query(
       `select * from public.stream_inventory(p_order => $1::text,p_query => $2::text,p_offset => $3::integer,
         p_limit => $4::integer,p_status => $5::text,p_address_format => $6::text,p_province_id => $7::uuid,
-        p_district_id => $8::uuid,p_commune_id => $9::uuid)`,
+        p_district_id => $8::uuid,p_commune_id => $9::uuid,p_created_by => $10::text)`,
       [
         order,
         query,
@@ -102,6 +103,7 @@ export async function inventoryStreamContract({
         province,
         district,
         commune,
+        createdBy,
       ],
     );
     // Every read answers at least one row: the window's rows, or the counting row alone when the
@@ -666,6 +668,66 @@ export async function inventoryStreamContract({
       });
       assert.ok(byThiTran.rows.some((row) => row.id === textThiTranYenVien));
       assert.ok(!byThiTran.rows.some((row) => row.id === textXaYenVien));
+    },
+  );
+
+  await check(
+    'the creator selection narrows the stream to the caller, never to a stated identity',
+    async () => {
+      // Three records told apart by their creator alone: the fixture salesperson's own, a
+      // colleague's, and one that records no creator at all. They are read through their own code
+      // marker, so the shared embedded inventory neither satisfies nor breaks the count.
+      const ownCreated = id('c1');
+      const colleagueCreated = id('c2');
+      const unclaimed = id('c3');
+      await asOwner();
+      await db.query(
+        `insert into public.properties(id,property_code,listing_mode,status,property_type,created_by) values
+          ($1,'SGN-STRM-C1','sale','available','house',$4),
+          ($2,'SGN-STRM-C2','sale','available','house',$5),
+          ($3,'SGN-STRM-C3','sale','available','house',null)`,
+        [ownCreated, colleagueCreated, unclaimed, employees[0], employees[1]],
+      );
+      await asUser(0);
+      const mine = await read({ query: 'SGN-STRM-C', createdBy: 'mine' });
+      assert.deepEqual(
+        mine.rows.map((row) => row.id),
+        [ownCreated],
+        'only the caller\u2019s own record matches',
+      );
+      assert.equal(mine.total, 1);
+      // The criterion is the caller's identity, so the same read made by the colleague keeps their
+      // own record and not the salesperson's - no stated value can point it at somebody else.
+      await asUser(1);
+      const theirs = await read({ query: 'SGN-STRM-C', createdBy: 'mine' });
+      assert.deepEqual(
+        theirs.rows.map((row) => row.id),
+        [colleagueCreated],
+        'the criterion follows the caller, not the state',
+      );
+      assert.equal(theirs.total, 1);
+      // It narrows what the caller could already read rather than hiding it: without the selection
+      // all three records - including the one with no recorded creator - are in the stream.
+      const unfiltered = await read({ query: 'SGN-STRM-C', limit: 200 });
+      assert.deepEqual(
+        unfiltered.rows.map((row) => row.id).sort(),
+        [ownCreated, colleagueCreated, unclaimed].sort(),
+      );
+      assert.equal(unfiltered.total, 3);
+      // The one token is the only selection; an employee identity or any other word is refused
+      // rather than applied as a different inventory.
+      await asUser(0);
+      for (const value of [employees[1], 'Mine', 'yes', ''])
+        await fails(
+          'select * from public.stream_inventory(p_created_by => $1::text)',
+          [value],
+          '22023',
+        );
+      await asOwner();
+      await db.query(
+        'delete from public.properties where id = any($1::uuid[])',
+        [[ownCreated, colleagueCreated, unclaimed]],
+      );
     },
   );
 

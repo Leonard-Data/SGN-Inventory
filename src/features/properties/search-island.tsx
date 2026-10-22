@@ -697,10 +697,9 @@ export function SearchIsland({
                 </div>
                 <p className="field-hint">{text.addressFormatHint}</p>
               </div>
-              {/* The creator selection is answered from the loaded catalogue alone, so it is
-                  offered only for a run that stays in it. A whole-inventory search has no creator
-                  criterion; a locked field the form cannot submit keeps that run from stating a
-                  filter it will not apply. */}
+              {/* The creator selection is one more filter of the set: the whole-inventory read
+                  resolves the signed-in employee from the caller's session, so choosing it narrows
+                  a catalogue search and a whole-inventory search alike. */}
               <div className="form-grid-3">
                 <div className="field">
                   <label className="field-label" htmlFor="filter-createdBy">
@@ -714,19 +713,10 @@ export function SearchIsland({
                     onChange={(event) =>
                       setCreatedBy(event.currentTarget.value)
                     }
-                    disabled={advancedDraft}
-                    aria-describedby={
-                      advancedDraft ? 'filter-createdBy-hint' : undefined
-                    }
                   >
                     <option value="">{text.filtersAny}</option>
                     <option value="mine">{text.mine}</option>
                   </select>
-                  {advancedDraft ? (
-                    <p className="field-hint" id="filter-createdBy-hint">
-                      {text.creatorFilterCatalogueOnly}
-                    </p>
-                  ) : null}
                 </div>
               </div>
               <div className="field-group">
