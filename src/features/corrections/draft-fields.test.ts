@@ -30,7 +30,7 @@ test('address corrections keep their existing field boundaries', () => {
     propertyStatus: 'available',
   });
   assert.ok(names.includes('address_text'));
-  assert.ok(names.includes('district_text'));
+  assert.equal(names.includes('district_text'), false);
   // The legacy district is a picker now, so a staff correction can name it; the source labels stay
   // provenance and are never edited.
   assert.ok(names.includes('district_unit_id'));

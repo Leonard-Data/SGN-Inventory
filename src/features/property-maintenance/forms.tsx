@@ -10,7 +10,13 @@ import {
 } from 'react';
 import { api, RequestError } from '@/features/employees/api';
 import type { Locale } from '@/i18n/messages';
-import { fields, formChanges, type Target, type Changes } from './fields';
+import {
+  addressFields,
+  fields,
+  formChanges,
+  type Target,
+  type Changes,
+} from './fields';
 import { maintenanceError, maintenanceText, optionLabel } from './messages';
 import { failureRoute } from './refusal-rules';
 import { UnitCombobox, type UnitChoice } from './unit-combobox';
@@ -169,6 +175,29 @@ export function RecordFields({
       : value == null
         ? ''
         : String(value);
+    // The district text is written by the legacy district picker and never typed here: a recorded
+    // value travels with the form on every other save and reads back as the text it holds.
+    if (name === 'district_text')
+      return initial ? (
+        <div className="field" key={name}>
+          <span className="field-label">{text}</span>
+          <p translate="no">{initial}</p>
+          <input
+            type="hidden"
+            name={name}
+            ref={refs?.[name]}
+            defaultValue={initial}
+          />
+        </div>
+      ) : (
+        <input
+          key={name}
+          type="hidden"
+          name={name}
+          ref={refs?.[name]}
+          defaultValue=""
+        />
+      );
     const wide =
       ['phones'].includes(field.kind ?? '') ||
       [
@@ -259,7 +288,6 @@ function UnitPicker({
   onChange,
   locale,
   onDenied,
-  listed,
 }: {
   name: string;
   level: string;
@@ -270,8 +298,6 @@ function UnitPicker({
   onChange: (value: string, unit?: UnitChoice) => void;
   locale: Locale;
   onDenied: (status: number) => void;
-  // The list this picker loaded, so a caller can read the official name of a recorded unit.
-  listed?: { current: Unit[] };
 }) {
   const id = useId(),
     [units, setUnits] = useState<Unit[]>([]),
@@ -295,7 +321,6 @@ function UnitPicker({
       .then((result) => {
         if (abort.signal.aborted) return;
         setUnits(result.units);
-        if (listed) listed.current = result.units;
       })
       .catch((failure) => {
         if (abort.signal.aborted) return;
@@ -307,7 +332,7 @@ function UnitPicker({
         else setError(true);
       });
     return () => abort.abort();
-  }, [level, parent, day, value, onDenied, listed]);
+  }, [level, parent, day, value, onDenied]);
   const text = maintenanceText(locale);
   return (
     <UnitCombobox
@@ -339,34 +364,32 @@ export function AddressFields({
   const selected = names ? new Set(names) : null,
     includes = (name: string) => selected === null || selected.has(name),
     id = useId(),
-    [format, setFormat] = useState(String(values.format ?? '')),
+    // A new address starts in the legacy format; a recorded one opens on the format it holds.
+    [format, setFormat] = useState(String(values.format ?? 'legacy')),
     [units, setUnits] = useState<AddressUnits>({
       province: String(values.province_unit_id ?? ''),
       district: String(values.district_unit_id ?? ''),
       commune: String(values.commune_unit_id ?? ''),
     }),
     districtText = useRef<HTMLInputElement>(null),
-    districtList = useRef<Unit[]>([]);
+    // The text the picker has written, which is what a save submits and what reads back beside it.
+    [districtTextValue, setDistrictTextValue] = useState(
+      String(values.district_text ?? ''),
+    );
   const text = maintenanceText(locale),
-    current = variant === 'mapping' || format === 'current',
     // A legacy address is the only one with a district level, and its pickers read the closed
     // pre-2025 three-tier list, where a ward hangs off its district rather than the province.
     legacy = variant === 'address' && format === 'legacy',
     generation = legacy ? 'legacy' : 'current',
     day = legacy ? LEGACY_CATALOG_DAY : undefined;
-  // The district list the picker loaded states the official name of the district the address
-  // records, so a text that reads exactly that name is the picker's own wording, not a person's.
+  // The legacy district picker is the only writer of the district text, so every write lands in
+  // the field a save submits and in the text that reads back beside it.
   function setDistrictText(next: string) {
-    const field = districtText.current,
-      value = field
-        ? filledDistrictText(
-            field.value,
-            districtList.current.find((unit) => unit.id === units.district)
-              ?.name_vi,
-            next,
-          )
-        : null;
-    if (!field || value === null) return;
+    const value = filledDistrictText(districtTextValue, next);
+    if (value === null) return;
+    setDistrictTextValue(value);
+    const field = districtText.current;
+    if (!field) return;
     field.value = value;
     // The surrounding form tracks its unsaved state from input events, which a value written this
     // way raises none of.
@@ -383,6 +406,8 @@ export function AddressFields({
                 <label className="field-label" htmlFor={id}>
                   {fields.format![locale]}
                 </label>
+                {/* Two formats are offered. A row an earlier import recorded as neither reads back
+                    as what it holds: its own format is stated here but never offered. */}
                 <select
                   id={id}
                   className="select"
@@ -392,12 +417,13 @@ export function AddressFields({
                   onChange={(event) => {
                     setFormat(event.target.value);
                     // The two formats read different catalog generations, so no recorded unit is
-                    // carried into a list that may not hold it.
+                    // carried into a list that may not hold it, nor the label the picker wrote for
+                    // the district that unit named.
                     setUnits(clearedUnits());
+                    setDistrictText('');
                   }}
                   disabled={!!values.id}
                 >
-                  <option value="">{text.unknown}</option>
                   {values.format === 'alternate' ? (
                     <option value="alternate">
                       {optionLabel(locale, 'alternate')}
@@ -418,15 +444,9 @@ export function AddressFields({
           </p>
           <RecordFields
             locale={locale}
-            values={values}
+            values={{ ...values, district_text: districtTextValue }}
             refs={{ district_text: districtText }}
-            names={[
-              'address_text',
-              'house_number',
-              'street',
-              ...(!current ? ['district_text'] : []),
-              'is_primary',
-            ].filter(includes)}
+            names={addressFields(names, legacy)}
           />
         </>
       ) : (
@@ -469,7 +489,6 @@ export function AddressFields({
           parent={unitParent('legacy', 'district', units)}
           day={LEGACY_CATALOG_DAY}
           value={units.district}
-          listed={districtList}
           onChange={(value, unit) => {
             setUnits(pickedDistrict(units, value));
             if (unit) setDistrictText(unit.name_vi);
