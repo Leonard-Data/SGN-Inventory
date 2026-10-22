@@ -84,11 +84,25 @@ export async function inventoryStreamContract({
     query = 'strmfix',
     status = null,
     addressFormat = null,
+    province = null,
+    district = null,
+    commune = null,
   } = {}) {
     const result = await db.query(
       `select * from public.stream_inventory(p_order => $1::text,p_query => $2::text,p_offset => $3::integer,
-        p_limit => $4::integer,p_status => $5::text,p_address_format => $6::text)`,
-      [order, query, offset, limit, status, addressFormat],
+        p_limit => $4::integer,p_status => $5::text,p_address_format => $6::text,p_province_id => $7::uuid,
+        p_district_id => $8::uuid,p_commune_id => $9::uuid)`,
+      [
+        order,
+        query,
+        offset,
+        limit,
+        status,
+        addressFormat,
+        province,
+        district,
+        commune,
+      ],
     );
     // Every read answers at least one row: the window's rows, or the counting row alone when the
     // window has run out.
@@ -131,6 +145,120 @@ export async function inventoryStreamContract({
   await db.query(
     "insert into public.property_addresses(property_id,format,address_text) select p.id,'current',$2||' nuoc moi '||p.property_code from public.properties p where p.id = any($1::uuid[])",
     [currentOnly.map((row) => row.id), marker],
+  );
+
+  // Two fixtures also record the official units their address names, read from the seeded catalog:
+  // a legacy province, district and ward on the property that records both formats, and a current
+  // province and commune on that same property's current address, so one property's two addresses
+  // sit in different generations. A second property names only the legacy province.
+  const catalogRow = async (sql, params) =>
+    (await db.query(sql, params)).rows[0];
+  const legacyWard = await catalogRow(
+    "select id,parent_id from public.admin_unit_versions where unit_level='commune' and valid_to='2025-07-01' order by official_code limit 1",
+  );
+  const legacyDistrict = await catalogRow(
+    'select id,parent_id from public.admin_unit_versions where id=$1',
+    [legacyWard.parent_id],
+  );
+  const currentCommune = await catalogRow(
+    "select id,parent_id from public.admin_unit_versions where unit_level='commune' and valid_from='2025-07-01' order by official_code limit 1",
+  );
+  const legacyProvince = legacyDistrict.parent_id;
+  const currentProvince = currentCommune.parent_id;
+  // A recorded address is immutable, so these are their own rows rather than an edit.
+  await db.query(
+    `insert into public.property_addresses(property_id,format,address_text,province_unit_id,district_unit_id,commune_unit_id,is_primary)
+      values ($1,'legacy','STRMFIX legacy units',$2,$3,$4,false),
+        ($1,'current','STRMFIX current units',$5,null,$6,false),
+        ($7,'legacy','STRMFIX legacy province',$2,null,null,false)`,
+    [
+      dated[0].id,
+      legacyProvince,
+      legacyDistrict.id,
+      legacyWard.id,
+      currentProvince,
+      currentCommune.id,
+      dated[1].id,
+    ],
+  );
+
+  // Two imported-shaped addresses: free text only, no unit ids, and abbreviated the way a source
+  // sheet writes it. They carry no STRMFIX marker, so the reads above and below that state a query
+  // neither see them nor count them.
+  const textImported = id('b1');
+  const textNearMiss = id('b2');
+  const textNames = await db.query(
+    'select id,name_vi from public.admin_unit_versions where id = any($1::uuid[])',
+    [[legacyProvince, legacyDistrict.id, legacyWard.id]],
+  );
+  const unitName = (unitId) =>
+    textNames.rows.find((row) => row.id === unitId).name_vi;
+  // The abbreviation the source sheets use for a unit's own type; a type with no common
+  // abbreviation keeps its official name, which the text path matches once folded.
+  const TYPE_ABBREVIATION = {
+    'Thành phố': 'TP. ',
+    Tỉnh: 'T. ',
+    Quận: 'Q. ',
+    Phường: 'P. ',
+    Xã: 'X. ',
+    'Thị trấn': 'TT ',
+    'Thị xã': 'TX ',
+  };
+  const abbreviated = (name) => {
+    const [, type, rest] =
+      name.match(
+        /^(Thành phố|Tỉnh|Quận|Huyện|Thị trấn|Thị xã|Phường|Xã)\s+(.*)$/u,
+      ) ?? [];
+    return type && TYPE_ABBREVIATION[type]
+      ? `${TYPE_ABBREVIATION[type]}${rest}`
+      : name;
+  };
+  await db.query(
+    `insert into public.properties(id,property_code,listing_mode,status,property_type,created_by,entry_on,entry_source)
+      values ($1,'SGN-TXT-01','sale','available','house',$2,'2025-02-02','legacy'),
+        ($3,'SGN-TXT-02','sale','available','house',$2,'2025-02-03','legacy')`,
+    [textImported, sales, textNearMiss],
+  );
+  await db.query(
+    `insert into public.property_addresses(property_id,format,address_text,province_text,district_text,commune_text)
+      values ($1,'legacy','TXT cu 01',$2,$3,$4),
+        ($5,'legacy','TXT cu 02',$6,$7,$8)`,
+    [
+      textImported,
+      abbreviated(unitName(legacyProvince)),
+      abbreviated(unitName(legacyDistrict.id)),
+      abbreviated(unitName(legacyWard.id)),
+      textNearMiss,
+      `${abbreviated(unitName(legacyProvince))} cu`,
+      `${unitName(legacyDistrict.id)} cu`,
+      `${unitName(legacyWard.id)} cu`,
+    ],
+  );
+
+  // Two wards of one district whose names differ only by their administrative type. The text path
+  // expands the type abbreviation but never drops the type, so a filter for one ward must not answer
+  // addresses recorded under the other.
+  const yenVien = await db.query(
+    "select id,name_vi from public.admin_unit_versions where unit_level='commune' and valid_to='2025-07-01' and name_vi in ('Xã Yên Viên','Thị trấn Yên Viên')",
+  );
+  const xaYenVien = yenVien.rows.find((row) => row.name_vi === 'Xã Yên Viên');
+  const thiTranYenVien = yenVien.rows.find(
+    (row) => row.name_vi === 'Thị trấn Yên Viên',
+  );
+  assert.ok(xaYenVien && thiTranYenVien, 'both Yên Viên wards are seeded');
+  const textXaYenVien = id('b3');
+  const textThiTranYenVien = id('b4');
+  await db.query(
+    `insert into public.properties(id,property_code,listing_mode,status,property_type,created_by,entry_on,entry_source)
+      values ($1,'SGN-TXT-03','sale','available','house',$2,'2025-02-04','legacy'),
+        ($3,'SGN-TXT-04','sale','available','house',$2,'2025-02-05','legacy')`,
+    [textXaYenVien, sales, textThiTranYenVien],
+  );
+  await db.query(
+    `insert into public.property_addresses(property_id,format,address_text,commune_text)
+      values ($1,'legacy','TXT cu 03','Xa Yen Vien'),
+        ($2,'legacy','TXT cu 04','Thi tran Yen Vien')`,
+    [textXaYenVien, textThiTranYenVien],
   );
 
   // The default stream is newest-created first with identity breaking ties; the chronology lists
@@ -418,6 +546,126 @@ export async function inventoryStreamContract({
       // this function still gets.
       const unfiltered = await read({ addressFormat: null, limit: 100 });
       assert.equal(unfiltered.total, browseOrder.length);
+    },
+  );
+
+  await check(
+    'the stated administrative levels compose on one address of the searched format',
+    async () => {
+      // The province alone takes both properties that record it in a legacy address.
+      const province = await read({
+        province: legacyProvince,
+        limit: 100,
+      });
+      assert.deepEqual(
+        province.rows.map((row) => row.id).sort(),
+        [dated[0].id, dated[1].id].sort(),
+      );
+      assert.equal(province.total, 2);
+      // A district narrows its province and a ward its district, each on the same address.
+      const district = await read({
+        province: legacyProvince,
+        district: legacyDistrict.id,
+        limit: 100,
+      });
+      assert.deepEqual(
+        district.rows.map((row) => row.id),
+        [dated[0].id],
+      );
+      const ward = await read({
+        province: legacyProvince,
+        district: legacyDistrict.id,
+        commune: legacyWard.id,
+        limit: 100,
+      });
+      assert.deepEqual(
+        ward.rows.map((row) => row.id),
+        [dated[0].id],
+      );
+      // A level from another address, or another province's district, matches nothing rather than
+      // a mixture of two recorded addresses.
+      const mismatched = await read({
+        province: legacyProvince,
+        district: currentCommune.id,
+        limit: 100,
+      });
+      assert.deepEqual(mismatched.rows, []);
+      assert.equal(mismatched.total, 0);
+      const absent = await read({ district: legacyDistrict.id, limit: 100 });
+      assert.equal(absent.total, 1);
+      // The levels apply to the address of the stated format: the one property here records a
+      // legacy address in one province and a current address in another, so asking for the legacy
+      // province through the current format does not match it.
+      const scoped = await read({
+        addressFormat: 'current',
+        province: legacyProvince,
+        limit: 100,
+      });
+      assert.deepEqual(scoped.rows, []);
+      const current = await read({
+        addressFormat: 'current',
+        province: currentProvince,
+        commune: currentCommune.id,
+        limit: 100,
+      });
+      assert.deepEqual(
+        current.rows.map((row) => row.id),
+        [dated[0].id],
+      );
+    },
+  );
+
+  await check(
+    'an area level matches the recorded text of an imported legacy address',
+    async () => {
+      // The imported inventory records each old address as free text and no unit ids, so a level
+      // filter has to read that level's own text. These fixtures name the catalog units the way
+      // the source sheets abbreviate them, and one states an extra word that is not the unit.
+      // Each stated level matches the text recorded for that same level, though the address records
+      // no unit id at all.
+      for (const level of [
+        { province: legacyProvince },
+        { district: legacyDistrict.id },
+        { commune: legacyWard.id },
+      ]) {
+        const result = await read({ ...level, query: '', limit: 200 });
+        assert.ok(
+          result.rows.some((row) => row.id === textImported),
+          JSON.stringify(level),
+        );
+        // Matching is equality after normalisation, so a text carrying another word is not the
+        // unit and is not read as one.
+        assert.ok(!result.rows.some((row) => row.id === textNearMiss));
+      }
+      // A level's text is compared with that level alone: the ward recorded here is no province.
+      const crossLevel = await read({
+        province: legacyWard.id,
+        query: '',
+        limit: 200,
+      });
+      assert.ok(!crossLevel.rows.some((row) => row.id === textImported));
+    },
+  );
+
+  await check(
+    'an area text match keeps the administrative type of the unit',
+    async () => {
+      // The same name under two types is two units: equality is on the expanded type, never on the
+      // name with the type dropped, so neither ward answers the other's filter.
+      const byXa = await read({
+        commune: xaYenVien.id,
+        query: '',
+        limit: 200,
+      });
+      assert.ok(byXa.rows.some((row) => row.id === textXaYenVien));
+      assert.ok(!byXa.rows.some((row) => row.id === textThiTranYenVien));
+      const byThiTran = await read({
+        commune: thiTranYenVien.id,
+        query: '',
+        limit: 200,
+      });
+      assert.ok(byThiTran.rows.some((row) => row.id === textThiTranYenVien));
+      assert.ok(!byThiTran.rows.some((row) => row.id === textXaYenVien));
     },
   );
 

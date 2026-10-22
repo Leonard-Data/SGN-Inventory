@@ -2474,7 +2474,9 @@ export type Database = {
           p_price_max?: string;
           p_area_min?: number;
           p_area_max?: number;
-          p_area_id?: string;
+          p_province_id?: string;
+          p_district_id?: string;
+          p_commune_id?: string;
           p_contact_id?: string;
           p_address_format?: string;
         };

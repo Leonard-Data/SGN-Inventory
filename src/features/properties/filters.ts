@@ -1,8 +1,10 @@
 // The inventory filter set as it travels in the page address, plus the one place its bounds are
 // validated. The route validates the same strings the browser carries, so a filter is either
 // applied exactly as the address states or refused as invalid input — never silently dropped.
-// The province/ward pair names official administrative units; the ward is dependent on the
-// province and, when both are set, the narrower ward is the unit the read applies. The contact
+// The province/district/ward triple names official administrative units, each narrowing the level
+// above it: the district only exists in the closed pre-2025 three-tier generation, so it is a
+// legacy-address filter and no part of a current-address search. The read applies every level that
+// is stated to one address of the searched format. The contact
 // value is a recorded contact identity, so it is validated with the same UUID shape. The address
 // format is the format of the address a search is matched through: the page states the legacy address
 // unless the address clears the filter, and clearing it states no format condition so a property
@@ -51,6 +53,7 @@ export const INVENTORY_FILTER_KEYS = [
   'areaMin',
   'areaMax',
   'province',
+  'district',
   'ward',
   'contact',
   'createdBy',
@@ -73,6 +76,7 @@ export const noInventoryFilters: InventoryFilters = {
   areaMin: null,
   areaMax: null,
   province: null,
+  district: null,
   ward: null,
   contact: null,
   createdBy: null,
@@ -111,6 +115,7 @@ export function inventoryFilters(
     areaMin: read('areaMin'),
     areaMax: read('areaMax'),
     province: read('province'),
+    district: read('district'),
     ward: read('ward'),
     contact: read('contact'),
     createdBy: read('createdBy'),
@@ -135,6 +140,7 @@ export function parseInventoryFilters(
     areaMin,
     areaMax,
     province,
+    district,
     ward,
     contact,
     createdBy,
@@ -151,11 +157,18 @@ export function parseInventoryFilters(
   // A unit value is an official catalog identity and the contact is a recorded identity, so a
   // malformed value is refused here; an out-of-catalog or wrong-level unit and an unknown or
   // unreadable contact are refused by the route's own checks.
-  for (const value of [province, ward, contact])
+  for (const value of [province, district, ward, contact])
     if (value !== null && !UUID_VALUE.test(value)) return refuse();
-  // The ward narrows its parent province; a ward without that province is not a filter set this
-  // panel can produce, so it is refused rather than applied as a different inventory.
+  // The district and the ward each narrow their parent province; one without that province is not
+  // a filter set this panel can produce, so it is refused rather than applied as a different
+  // inventory.
+  if (district !== null && province === null) return refuse();
   if (ward !== null && province === null) return refuse();
+  // The two-tier generation has no district level, so a district on a current-address search names
+  // no unit that address can record and is refused rather than read as a filter that matches
+  // nothing.
+  if (district !== null && searchedAddressFormat(filters) === 'current')
+    return refuse();
   for (const price of [priceMin, priceMax])
     if (price !== null && !wholeVnd(price)) return refuse();
   for (const area of [areaMin, areaMax])
@@ -193,10 +206,12 @@ export function activeFilterCount(filters: InventoryFilters): number {
 }
 
 // The catalog check the route runs after parsing: a province value must name a province-level
-// unit and a ward value a commune-level one inside the stated province, so absent, out-of-catalog,
-// swapped or mismatched units are refused instead of matching a different inventory. A legacy ward
-// hangs under its district rather than the province, so that one hop is followed when the read
-// carries the district; a ward whose district is missing from the list stays mismatched.
+// unit, a district value a district-level unit inside the stated province, and a ward value a
+// commune-level one inside the stated district or province, so absent, out-of-catalog, swapped or
+// mismatched units are refused instead of matching a different inventory. A legacy ward hangs under
+// its district rather than the province, so that one hop is followed; a ward whose district is
+// missing from the list, or which hangs off another district than the one stated, stays
+// mismatched.
 export function catalogUnitsMatch(
   units: readonly {
     id: string;
@@ -206,12 +221,20 @@ export function catalogUnitsMatch(
   filters: InventoryFilters,
 ): boolean {
   const byId = new Map(units.map((unit) => [unit.id, unit]));
-  const { province, ward } = filters;
+  const { province, district, ward } = filters;
   if (province !== null && byId.get(province)?.unit_level !== 'province')
     return false;
+  if (district !== null) {
+    const unit = byId.get(district);
+    if (unit?.unit_level !== 'district' || unit.parent_id !== province)
+      return false;
+  }
   if (ward === null) return true;
   const unit = byId.get(ward);
   if (unit?.unit_level !== 'commune') return false;
+  // The stated district is the ward's own parent, so a ward outside it names no address this set
+  // could match.
+  if (district !== null && unit.parent_id !== district) return false;
   if (province === null || unit.parent_id === province) return true;
   const parent = unit.parent_id === null ? undefined : byId.get(unit.parent_id);
   return parent?.unit_level === 'district' && parent.parent_id === province;
@@ -225,7 +248,9 @@ export type InventoryFilterArgs = {
   p_price_max?: string;
   p_area_min?: number;
   p_area_max?: number;
-  p_area_id?: string;
+  p_province_id?: string;
+  p_district_id?: string;
+  p_commune_id?: string;
   p_contact_id?: string;
   p_address_format?: string;
 };
@@ -234,6 +259,17 @@ export type InventoryFilterArgs = {
 // read can never be pointed at different formats by a set that states none.
 export function searchedAddressFormat(filters: InventoryFilters): string {
   return filters.addressFormat ?? DEFAULT_ADDRESS_FORMAT;
+}
+
+// The address levels the panel offers for the format it is set to: a legacy address names three
+// levels and a current one two. A cleared format states no condition, so it keeps the legacy shape
+// the panel opens on.
+export function offeredAddressLevels(
+  format: string,
+): readonly ('province' | 'district' | 'ward')[] {
+  return format === 'current'
+    ? ['province', 'ward']
+    : ['province', 'district', 'ward'];
 }
 
 // Half of each range is optional; an absent bound leaves the database default (no bound) in
@@ -251,10 +287,12 @@ export function filterRpcArgs(filters: InventoryFilters): InventoryFilterArgs {
   // format condition is applied.
   const format = searchedAddressFormat(filters);
   if (format !== INVENTORY_ADDRESS_FORMAT_ANY) args.p_address_format = format;
-  // Both the browse and the chronological walk take one administrative unit, so the narrower
-  // ward governs and the province is kept in the address only as its parent context.
-  const areaId = filters.ward ?? filters.province;
-  if (areaId) args.p_area_id = areaId;
+  // Each stated level travels on its own, because the read composes them on one address of the
+  // searched format: a district narrows its province and a ward its district or province, rather
+  // than one narrower unit replacing the levels above it.
+  if (filters.province) args.p_province_id = filters.province;
+  if (filters.district) args.p_district_id = filters.district;
+  if (filters.ward) args.p_commune_id = filters.ward;
   if (filters.contact) args.p_contact_id = filters.contact;
   // The creator selection has no argument here on purpose: the whole-inventory read carries no
   // creator criterion, so that selection is answered from the loaded catalogue alone

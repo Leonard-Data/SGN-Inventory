@@ -10,7 +10,10 @@ import { api, RequestError } from '@/features/employees/api';
 import { contactName } from '@/features/contacts/directory';
 import { ContactPicker } from '@/features/property-maintenance/contact-picker';
 import { UnitCombobox } from '@/features/property-maintenance/unit-combobox';
-import { type UnitOption } from '@/features/property-maintenance/units';
+import {
+  LEGACY_CATALOG_DAY,
+  type UnitOption,
+} from '@/features/property-maintenance/units';
 import {
   INVENTORY_ADDRESS_FORMAT_ANY,
   INVENTORY_ADDRESS_FORMATS,
@@ -19,6 +22,7 @@ import {
   INVENTORY_PROPERTY_TYPES,
   INVENTORY_STATUSES,
   noInventoryFilters,
+  offeredAddressLevels,
   parseInventoryFilters,
   searchedAddressFormat,
   squareMetres,
@@ -30,8 +34,8 @@ import { inventoryHref, type InventoryView } from './view';
 import { isInventoryOrder } from './stream';
 import { resultMode } from './catalogue-results';
 
-// The official catalog rows the province/ward pickers read. Names are source data and are never
-// translated, so a language switch keeps the same unit name.
+// The official catalog rows the province/district/ward pickers read. Names are source data and are
+// never translated, so a language switch keeps the same unit name.
 type AdminUnit = UnitOption & { id: string };
 
 // The search island: the same inventory filters in a compact panel opened from the list. It is
@@ -62,6 +66,7 @@ export function SearchIsland({
   const text = messages[locale];
   const appliedMode = filters.mode ?? '';
   const appliedProvince = filters.province ?? '';
+  const appliedDistrict = filters.district ?? '';
   const appliedWard = filters.ward ?? '';
   const appliedContact = filters.contact ?? '';
   const appliedCreatedBy = filters.createdBy ?? '';
@@ -84,10 +89,11 @@ export function SearchIsland({
   const [invalid, setInvalid] = useState(false);
   const [mode, setMode] = useState(appliedMode);
   const [order, setOrder] = useState(appliedOrder);
-  // The dialog's live province selection drives the dependent ward list; applying or dismissing
-  // returns both to the filter set the address currently states. The contact selection is the
-  // same shape: it starts at the applied value and returns to it on dismiss.
+  // The dialog's live province selection drives the dependent district and ward lists; applying or
+  // dismissing returns all three to the filter set the address currently states. The contact
+  // selection is the same shape: it starts at the applied value and returns to it on dismiss.
   const [province, setProvince] = useState(appliedProvince);
+  const [district, setDistrict] = useState(appliedDistrict);
   const [ward, setWard] = useState(appliedWard);
   const [contact, setContact] = useState(appliedContact);
   // The format the panel will apply: one of the two formats, or the cleared state it inherited from
@@ -96,9 +102,12 @@ export function SearchIsland({
   const [createdBy, setCreatedBy] = useState(appliedCreatedBy);
   const [contactLabel, setContactLabel] = useState<string | null>(null);
   const [provinces, setProvinces] = useState<AdminUnit[]>([]);
+  const [districts, setDistricts] = useState<AdminUnit[]>([]);
   const [wards, setWards] = useState<AdminUnit[]>([]);
   const [provinceFailed, setProvinceFailed] = useState(false);
+  const [districtFailed, setDistrictFailed] = useState(false);
   const [wardFailed, setWardFailed] = useState(false);
+  const [appliedNames, setAppliedNames] = useState<Record<string, string>>({});
   const dialogRef = useRef<HTMLDialogElement>(null);
   function dismiss() {
     onOpen(false);
@@ -106,6 +115,7 @@ export function SearchIsland({
     setMode(appliedMode);
     setOrder(appliedOrder);
     setProvince(appliedProvince);
+    setDistrict(appliedDistrict);
     setWard(appliedWard);
     setContact(appliedContact);
     setCreatedBy(appliedCreatedBy);
@@ -126,6 +136,7 @@ export function SearchIsland({
     setOrder(appliedOrder);
     setInvalid(false);
     setProvince(appliedProvince);
+    setDistrict(appliedDistrict);
     setWard(appliedWard);
     setContact(appliedContact);
     setCreatedBy(appliedCreatedBy);
@@ -135,17 +146,31 @@ export function SearchIsland({
     appliedMode,
     appliedOrder,
     appliedProvince,
+    appliedDistrict,
     appliedWard,
     appliedContact,
     appliedCreatedBy,
     appliedStateKey,
   ]);
-  // The catalog is the same official list the address form reads. A denial clears the protected
-  // surface through the handler the inventory list already uses.
+  // The catalog is the same official list the address form reads, for the generation the stated
+  // format records: the closed pre-2025 three-tier list a legacy address names, the current
+  // two-tier list a current one names. A cleared format filter states no condition, so it keeps the
+  // legacy generation the panel opens on, where the district level exists at all.
+  const legacyUnits = format !== 'current';
+  const levels = offeredAddressLevels(format);
+  // A dependent level waits for the level above it, unless the address already states a ward the
+  // panel must keep visible and removable.
+  const wardParent = legacyUnits ? district : province;
+  const wardDisabled = !wardParent && !ward;
+  // A denial clears the protected surface through the handler the inventory list already uses.
   useEffect(() => {
+    setProvinces([]);
+    setProvinceFailed(false);
     const abort = new AbortController();
+    const params = new URLSearchParams({ level: 'province' });
+    if (legacyUnits) params.set('on', LEGACY_CATALOG_DAY);
     void api<{ units: AdminUnit[] }>(
-      '/api/admin-units?' + new URLSearchParams({ level: 'province' }),
+      '/api/admin-units?' + params,
       undefined,
       abort.signal,
     )
@@ -164,15 +189,51 @@ export function SearchIsland({
         else setProvinceFailed(true);
       });
     return () => abort.abort();
-  }, [onDenied]);
+  }, [legacyUnits, onDenied]);
+  // The district level exists only in the legacy generation, and only inside the chosen province.
+  useEffect(() => {
+    setDistricts([]);
+    setDistrictFailed(false);
+    if (!legacyUnits || !province) return;
+    const abort = new AbortController();
+    const params = new URLSearchParams({
+      level: 'district',
+      parent: province,
+      on: LEGACY_CATALOG_DAY,
+    });
+    void api<{ units: AdminUnit[] }>(
+      '/api/admin-units?' + params,
+      undefined,
+      abort.signal,
+    )
+      .then((result) => {
+        if (abort.signal.aborted) return;
+        setDistricts(result.units);
+        setDistrictFailed(false);
+      })
+      .catch((failure) => {
+        if (abort.signal.aborted) return;
+        if (
+          failure instanceof RequestError &&
+          (failure.status === 401 || failure.status === 403)
+        )
+          onDenied(failure.status);
+        else setDistrictFailed(true);
+      });
+    return () => abort.abort();
+  }, [legacyUnits, province, onDenied]);
+  // A legacy ward hangs off its district and a current commune off its province, so the ward list
+  // narrows by the level the chosen generation has above it.
   useEffect(() => {
     setWards([]);
     setWardFailed(false);
-    if (!province) return;
+    const parent = legacyUnits ? district : province;
+    if (!parent) return;
     const abort = new AbortController();
+    const params = new URLSearchParams({ level: 'commune', parent });
+    if (legacyUnits) params.set('on', LEGACY_CATALOG_DAY);
     void api<{ units: AdminUnit[] }>(
-      '/api/admin-units?' +
-        new URLSearchParams({ level: 'commune', parent: province }),
+      '/api/admin-units?' + params,
       undefined,
       abort.signal,
     )
@@ -191,7 +252,48 @@ export function SearchIsland({
         else setWardFailed(true);
       });
     return () => abort.abort();
-  }, [province, onDenied]);
+  }, [legacyUnits, district, province, onDenied]);
+  // An applied unit is named from its own recorded row, so a chip and a field state the unit
+  // without offering it as a choice. The read is keyed by the applied ids alone: an id the catalog
+  // cannot answer stays named by itself rather than being asked for again on every render.
+  useEffect(() => {
+    const applied: [string, string][] = [];
+    if (appliedProvince) applied.push(['province', appliedProvince]);
+    if (appliedDistrict) applied.push(['district', appliedDistrict]);
+    if (appliedWard) applied.push(['commune', appliedWard]);
+    if (!applied.length) return;
+    const abort = new AbortController();
+    void Promise.all(
+      applied.map(([level, id]) =>
+        api<{ units: AdminUnit[] }>(
+          '/api/admin-units?' + new URLSearchParams({ level, include: id }),
+          undefined,
+          abort.signal,
+        )
+          .then(
+            (result) => result.units.find((unit) => unit.id === id)?.name_vi,
+          )
+          .catch((failure) => {
+            if (
+              failure instanceof RequestError &&
+              (failure.status === 401 || failure.status === 403)
+            )
+              onDenied(failure.status);
+            return undefined;
+          }),
+      ),
+    ).then((names) => {
+      if (abort.signal.aborted) return;
+      const found: Record<string, string> = {};
+      applied.forEach(([, id], index) => {
+        const name = names[index];
+        if (name) found[id] = name;
+      });
+      if (!Object.keys(found).length) return;
+      setAppliedNames((current) => ({ ...current, ...found }));
+    });
+    return () => abort.abort();
+  }, [appliedProvince, appliedDistrict, appliedWard, onDenied]);
   // The contact filter lists only identities the caller may read, through the bounded name
   // search and paging the property maintenance picker already uses: a page at a time on
   // request, never a walk over the whole directory. The applied filter's label is the one
@@ -269,6 +371,7 @@ export function SearchIsland({
       filters: {
         ...noInventoryFilters,
         province: province || null,
+        district: district || null,
         ward: ward || null,
         contact: contact || null,
       },
@@ -297,11 +400,16 @@ export function SearchIsland({
   if (filters.createdBy)
     applied.push({ key: 'createdBy', label: label(locale, filters.createdBy) });
   const unitName = (units: readonly AdminUnit[], id: string) =>
-    units.find((unit) => unit.id === id)?.name_vi ?? id;
+    units.find((unit) => unit.id === id)?.name_vi ?? appliedNames[id] ?? id;
   if (filters.province)
     applied.push({
       key: 'province',
       label: `${text.province}: ${unitName(provinces, filters.province)}`,
+    });
+  if (filters.district)
+    applied.push({
+      key: 'district',
+      label: `${text.district}: ${unitName(districts, filters.district)}`,
     });
   if (filters.ward)
     applied.push({
@@ -334,15 +442,17 @@ export function SearchIsland({
       label: `${text.areaRangeTo}: ${m2(filters.areaMax)}`,
     });
   function remove(key: InventoryFilterKey) {
-    // The ward narrows its province, so removing the province removes the dependent ward too. The
-    // format is cleared rather than unstated, so the next load reads the cleared search back instead
-    // of reopening the default legacy one.
+    // Each level narrows the one above it, so removing a level removes the levels beneath it too.
+    // The format is cleared rather than unstated, so the next load reads the cleared search back
+    // instead of reopening the default legacy one.
     const next =
       key === 'province'
-        ? { ...filters, province: null, ward: null }
-        : key === 'addressFormat'
-          ? { ...filters, addressFormat: INVENTORY_ADDRESS_FORMAT_ANY }
-          : { ...filters, [key]: null };
+        ? { ...filters, province: null, district: null, ward: null }
+        : key === 'district'
+          ? { ...filters, district: null, ward: null }
+          : key === 'addressFormat'
+            ? { ...filters, addressFormat: INVENTORY_ADDRESS_FORMAT_ANY }
+            : { ...filters, [key]: null };
     router.push(inventoryHref({ query, sort, view, filters: next }));
   }
   const clearHref = inventoryHref({
@@ -563,7 +673,18 @@ export function SearchIsland({
                       value={
                         format === INVENTORY_ADDRESS_FORMAT_ANY ? '' : format
                       }
-                      onChange={(event) => setFormat(event.currentTarget.value)}
+                      onChange={(event) => {
+                        const next = event.currentTarget.value;
+                        if (next === format) return;
+                        // The two generations hold their own units, so a switch leaves no selected
+                        // unit that still applies: the district does not exist in the current
+                        // generation and a legacy province is not the current one, so keeping any
+                        // of them would apply a filter the chosen address can never match.
+                        setFormat(next);
+                        setProvince('');
+                        setDistrict('');
+                        setWard('');
+                      }}
                     >
                       {INVENTORY_ADDRESS_FORMATS.map((value) => (
                         <option key={value} value={value}>
@@ -647,36 +768,60 @@ export function SearchIsland({
               </div>
               <div className="field-group">
                 <div className="form-grid">
+                  {/* The panel keeps every level the chosen address format has - a legacy
+                    address adds the district between the province and the ward - and a dependent
+                    level waits, disabled with its hint, until the level above it is chosen. */}
                   <UnitCombobox
                     id="filter-province"
                     name="province"
                     label={text.province}
                     units={provinces}
                     value={province}
+                    selectedLabel={appliedNames[province]}
                     onChange={(next) => {
+                      if (next === province) return;
                       setProvince(next);
+                      setDistrict('');
                       setWard('');
                     }}
                     anyLabel={text.filtersAny}
                     noMatch={text.comboboxNoMatch}
                   />
-                  {/* A ward narrows the chosen province, so the ward picker exists only once
-                    there is a province to narrow. */}
-                  {province ? (
+                  {levels.includes('district') ? (
                     <UnitCombobox
-                      id="filter-ward"
-                      name="ward"
-                      label={text.ward}
-                      units={wards}
-                      value={ward}
-                      onChange={setWard}
+                      id="filter-district"
+                      name="district"
+                      label={text.district}
+                      units={districts}
+                      value={district}
+                      selectedLabel={appliedNames[district]}
+                      disabled={!province}
+                      hint={province ? undefined : text.areaLevelHint}
+                      onChange={(next) => {
+                        if (next === district) return;
+                        setDistrict(next);
+                        setWard('');
+                      }}
                       anyLabel={text.filtersAny}
                       noMatch={text.comboboxNoMatch}
                     />
                   ) : null}
+                  <UnitCombobox
+                    id="filter-ward"
+                    name="ward"
+                    label={text.ward}
+                    units={wards}
+                    value={ward}
+                    selectedLabel={appliedNames[ward]}
+                    disabled={wardDisabled}
+                    hint={wardDisabled ? text.areaLevelHint : undefined}
+                    onChange={setWard}
+                    anyLabel={text.filtersAny}
+                    noMatch={text.comboboxNoMatch}
+                  />
                 </div>
                 <p className="field-hint">{text.areaAdminHint}</p>
-                {provinceFailed || wardFailed ? (
+                {provinceFailed || districtFailed || wardFailed ? (
                   <p className="field-error" role="alert">
                     {text.areaFilterUnavailable}
                   </p>

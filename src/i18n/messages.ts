@@ -161,11 +161,13 @@ const vi = {
   areaFilterHint:
     'Diện tích khớp khi diện tích đất hoặc diện tích sàn nằm trong khoảng.',
   province: 'Tỉnh / thành phố',
+  district: 'Quận / huyện',
   ward: 'Xã / phường',
   areaAdminHint:
-    'Lọc theo tỉnh/thành phố và xã/phường của địa chỉ. Chọn tỉnh/thành phố sẽ gồm mọi xã/phường thuộc tỉnh/thành phố đó; chọn xã/phường sẽ thu hẹp trong xã/phường đó. Khi cả hai được chọn, xã/phường là điều kiện có hiệu lực.',
+    'Lọc theo các cấp địa chỉ mà định dạng đã chọn có: địa chỉ cũ gồm tỉnh/thành phố, quận/huyện và xã/phường — mỗi cấp thu hẹp cấp trên; địa chỉ mới gồm tỉnh/thành phố và xã/phường. Chọn tỉnh/thành phố sẽ gồm mọi đơn vị bên trong; chọn thêm cấp dưới sẽ thu hẹp theo cấp đó. Khi nhiều cấp được chọn, tất cả cùng có hiệu lực trên cùng một địa chỉ.',
+  areaLevelHint: 'Chọn cấp địa chỉ phía trên trước để dùng bộ lọc này.',
   areaFilterUnavailable:
-    'Chưa tải được danh mục tỉnh/thành phố và xã/phường. Bộ lọc giá và diện tích vẫn dùng được.',
+    'Chưa tải được danh mục tỉnh/thành phố, quận/huyện và xã/phường. Bộ lọc giá và diện tích vẫn dùng được.',
   contactFilter: 'Người liên hệ',
   contactFilterHint:
     'Chỉ gồm người liên hệ bạn được phép đọc. Bộ lọc này kết hợp với các điều kiện khác.',
@@ -1075,11 +1077,13 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     areaFilterHint:
       'Area matches when the land area or the floor area is inside the range.',
     province: 'Province / city',
+    district: 'District',
     ward: 'Commune / ward',
     areaAdminHint:
-      "Filter by the address's province/city and commune/ward. Choosing a province/city includes every commune/ward in it; choosing a commune/ward narrows to that ward. When both are set, the ward is the condition in force.",
+      'Filter by the address levels the selected format has: a legacy address has a province/city, a district and a commune/ward, each narrowing the level above it; a current address has a province/city and a commune/ward. Choosing a province/city includes every unit inside it; choosing a level beneath it narrows to that unit. When several are set, all of them must hold on the same address.',
+    areaLevelHint: 'Choose the level above first to use this filter.',
     areaFilterUnavailable:
-      'The province and ward catalog could not be loaded. The price and area filters still work.',
+      'The province, district and ward catalog could not be loaded. The price and area filters still work.',
     contactFilter: 'Contact',
     contactFilterHint:
       'Only contacts you may read. This filter combines with the other conditions.',

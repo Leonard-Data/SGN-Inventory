@@ -187,27 +187,28 @@ function accessError(code: string | undefined): ApiError {
     : new ApiError(503, 'unavailable');
 }
 
-// The province must be a province-level catalog unit and the ward a commune-level unit inside
-// that province, so an address that swaps or mismatches them is refused rather than applied to a
-// different unit. Units are matched whatever their validity window, because a property recorded in
-// the closed pre-2025 generation is filtered by its own legacy province, district and ward.
+// The province must be a province-level catalog unit, the district a district-level unit inside
+// that province and the ward a commune-level unit inside the stated district or province, so an
+// address that mixes levels or parents is refused rather than applied to a different unit. Units
+// are matched whatever their validity window, because a property recorded in the closed pre-2025
+// generation is filtered by its own legacy province, district and ward.
 async function assertAreaUnits(
   context: RouteContext,
   filters: InventoryFilters,
 ): Promise<void> {
-  const { province, ward } = filters;
-  if (province === null && ward === null) return;
+  const { province, district, ward } = filters;
+  if (province === null && district === null && ward === null) return;
   const { data, error } = await context.client
     .from('admin_unit_versions')
     .select('id,unit_level,parent_id')
     .in(
       'id',
-      [province, ward].filter((id): id is string => id !== null),
+      [province, district, ward].filter((id): id is string => id !== null),
     );
   if (error) throw new ApiError(503, 'unavailable');
   const units = [...(data ?? [])];
-  // A legacy ward's parent is its legacy district, so the province is one hop further and is read
-  // only when it is not already in hand; a current ward's parent is the province itself.
+  // A legacy ward's parent is its legacy district, so the level above the stated one is read only
+  // when it is not already in hand; a current ward's parent is the province itself.
   const hop = units.find((unit) => unit.id === ward)?.parent_id;
   if (province !== null && hop && !units.some((unit) => unit.id === hop)) {
     const district = await context.client

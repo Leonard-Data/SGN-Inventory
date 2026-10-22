@@ -25,6 +25,9 @@ export function UnitCombobox({
   anyLabel,
   noMatch,
   error,
+  selectedLabel,
+  disabled,
+  hint,
 }: {
   id: string;
   // The form field the committed identifier reaches; the visible field carries typed text.
@@ -39,18 +42,21 @@ export function UnitCombobox({
   anyLabel?: string;
   noMatch: string;
   error?: string;
+  // The applied unit's own recorded name where the loaded list does not carry it, so the field
+  // states it as the current selection without offering it as a choice.
+  selectedLabel?: string;
+  // A dependent picker waits for the level above it; the hint says so while it does.
+  disabled?: boolean;
+  hint?: string;
 }) {
   const [state, setState] = useState(closedCombobox);
   const field = useRef<HTMLInputElement>(null);
   const hidden = useRef<HTMLInputElement>(null);
   const listId = id + '-list';
   const emptyId = id + '-empty';
+  const hintId = id + '-hint';
   const options: ComboboxOption[] = [];
   if (anyLabel !== undefined) options.push({ value: '', label: anyLabel });
-  // A recorded identifier the loaded catalog no longer carries stays visible and selected rather
-  // than silently reading as "all units".
-  if (value && !units.some((unit) => unit.id === value))
-    options.push({ value, label: value });
   const names = unitOptionLabels(units);
   units.forEach((unit, index) =>
     options.push({ value: unit.id, label: names[index]! }),
@@ -58,11 +64,19 @@ export function UnitCombobox({
   const matches = filterUnitOptions(options, state.query);
   const selected = options.findIndex((option) => option.value === value);
   // Closed, the field states the committed unit's own name; typed text is what it shows while
-  // the list is open, and it never survives as a value of its own.
+  // the list is open, and it never survives as a value of its own. A recorded identifier the loaded
+  // catalog does not carry stays visible and selected rather than silently reading as "all units".
   const shown =
     state.query ??
     options.find((option) => option.value === value)?.label ??
-    '';
+    selectedLabel ??
+    value;
+  const describedBy = [
+    hint ? hintId : '',
+    state.open && !matches.length ? emptyId : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
   const activeId =
     state.open && state.active >= 0 && matches[state.active]
       ? `${id}-option-${state.active}`
@@ -133,8 +147,9 @@ export function UnitCombobox({
           aria-controls={state.open ? listId : undefined}
           aria-autocomplete="list"
           aria-activedescendant={activeId}
-          aria-describedby={state.open && !matches.length ? emptyId : undefined}
+          aria-describedby={describedBy || undefined}
           value={shown}
+          disabled={disabled}
           onChange={(event) => {
             const typed = event.currentTarget.value;
             setState(
@@ -182,6 +197,11 @@ export function UnitCombobox({
           </div>
         ) : null}
       </div>
+      {hint ? (
+        <p className="field-hint" id={hintId}>
+          {hint}
+        </p>
+      ) : null}
       {error ? (
         <p className="field-error" role="alert">
           {error}

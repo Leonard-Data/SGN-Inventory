@@ -23,7 +23,12 @@ import type { PropertySummary } from './types.ts';
 
 // The filters the summaries carry no field for: an official administrative-unit identity and a
 // recorded contact identity are names in the database's own catalog, not text the summary holds.
-export const ADVANCED_FILTER_KEYS = ['province', 'ward', 'contact'] as const;
+export const ADVANCED_FILTER_KEYS = [
+  'province',
+  'district',
+  'ward',
+  'contact',
+] as const;
 
 // The filters of a stated set the loaded catalogue cannot answer. Empty means every stated filter
 // is one the summaries can apply locally.
