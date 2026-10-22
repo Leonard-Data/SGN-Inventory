@@ -1013,8 +1013,10 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     listingMode: 'Listing mode',
     status: 'Inventory status',
     address: 'Address',
-    legacy: 'Legacy address',
-    current: 'Current address',
+    // The two address formats read as the labelled choices the form offers, so one format never
+    // reads two ways between the form and the record it states.
+    legacy: 'Legacy Address',
+    current: 'Current Address',
     alternate: 'Alternate address',
     unresolved: 'Unverified',
     candidate: 'Candidate address — unverified',

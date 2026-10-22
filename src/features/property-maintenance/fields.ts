@@ -243,6 +243,26 @@ export const targetFields: Record<Target, readonly string[]> = {
   link: ['contact_id', 'relation', 'is_primary', 'remove'],
 };
 const LOCATION_FIELDS = ['latitude', 'longitude'];
+// The fields an address form renders: the caller's own selection, except that the district label
+// follows the legacy district picker that is its only writer, so it is rendered wherever that
+// picker is offered rather than only where a caller names it, and a current address renders none.
+export function addressFields(
+  names: readonly string[] | undefined,
+  legacy: boolean,
+): string[] {
+  const selected = names ? new Set(names) : null,
+    picker = legacy && (selected === null || selected.has('district_unit_id'));
+  return [
+    'address_text',
+    'house_number',
+    'street',
+    ...(picker ? ['district_text'] : []),
+    'is_primary',
+  ].filter(
+    (name) =>
+      name === 'district_text' || selected === null || selected.has(name),
+  );
+}
 export function correctionFieldNames({
   target,
   staff,
@@ -260,7 +280,8 @@ export function correctionFieldNames({
       (staff || !['contact_id', 'remove'].includes(name)) &&
       !(name === 'status' && ['sold', 'rented'].includes(propertyStatus)) &&
       !(
-        target === 'address' && ['province_text', 'commune_text'].includes(name)
+        target === 'address' &&
+        ['province_text', 'district_text', 'commune_text'].includes(name)
       ) &&
       !(
         target === 'address' &&
