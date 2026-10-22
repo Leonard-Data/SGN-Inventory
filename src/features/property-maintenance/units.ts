@@ -52,20 +52,14 @@ export function unitParent(
   );
 }
 
-// What a district pick or a province change writes into the source district text: the next name
-// while the field holds nothing or the official name of the district the address records, so a
-// re-pick rewrites a picker-written label and a province change clears it, while a person's own
-// wording stays untouched. No answer leaves the field as it is.
+// What a district pick or a province change writes into the source district text: the picker is the
+// only writer of that field, so everything but the picked name itself is replaced — a re-pick
+// repairs an imported shorthand — and a province change clears it. No answer leaves it as it is.
 export function filledDistrictText(
   current: string | null | undefined,
-  recordedName: string | null | undefined,
   next: string,
 ): string | null {
-  const value = String(current ?? '').trim();
-  if (value === next) return null;
-  return value === '' || (recordedName != null && value === recordedName.trim())
-    ? next
-    : null;
+  return String(current ?? '').trim() === next ? null : next;
 }
 
 // The one rule every catalog read applies: a stated Vietnam calendar day offers the units whose

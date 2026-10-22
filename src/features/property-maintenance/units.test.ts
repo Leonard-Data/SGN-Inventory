@@ -125,23 +125,22 @@ test('re-picking the unit a level already holds keeps the recorded levels beneat
   });
 });
 
-test('a picker rewrites the district text it wrote and keeps a person\u2019s wording', () => {
+test('a district pick repairs an imported label and leaves the picked name alone', () => {
   // Nothing recorded yet: a pick fills the field.
-  assert.equal(filledDistrictText('', undefined, 'Quận 1'), 'Quận 1');
-  assert.equal(filledDistrictText('   ', undefined, 'Quận 1'), 'Quận 1');
-  // The recorded text already reads the official name of the district the address records, so the
-  // picker wrote it, in this form or an earlier one, and a pick replaces it.
-  assert.equal(filledDistrictText('Quận 1', 'Quận 1', 'Quận 3'), 'Quận 3');
-  // A province change clears that picker-written label with its district id.
-  assert.equal(filledDistrictText('Quận 1', 'Quận 1', ''), '');
-  // A person's own wording is never rewritten, and a pick already held changes nothing.
+  assert.equal(filledDistrictText('', 'Quận 1'), 'Quận 1');
+  assert.equal(filledDistrictText('   ', 'Quận 1'), 'Quận 1');
+  // A label that is not the picked district's official name, an imported shorthand included, is
+  // replaced: the picker is the only writer of the field, so a re-pick repairs it.
+  assert.equal(filledDistrictText('Q. Bình Thạnh', 'Bình Thạnh'), 'Bình Thạnh');
   assert.equal(
-    filledDistrictText('Quận 1, phường Bến Thành', 'Quận 1', 'Quận 3'),
-    null,
+    filledDistrictText('Quận 1, phường Bến Thành', 'Quận 3'),
+    'Quận 3',
   );
-  assert.equal(filledDistrictText('Quận 1', undefined, 'Quận 3'), null);
-  assert.equal(filledDistrictText('Quận 3', 'Quận 1', 'Quận 3'), null);
-  assert.equal(filledDistrictText('', undefined, ''), null);
+  // A province change clears the label with the district it described.
+  assert.equal(filledDistrictText('Quận 1', ''), '');
+  // The field already reads the picked district's official name, so the pick changes nothing.
+  assert.equal(filledDistrictText(' Quận 1 ', 'Quận 1'), null);
+  assert.equal(filledDistrictText('', ''), null);
 });
 
 test('a picker offers the unit an address recorded before this entry still holds', () => {

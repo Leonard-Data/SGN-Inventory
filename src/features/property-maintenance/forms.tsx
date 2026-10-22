@@ -282,7 +282,6 @@ function UnitPicker({
   onChange,
   locale,
   onDenied,
-  listed,
 }: {
   name: string;
   level: string;
@@ -293,8 +292,6 @@ function UnitPicker({
   onChange: (value: string, unit?: UnitChoice) => void;
   locale: Locale;
   onDenied: (status: number) => void;
-  // The list this picker loaded, so a caller can read the official name of a recorded unit.
-  listed?: { current: Unit[] };
 }) {
   const id = useId(),
     [units, setUnits] = useState<Unit[]>([]),
@@ -318,7 +315,6 @@ function UnitPicker({
       .then((result) => {
         if (abort.signal.aborted) return;
         setUnits(result.units);
-        if (listed) listed.current = result.units;
       })
       .catch((failure) => {
         if (abort.signal.aborted) return;
@@ -330,7 +326,7 @@ function UnitPicker({
         else setError(true);
       });
     return () => abort.abort();
-  }, [level, parent, day, value, onDenied, listed]);
+  }, [level, parent, day, value, onDenied]);
   const text = maintenanceText(locale);
   return (
     <UnitCombobox
@@ -370,7 +366,10 @@ export function AddressFields({
       commune: String(values.commune_unit_id ?? ''),
     }),
     districtText = useRef<HTMLInputElement>(null),
-    districtList = useRef<Unit[]>([]);
+    // The text the picker has written, which is what a save submits and what reads back beside it.
+    [districtTextValue, setDistrictTextValue] = useState(
+      String(values.district_text ?? ''),
+    );
   const text = maintenanceText(locale),
     current = variant === 'mapping' || format === 'current',
     // A legacy address is the only one with a district level, and its pickers read the closed
@@ -378,19 +377,14 @@ export function AddressFields({
     legacy = variant === 'address' && format === 'legacy',
     generation = legacy ? 'legacy' : 'current',
     day = legacy ? LEGACY_CATALOG_DAY : undefined;
-  // The district list the picker loaded states the official name of the district the address
-  // records, so a text that reads exactly that name is the picker's own wording, not a person's.
+  // The legacy district picker is the only writer of the district text, so every write lands in
+  // the field a save submits and in the text that reads back beside it.
   function setDistrictText(next: string) {
-    const field = districtText.current,
-      value = field
-        ? filledDistrictText(
-            field.value,
-            districtList.current.find((unit) => unit.id === units.district)
-              ?.name_vi,
-            next,
-          )
-        : null;
-    if (!field || value === null) return;
+    const value = filledDistrictText(districtTextValue, next);
+    if (value === null) return;
+    setDistrictTextValue(value);
+    const field = districtText.current;
+    if (!field) return;
     field.value = value;
     // The surrounding form tracks its unsaved state from input events, which a value written this
     // way raises none of.
@@ -443,7 +437,7 @@ export function AddressFields({
           </p>
           <RecordFields
             locale={locale}
-            values={values}
+            values={{ ...values, district_text: districtTextValue }}
             refs={{ district_text: districtText }}
             names={[
               'address_text',
@@ -494,7 +488,6 @@ export function AddressFields({
           parent={unitParent('legacy', 'district', units)}
           day={LEGACY_CATALOG_DAY}
           value={units.district}
-          listed={districtList}
           onChange={(value, unit) => {
             setUnits(pickedDistrict(units, value));
             if (unit) setDistrictText(unit.name_vi);

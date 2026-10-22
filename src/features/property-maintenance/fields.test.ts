@@ -134,10 +134,11 @@ test('a staff address correction can name the legacy district unit', () => {
     staff: true,
     propertyStatus: 'available',
   });
-  for (const name of ['address_text', 'district_text', 'district_unit_id'])
+  for (const name of ['address_text', 'district_unit_id'])
     assert.ok(names.includes(name), name);
-  // The source labels stay provenance and are never an editable replacement.
-  for (const name of ['province_text', 'commune_text'])
+  // The district label is written by the picker, so a correction never offers it, and the source
+  // labels stay provenance.
+  for (const name of ['province_text', 'district_text', 'commune_text'])
     assert.equal(names.includes(name), false);
   // A current address has no district level at all, so it offers no district field.
   const current = correctionFieldNames({
