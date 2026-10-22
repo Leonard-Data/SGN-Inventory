@@ -124,7 +124,7 @@ Rental agreements, monthly dues and manual receipt/refund tracking are included.
 
 ## Query and index design
 
-- Filter index: status/mode/type/UUID on unarchived inventory; price indexes for price filters (`properties_sale_price_idx`, `properties_monthly_rent_idx`); area range indexes (`properties_land_area_idx`, `properties_floor_area_idx`); FK indexes on relationship access paths.
+- Filter index: status/mode/type/UUID on unarchived inventory; the browse order index `properties_recent_change_idx` on `(updated_at DESC, id DESC)` over unarchived inventory, which serves the ordinary browse window and the catalogue's first page (issue #258); price indexes for price filters (`properties_sale_price_idx`, `properties_monthly_rent_idx`); area range indexes (`properties_land_area_idx`, `properties_floor_area_idx`); FK indexes on relationship access paths.
 - Address GIN trigram index on accent-normalized text from both formats. Property code has a unique B-tree index. Very short substring searches can scan more records; inspect plans before adding another index.
 - Daily activity indexed by employee/day/kind; reservation expiry indexed only for open states.
 - Approved-reservation uniqueness is a partial index over state, not a time-dependent predicate. Workflow RPCs expire stale state while holding the property row lock.

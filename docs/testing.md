@@ -23,6 +23,19 @@ The area filter matches an address level by its recorded unit id or, for the imp
 
 The per-window cost is accepted in this ticket. The migration header records the same account for the next reader, and persisted normalised text with its own index is a separate follow-up.
 
+### Inventory browse order: most recently changed first (issue #258)
+
+The ordinary inventory browse orders by the record's own modification time (`properties.updated_at`, then the property identity) instead of its creation time, and the browser catalogue's page read walks that same total order, so the first page painted is the inventory's first window. `supabase/migrations/20261022084850_inventory_recent_change_order.sql` states the order and ships `properties_recent_change_idx`, `(updated_at desc, id desc)` over unarchived rows. `node scripts/recent-change-order-evidence.mjs` reproduces the measurement in embedded PostgreSQL 18.3 (PGlite 0.5.8) at the imported stock's current size; it builds nothing into the shipped schema and changes no migration.
+
+The run loads 18,801 properties created inside one import run (2026-09-30 17:00 to 22:13 UTC) and then changes twelve of them through the property guard, the way a correction made after the import would.
+
+- What the first window of 100 holds: **0 of the twelve** records changed after the import under the creation order, and **all twelve** under the change order. The most recently changed record sat at position 3,102 of 18,801 in the creation order.
+- What that first window costs, as the authenticated employee with the table's own row security: `Index Scan using properties_recent_change_idx`, about 1 ms. The same rows ordered by creation were a `Seq Scan` of all 18,801 rows with a top-N sort, about 99 ms. With the shipped index dropped the change-ordered read fell back to that same scan and sort, about 103 ms.
+- The whole `stream_inventory` first-window call costs the same before and after at this size, roughly 130–180 ms between runs and within the run-to-run spread: the read states its matching total beside the window and materialises the filtered set once for both, so that one counting pass - unchanged by this ticket - dominates it. The index is what the catalogue's page read (the initial paint) uses; inside the function the window is sliced from the set it has already materialised.
+- Timings are as recorded on the machine that ran it and vary between runs; the plan nodes do not.
+
+The stream contract (`scripts/inventory-stream-contract.mjs`) pins the rest: the default order follows a record's own change and not its creation, a shared change timestamp is decided by identity so a window boundary neither repeats nor drops a row, an edit moves a record to the top of the browse while `sort=oldest`/`sort=newest` keep their recorded entry-date order, and the index the order reads through exists.
+
 ### Executed canonical authentication design comparison (tickets #50–#52)
 
 - `npm run test:unit` now also runs `src/i18n/messages.test.ts` (VI/EN key parity, non-blank strings, canonical copy) and `src/features/employees/password-policy.test.ts` (four rules and their independent evaluation, the level↔verdict mapping, and the deliberately stricter nine-character case). Both pass.

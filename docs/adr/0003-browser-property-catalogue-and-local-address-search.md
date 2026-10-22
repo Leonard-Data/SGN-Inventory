@@ -1,6 +1,6 @@
 # Browser property catalogue and local address search
 
-Status: accepted (2026-10-20)
+Status: accepted (2026-10-20). Ordering amended by [#258](https://github.com/Leonard-Data/SGN-Inventory/issues/258): the one ordering is now the record's latest change then its identity, not the property identity alone, so the first page the browser paints is the inventory's first window.
 
 Ordinary address search read the database. The list carried the free-text query in its address and every submitted search was a window of a server read (`stream_inventory`), so a remount or a return from a property's details read the same rows again. Salespeople search mostly by free text address, and caching individual search strings buys little: every spelling, abbreviation and partial address is a different key.
 

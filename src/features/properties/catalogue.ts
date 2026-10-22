@@ -13,7 +13,9 @@ export const CATALOGUE_PAGE_SIZE = 200;
 
 // The summary shape's own version. A browser-held catalogue is only reused for the same shape, so
 // a later field change starts a new key instead of reading rows of the old one as the new one.
-export const CATALOGUE_SCHEMA_VERSION = 5;
+// Version 6 is the most-recently-changed browse order: a catalogue read before it is in another
+// order and is not reused.
+export const CATALOGUE_SCHEMA_VERSION = 6;
 
 // The one field list a catalogue read carries. Money and measurements are cast to text, so a
 // whole-VND or m² value is never rounded through a JavaScript number, and a property's address
@@ -179,15 +181,33 @@ export function catalogueSummary(
   };
 }
 
-// The catalogue's cursor is a row position in one stable ordering - the property identity - and
-// never an authorization grant: every read reapplies the caller's own authorization and answers
-// with the rows that identity may receive, whatever cursor it was handed.
+// The catalogue's cursor is a row position in one total order - the record's own modification
+// time, then the property identity - and never an authorization grant: every read reapplies the
+// caller's own authorization and answers with the rows that position may receive, whatever cursor
+// it was handed. The modification time is carried as the read stated it, never through a
+// JavaScript Date, so two records sharing one instant are not rounded apart.
+export type CatalogueCursor = { updatedAt: string; id: string };
+
+const CURSOR_SEPARATOR = '|';
+
 export function parseCatalogueCursor(
   params: URLSearchParams,
-): { ok: true; after: string | null } | { ok: false } {
+): { ok: true; after: CatalogueCursor | null } | { ok: false } {
   const after = params.get('after');
   if (after === null) return { ok: true, after: null };
-  return isUuid(after) ? { ok: true, after } : { ok: false };
+  const [updatedAt = '', id = '', ...rest] = after.split(CURSOR_SEPARATOR);
+  return rest.length === 0 && isUuid(id) && !Number.isNaN(Date.parse(updatedAt))
+    ? { ok: true, after: { updatedAt, id } }
+    : { ok: false };
+}
+
+// The read's own keyset for a position: every row strictly after this one in the same order - an
+// earlier change time, or the same instant with a lower identity. Both terms repeat the value the
+// read returned, quoted, so one date is read as one date rather than as more of the filter's own
+// grammar.
+export function catalogueKeyset(cursor: CatalogueCursor): string {
+  const at = `"${cursor.updatedAt}"`;
+  return `updated_at.lt.${at},and(updated_at.eq.${at},id.lt."${cursor.id}")`;
 }
 
 // The one request a catalogue read answers: no cursor is the first page, a property identity is a
@@ -195,7 +215,7 @@ export function parseCatalogueCursor(
 // mangled cursor - is refused rather than answered with a page the caller did not ask for.
 export function catalogueRequest(
   params: URLSearchParams,
-): { ok: true; after: string | null } | { ok: false } {
+): { ok: true; after: CatalogueCursor | null } | { ok: false } {
   if ([...params.keys()].some((key) => key !== 'after')) return { ok: false };
   return parseCatalogueCursor(params);
 }
@@ -212,11 +232,16 @@ export function catalogueFailure(code: string | undefined): {
     : { status: 503, code: 'unavailable' };
 }
 
-// The cursor the page after this one starts after: the last identity this page carried, or null
+// The cursor the page after this one starts after: the last position this page carried, or null
 // when this page ended the traversal. A full page may still be the last one, so the following read
 // decides rather than this one.
-export function nextCatalogueCursor(ids: readonly string[]): string | null {
-  return ids.length >= CATALOGUE_PAGE_SIZE
-    ? (ids[ids.length - 1] ?? null)
-    : null;
+export function nextCatalogueCursor(
+  rows: readonly { id: string; updatedAt: string | null }[],
+): string | null {
+  const last = rows[rows.length - 1];
+  // A record whose change time the read did not state cannot state a position after it; the column
+  // is not null in the database, so this ends the traversal only where nothing follows to skip.
+  if (rows.length < CATALOGUE_PAGE_SIZE || !last || last.updatedAt === null)
+    return null;
+  return `${last.updatedAt}${CURSOR_SEPARATOR}${last.id}`;
 }

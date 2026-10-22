@@ -4,6 +4,7 @@ import {
   CATALOGUE_PAGE_SIZE,
   CATALOGUE_SELECT,
   catalogueFailure,
+  catalogueKeyset,
   catalogueRequest,
   catalogueSummary,
   nextCatalogueCursor,
@@ -371,12 +372,16 @@ test('a row with no address or no facts states the gap rather than inventing one
 
 const cursor = (values: Record<string, string>) =>
   parseCatalogueCursor(new URLSearchParams(values));
+const CHANGED_AT = '2026-10-22T08:51:10.369123+00:00';
+const CURSOR = `${CHANGED_AT}|${PROPERTY_ID}`;
 
 test('an absent cursor is the first page and a mangled one is refused', () => {
   assert.deepEqual(cursor({}), { ok: true, after: null });
-  assert.deepEqual(cursor({ after: PROPERTY_ID }), {
+  // The change time is carried as the read stated it, minute and microsecond alike: rounding it
+  // would move the position past rows the page never carried.
+  assert.deepEqual(cursor({ after: CURSOR }), {
     ok: true,
-    after: PROPERTY_ID,
+    after: { updatedAt: CHANGED_AT, id: PROPERTY_ID },
   });
   // The cursor is a position in one ordering, so a value that names no position is refused rather
   // than read as a different page.
@@ -384,32 +389,60 @@ test('an absent cursor is the first page and a mangled one is refused', () => {
     '',
     '1',
     'not-a-uuid',
-    `${PROPERTY_ID} or true`,
-    `${PROPERTY_ID} `,
-    PROPERTY_ID.toUpperCase() + 'x',
+    PROPERTY_ID,
+    `${CHANGED_AT}|`,
+    `${CHANGED_AT}|not-a-uuid`,
+    `${CHANGED_AT}|${PROPERTY_ID}|extra`,
+    `not-a-date|${PROPERTY_ID}`,
+    `${CHANGED_AT}|${PROPERTY_ID} or true`,
+    `${CHANGED_AT}|${PROPERTY_ID} `,
+    `${CHANGED_AT}|${PROPERTY_ID.toUpperCase()}x`,
   ])
     assert.deepEqual(cursor({ after: value }), { ok: false }, `after=${value}`);
 });
 
-test('the next cursor is the last identity of a full page only', () => {
-  // A short page ends the traversal: there is no position after it to state.
-  assert.equal(nextCatalogueCursor([PROPERTY_ID]), null);
-  assert.equal(nextCatalogueCursor([]), null);
-  const full = Array.from(
-    { length: CATALOGUE_PAGE_SIZE },
-    (_, index) =>
-      `${String(index).padStart(8, '0')}-0000-0000-0000-000000000000`,
+test('the keyset for a position states the change time and the identity it continues from', () => {
+  // An earlier change time comes first; the same instant is decided by a lower identity. Both
+  // terms repeat the read's own value quoted, so one timestamp is not read as filter grammar.
+  assert.equal(
+    catalogueKeyset({ updatedAt: CHANGED_AT, id: PROPERTY_ID }),
+    `updated_at.lt."${CHANGED_AT}",and(updated_at.eq."${CHANGED_AT}",id.lt."${PROPERTY_ID}")`,
   );
-  assert.equal(nextCatalogueCursor(full), full[full.length - 1]);
+});
+
+test('the next cursor is the last position of a full page only', () => {
+  // A short page ends the traversal: there is no position after it to state.
+  assert.equal(
+    nextCatalogueCursor([{ id: PROPERTY_ID, updatedAt: CHANGED_AT }]),
+    null,
+  );
+  assert.equal(nextCatalogueCursor([]), null);
+  const full = Array.from({ length: CATALOGUE_PAGE_SIZE }, (_, index) => ({
+    id: `${String(index).padStart(8, '0')}-0000-0000-0000-000000000000`,
+    updatedAt: CHANGED_AT,
+  }));
+  assert.equal(
+    nextCatalogueCursor(full),
+    `${CHANGED_AT}|${full[full.length - 1]?.id}`,
+  );
+  // A page whose last row states no change time cannot state a position after it.
+  assert.equal(
+    nextCatalogueCursor(
+      full.map((row, index) =>
+        index === full.length - 1 ? { ...row, updatedAt: null } : row,
+      ),
+    ),
+    null,
+  );
 });
 
 test('the read answers one cursor and nothing else in the address', () => {
   const ask = (values: Record<string, string>) =>
     catalogueRequest(new URLSearchParams(values));
   assert.deepEqual(ask({}), { ok: true, after: null });
-  assert.deepEqual(ask({ after: PROPERTY_ID }), {
+  assert.deepEqual(ask({ after: CURSOR }), {
     ok: true,
-    after: PROPERTY_ID,
+    after: { updatedAt: CHANGED_AT, id: PROPERTY_ID },
   });
   // The catalogue read has no filters, no ordering and no page size of its own: a caller that
   // sends one is refused rather than answered with a page it did not ask for.
@@ -419,7 +452,7 @@ test('the read answers one cursor and nothing else in the address', () => {
     { page: '2' },
     { after: '' },
     { after: 'nonsense' },
-    { after: PROPERTY_ID, query: '' },
+    { after: CURSOR, query: '' },
   ] as Record<string, string>[])
     assert.deepEqual(ask(values), { ok: false }, JSON.stringify(values));
 });
