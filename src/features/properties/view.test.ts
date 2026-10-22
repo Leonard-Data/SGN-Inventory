@@ -62,6 +62,7 @@ test('switching the view keeps the search, the ordering and the filters', () => 
   assert.deepEqual(
     [...new URLSearchParams(table.split('?')[1]).entries()].sort(),
     [
+      ['addressFormat', 'legacy'],
       ['mode', 'sale'],
       ['priceMin', '1000000'],
       ['province', '50000000-0000-4000-8000-000000000001'],
@@ -79,7 +80,16 @@ test('switching the view keeps the search, the ordering and the filters', () => 
   });
   assert.deepEqual(
     [...new URLSearchParams(cards.split('?')[1]).keys()].sort(),
-    ['mode', 'priceMin', 'province', 'query', 'sort', 'status', 'view'],
+    [
+      'addressFormat',
+      'mode',
+      'priceMin',
+      'province',
+      'query',
+      'sort',
+      'status',
+      'view',
+    ],
   );
   assert.deepEqual(
     [...new URLSearchParams(cards.split('?')[1]).entries()].find(
@@ -87,14 +97,15 @@ test('switching the view keeps the search, the ordering and the filters', () => 
     ),
     ['view', 'cards'],
   );
-  // The default ordering and the default view both leave their own parameter out.
+  // The default ordering and the default view both leave their own parameter out; the address
+  // format is always stated, because it is always one of the two formats the list reads through.
   const plain = inventoryHref({
     query: '',
     sort: null,
     view: 'table',
     filters: noInventoryFilters,
   });
-  assert.equal(plain, '/properties?query=');
+  assert.equal(plain, '/properties?query=&addressFormat=legacy');
 });
 
 test('the card grid holds the columns the package’s own auto-fill tracks fit', () => {

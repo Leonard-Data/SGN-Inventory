@@ -83,10 +83,12 @@ export async function inventoryStreamContract({
     limit = 5,
     query = 'strmfix',
     status = null,
+    addressFormat = null,
   } = {}) {
     const result = await db.query(
-      `select * from public.stream_inventory($1::text,$2::text,$3::integer,$4::integer,$5::text)`,
-      [order, query, offset, limit, status],
+      `select * from public.stream_inventory(p_order => $1::text,p_query => $2::text,p_offset => $3::integer,
+        p_limit => $4::integer,p_status => $5::text,p_address_format => $6::text)`,
+      [order, query, offset, limit, status, addressFormat],
     );
     // Every read answers at least one row: the window's rows, or the counting row alone when the
     // window has run out.
@@ -122,6 +124,13 @@ export async function inventoryStreamContract({
   await db.query(
     "insert into public.property_addresses(property_id,format,address_text,house_number,street,commune_text,district_text) select p.id,'legacy',$2||' '||p.property_code,'12','Le Loi','Ben Nghe','Quan 1' from public.properties p where p.id = any($1::uuid[])",
     [all.map((row) => row.id), marker],
+  );
+  // Two of those properties also record a current address, so the format filter has both kinds of
+  // record to tell apart: one searched through the legacy text and one through the current text.
+  const currentOnly = [dated[0], dated[2]];
+  await db.query(
+    "insert into public.property_addresses(property_id,format,address_text) select p.id,'current',$2||' nuoc moi '||p.property_code from public.properties p where p.id = any($1::uuid[])",
+    [currentOnly.map((row) => row.id), marker],
   );
 
   // The default stream is newest-created first with identity breaking ties; the chronology lists
@@ -330,6 +339,85 @@ export async function inventoryStreamContract({
           [order],
           '22023',
         );
+      // A recorded other address is no format this read searches through.
+      for (const format of ['alternate', 'LEGACY', 'both'])
+        await fails(
+          'select * from public.stream_inventory(p_address_format => $1::text)',
+          [format],
+          '22023',
+        );
+    },
+  );
+
+  await check(
+    'the address format states which recorded address the search reads',
+    async () => {
+      // Every fixture records a legacy address, so the legacy format is the whole stream of them.
+      const legacy = await read({ addressFormat: 'legacy', limit: 100 });
+      assert.equal(legacy.total, browseOrder.length);
+      assert.deepEqual(
+        legacy.rows.map((row) => row.id),
+        browseOrder,
+      );
+      // Only the two properties that record a current address match it: a property with no address
+      // in the selected format does not match, and nothing is inferred on its behalf.
+      const current = await read({ addressFormat: 'current', limit: 100 });
+      assert.deepEqual(
+        current.rows.map((row) => row.id).sort(),
+        currentOnly.map((row) => row.id).sort(),
+      );
+      assert.equal(current.total, 2);
+      // A word recorded only in the current address is answered by that format and by no other,
+      // so one query is never matched through the address it did not select.
+      const scoped = await read({
+        addressFormat: 'current',
+        query: 'nuoc moi',
+        limit: 100,
+      });
+      assert.deepEqual(
+        scoped.rows.map((row) => row.id).sort(),
+        currentOnly.map((row) => row.id).sort(),
+      );
+      const wrong = await read({
+        addressFormat: 'legacy',
+        query: 'nuoc moi',
+        limit: 100,
+      });
+      assert.deepEqual(wrong.rows, []);
+      assert.equal(wrong.total, 0);
+      // The property code still matches in either format, as it does in the ordinary read.
+      const byCode = await read({
+        addressFormat: 'current',
+        query: dated[2].code.toLowerCase(),
+        limit: 100,
+      });
+      assert.deepEqual(
+        byCode.rows.map((row) => row.id),
+        [dated[2].id],
+      );
+    },
+  );
+
+  await check(
+    'the address format composes with the other filters and totals together',
+    async () => {
+      const narrowed = await read({
+        addressFormat: 'current',
+        status: 'available',
+        limit: 100,
+      });
+      const available = currentOnly.filter(
+        (row) => (row.status ?? 'available') === 'available',
+      );
+      assert.deepEqual(
+        narrowed.rows.map((row) => row.id).sort(),
+        available.map((row) => row.id).sort(),
+      );
+      assert.equal(narrowed.total, available.length);
+      // An absent format applies no format condition, which is the read every earlier caller of
+      // this function still gets.
+      const unfiltered = await read({ addressFormat: null, limit: 100 });
+      assert.equal(unfiltered.total, browseOrder.length);
     },
   );
 

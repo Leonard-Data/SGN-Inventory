@@ -3,7 +3,9 @@
 // applied exactly as the address states or refused as invalid input — never silently dropped.
 // The province/ward pair names official administrative units; the ward is dependent on the
 // province and, when both are set, the narrower ward is the unit the read applies. The contact
-// value is a recorded contact identity, so it is validated with the same UUID shape.
+// value is a recorded contact identity, so it is validated with the same UUID shape. The address
+// format is the format of the address a search is matched through, and it is always stated: the
+// panel opens on the legacy address, which is the default an address that states none carries.
 const UUID_VALUE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -24,11 +26,16 @@ export const INVENTORY_PROPERTY_TYPES = [
   'serviced_apartment',
   'unclassified',
 ] as const;
+// The two formats a search is matched through. An `alternate` address is a recorded other address
+// rather than one of the two formats a property is searched by, so it is no filter value.
+export const INVENTORY_ADDRESS_FORMATS = ['legacy', 'current'] as const;
+export const DEFAULT_ADDRESS_FORMAT = 'legacy';
 
 export const INVENTORY_FILTER_KEYS = [
   'status',
   'mode',
   'type',
+  'addressFormat',
   'priceMin',
   'priceMax',
   'areaMin',
@@ -50,6 +57,7 @@ export const noInventoryFilters: InventoryFilters = {
   status: null,
   mode: null,
   type: null,
+  addressFormat: DEFAULT_ADDRESS_FORMAT,
   priceMin: null,
   priceMax: null,
   areaMin: null,
@@ -81,6 +89,8 @@ export function inventoryFilters(params: URLSearchParams): InventoryFilters {
     status: read('status'),
     mode: read('mode'),
     type: read('type'),
+    // An address that states no format is the legacy search, which is the one the panel opens on.
+    addressFormat: read('addressFormat') ?? DEFAULT_ADDRESS_FORMAT,
     priceMin: read('priceMin'),
     priceMax: read('priceMax'),
     areaMin: read('areaMin'),
@@ -103,6 +113,7 @@ export function parseInventoryFilters(
     status,
     mode,
     type,
+    addressFormat,
     priceMin,
     priceMax,
     areaMin,
@@ -116,6 +127,8 @@ export function parseInventoryFilters(
   if (mode !== null && !includes(INVENTORY_LISTING_MODES, mode))
     return refuse();
   if (type !== null && !includes(INVENTORY_PROPERTY_TYPES, type))
+    return refuse();
+  if (!includes(INVENTORY_ADDRESS_FORMATS, addressFormat ?? ''))
     return refuse();
   if (createdBy !== null && createdBy !== INVENTORY_CREATOR_MINE)
     return refuse();
@@ -198,7 +211,14 @@ export type InventoryFilterArgs = {
   p_area_max?: number;
   p_area_id?: string;
   p_contact_id?: string;
+  p_address_format?: string;
 };
+
+// The format a filter set searches through, held in one place so the local match and the database
+// read can never be pointed at different formats by a set that states none.
+export function searchedAddressFormat(filters: InventoryFilters): string {
+  return filters.addressFormat ?? DEFAULT_ADDRESS_FORMAT;
+}
 
 // Half of each range is optional; an absent bound leaves the database default (no bound) in
 // place instead of sending a zero that would mean a real limit.
@@ -211,6 +231,7 @@ export function filterRpcArgs(filters: InventoryFilters): InventoryFilterArgs {
   if (filters.priceMax) args.p_price_max = filters.priceMax;
   if (filters.areaMin) args.p_area_min = Number(filters.areaMin);
   if (filters.areaMax) args.p_area_max = Number(filters.areaMax);
+  args.p_address_format = searchedAddressFormat(filters);
   // Both the browse and the chronological walk take one administrative unit, so the narrower
   // ward governs and the province is kept in the address only as its parent context.
   const areaId = filters.ward ?? filters.province;

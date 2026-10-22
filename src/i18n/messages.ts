@@ -151,6 +151,9 @@ const vi = {
   filtersRemove: 'Bỏ điều kiện lọc',
   filtersAny: 'Tất cả',
   filtersInvalid: 'Bộ lọc chưa hợp lệ. Kiểm tra lại giá và diện tích đã nhập.',
+  addressFormat: 'Định dạng địa chỉ',
+  addressFormatHint:
+    'Chỉ hồ sơ có địa chỉ ở định dạng đã chọn mới khớp, và nội dung tìm kiếm chỉ so với địa chỉ ở định dạng đó: địa chỉ cũ là mặc định, địa chỉ mới khi bạn chọn. Hồ sơ không có địa chỉ ở định dạng này không xuất hiện.',
   // Matches nothing, so nothing is committed: the picker states why.
   comboboxNoMatch: 'Không có đơn vị chính thức nào khớp với nội dung đã gõ.',
   priceFilterHint:
@@ -1055,6 +1058,9 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     filtersAny: 'Any',
     filtersInvalid:
       'The filter set is not valid. Check the entered price and area bounds.',
+    addressFormat: 'Address format',
+    addressFormatHint:
+      'Only a property recording an address in the selected format matches, and a typed search is compared with that format’s address: the legacy address by default, the current one when you choose it. A property with no address in that format does not appear.',
     comboboxNoMatch: 'No official unit matches what you typed.',
     priceFilterHint:
       'With no listing mode selected, each record uses its own asking price: rental records use monthly asking rent (VND/month), while sale and sale-and-rent records use asking sale price in whole VND. Select Sale or Sale and rent to compare asking sale prices only; select Rent to compare monthly asking rents only.',

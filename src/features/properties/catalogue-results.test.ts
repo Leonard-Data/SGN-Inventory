@@ -186,6 +186,7 @@ test('a submitted search states its criteria in one address and nothing else', (
     sort: 'oldest',
     status: 'available',
     mode: 'rent',
+    addressFormat: 'legacy',
   });
   // A record a render rebuilt names the same address, so it names the same search.
   assert.equal(
@@ -197,12 +198,13 @@ test('a submitted search states its criteria in one address and nothing else', (
     endpoint,
   );
   // An unstated ordering and an unstated filter stay out of the address rather than naming a
-  // different search.
+  // different search. The address format is the exception: it is always one of the two formats, so
+  // the read is always told which recorded address it is asked to search.
   assert.deepEqual(
     stated(
       searchEndpoint({ query: '', sort: null, filters: noInventoryFilters }),
     ),
-    { query: '' },
+    { query: '', addressFormat: 'legacy' },
   );
   // The creator selection is answered from the loaded catalogue alone, so it never becomes a
   // criterion this read is asked to apply and then cannot.
@@ -397,6 +399,72 @@ test('a typed query keeps the address ranking and a browse takes the catalogue o
   assert.deepEqual(
     ids('BDS-b', { ...noInventoryFilters, status: 'available' }),
     ['b'],
+  );
+});
+
+test('the address format decides which recorded address a search is matched through', () => {
+  // The same house recorded in the two formats: the format filter states which of the recorded
+  // addresses the query is compared with, and a property recording none of that format does not
+  // match - exactly the database read's own exists-predicate, so the two answer the same set.
+  const currentOf = (id: string, addressText: string): AddressSummary => ({
+    ...address(id, addressText),
+    id: `address-current-${id}`,
+    format: 'current',
+    district: null,
+  });
+  const onlyLegacy = property('legacy-only', {
+    addresses: [address('legacy-only', '12 Lê Lợi, Quận 1')],
+  });
+  const onlyCurrent = property('current-only', {
+    status: 'sold',
+    addresses: [currentOf('current-only', '12 Lê Lợi, Phường Bến Nghé')],
+  });
+  const both = property('both', {
+    addresses: [
+      address('both', '12 Lê Lợi, Quận 1'),
+      currentOf('both', '12 Lê Lợi, Phường Bến Nghé'),
+    ],
+  });
+  const index = buildAddressIndex([onlyLegacy, onlyCurrent, both]);
+  const ids = (query: string, stated: Partial<InventoryFilters> = {}) =>
+    catalogueMatches(index, {
+      query,
+      filters: { ...noInventoryFilters, ...stated },
+    })
+      .map((match) => match.record.id)
+      .sort();
+  // The legacy address is the default the panel opens on.
+  assert.deepEqual(ids(''), ['both', 'legacy-only']);
+  assert.deepEqual(ids('', { addressFormat: 'current' }), [
+    'both',
+    'current-only',
+  ]);
+  // A word recorded in one format's address alone is answered by that format and no other.
+  assert.deepEqual(ids('quan 1'), ['both', 'legacy-only']);
+  assert.deepEqual(ids('quan 1', { addressFormat: 'current' }), []);
+  assert.deepEqual(ids('ben nghe'), []);
+  assert.deepEqual(ids('ben nghe', { addressFormat: 'current' }), [
+    'both',
+    'current-only',
+  ]);
+  // The format is one condition among the others, not a replacement for them.
+  assert.deepEqual(ids('', { addressFormat: 'current', status: 'available' }), [
+    'both',
+  ]);
+  assert.deepEqual(ids('', { status: 'available' }), ['both', 'legacy-only']);
+  // The existence requirement is the filter's own statement: a property recording no address in
+  // the selected format never matches, whatever else the record carries.
+  assert.deepEqual(ids('BDS-current-only'), []);
+  assert.deepEqual(ids('BDS-current-only', { addressFormat: 'current' }), [
+    'current-only',
+  ]);
+  assert.equal(matchesLocalFilters(onlyCurrent, noInventoryFilters), false);
+  assert.equal(
+    matchesLocalFilters(onlyCurrent, {
+      ...noInventoryFilters,
+      addressFormat: 'current',
+    }),
+    true,
   );
 });
 
