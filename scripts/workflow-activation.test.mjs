@@ -99,6 +99,34 @@ test('release activation is stage-scoped and production keeps its own switch', (
   );
 });
 
+// A merge carrying a migration must apply it, or the release fails on purpose
+// while production stays behind. The mode is pinned to both trigger shapes: a
+// push applies, a dispatch still chooses, and verify keeps its failing path.
+test('a main push applies its reviewed migrations before the release', () => {
+  const deploy = workflow('deploy.yml');
+  assert.equal(
+    gate(deploy.jobs.migrate.with.apply),
+    gate("${{ github.event_name == 'push' || inputs.migration == 'apply' }}"),
+  );
+  assert.equal(deploy.jobs.migrate.with.stage, "${{ inputs.stage || 'prod' }}");
+
+  // The apply flag selects the write path and nothing else: the applying push
+  // runs only when apply, the deliberate failure runs only when it does not.
+  const steps = workflow('migration.yml').jobs.migrate.steps;
+  assert.equal(
+    steps.find((step) => step.name === 'Apply the reviewed pending migrations')
+      ?.if,
+    'inputs.apply',
+  );
+  assert.equal(
+    gate(
+      steps.find((step) => step.name === 'Fail while migrations remain pending')
+        ?.if,
+    ),
+    '${{ !inputs.apply }}',
+  );
+});
+
 // The release-guard step reads its activation switch from the process
 // environment, but a repository variable is not exported there on its own. A
 // job whose `if:` gate uses a switch yet omits it from `env:` starts, then

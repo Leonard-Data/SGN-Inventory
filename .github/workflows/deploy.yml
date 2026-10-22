@@ -46,8 +46,9 @@ jobs:
     uses: ./.github/workflows/migration.yml
     with:
       stage: ${{ inputs.stage || 'prod' }}
-      # A merge authorizes application delivery, not new database writes.
-      apply: ${{ github.event_name == 'workflow_dispatch' && inputs.migration == 'apply' }}
+      # A merge to main applies its own reviewed pending migrations before the
+      # application that depends on them; a dispatch chooses apply or verify.
+      apply: ${{ github.event_name == 'push' || inputs.migration == 'apply' }}
     secrets: inherit
   deploy:
     needs: migrate
