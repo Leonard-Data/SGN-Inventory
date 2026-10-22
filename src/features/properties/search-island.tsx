@@ -252,32 +252,18 @@ export function SearchIsland({
       });
     return () => abort.abort();
   }, [legacyUnits, district, province, onDenied]);
-  // An applied unit the panel's list does not carry keeps its own recorded name, so a chip and a
-  // field state the unit without offering it as a choice.
+  // An applied unit is named from its own recorded row, so a chip and a field state the unit
+  // without offering it as a choice. The read is keyed by the applied ids alone: an id the catalog
+  // cannot answer stays named by itself rather than being asked for again on every render.
   useEffect(() => {
-    const missing: [string, string][] = [];
-    if (
-      appliedProvince &&
-      !appliedNames[appliedProvince] &&
-      !provinces.some((unit) => unit.id === appliedProvince)
-    )
-      missing.push(['province', appliedProvince]);
-    if (
-      appliedDistrict &&
-      !appliedNames[appliedDistrict] &&
-      !districts.some((unit) => unit.id === appliedDistrict)
-    )
-      missing.push(['district', appliedDistrict]);
-    if (
-      appliedWard &&
-      !appliedNames[appliedWard] &&
-      !wards.some((unit) => unit.id === appliedWard)
-    )
-      missing.push(['commune', appliedWard]);
-    if (!missing.length) return;
+    const applied: [string, string][] = [];
+    if (appliedProvince) applied.push(['province', appliedProvince]);
+    if (appliedDistrict) applied.push(['district', appliedDistrict]);
+    if (appliedWard) applied.push(['commune', appliedWard]);
+    if (!applied.length) return;
     const abort = new AbortController();
     void Promise.all(
-      missing.map(([level, id]) =>
+      applied.map(([level, id]) =>
         api<{ units: AdminUnit[] }>(
           '/api/admin-units?' + new URLSearchParams({ level, include: id }),
           undefined,
@@ -286,27 +272,27 @@ export function SearchIsland({
           .then(
             (result) => result.units.find((unit) => unit.id === id)?.name_vi,
           )
-          .catch(() => undefined),
+          .catch((failure) => {
+            if (
+              failure instanceof RequestError &&
+              (failure.status === 401 || failure.status === 403)
+            )
+              onDenied(failure.status);
+            return undefined;
+          }),
       ),
     ).then((names) => {
       if (abort.signal.aborted) return;
       const found: Record<string, string> = {};
-      missing.forEach(([, id], index) => {
+      applied.forEach(([, id], index) => {
         const name = names[index];
         if (name) found[id] = name;
       });
+      if (!Object.keys(found).length) return;
       setAppliedNames((current) => ({ ...current, ...found }));
     });
     return () => abort.abort();
-  }, [
-    appliedProvince,
-    appliedDistrict,
-    appliedWard,
-    appliedNames,
-    provinces,
-    districts,
-    wards,
-  ]);
+  }, [appliedProvince, appliedDistrict, appliedWard, onDenied]);
   // The contact filter lists only identities the caller may read, through the bounded name
   // search and paging the property maintenance picker already uses: a page at a time on
   // request, never a walk over the whole directory. The applied filter's label is the one
