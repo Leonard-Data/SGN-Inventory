@@ -59,6 +59,26 @@ export function writeListState(
   carrier.state = { ...state };
 }
 
+// Whether the list paints the rows the browser already holds while this surface's own session read
+// is still answering. A return to the list finds the catalogue in the provider above the route, so
+// the rows are there to show on the first render; waiting for the session read that confirms them
+// would put a skeleton over rows that are already in memory, which is the wait the person reports.
+// The catalogue's own loader owns the authority check - a changed scope empties what it holds and
+// this reads false again - and a read that failed states its own error instead of a list nothing
+// confirmed.
+export function paintsHeldRows({
+  held,
+  failed,
+}: {
+  // The catalogue's authorized scope is present: `useCatalogue` answered with it rather than the
+  // empty state it falls back to for another scope.
+  held: boolean;
+  // This surface's own session read stopped with an error.
+  failed: boolean;
+}): boolean {
+  return held && !failed;
+}
+
 // Whether the stream has rendered enough to put a position on: the read has stated the total the
 // stream reserves its whole height from, and - in the grid, whose chunk size is the measured column
 // count - that count has settled. Applied any earlier, the position would be clamped onto a height

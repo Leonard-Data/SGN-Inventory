@@ -36,7 +36,12 @@ import {
 } from './catalogue-results';
 import type { CatalogueMatch } from './address-index';
 import { useListStateCarrier } from './list-state-provider';
-import { positionReady, readListState, writeListState } from './list-state';
+import {
+  paintsHeldRows,
+  positionReady,
+  readListState,
+  writeListState,
+} from './list-state';
 import {
   activeFilterCount,
   filterParams,
@@ -245,6 +250,16 @@ export function Inventory({
     () => restored?.edited ?? false,
   );
   const catalogue = useCatalogue(session);
+  // The rows the browser already holds paint on arrival: a return to the list shows the catalogue
+  // the provider above the route still holds, instead of putting a skeleton over rows that are in
+  // memory while this surface re-confirms the authority the catalogue was read under. Nothing is
+  // shown before the first answer, and a read that failed states its own error.
+  const showsList =
+    (employee !== null && !busy) ||
+    paintsHeldRows({
+      held: catalogue.scope !== null,
+      failed: sessionError !== null,
+    });
   // The authorization scope: the employee, their role and the server-maintained access revision.
   // A replacement catalogue is not a new authority, so it neither reopens a submitted search nor
   // closes the quick view of a record that is still readable.
@@ -289,9 +304,12 @@ export function Inventory({
   const localReady = localActive && catalogue.index.length > 0;
   const catalogueFailed =
     catalogue.status === 'failed' && !catalogue.progress.isComplete;
-  // The employee the creator selection compares against; the list reads nothing until the session
-  // has answered, so an absent one matches nothing rather than everyone.
-  const employeeId = session?.employee.id ?? null;
+  // The employee the creator selection compares against. The catalogue's own authorized scope names
+  // the same employee whenever it is answered, so a list painting from the held rows filters by the
+  // creator before this surface's session read has answered; an absent one matches nothing rather
+  // than everyone.
+  const employeeId =
+    session?.employee.id ?? catalogue.scope?.employee.id ?? null;
   const matches = useMemo(() => {
     if (!localActive) return null;
     return localReady
@@ -1153,9 +1171,9 @@ export function Inventory({
           </div>
         ) : null}
 
-        {busy ? <SkeletonCards label={text.loading} /> : null}
+        {busy && !showsList ? <SkeletonCards label={text.loading} /> : null}
 
-        <div ref={surface} hidden={!employee || busy}>
+        <div ref={surface} hidden={!showsList}>
           {streamError && total === 0 ? (
             <div className="panel">
               <div className="state-panel" data-tone="danger">

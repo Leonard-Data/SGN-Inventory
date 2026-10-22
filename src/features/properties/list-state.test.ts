@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   newListStateCarrier,
+  paintsHeldRows,
   positionReady,
   readListState,
   writeListState,
@@ -124,4 +125,13 @@ test('a position is only restored onto a stream that has rendered', () => {
     positionReady({ read: false, total: 400, view: 'table', width: 0 }),
     false,
   );
+});
+
+// A return to the list finds the catalogue in the provider above the route, so the rows are there
+// to paint on the first render (issue #265). Only the absence of that catalogue, or a session read
+// that stopped with an error, puts the list back to waiting.
+test('the list paints the rows the browser holds while the session read answers', () => {
+  assert.equal(paintsHeldRows({ held: true, failed: false }), true);
+  assert.equal(paintsHeldRows({ held: false, failed: false }), false);
+  assert.equal(paintsHeldRows({ held: true, failed: true }), false);
 });

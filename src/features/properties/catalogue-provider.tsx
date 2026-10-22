@@ -102,14 +102,19 @@ const CatalogueContext = createContext<CatalogueState>(EMPTY);
 
 export function useCatalogue(session: EmployeeSession | null): CatalogueState {
   const catalogue = useContext(CatalogueContext);
+  // A session that differs from the one the catalogue was read under is another authority, and the
+  // catalogue it holds does not answer for it. A surface that has not answered yet - its own read is
+  // still in flight - is not a different authority: the provider's read is what authorized the
+  // catalogue, and it empties what it holds when that scope moves. Treating the unanswered read as a
+  // change is what threw the held catalogue away on a return to the list.
   if (
     catalogue.scope &&
-    (!session ||
-      sessionDiffers(
-        renderedSession(catalogue.scope.employee),
-        catalogue.scope.accessRevision,
-        session,
-      ))
+    session &&
+    sessionDiffers(
+      renderedSession(catalogue.scope.employee),
+      catalogue.scope.accessRevision,
+      session,
+    )
   )
     return EMPTY;
   return catalogue;

@@ -66,7 +66,13 @@ export function useProtectedData<T>(
         renderedFor: renderedFor.current,
         renderedAccessRevision: renderedAccessRevision.current,
         onIdentityChange: () => {
-          if (surfaceElement.current) surfaceElement.current.hidden = true;
+          // A surface that has rendered nothing has nothing to conceal. Hiding it here anyway is
+          // what put a blank results area over rows a returning list had already painted from the
+          // catalogue the browser holds (#265); the first answer of a read is not a change of
+          // identity. An identity that really moved is a surface with something rendered, and it is
+          // still hidden at once.
+          if (renderedFor.current !== null && surfaceElement.current)
+            surfaceElement.current.hidden = true;
           renderedFor.current = null;
           renderedAccessRevision.current = null;
           setData(null);
