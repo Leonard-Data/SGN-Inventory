@@ -4,6 +4,7 @@ import test from 'node:test';
 import { messages } from '../../i18n/messages.ts';
 import {
   COLUMN_HEADINGS,
+  listedAddress,
   MISSING_VALUE,
   propertyTableRow,
   recordFacts,
@@ -158,6 +159,70 @@ test('a value the record does not have renders as an em dash, never as a blank c
   );
   assert.equal(cell(current, 'district').text, MISSING_VALUE);
   assert.equal(cell(current, 'ward').text, 'Phường Bến Nghé');
+});
+
+// The row states the recorded address the search read it through, so a property recorded in both
+// formats is listed with the format the search states rather than with whichever variant is primary.
+test('a row states the recorded address the search read it through', () => {
+  const current = {
+    id: '33333333-3333-4333-8333-333333333333',
+    format: 'current',
+    addressText: '12 Lê Lợi, Phường Bến Nghé',
+    mappingStatus: 'verified',
+    isPrimary: false,
+    houseNumber: '12',
+    street: 'Lê Lợi',
+    commune: 'Phường Bến Nghé',
+    district: null,
+  };
+  const both = record({
+    addresses: [
+      {
+        id: '22222222-2222-4222-8222-222222222222',
+        format: 'legacy',
+        addressText: '12 Lê Lợi, Phường Bến Nghé, Quận 1',
+        mappingStatus: 'unresolved',
+        isPrimary: true,
+        houseNumber: '12',
+        street: 'Lê Lợi',
+        commune: 'Phường Bến Nghé',
+        district: 'Quận 1',
+      },
+      current,
+    ],
+  });
+  const legacy = propertyTableRow(both, 'vi');
+  assert.equal(cell(legacy, 'district').text, 'Quận 1');
+  assert.match(legacy.title, /Quận 1/);
+  const searched = propertyTableRow(
+    both,
+    'vi',
+    null,
+    listedAddress(both, 'current'),
+  );
+  assert.equal(cell(searched, 'ward').text, 'Phường Bến Nghé');
+  // A current-format address records no district, so the cell says so rather than stating the
+  // other format's district beside the current address.
+  assert.equal(cell(searched, 'district').text, MISSING_VALUE);
+  assert.equal(searched.title, 'SNH-0148 · 12 Lê Lợi, Phường Bến Nghé');
+  // A cleared search states the recorded primary address, and the variant a query matched when
+  // there is one, so the row's text and parts describe the address it is listed under.
+  assert.equal(listedAddress(both, 'any'), both.addresses[0]);
+  assert.equal(listedAddress(both, 'any', 'current'), current);
+  const matched = propertyTableRow(
+    both,
+    'vi',
+    null,
+    listedAddress(both, 'any', 'current'),
+  );
+  assert.equal(cell(matched, 'district').text, MISSING_VALUE);
+  assert.equal(matched.title, 'SNH-0148 · 12 Lê Lợi, Phường Bến Nghé');
+  // A match that states no format, such as a property code alone, keeps the format the search reads
+  // through instead of falling back to whichever variant was recorded first.
+  assert.equal(listedAddress(both, 'legacy', ''), both.addresses[0]);
+  assert.equal(listedAddress(both, 'current', ''), current);
+  assert.equal(listedAddress(both, 'current'), current);
+  assert.equal(listedAddress(both, null), both.addresses[0]);
 });
 
 // The list states these four facts in their own columns and the quick view states the same four

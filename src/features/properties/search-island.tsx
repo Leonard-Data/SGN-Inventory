@@ -11,12 +11,15 @@ import { ContactPicker } from '@/features/property-maintenance/contact-picker';
 import { UnitCombobox } from '@/features/property-maintenance/unit-combobox';
 import { type UnitOption } from '@/features/property-maintenance/units';
 import {
+  INVENTORY_ADDRESS_FORMAT_ANY,
+  INVENTORY_ADDRESS_FORMATS,
   INVENTORY_FILTER_KEYS,
   INVENTORY_LISTING_MODES,
   INVENTORY_PROPERTY_TYPES,
   INVENTORY_STATUSES,
   noInventoryFilters,
   parseInventoryFilters,
+  searchedAddressFormat,
   squareMetres,
   wholeVnd,
   type InventoryFilterKey,
@@ -61,6 +64,13 @@ export function SearchIsland({
   const appliedWard = filters.ward ?? '';
   const appliedContact = filters.contact ?? '';
   const appliedCreatedBy = filters.createdBy ?? '';
+  // The format the search reads through: an address that states none is the legacy search the panel
+  // opens on, and a cleared format filter states no format condition at all.
+  const appliedFormat = searchedAddressFormat(filters);
+  const formatLabel = (format: string) =>
+    format === INVENTORY_ADDRESS_FORMAT_ANY
+      ? text.filtersAny
+      : label(locale, format);
   // The stated ordering, when the address carries one. A chronological ordering is an advanced
   // criterion: it names the eligible-status database view, which the loaded catalogue cannot
   // state, so it is submitted from this panel rather than run as soon as a control changes.
@@ -79,6 +89,9 @@ export function SearchIsland({
   const [province, setProvince] = useState(appliedProvince);
   const [ward, setWard] = useState(appliedWard);
   const [contact, setContact] = useState(appliedContact);
+  // The format the panel will apply: one of the two formats, or the cleared state it inherited from
+  // the address, which the two-value control cannot display but a submission keeps.
+  const [format, setFormat] = useState(appliedFormat);
   const [createdBy, setCreatedBy] = useState(appliedCreatedBy);
   const [contactLabel, setContactLabel] = useState<string | null>(null);
   const [provinces, setProvinces] = useState<AdminUnit[]>([]);
@@ -95,6 +108,7 @@ export function SearchIsland({
     setWard(appliedWard);
     setContact(appliedContact);
     setCreatedBy(appliedCreatedBy);
+    setFormat(appliedFormat);
   }
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -114,7 +128,9 @@ export function SearchIsland({
     setWard(appliedWard);
     setContact(appliedContact);
     setCreatedBy(appliedCreatedBy);
+    setFormat(appliedFormat);
   }, [
+    appliedFormat,
     appliedMode,
     appliedOrder,
     appliedProvince,
@@ -323,11 +339,15 @@ export function SearchIsland({
       label: `${text.areaRangeTo}: ${m2(filters.areaMax)}`,
     });
   function remove(key: InventoryFilterKey) {
-    // The ward narrows its province, so removing the province removes the dependent ward too.
+    // The ward narrows its province, so removing the province removes the dependent ward too. The
+    // format is cleared rather than unstated, so the next load reads the cleared search back instead
+    // of reopening the default legacy one.
     const next =
       key === 'province'
         ? { ...filters, province: null, ward: null }
-        : { ...filters, [key]: null };
+        : key === 'addressFormat'
+          ? { ...filters, addressFormat: INVENTORY_ADDRESS_FORMAT_ANY }
+          : { ...filters, [key]: null };
     router.push(inventoryHref({ query, sort, view, filters: next }));
   }
   const clearHref = inventoryHref({
@@ -405,34 +425,58 @@ export function SearchIsland({
   );
   return (
     <>
-      {applied.length ? (
-        <div className="chips">
+      {/* The applied summary always names the address format: the legacy search is itself a
+          narrowing, so it is stated rather than left for a person to wonder where a property
+          recorded in the other format went. Its remove control clears it to the no-format search. */}
+      <div className="chips">
+        {applied.length ? (
           <Link className="link" href={clearHref} prefetch={false}>
             {text.filtersClear}
           </Link>
-          {applied.map((condition) => (
-            <span className="chip" key={condition.key}>
-              {condition.label}
-              <button
-                type="button"
-                onClick={() => remove(condition.key)}
-                aria-label={`${text.filtersRemove}: ${condition.label}`}
+        ) : null}
+        <span className="chip">
+          {text.addressFormat}: {formatLabel(appliedFormat)}
+          {appliedFormat === INVENTORY_ADDRESS_FORMAT_ANY ? null : (
+            <button
+              type="button"
+              onClick={() => remove('addressFormat')}
+              aria-label={`${text.filtersRemove}: ${text.addressFormat}`}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                aria-hidden="true"
               >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  aria-hidden="true"
-                >
-                  <path d="M6 6l12 12M18 6L6 18" />
-                </svg>
-              </button>
-            </span>
-          ))}
-        </div>
-      ) : null}
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          )}
+        </span>
+        {applied.map((condition) => (
+          <span className="chip" key={condition.key}>
+            {condition.label}
+            <button
+              type="button"
+              onClick={() => remove(condition.key)}
+              aria-label={`${text.filtersRemove}: ${condition.label}`}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                aria-hidden="true"
+              >
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          </span>
+        ))}
+      </div>
       <dialog
         id="inventory-filters"
         ref={dialogRef}
@@ -480,6 +524,36 @@ export function SearchIsland({
                 {select('status', text.status, INVENTORY_STATUSES, true)}
                 {select('mode', text.listingMode, INVENTORY_LISTING_MODES)}
                 {select('type', text.propertyType, INVENTORY_PROPERTY_TYPES)}
+              </div>
+              {/* The panel offers the two formats a search is matched through; the cleared state
+                  that searches both is reached from the format chip above, not from here. */}
+              <div className="field-group">
+                <div className="form-grid">
+                  <div className="field">
+                    <label
+                      className="field-label"
+                      htmlFor="filter-addressFormat"
+                    >
+                      {text.addressFormat}
+                    </label>
+                    <select
+                      id="filter-addressFormat"
+                      className="select"
+                      value={
+                        format === INVENTORY_ADDRESS_FORMAT_ANY ? '' : format
+                      }
+                      onChange={(event) => setFormat(event.currentTarget.value)}
+                    >
+                      {INVENTORY_ADDRESS_FORMATS.map((value) => (
+                        <option key={value} value={value}>
+                          {label(locale, value)}
+                        </option>
+                      ))}
+                    </select>
+                    <input type="hidden" name="addressFormat" value={format} />
+                  </div>
+                </div>
+                <p className="field-hint">{text.addressFormatHint}</p>
               </div>
               {/* The creator selection is answered from the loaded catalogue alone, so it is
                   offered only for a run that stays in it. A whole-inventory search has no creator

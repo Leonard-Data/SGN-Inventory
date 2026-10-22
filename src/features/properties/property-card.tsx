@@ -6,6 +6,7 @@ import type { PropertySummary } from './types';
 import { CoverImage } from '@/features/property-files/cover-image';
 import { Plate } from './plate';
 import { formatInteger, vietnamDate } from './format';
+import { listedAddress } from './table';
 
 /* Tone helper: maps an inventory status to a badge tone. Shared with the quick view, so a status
    reads the same everywhere it appears. */
@@ -33,6 +34,7 @@ export const PropertyCard = memo(function PropertyCard({
   onDenied,
   onQuickView,
   showEntry = false,
+  addressFormat = null,
   matchedFormat,
 }: {
   record: PropertySummary;
@@ -43,10 +45,13 @@ export const PropertyCard = memo(function PropertyCard({
   // call, so closing the quick view returns focus to that same control.
   onQuickView?: (record: PropertySummary, opener: HTMLElement | null) => void;
   showEntry?: boolean;
-  // The stored format a local search matched this property through, stated only when it differs
-  // from the address the card already shows.
+  // The format the search reads through, which decides the address the card states.
+  addressFormat?: string | null;
+  // The stored format a local search matched this property through. It decides the address the card
+  // states, and is named beside it when the search states no format.
   matchedFormat?: string;
 }) {
+  const address = listedAddress(record, addressFormat, matchedFormat ?? null);
   // The chronological views carry the recorded original entry date and the database's Vietnam
   // age. A property the database reports with no date is an explicit unknown, not a missing row.
   const entryDate = record.entryOn ? vietnamDate(record.entryOn) : null;
@@ -94,12 +99,10 @@ export const PropertyCard = memo(function PropertyCard({
               new URLSearchParams({ returnTo: resultLocation })
             }
           >
-            {record.addresses.length && record.addresses[0]?.addressText
-              ? record.addresses[0].addressText
-              : label(locale, null)}
+            {address?.addressText || label(locale, null)}
           </Link>
         </h2>
-        {matchedFormat && matchedFormat !== record.addresses[0]?.format ? (
+        {matchedFormat && matchedFormat !== addressFormat ? (
           <p className="card-entry">
             <span className="badge" data-tone="muted">
               {label(locale, matchedFormat)}

@@ -5,6 +5,8 @@ import {
   catalogUnitsMatch,
   filterParams,
   filterRpcArgs,
+  INVENTORY_ADDRESS_FORMAT_ANY,
+  INVENTORY_ADDRESS_FORMATS,
   noInventoryFilters,
   parseInventoryFilters,
 } from './filters.ts';
@@ -21,6 +23,7 @@ test('a complete filter set is applied exactly as the address stated it', () => 
     status: 'available',
     mode: 'rent',
     type: 'house',
+    addressFormat: 'current',
     priceMin: '5000000',
     priceMax: '25000000',
     areaMin: '45.5',
@@ -35,6 +38,7 @@ test('a complete filter set is applied exactly as the address stated it', () => 
     status: 'available',
     mode: 'rent',
     type: 'house',
+    addressFormat: 'current',
     priceMin: '5000000',
     priceMax: '25000000',
     areaMin: '45.5',
@@ -44,6 +48,52 @@ test('a complete filter set is applied exactly as the address stated it', () => 
     contact: '33333333-3333-4333-8333-333333333333',
     createdBy: 'mine',
   });
+});
+
+// The panel offers exactly the two formats a search is matched through and opens on the legacy one;
+// the cleared state that applies no format condition is carried by the address alone.
+test('the address format offers two formats and a cleared state the address carries', () => {
+  assert.deepEqual([...INVENTORY_ADDRESS_FORMATS], ['legacy', 'current']);
+  const unstated = parse({});
+  assert.ok(unstated.ok);
+  assert.equal(unstated.filters.addressFormat, 'legacy');
+  assert.equal(parse({ addressFormat: 'legacy' }).ok, true);
+  const current = parse({ addressFormat: 'current' });
+  assert.ok(current.ok);
+  assert.equal(current.filters.addressFormat, 'current');
+  const cleared = parse({ addressFormat: 'any' });
+  assert.ok(cleared.ok);
+  assert.equal(cleared.filters.addressFormat, 'any');
+  // Clearing the format filter states the cleared search in the address, so a reload reads it back
+  // instead of reopening the default legacy search.
+  const clearedAddress = filterParams({
+    ...noInventoryFilters,
+    addressFormat: 'any',
+  });
+  assert.deepEqual(clearedAddress, { addressFormat: 'any' });
+  const reloaded = parseInventoryFilters(new URLSearchParams(clearedAddress));
+  assert.ok(reloaded.ok);
+  assert.equal(reloaded.filters.addressFormat, 'any');
+  // The recorded third format is a property's other address, not one of the two a search reads
+  // through, and nothing else is a format at all.
+  for (const value of ['alternate', 'Legacy', 'CURRENT', 'both'])
+    assert.equal(parse({ addressFormat: value }).ok, false, value);
+});
+
+// The whole-inventory read takes its criteria as optional parameters, so a caller that states no
+// format asks for no format condition rather than for the page's default legacy search.
+test('an absent format parameter is no format condition for the read', () => {
+  const read = parseInventoryFilters(
+    new URLSearchParams(),
+    INVENTORY_ADDRESS_FORMAT_ANY,
+  );
+  assert.ok(read.ok);
+  assert.equal(read.filters.addressFormat, 'any');
+  assert.deepEqual(filterRpcArgs(read.filters), {});
+  // The page's own address keeps its default: the search opens on the legacy address.
+  const page = parse({});
+  assert.ok(page.ok);
+  assert.equal(page.filters.addressFormat, 'legacy');
 });
 
 test('the creator selection is the one token, and nothing else', () => {
@@ -171,12 +221,14 @@ test('a contact value is a recorded identity, independent of the area filters', 
   assert.ok(composed.ok);
   assert.deepEqual(filterParams(composed.filters), {
     status: 'available',
+    addressFormat: 'legacy',
     areaMax: '80',
     contact,
   });
   assert.deepEqual(filterRpcArgs(composed.filters), {
     p_status: 'available',
     p_area_max: 80,
+    p_address_format: 'legacy',
     p_contact_id: contact,
   });
   // A malformed identity is refused; a blank one is simply no filter.
@@ -190,31 +242,39 @@ test('a contact value is a recorded identity, independent of the area filters', 
 });
 
 test('only set filters become link and RPC parameters', () => {
-  assert.deepEqual(filterParams(noInventoryFilters), {});
+  // The address format is one of the two formats rather than an absent value, so it is always
+  // stated: it is the address the search reads through, and the default legacy search is itself a
+  // narrowing. Every other filter appears only when the address sets it.
+  assert.deepEqual(filterParams(noInventoryFilters), {
+    addressFormat: 'legacy',
+  });
   // The creator selection travels in the address like every other filter, so the link, the chip and
   // the control all read the one place a filter lives.
   assert.deepEqual(filterParams({ ...noInventoryFilters, createdBy: 'mine' }), {
+    addressFormat: 'legacy',
     createdBy: 'mine',
   });
   assert.deepEqual(
     filterParams({ ...noInventoryFilters, mode: 'sale', areaMax: '80' }),
-    { mode: 'sale', areaMax: '80' },
+    { addressFormat: 'legacy', mode: 'sale', areaMax: '80' },
   );
-  assert.equal(activeFilterCount(noInventoryFilters), 0);
+  assert.equal(activeFilterCount(noInventoryFilters), 1);
   assert.equal(
     activeFilterCount({
       ...noInventoryFilters,
       status: 'available',
       mode: 'sale',
     }),
-    2,
+    3,
   );
-  assert.deepEqual(filterRpcArgs(noInventoryFilters), {});
+  assert.deepEqual(filterRpcArgs(noInventoryFilters), {
+    p_address_format: 'legacy',
+  });
   // The creator selection names no parameter of this read: the whole-inventory search has no
   // creator criterion, and the selection is answered from the loaded catalogue alone.
   assert.deepEqual(
     filterRpcArgs({ ...noInventoryFilters, createdBy: 'mine' }),
-    {},
+    { p_address_format: 'legacy' },
   );
   assert.deepEqual(
     filterRpcArgs({
@@ -229,6 +289,7 @@ test('only set filters become link and RPC parameters', () => {
       p_price_min: '1000',
       p_price_max: '2000',
       p_area_min: 45.5,
+      p_address_format: 'legacy',
     },
   );
   assert.deepEqual(
@@ -240,7 +301,23 @@ test('only set filters become link and RPC parameters', () => {
     {
       p_price_min: '100000000000000000',
       p_price_max: '999999999999999999',
+      p_address_format: 'legacy',
     },
+  );
+  // The current format travels too, so the read is asked for the other recorded address.
+  assert.deepEqual(
+    filterRpcArgs({ ...noInventoryFilters, addressFormat: 'current' }),
+    { p_address_format: 'current' },
+  );
+  // The choice that states no format is the read's own unconditional form: the address keeps the
+  // choice, and the read is asked with no format parameter at all.
+  assert.deepEqual(
+    filterParams({ ...noInventoryFilters, addressFormat: 'any' }),
+    { addressFormat: 'any' },
+  );
+  assert.deepEqual(
+    filterRpcArgs({ ...noInventoryFilters, addressFormat: 'any' }),
+    {},
   );
 });
 
@@ -248,15 +325,18 @@ test('the narrower administrative unit is the read parameter', () => {
   const province = '11111111-1111-4111-8111-111111111111';
   const ward = '22222222-2222-4222-8222-222222222222';
   assert.deepEqual(filterParams({ ...noInventoryFilters, province, ward }), {
+    addressFormat: 'legacy',
     province,
     ward,
   });
-  assert.equal(activeFilterCount({ ...noInventoryFilters, province, ward }), 2);
+  assert.equal(activeFilterCount({ ...noInventoryFilters, province, ward }), 3);
   assert.deepEqual(filterRpcArgs({ ...noInventoryFilters, province }), {
+    p_address_format: 'legacy',
     p_area_id: province,
   });
   // A ward is always inside its province, so the ward is the unit that governs.
   assert.deepEqual(filterRpcArgs({ ...noInventoryFilters, province, ward }), {
+    p_address_format: 'legacy',
     p_area_id: ward,
   });
 });

@@ -2476,6 +2476,7 @@ export type Database = {
           p_area_max?: number;
           p_area_id?: string;
           p_contact_id?: string;
+          p_address_format?: string;
         };
         // One window of the stream beside the matching total. A window past the end, or a filter
         // that matches nothing, answers one row whose window columns are null, so the total is

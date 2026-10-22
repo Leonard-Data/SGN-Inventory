@@ -12,7 +12,9 @@ import {
 import {
   areaHundredths,
   filterParams,
+  INVENTORY_ADDRESS_FORMAT_ANY,
   parseInventoryFilters,
+  searchedAddressFormat,
   wholeVnd,
   type InventoryFilterKey,
   type InventoryFilters,
@@ -175,7 +177,12 @@ export function matchesLocalFilters(
     // Either recorded area satisfies the range, as it does in the database read.
     if (!within(land, low, high) && !within(floor, low, high)) return false;
   }
-  return true;
+  // The stated format is the address the record is searched through, so a property recording no
+  // address in that format does not match - the database read's own exists-predicate, where nothing
+  // is inferred for a property on its behalf. The choice that states no format narrows nothing.
+  const searched = searchedAddressFormat(filters);
+  if (searched === INVENTORY_ADDRESS_FORMAT_ANY) return true;
+  return record.addresses.some((address) => address.format === searched);
 }
 
 // Newest-created first, then the property identity descending: the total order the database's
@@ -222,7 +229,20 @@ export function catalogueMatches(
     employeeId?: string | null;
   },
 ): CatalogueMatch[] {
-  const matched = matchCatalogue(index, query).filter((match) =>
+  const searched = searchedAddressFormat(filters);
+  // The typed query is matched through the selected format's addresses alone, exactly as the
+  // database read applies it: the other format's variants stay recorded and displayed but are not
+  // what this search reads, so the same query answers the same inventory in both places.
+  const scoped =
+    searched === INVENTORY_ADDRESS_FORMAT_ANY
+      ? index
+      : index.map((entry) => ({
+          ...entry,
+          variants: entry.variants.filter(
+            (variant) => variant.format === searched,
+          ),
+        }));
+  const matched = matchCatalogue(scoped, query).filter((match) =>
     matchesLocalFilters(match.record, filters, employeeId),
   );
   return query.trim() === '' ? orderCatalogue(matched) : matched;
