@@ -797,8 +797,10 @@ export async function inventoryStreamContract({
     },
   );
 
+  // What the index is, not what the planner does with it at fixture size: the plan is measured at
+  // the imported stock's size in scripts/recent-change-order-evidence.mjs.
   await check(
-    'the change-time order is indexed, so the catalogue page that states it is an index walk',
+    'the change-order index exists over unarchived rows',
     async () => {
       const index = (
         await db.query(
@@ -807,6 +809,7 @@ export async function inventoryStreamContract({
       ).rows[0];
       assert.ok(index, 'the browse order index exists');
       assert.match(index.indexdef, /updated_at DESC, id DESC/i);
+      assert.match(index.indexdef, /WHERE \(archived_at IS NULL\)\s*$/i);
     },
   );
 
