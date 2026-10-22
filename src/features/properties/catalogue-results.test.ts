@@ -458,8 +458,8 @@ test('the address format decides which recorded address a search is matched thro
   assert.deepEqual(ids('BDS-current-only', { addressFormat: 'current' }), [
     'current-only',
   ]);
-  // The choice that states no format condition widens the search to both recorded formats, so a
-  // property recorded in only the other format stays reachable from the panel.
+  // Clearing the format filter widens the search to both recorded formats, so a property recorded in
+  // only the other format stays reachable from the panel.
   assert.deepEqual(ids('', { addressFormat: 'any' }), [
     'both',
     'current-only',

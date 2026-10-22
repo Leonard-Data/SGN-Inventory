@@ -5,6 +5,8 @@ import {
   catalogUnitsMatch,
   filterParams,
   filterRpcArgs,
+  INVENTORY_ADDRESS_FORMAT_ANY,
+  INVENTORY_ADDRESS_FORMATS,
   noInventoryFilters,
   parseInventoryFilters,
 } from './filters.ts';
@@ -48,9 +50,10 @@ test('a complete filter set is applied exactly as the address stated it', () => 
   });
 });
 
-// The address format is always stated, so a search always names the address it reads through, or
-// states the choice that applies no format condition.
-test('the address format is the legacy address unless the address states another choice', () => {
+// The panel offers exactly the two formats a search is matched through and opens on the legacy one;
+// the cleared state that applies no format condition is carried by the address alone.
+test('the address format offers two formats and a cleared state the address carries', () => {
+  assert.deepEqual([...INVENTORY_ADDRESS_FORMATS], ['legacy', 'current']);
   const unstated = parse({});
   assert.ok(unstated.ok);
   assert.equal(unstated.filters.addressFormat, 'legacy');
@@ -58,13 +61,39 @@ test('the address format is the legacy address unless the address states another
   const current = parse({ addressFormat: 'current' });
   assert.ok(current.ok);
   assert.equal(current.filters.addressFormat, 'current');
-  const either = parse({ addressFormat: 'any' });
-  assert.ok(either.ok);
-  assert.equal(either.filters.addressFormat, 'any');
+  const cleared = parse({ addressFormat: 'any' });
+  assert.ok(cleared.ok);
+  assert.equal(cleared.filters.addressFormat, 'any');
+  // Clearing the format filter states the cleared search in the address, so a reload reads it back
+  // instead of reopening the default legacy search.
+  const clearedAddress = filterParams({
+    ...noInventoryFilters,
+    addressFormat: 'any',
+  });
+  assert.deepEqual(clearedAddress, { addressFormat: 'any' });
+  const reloaded = parseInventoryFilters(new URLSearchParams(clearedAddress));
+  assert.ok(reloaded.ok);
+  assert.equal(reloaded.filters.addressFormat, 'any');
   // The recorded third format is a property's other address, not one of the two a search reads
   // through, and nothing else is a format at all.
   for (const value of ['alternate', 'Legacy', 'CURRENT', 'both'])
     assert.equal(parse({ addressFormat: value }).ok, false, value);
+});
+
+// The whole-inventory read takes its criteria as optional parameters, so a caller that states no
+// format asks for no format condition rather than for the page's default legacy search.
+test('an absent format parameter is no format condition for the read', () => {
+  const read = parseInventoryFilters(
+    new URLSearchParams(),
+    INVENTORY_ADDRESS_FORMAT_ANY,
+  );
+  assert.ok(read.ok);
+  assert.equal(read.filters.addressFormat, 'any');
+  assert.deepEqual(filterRpcArgs(read.filters), {});
+  // The page's own address keeps its default: the search opens on the legacy address.
+  const page = parse({});
+  assert.ok(page.ok);
+  assert.equal(page.filters.addressFormat, 'legacy');
 });
 
 test('the creator selection is the one token, and nothing else', () => {

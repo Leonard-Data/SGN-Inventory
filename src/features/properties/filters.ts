@@ -4,9 +4,9 @@
 // The province/ward pair names official administrative units; the ward is dependent on the
 // province and, when both are set, the narrower ward is the unit the read applies. The contact
 // value is a recorded contact identity, so it is validated with the same UUID shape. The address
-// format is the format of the address a search is matched through: the panel opens on the legacy
-// address, which is the default an address that states none carries, and its third choice states
-// no format condition so a property recorded in either format is reachable.
+// format is the format of the address a search is matched through: the page states the legacy address
+// unless the address clears the filter, and clearing it states no format condition so a property
+// recorded in either format is reachable.
 const UUID_VALUE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -30,11 +30,12 @@ export const INVENTORY_PROPERTY_TYPES = [
 // The two formats a search is matched through. An `alternate` address is a recorded other address
 // rather than one of the two formats a property is searched by, so it is no filter value.
 export const INVENTORY_ADDRESS_FORMATS = ['legacy', 'current'] as const;
-// The choice beside the two formats: no format condition at all, which the read expresses by the
-// absent parameter rather than by a format it would be asked to match. It is not a format a property
-// records, so no recorded address ever carries it.
+// The cleared state beside the two formats: no format condition at all, which the read expresses by
+// the absent parameter rather than by a format it would be asked to match. The address carries it so
+// a reload keeps the filter cleared instead of reopening the default; it is not a format a property
+// records, and it is no value the panel offers beside the two.
 export const INVENTORY_ADDRESS_FORMAT_ANY = 'any';
-export const INVENTORY_ADDRESS_FORMAT_CHOICES = [
+export const INVENTORY_ADDRESS_FORMAT_VALUES = [
   ...INVENTORY_ADDRESS_FORMATS,
   INVENTORY_ADDRESS_FORMAT_ANY,
 ] as const;
@@ -88,8 +89,14 @@ export function squareMetres(value: string): boolean {
   return AREA_M2.test(value) && areaHundredths(value) > 0n;
 }
 
-// The raw address values, before validation: the page hands the read what the address said.
-export function inventoryFilters(params: URLSearchParams): InventoryFilters {
+// The raw address values, before validation: the page hands the read what the address said. The
+// value an address that states no format carries is the boundary's own: the page's addresses state
+// the legacy search the panel opens on, while a read that takes its criteria as optional parameters
+// states the no-format condition for an absent one.
+export function inventoryFilters(
+  params: URLSearchParams,
+  absentAddressFormat: string = DEFAULT_ADDRESS_FORMAT,
+): InventoryFilters {
   const read = (key: InventoryFilterKey): string | null => {
     const value = params.get(key)?.trim() ?? '';
     return value === '' ? null : value;
@@ -98,8 +105,7 @@ export function inventoryFilters(params: URLSearchParams): InventoryFilters {
     status: read('status'),
     mode: read('mode'),
     type: read('type'),
-    // An address that states no format is the legacy search, which is the one the panel opens on.
-    addressFormat: read('addressFormat') ?? DEFAULT_ADDRESS_FORMAT,
+    addressFormat: read('addressFormat') ?? absentAddressFormat,
     priceMin: read('priceMin'),
     priceMax: read('priceMax'),
     areaMin: read('areaMin'),
@@ -116,8 +122,9 @@ export type InventoryFilterParse =
 
 export function parseInventoryFilters(
   params: URLSearchParams,
+  absentAddressFormat: string = DEFAULT_ADDRESS_FORMAT,
 ): InventoryFilterParse {
-  const filters = inventoryFilters(params);
+  const filters = inventoryFilters(params, absentAddressFormat);
   const {
     status,
     mode,
@@ -137,7 +144,7 @@ export function parseInventoryFilters(
     return refuse();
   if (type !== null && !includes(INVENTORY_PROPERTY_TYPES, type))
     return refuse();
-  if (!includes(INVENTORY_ADDRESS_FORMAT_CHOICES, addressFormat ?? ''))
+  if (!includes(INVENTORY_ADDRESS_FORMAT_VALUES, addressFormat ?? ''))
     return refuse();
   if (createdBy !== null && createdBy !== INVENTORY_CREATOR_MINE)
     return refuse();

@@ -42,9 +42,11 @@ export async function browseProperties(
   if ([...query].length > 120) throw new ApiError(400, 'query-too-long');
   if (sort !== null && !isInventoryOrder(sort))
     throw new ApiError(400, 'invalid-input');
+  // This read takes its criteria as optional parameters, so a caller that states no format asks for
+  // no format condition rather than for the page's default legacy search.
   // A filter the address states must be applied or refused; it is never dropped into a
   // different inventory than the one the address describes.
-  const filters = parseInventoryFilters(params);
+  const filters = parseInventoryFilters(params, INVENTORY_ADDRESS_FORMAT_ANY);
   if (!filters.ok) throw new ApiError(400, 'invalid-input');
   // The creator selection is answered from the loaded catalogue, which is the only place a record's
   // creator is already known; this read carries no creator criterion, so a caller asking for one is

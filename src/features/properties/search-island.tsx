@@ -11,8 +11,9 @@ import { ContactPicker } from '@/features/property-maintenance/contact-picker';
 import { UnitCombobox } from '@/features/property-maintenance/unit-combobox';
 import { type UnitOption } from '@/features/property-maintenance/units';
 import {
+  DEFAULT_ADDRESS_FORMAT,
   INVENTORY_ADDRESS_FORMAT_ANY,
-  INVENTORY_ADDRESS_FORMAT_CHOICES,
+  INVENTORY_ADDRESS_FORMATS,
   INVENTORY_FILTER_KEYS,
   INVENTORY_LISTING_MODES,
   INVENTORY_PROPERTY_TYPES,
@@ -65,7 +66,7 @@ export function SearchIsland({
   const appliedContact = filters.contact ?? '';
   const appliedCreatedBy = filters.createdBy ?? '';
   // The format the search reads through: an address that states none is the legacy search the panel
-  // opens on, and the third choice states no format condition at all.
+  // opens on, and a cleared format filter states no format condition at all.
   const appliedFormat = searchedAddressFormat(filters);
   const formatLabel = (format: string) =>
     format === INVENTORY_ADDRESS_FORMAT_ANY
@@ -333,11 +334,15 @@ export function SearchIsland({
       label: `${text.areaRangeTo}: ${m2(filters.areaMax)}`,
     });
   function remove(key: InventoryFilterKey) {
-    // The ward narrows its province, so removing the province removes the dependent ward too.
+    // The ward narrows its province, so removing the province removes the dependent ward too. The
+    // format is cleared rather than unstated, so the next load reads the cleared search back instead
+    // of reopening the default legacy one.
     const next =
       key === 'province'
         ? { ...filters, province: null, ward: null }
-        : { ...filters, [key]: null };
+        : key === 'addressFormat'
+          ? { ...filters, addressFormat: INVENTORY_ADDRESS_FORMAT_ANY }
+          : { ...filters, [key]: null };
     router.push(inventoryHref({ query, sort, view, filters: next }));
   }
   const clearHref = inventoryHref({
@@ -417,8 +422,7 @@ export function SearchIsland({
     <>
       {/* The applied summary always names the address format: the legacy search is itself a
           narrowing, so it is stated rather than left for a person to wonder where a property
-          recorded in the other format went. It carries no remove control, and clearing is offered
-          only when another condition is stated, because the format is always stated. */}
+          recorded in the other format went. Its remove control clears it to the no-format search. */}
       <div className="chips">
         {applied.length ? (
           <Link className="link" href={clearHref} prefetch={false}>
@@ -427,6 +431,24 @@ export function SearchIsland({
         ) : null}
         <span className="chip">
           {text.addressFormat}: {formatLabel(appliedFormat)}
+          {appliedFormat === INVENTORY_ADDRESS_FORMAT_ANY ? null : (
+            <button
+              type="button"
+              onClick={() => remove('addressFormat')}
+              aria-label={`${text.filtersRemove}: ${text.addressFormat}`}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                aria-hidden="true"
+              >
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          )}
         </span>
         {applied.map((condition) => (
           <span className="chip" key={condition.key}>
@@ -498,8 +520,8 @@ export function SearchIsland({
                 {select('mode', text.listingMode, INVENTORY_LISTING_MODES)}
                 {select('type', text.propertyType, INVENTORY_PROPERTY_TYPES)}
               </div>
-              {/* The format decides which recorded address the query is matched against; the choice
-                  that states none matches a property recorded in either format. */}
+              {/* The panel offers the two formats a search is matched through; the cleared state
+                  that searches both is reached from the format chip above, not from here. */}
               <div
                 className="field-group"
                 key={`addressFormat=${appliedFormat}`}
@@ -516,11 +538,15 @@ export function SearchIsland({
                       id="filter-addressFormat"
                       className="select"
                       name="addressFormat"
-                      defaultValue={appliedFormat}
+                      defaultValue={
+                        appliedFormat === INVENTORY_ADDRESS_FORMAT_ANY
+                          ? DEFAULT_ADDRESS_FORMAT
+                          : appliedFormat
+                      }
                     >
-                      {INVENTORY_ADDRESS_FORMAT_CHOICES.map((format) => (
+                      {INVENTORY_ADDRESS_FORMATS.map((format) => (
                         <option key={format} value={format}>
-                          {formatLabel(format)}
+                          {label(locale, format)}
                         </option>
                       ))}
                     </select>
