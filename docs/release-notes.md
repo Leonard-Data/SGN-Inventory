@@ -60,11 +60,13 @@ With it:
 
 - **Progressive loading with honest progress** (#189). After the first page the loader follows the
   endpoint's own cursor to the end of the authorized inventory, deduplicating and indexing each
-  batch, and a line beside the search states the loaded count, the authorized total and an
+  batch, and a line beside the search stated the loaded count, the authorized total and an
   approximate percentage — held below 100% until the last batch is indexed — or the loaded count
-  alone when the total is not known. An interrupted load keeps what it has and offers Retry, and
-  while it is incomplete an empty result reads as "no matches in the loaded properties", never as an
-  empty inventory.
+  alone when the total was not known. That progress line is gone: #267 removed it, leaving Refresh as
+  the only loading affordance, so the loaded count now appears only as the denominator of the address
+  box's own local match line. An interrupted load keeps what it has and offers Retry, and while it is
+  incomplete an empty result reads as "no matches in the loaded properties", never as an empty
+  inventory.
 - **Deliberate Refresh as a replacement catalogue** (#190). Once the catalogue is complete, Refresh
   builds a replacement beside the one in use: the working catalogue stays searchable throughout, the
   replacement states its own progress and total separately, and it is swapped in only when every
