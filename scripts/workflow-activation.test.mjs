@@ -100,31 +100,142 @@ test('release activation is stage-scoped and production keeps its own switch', (
 });
 
 // A merge carrying a migration must apply it, or the release fails on purpose
-// while production stays behind. The mode is pinned to both trigger shapes: a
-// push applies, a dispatch still chooses, and verify keeps its failing path.
+// while production stays behind. These cases resolve the workflow's own
+// conditions for each trigger shape, so a rewrite that keeps the meaning passes
+// and a condition that changes it fails.
+const EXPRESSION_TOKEN =
+  /\s*(\|\||&&|==|!=|!|\(|\)|'[^']*'|[A-Za-z_][\w.]*|\d+)/g;
+
+function tokenizeCondition(expression) {
+  const source = String(expression)
+    .replace(/^\s*\$\{\{/, '')
+    .replace(/\}\}\s*$/, '');
+  return [...source.matchAll(EXPRESSION_TOKEN)].map(([, token]) => {
+    if (/^'/.test(token)) return { literal: token.slice(1, -1) };
+    if (/^\d/.test(token)) return { literal: Number(token) };
+    if (/^[A-Za-z_]/.test(token)) return { reference: token };
+    return { operator: token };
+  });
+}
+
+// The subset these workflow conditions use: references, literals, `!`, `==`,
+// `!=`, `&&`, `||` and parentheses.
+function resolveCondition(expression, context) {
+  const tokens = tokenizeCondition(expression);
+  let position = 0;
+  const take = () => tokens[position++];
+  const peek = (operator) => tokens[position]?.operator === operator;
+
+  function primary() {
+    if (peek('!')) {
+      take();
+      return !primary();
+    }
+    if (peek('(')) {
+      take();
+      const value = disjunction();
+      assert.equal(take()?.operator, ')', `unclosed group in ${expression}`);
+      return value;
+    }
+    const token = take();
+    if (!token || token.operator) {
+      throw new Error(`unexpected token in ${expression}`);
+    }
+    if ('literal' in token) return token.literal;
+    if (token.reference === 'true') return true;
+    if (token.reference === 'false') return false;
+    return token.reference
+      .split('.')
+      .reduce((value, key) => value?.[key], context);
+  }
+
+  function comparison() {
+    const left = primary();
+    if (peek('==')) {
+      take();
+      // Loose comparison keeps an absent trigger input unequal to a literal.
+      return left == comparison();
+    }
+    if (peek('!=')) {
+      take();
+      return left != comparison();
+    }
+    return left;
+  }
+
+  function conjunction() {
+    let value = comparison();
+    while (peek('&&')) {
+      take();
+      const right = comparison();
+      value = value && right;
+    }
+    return value;
+  }
+
+  function disjunction() {
+    let value = conjunction();
+    while (peek('||')) {
+      take();
+      const right = conjunction();
+      value = value || right;
+    }
+    return value;
+  }
+
+  const value = disjunction();
+  assert.equal(position, tokens.length, `unparsed tokens in ${expression}`);
+  return value;
+}
+
 test('a main push applies its reviewed migrations before the release', () => {
   const deploy = workflow('deploy.yml');
-  assert.equal(
-    gate(deploy.jobs.migrate.with.apply),
-    gate("${{ github.event_name == 'push' || inputs.migration == 'apply' }}"),
-  );
-  assert.equal(deploy.jobs.migrate.with.stage, "${{ inputs.stage || 'prod' }}");
+  const applyFor = (event, inputs) =>
+    resolveCondition(deploy.jobs.migrate.with.apply, {
+      github: { event_name: event },
+      inputs,
+    });
 
-  // The apply flag selects the write path and nothing else: the applying push
+  // A push reaches this pipeline only on the default branch, which is what
+  // keeps apply-on-push from reaching another stage.
+  assert.deepEqual(deploy.on.push.branches, ['main']);
+  assert.equal(deploy.on.workflow_dispatch.inputs.migration.default, 'apply');
+  assert.equal(applyFor('push', {}), true);
+  assert.equal(applyFor('workflow_dispatch', { migration: 'apply' }), true);
+  assert.equal(applyFor('workflow_dispatch', { migration: 'verify' }), false);
+  assert.equal(
+    resolveCondition(deploy.jobs.migrate.with.stage, { inputs: {} }),
+    'prod',
+  );
+  assert.equal(
+    resolveCondition(deploy.jobs.migrate.with.stage, {
+      inputs: { stage: 'dev' },
+    }),
+    'dev',
+  );
+
+  // The apply flag selects the write path and nothing else: the applying step
   // runs only when apply, the deliberate failure runs only when it does not.
   const steps = workflow('migration.yml').jobs.migrate.steps;
-  assert.equal(
-    steps.find((step) => step.name === 'Apply the reviewed pending migrations')
-      ?.if,
-    'inputs.apply',
-  );
-  assert.equal(
-    gate(
-      steps.find((step) => step.name === 'Fail while migrations remain pending')
-        ?.if,
-    ),
-    '${{ !inputs.apply }}',
-  );
+  const conditionOf = (name) => {
+    const step = steps.find((candidate) => candidate.name === name);
+    assert.ok(step, `migration.yml must keep the step "${name}"`);
+    return step.if;
+  };
+  for (const apply of [true, false]) {
+    assert.equal(
+      resolveCondition(conditionOf('Apply the reviewed pending migrations'), {
+        inputs: { apply },
+      }),
+      apply,
+    );
+    assert.equal(
+      resolveCondition(conditionOf('Fail while migrations remain pending'), {
+        inputs: { apply },
+      }),
+      !apply,
+    );
+  }
 });
 
 // The release-guard step reads its activation switch from the process
