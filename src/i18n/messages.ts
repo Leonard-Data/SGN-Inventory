@@ -75,14 +75,9 @@ const vi = {
   // An empty list narrowed to the reader's own records says something about their own work, not
   // about the inventory, so it never reads as "there is nothing here".
   catalogueLocalNoneCreated: 'Không có hồ sơ nào bạn tạo khớp bộ lọc này.',
-  // The progressive load's own words: the loaded count is always stated, and the authorized total
-  // and an approximate percentage only when the count is known and the load can state one.
-  catalogueLoadingKnown:
-    'Đang tải danh mục · {loaded} / {total} bất động sản · khoảng {percent}%',
-  catalogueLoadingUnknown: 'Đang tải danh mục · đã tải {loaded} bất động sản',
-  catalogueIncomplete: 'Chưa tải hết danh mục · đã tải {loaded} bất động sản',
-  catalogueComplete: 'Danh mục đã sẵn sàng · {loaded} bất động sản',
-  catalogueSyncedAt: 'Cập nhật lần cuối lúc {time}.',
+  // The progressive load states no progress of its own: the rows paint from the catalogue the
+  // browser holds, so a load that stopped says so beside its retry and nothing claims a count.
+  catalogueLoadFailed: 'Không tải được danh mục.',
   catalogueMoreMatches: 'Có thể có thêm kết quả khi quá trình tải tiếp tục.',
   catalogueRefresh: 'Làm mới danh mục',
   catalogueRefreshKnown:
@@ -995,14 +990,9 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     // An empty list narrowed to the reader's own records says something about their own work, not
     // about the inventory, so it never reads as "there is nothing here".
     catalogueLocalNoneCreated: 'No property you created matches this filter.',
-    // The progressive load's own words: the loaded count is always stated, and the authorized
-    // total and an approximate percentage only when the count is known and the load can state one.
-    catalogueLoadingKnown:
-      'Loading catalogue · {loaded} / {total} properties · approximately {percent}%',
-    catalogueLoadingUnknown: 'Loading catalogue · {loaded} properties loaded',
-    catalogueIncomplete: 'Catalogue incomplete · {loaded} properties loaded',
-    catalogueComplete: 'Catalogue ready · {loaded} properties',
-    catalogueSyncedAt: 'Last updated at {time}.',
+    // The progressive load states no progress of its own: the rows paint from the catalogue the
+    // browser holds, so a load that stopped says so beside its retry and nothing claims a count.
+    catalogueLoadFailed: 'The catalogue could not be loaded.',
     catalogueMoreMatches: 'More matches may appear as loading continues.',
     catalogueRefresh: 'Refresh catalogue',
     catalogueRefreshKnown:

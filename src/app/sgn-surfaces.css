@@ -325,8 +325,8 @@
   max-width: 65ch;
   padding-block: var(--space-2);
 }
-/* The progressive catalogue's own line: an accessible progress element with the count beside it.
-   The bar exposes a numeric value only while the load can state a determinate percentage. */
+/* The catalogue's own line under the search help: a stopped load's statement and its retry, or the
+   Refresh control. The replacement a refresh builds states itself on a line of the same shape. */
 .catalogue-progress {
   display: flex;
   align-items: center;
@@ -339,9 +339,6 @@
   height: 6px;
   flex: 0 0 auto;
   accent-color: var(--accent);
-}
-.catalogue-progress[data-state='failed'] .catalogue-progress-bar {
-  accent-color: var(--warn);
 }
 .catalogue-progress-text {
   font-size: var(--text-xs);
