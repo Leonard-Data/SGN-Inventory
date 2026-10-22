@@ -7,6 +7,7 @@ import { ContactPicker } from '@/features/property-maintenance/contact-picker';
 import { api, RequestError } from '@/features/employees/api';
 import { useToast } from '@/features/toasts/toast-host';
 import type { PropertyDetail } from '@/features/properties/detail-data';
+import { confirmsPrice } from '@/features/properties/price-input';
 import {
   AddressFields,
   RecordFields,
@@ -116,7 +117,8 @@ export function CorrectionDraft({
   );
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy || !observed) return;
+    if (busy || !observed || !confirmsPrice(event.currentTarget, locale))
+      return;
     const form = new FormData(event.currentTarget);
     setBusy(true);
     setError(null);

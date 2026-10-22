@@ -5,6 +5,9 @@ import {
   compactVnd,
   formatDecimal,
   formatInteger,
+  amountInUnit,
+  parsePriceAmount,
+  priceNeedsConfirmation,
   RELATIVE_DAYS,
   relativeTime,
   vietnamDate,
@@ -73,6 +76,81 @@ test('an absent or unparseable recorded date reports no value instead of throwin
 test('money rejects noncanonical decimal and scientific notation', () => {
   for (const value of ['1.5', '1e3', '-1', ''])
     assert.throws(() => formatVnd(value, 'en'));
+});
+
+// A typed amount with its unit becomes whole VND by moving the decimal separator, so 16 tỷ is
+// 16000000000 and one and six tenths tỷ - typed with either separator - is 1600000000.
+test('a typed amount with its unit is whole VND, in either decimal separator', () => {
+  assert.equal(parsePriceAmount('16', 'ty'), '16000000000');
+  assert.equal(parsePriceAmount('1.6', 'ty'), '1600000000');
+  assert.equal(parsePriceAmount('1,6', 'ty'), '1600000000');
+  assert.equal(parsePriceAmount('0,0005', 'ty'), '500000');
+  assert.equal(parsePriceAmount('25', 'trieu'), '25000000');
+  assert.equal(parsePriceAmount('2,5', 'trieu'), '2500000');
+  assert.equal(parsePriceAmount('16000000000', 'vnd'), '16000000000');
+  assert.equal(parsePriceAmount(' 16 ', 'ty'), '16000000000');
+  assert.equal(parsePriceAmount('0', 'ty'), '0');
+});
+
+// An amount that would need rounding, carries a second separator, a sign, a space, no digits or
+// more than the 18 digits a stored price holds is refused rather than guessed.
+test('a malformed typed amount is refused instead of guessed', () => {
+  for (const [text, unit] of [
+    ['', 'ty'],
+    ['abc', 'ty'],
+    ['1,2,3', 'ty'],
+    ['-1', 'ty'],
+    ['1e9', 'ty'],
+    ['16 000', 'ty'],
+    ['1,5', 'vnd'],
+    ['0,0000000001', 'ty'],
+    ['1,1234567', 'trieu'],
+    ['9999999999', 'ty'],
+  ] as const)
+    assert.equal(parsePriceAmount(text, unit), null, `${text} ${unit}`);
+  // The last amount a stored price holds stays accepted.
+  assert.equal(parsePriceAmount('999999999', 'ty'), '999999999000000000');
+});
+
+// A recorded price opens in the unit the field states, in the locale's own decimal separator, and
+// what it opens with parses back to the same stored amount.
+test('a stored price opens in a human unit and reads back as itself', () => {
+  assert.equal(amountInUnit('16000000000', 'ty', 'vi'), '16');
+  assert.equal(amountInUnit('1600000000', 'ty', 'vi'), '1,6');
+  assert.equal(amountInUnit('1600000000', 'ty', 'en'), '1.6');
+  assert.equal(amountInUnit('25000000', 'trieu', 'en'), '25');
+  assert.equal(amountInUnit('1600000000', 'vnd', 'vi'), '1600000000');
+  for (const unit of ['ty', 'trieu', 'vnd'] as const)
+    for (const value of [
+      '0',
+      '500000',
+      '1600000000',
+      '16000000000',
+      '999999999999999999',
+    ])
+      for (const locale of ['vi', 'en'] as const)
+        assert.equal(
+          parsePriceAmount(amountInUnit(value, unit, locale), unit),
+          value,
+          `${value} ${unit} ${locale}`,
+        );
+});
+
+// The magnitudes worth confirming before saving: an asking sale price under one million VND, and
+// nine digits or more typed in tỷ - a hundred million tỷ and up.
+test('an implausible magnitude asks for confirmation', () => {
+  assert.equal(priceNeedsConfirmation('999999', 'vnd', 'sale'), true);
+  assert.equal(priceNeedsConfirmation('1000000', 'vnd', 'sale'), false);
+  assert.equal(priceNeedsConfirmation('500000', 'trieu', 'rent'), false);
+  assert.equal(priceNeedsConfirmation('1600000000', 'ty', 'sale'), false);
+  assert.equal(
+    priceNeedsConfirmation('100000000000000000', 'ty', 'sale'),
+    true,
+  );
+  assert.equal(
+    priceNeedsConfirmation('99999999000000000', 'ty', 'sale'),
+    false,
+  );
 });
 test('Vietnam dates cross midnight at UTC 17:00 regardless of the device zone', () => {
   assert.equal(vietnamDate('2026-10-09T16:59:59Z'), '09/10/2026');

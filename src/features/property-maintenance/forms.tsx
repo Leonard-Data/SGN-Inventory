@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { api, RequestError } from '@/features/employees/api';
 import type { Locale } from '@/i18n/messages';
+import { confirmsPrice, PriceInput } from '@/features/properties/price-input';
 import {
   addressFields,
   fields,
@@ -78,7 +79,7 @@ export function MutationForm({
   }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy) return;
+    if (busy || !confirmsPrice(event.currentTarget, locale)) return;
     const form = new FormData(event.currentTarget);
     setBusy(true);
     setError(null);
@@ -244,6 +245,15 @@ export function RecordFields({
                 </option>
               ))}
           </select>
+        ) : field.kind === 'money' ? (
+          <PriceInput
+            id={id}
+            name={name}
+            value={initial || null}
+            locale={locale}
+            unit={field.price?.unit ?? 'ty'}
+            kind={field.price?.kind ?? 'sale'}
+          />
         ) : wide ? (
           // A multi-line field is as wide as the grid it stands in: source text is read, not
           // scanned in a column beside the other facts.
@@ -264,7 +274,7 @@ export function RecordFields({
             ref={refs?.[name]}
             type={field.kind === 'date' ? 'date' : 'text'}
             inputMode={
-              field.kind === 'money' || field.kind === 'count'
+              field.kind === 'count'
                 ? 'numeric'
                 : field.kind === 'decimal'
                   ? 'decimal'

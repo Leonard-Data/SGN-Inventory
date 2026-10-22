@@ -36,8 +36,8 @@ const copy = {
     'Legacy addresses use the pre-2025 catalog: choose the old province/city, district, then ward. Recorded address text is kept as it was.',
   ],
   optional: [
-    'Để trống thông tin chưa biết. VND nguyên; số đo dùng dấu chấm thập phân, không dấu phân cách hàng nghìn.',
-    'Leave unknown facts blank. Whole VND; dimensions use a decimal point without thousands separators.',
+    'Để trống thông tin chưa biết. Giá nhập theo đơn vị tỷ, triệu hoặc VND và được lưu bằng VND nguyên; số đo dùng dấu chấm thập phân, không dấu phân cách hàng nghìn.',
+    'Leave unknown facts blank. Prices take a tỷ, triệu or VND unit and are stored as whole VND; dimensions use a decimal point without thousands separators.',
   ],
   save: ['Lưu ngay', 'Save now'],
   saving: ['Đang lưu…', 'Saving…'],
@@ -64,8 +64,8 @@ const copy = {
   ],
   noChange: ['Chưa có thay đổi.', 'No changes to save.'],
   invalid: [
-    'Kiểm tra trường bắt buộc, giá VND nguyên, số đo và bằng chứng. Không có dữ liệu nào được lưu.',
-    'Check required fields, whole-VND prices, dimensions and evidence. Nothing was saved.',
+    'Kiểm tra trường bắt buộc, số tiền, số đo và bằng chứng. Không có dữ liệu nào được lưu.',
+    'Check required fields, the amounts, dimensions and evidence. Nothing was saved.',
   ],
   unavailable: [
     'Chưa xác nhận được kết quả. Đọc lại thông tin hiện tại trước khi thử lại; không gửi lại tự động.',

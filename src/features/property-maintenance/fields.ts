@@ -1,4 +1,5 @@
 import type { Json } from '@/types/database';
+import type { PriceUnit } from '@/features/properties/format';
 export type Target = 'property' | 'address' | 'mapping' | 'contact' | 'link';
 export type Changes = Record<string, Json>;
 type Field = {
@@ -15,6 +16,9 @@ type Field = {
     | 'coordinate';
   options?: readonly string[];
   required?: boolean;
+  // A money field's own entry rule: the unit it opens on, and whether the implausible-magnitude
+  // check reads it as an asking sale price. The stored value stays whole VND.
+  price?: { unit: PriceUnit; kind: 'sale' | 'rent' };
 };
 export const fields: Record<string, Field> = {
   listing_mode: {
@@ -62,14 +66,16 @@ export const fields: Record<string, Field> = {
     required: true,
   },
   sale_price_vnd: {
-    vi: 'Giá bán (VND nguyên)',
-    en: 'Asking sale price (whole VND)',
+    vi: 'Giá bán',
+    en: 'Asking sale price',
     kind: 'money',
+    price: { unit: 'ty', kind: 'sale' },
   },
   monthly_rent_vnd: {
-    vi: 'Giá thuê tháng (VND nguyên)',
-    en: 'Monthly asking rent (whole VND)',
+    vi: 'Giá thuê tháng',
+    en: 'Monthly asking rent',
     kind: 'money',
+    price: { unit: 'trieu', kind: 'rent' },
   },
   land_area_m2: {
     vi: 'Diện tích đất (m²)',

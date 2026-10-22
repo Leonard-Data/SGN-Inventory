@@ -38,6 +38,74 @@ export function compactVnd(value: string, locale: Locale): string {
   );
 }
 
+// The units a price is typed in. Each is a whole power of ten of VND, so a typed amount becomes
+// whole VND by moving its decimal separator and never through a floating-point number.
+export const PRICE_UNITS = ['ty', 'trieu', 'vnd'] as const;
+export type PriceUnit = (typeof PRICE_UNITS)[number];
+const PRICE_UNIT_EXPONENT: Record<PriceUnit, number> = {
+  ty: 9,
+  trieu: 6,
+  vnd: 0,
+};
+// The unit is named the way the amount is said, in either interface language.
+export const PRICE_UNIT_LABEL: Record<PriceUnit, string> = {
+  ty: 'tỷ',
+  trieu: 'triệu',
+  vnd: 'VND',
+};
+const TYPED_PRICE = /^(\d{1,18})(?:[.,](\d{1,9}))?$/;
+
+// A typed amount with its unit as whole VND, or null when it is not an amount this field accepts:
+// digits with at most one decimal separator - the dot or the Vietnamese comma - and no more
+// decimal places than the unit holds, so an amount that would need rounding is refused, not rounded.
+export function parsePriceAmount(text: string, unit: PriceUnit): string | null {
+  const exponent = PRICE_UNIT_EXPONENT[unit],
+    match = TYPED_PRICE.exec(text.trim());
+  if (!match) return null;
+  const fraction = match[2] ?? '';
+  if (fraction.length > exponent) return null;
+  const vnd = (
+    BigInt(match[1]!) * 10n ** BigInt(exponent) +
+    BigInt(fraction.padEnd(exponent, '0') || '0')
+  ).toString();
+  // The same 18-digit ceiling the maintenance contract states for a stored price.
+  return vnd.length <= 18 ? vnd : null;
+}
+
+// A stored whole-VND amount in a unit, without thousands separators - the field it fills parses
+// what it shows - and without trailing zeros in a decimal part the unit does not need.
+export function amountInUnit(
+  vnd: string,
+  unit: PriceUnit,
+  locale: Locale,
+): string {
+  const exponent = PRICE_UNIT_EXPONENT[unit],
+    scale = 10n ** BigInt(exponent),
+    amount = BigInt(vnd),
+    fraction = (amount % scale)
+      .toString()
+      .padStart(exponent, '0')
+      .replace(/0+$/, '');
+  return (
+    (amount / scale).toString() +
+    (fraction ? (locale === 'vi' ? ',' : '.') + fraction : '')
+  );
+}
+
+// The magnitudes that ask before they are saved: an asking sale price under one million VND, and
+// nine digits or more typed in tỷ, which is a hundred million tỷ and up.
+export function priceNeedsConfirmation(
+  vnd: string,
+  unit: PriceUnit,
+  kind: 'sale' | 'rent',
+): boolean {
+  const amount = BigInt(vnd);
+  return (
+    (kind === 'sale' && amount < 1_000_000n) ||
+    (unit === 'ty' && amount >= 100_000_000_000_000_000n)
+  );
+}
+
 // A whole count the database derived (an inventory age in days) is never parsed from text,
 // so no locale number string can turn it into a different day count.
 export function formatInteger(value: number, locale: Locale): string {
