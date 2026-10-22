@@ -209,3 +209,31 @@ test('the drawer box does not scroll, so the panel holds the only scrollbar', ()
   for (const block of drawerRules)
     assert.doesNotMatch(block, /overflow-y:\s*(auto|scroll)/, block);
 });
+
+// The property's note is read in the panel itself: the record's own `notes`, labelled, as source
+// text with its line breaks kept and wrapping inside the panel. A record with no note renders no
+// row at all, so the panel never shows an empty heading.
+test('the panel states the recorded note, and nothing when there is none', () => {
+  assert.match(
+    drawer,
+    /const note = record\?\.notes\?\.trim\(\) \? record\.notes : null;/,
+  );
+  assert.match(drawer, /\{note \? \(/);
+  assert.match(drawer, /<dt>\{text\.notes\}<\/dt>/);
+  // Source text: shown as recorded, never translated.
+  assert.match(
+    drawer,
+    /className="quick-view-note" translate="no">\s*\{note\}/,
+  );
+  // A long note takes the full row and keeps its own line breaks inside it.
+  assert.match(drawer, /<div className="fact span-all">\s*<dt>\{text\.notes\}/);
+  assert.match(rule('.quick-view-note {'), /white-space: pre-wrap/);
+  assert.match(rule('.quick-view-note {'), /overflow-wrap: anywhere/);
+  // The label exists in both languages.
+  assert.notEqual(messages.vi.notes, messages.en.notes);
+  for (const locale of ['vi', 'en'] as const)
+    assert.ok(
+      messages[locale].notes.trim().length,
+      `${locale}.notes is missing`,
+    );
+});
