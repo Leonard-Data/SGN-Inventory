@@ -20,6 +20,7 @@ import {
 import type { AddressSummary, PropertySummary } from './types.ts';
 
 const PROVINCE = '11111111-1111-4111-8111-111111111111';
+const DISTRICT = '55555555-5555-4555-8555-555555555555';
 const WARD = '22222222-2222-4222-8222-222222222222';
 const CONTACT = '33333333-3333-4333-8333-333333333333';
 
@@ -115,10 +116,11 @@ test('a supported filter, a blank search and the plain browse are answered by th
 });
 
 test('criteria the catalogue cannot answer route to an advanced search', () => {
-  // A province, a ward or a contact names a database catalog identity the summaries do not carry,
-  // so it is an advanced search.
+  // A province, a district, a ward or a contact names a database catalog identity the summaries
+  // do not carry, so each is an advanced search.
   for (const filters of [
     { ...noInventoryFilters, province: PROVINCE },
+    { ...noInventoryFilters, province: PROVINCE, district: DISTRICT },
     { ...noInventoryFilters, ward: WARD },
     { ...noInventoryFilters, contact: CONTACT },
   ])
