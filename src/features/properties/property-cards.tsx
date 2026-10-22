@@ -21,6 +21,7 @@ export const CardChunk = memo(function CardChunk({
   addressFormat,
   matchedFormats,
   onDenied,
+  quickView,
   onOpen,
   onMeasured,
 }: {
@@ -36,6 +37,9 @@ export const CardChunk = memo(function CardChunk({
   // The stored address format each property matched through, while a local search is filtering.
   matchedFormats: ReadonlyMap<string, string>;
   onDenied: (status: number) => void;
+  // Whether the row's quick view can open yet: it states the caller's own permissions, so it waits
+  // for this surface's session to answer.
+  quickView: boolean;
   onOpen: (record: PropertySummary, opener: HTMLElement | null) => void;
   onMeasured: (index: number, height: number) => void;
 }) {
@@ -79,6 +83,7 @@ export const CardChunk = memo(function CardChunk({
               resultLocation={resultLocation}
               onDenied={onDenied}
               onQuickView={onOpen}
+              quickViewReady={quickView}
               showEntry={showEntry}
               addressFormat={addressFormat}
               matchedFormat={matchedFormats.get(record.id)}

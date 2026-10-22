@@ -13,7 +13,7 @@ import {
 import Link from 'next/link';
 import { messages, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
-import { renderedSession } from '@/features/employees/protected-load';
+import { sessionScope } from '@/features/employees/protected-load';
 import type { EmployeeSession } from '@/features/employees/types';
 import { SkeletonCards } from '@/features/skeleton';
 import { CardChunk } from './property-cards';
@@ -36,7 +36,13 @@ import {
 } from './catalogue-results';
 import type { CatalogueMatch } from './address-index';
 import { useListStateCarrier } from './list-state-provider';
-import { positionReady, readListState, writeListState } from './list-state';
+import {
+  positionReady,
+  readListState,
+  readScope,
+  writeListState,
+} from './list-state';
+import { quickViewAvailable } from './quick-view-access';
 import {
   activeFilterCount,
   filterParams,
@@ -214,12 +220,14 @@ export function Inventory({
   });
   const endpoint = searchEndpoint({ query: initialQuery, sort, filters });
   // The session is this surface's own protection: the shell reads it, and the stream below reads
-  // nothing until it has answered.
+  // nothing under any scope but the one in force - this surface's own once it has answered, and the
+  // catalogue's until then.
   const {
     employee,
     data: session,
     error: sessionError,
     busy,
+    answered,
     surface,
     logout,
     clear,
@@ -248,9 +256,29 @@ export function Inventory({
   // The authorization scope: the employee, their role and the server-maintained access revision.
   // A replacement catalogue is not a new authority, so it neither reopens a submitted search nor
   // closes the quick view of a record that is still readable.
-  const sessionKey = session
-    ? `${renderedSession(session.employee)}:${session.accessRevision}`
-    : null;
+  const sessionKey = session ? sessionScope(session) : null;
+  // The catalogue the browser holds, which may be painted only until this surface's own read has
+  // published: from then on what the list shows is its own read's, so a change that read detected
+  // stays concealed instead of the held rows reappearing behind it.
+  const heldCatalogue = answered ? null : catalogue.scope;
+  // The scope key that catalogue was authorized under, which is where its rows were cached.
+  const heldScope = heldCatalogue ? sessionScope(heldCatalogue) : null;
+  // The scope this surface reads and paints under: its own answered session, or the catalogue's own
+  // scope until then. Both kinds of result set paint on arrival that way - the catalogue from the
+  // index the browser holds, an advanced search from the windows cached under this key - and the
+  // read that answers still governs: a session for another scope empties the catalogue, this falls
+  // back to that session's own key, and the windows read under the former one are dropped with it
+  // rather than left on screen.
+  const scope = readScope({
+    own: sessionKey,
+    held: heldScope,
+    answered,
+  });
+  // The rows the browser already holds paint on arrival, instead of a skeleton over rows that are in
+  // memory while this surface re-confirms the authority they were read under. Nothing is shown
+  // before the first answer, and a read that failed states its own error.
+  const showsList =
+    (employee !== null && !busy) || (sessionKey === null && scope !== null);
   // Which result set the address describes: the filters, the ordering and the paging the loaded
   // catalogue can answer are computed in the browser, and a criterion the catalogue has no field
   // for is an explicit whole-inventory search (issue #194). The split is `catalogue-results.ts`,
@@ -268,8 +296,9 @@ export function Inventory({
   } = useInventoryStream({
     // A catalogue result names no endpoint at all, so the browser answers from the rows it holds
     // and no search-data request is made until the person runs an advanced search.
-    source: employee && parsedView.ok && mode === 'advanced' ? endpoint : null,
-    scope: sessionKey ?? 'no-session',
+    source:
+      scope !== null && parsedView.ok && mode === 'advanced' ? endpoint : null,
+    scope: scope ?? 'no-session',
     onDenied: denyFiles,
   });
   // The text the box narrows the loaded catalogue with, or null while the result set is the
@@ -289,9 +318,11 @@ export function Inventory({
   const localReady = localActive && catalogue.index.length > 0;
   const catalogueFailed =
     catalogue.status === 'failed' && !catalogue.progress.isComplete;
-  // The employee the creator selection compares against; the list reads nothing until the session
-  // has answered, so an absent one matches nothing rather than everyone.
-  const employeeId = session?.employee.id ?? null;
+  // The employee the creator selection compares against. The catalogue's own authorized scope names
+  // the same employee whenever it is answered, so a list painting from the held rows filters by the
+  // creator before this surface's session read has answered; an absent one matches nothing rather
+  // than everyone.
+  const employeeId = session?.employee.id ?? heldCatalogue?.employee.id ?? null;
   const matches = useMemo(() => {
     if (!localActive) return null;
     return localReady
@@ -450,13 +481,16 @@ export function Inventory({
     rows: null,
     attempted: false,
   });
-  // A new column count or a new result set relabels every chunk, so old measurements describe
+  // A new column count, result set or read scope relabels every chunk, so old measurements describe
   // rows the chunk no longer holds and are dropped; the mounted chunks measure themselves again.
+  // The scope, not this surface's own session key: the rows painted from the held catalogue are read
+  // under the same scope key, and the answer that confirms it must not throw away the layout the
+  // person is already looking at.
   useEffect(() => {
     measuredRef.current = new Map();
     // eslint-disable-next-line react-hooks/set-state-in-effect -- the chunk layout changed, so previous measurements describe different rows
     setMeasured(NO_MEASURED);
-  }, [chunkRows, endpoint, sessionKey]);
+  }, [chunkRows, endpoint, scope]);
   const heights = useMemo(
     () => streamChunkHeights(measured, chunkCount),
     [measured, chunkCount],
@@ -707,6 +741,10 @@ export function Inventory({
   }, [band.first, band.last, chunkCount]);
 
   const showEntry = order !== null;
+  // The quick view states the caller's own permissions, so a row's controls are live only once this
+  // surface's session has answered. A list painted from the held catalogue shows them unavailable
+  // until then, instead of taking a click that opens nothing.
+  const quickView = quickViewAvailable(sessionKey);
   const openDrawer = useCallback(
     (record: PropertySummary, opener: HTMLElement | null) =>
       setOpened({ record, opener, scope: sessionKey }),
@@ -1153,9 +1191,9 @@ export function Inventory({
           </div>
         ) : null}
 
-        {busy ? <SkeletonCards label={text.loading} /> : null}
+        {busy && !showsList ? <SkeletonCards label={text.loading} /> : null}
 
-        <div ref={surface} hidden={!employee || busy}>
+        <div ref={surface} hidden={!showsList}>
           {streamError && total === 0 ? (
             <div className="panel">
               <div className="state-panel" data-tone="danger">
@@ -1261,6 +1299,7 @@ export function Inventory({
                         resultLocation={resultLocation}
                         addressFormat={addressFormat}
                         matchedFormats={matchedFormats}
+                        quickView={quickView}
                         onOpen={openDrawer}
                         onMeasured={reportHeight}
                       />
@@ -1298,6 +1337,7 @@ export function Inventory({
                         addressFormat={addressFormat}
                         matchedFormats={matchedFormats}
                         onDenied={denyFiles}
+                        quickView={quickView}
                         onOpen={openDrawer}
                         onMeasured={reportHeight}
                       />

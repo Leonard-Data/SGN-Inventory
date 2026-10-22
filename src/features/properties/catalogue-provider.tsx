@@ -21,6 +21,7 @@ import {
   AccessChangedError,
   renderedSession,
   sessionDiffers,
+  sessionScope,
 } from '@/features/employees/protected-load';
 import type { EmployeeSession } from '@/features/employees/types';
 import type { CatalogueIndexEntry } from './address-index';
@@ -102,14 +103,19 @@ const CatalogueContext = createContext<CatalogueState>(EMPTY);
 
 export function useCatalogue(session: EmployeeSession | null): CatalogueState {
   const catalogue = useContext(CatalogueContext);
+  // A session that differs from the one the catalogue was read under is another authority, and the
+  // catalogue it holds does not answer for it. A surface that has not answered yet - its own read is
+  // still in flight - is not a different authority: the provider's read is what authorized the
+  // catalogue, and it empties what it holds when that scope moves. Treating the unanswered read as a
+  // change is what threw the held catalogue away on a return to the list.
   if (
     catalogue.scope &&
-    (!session ||
-      sessionDiffers(
-        renderedSession(catalogue.scope.employee),
-        catalogue.scope.accessRevision,
-        session,
-      ))
+    session &&
+    sessionDiffers(
+      renderedSession(catalogue.scope.employee),
+      catalogue.scope.accessRevision,
+      session,
+    )
   )
     return EMPTY;
   return catalogue;
@@ -194,7 +200,7 @@ function CatalogueLoader({ children }: { children: ReactNode }) {
   );
   const read = useCallback(
     (signal: AbortSignal, session: EmployeeSession) => {
-      const identity = `${renderedSession(session.employee)}:${session.accessRevision}`;
+      const identity = sessionScope(session);
       const freshRead = fresh.current;
       fresh.current = false;
       // A scope this loader already started resumes it; a changed scope, and a read that has
@@ -225,8 +231,7 @@ function CatalogueLoader({ children }: { children: ReactNode }) {
   const onAuthorityFailure = useCallback(
     (failure: unknown, failedScope: EmployeeSession) => {
       if (
-        sessionRef.current !==
-          `${renderedSession(failedScope.employee)}:${failedScope.accessRevision}` ||
+        sessionRef.current !== sessionScope(failedScope) ||
         !(
           failure instanceof AccessChangedError ||
           (failure instanceof RequestError &&

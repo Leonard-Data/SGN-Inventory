@@ -8,6 +8,13 @@ export function renderedSession(employee: Employee) {
   return `${employee.id}:${employee.role}`;
 }
 
+// The key one session's authorized scope is read, cached and painted under: the employee, their role
+// and the server-maintained access revision. Two sessions share a key only when all three agree, so
+// a row cached under one key is never shown for another.
+export function sessionScope(session: EmployeeSession) {
+  return `${renderedSession(session.employee)}:${session.accessRevision}`;
+}
+
 export function sessionDiffers(
   renderedFor: string | null,
   renderedAccessRevision: number | null,
