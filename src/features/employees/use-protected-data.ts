@@ -19,11 +19,11 @@ export function useProtectedData<T>(
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(true);
-  // Whether this surface's own read has published since it mounted, or the authority it rendered was
-  // discarded or refused. Rows the browser holds from a scope this surface did not read may be
-  // painted only until then: from the first answer on, what a surface shows is what its own read
-  // published, so a change a later read detects stays concealed instead of being undone by painting
-  // held rows again.
+  // Whether this surface's own read has answered since it mounted - published, failed, or had its
+  // authority discarded or refused. Rows the browser holds from a scope this surface did not read may
+  // be painted only until then: from the first answer on, what a surface shows is what its own read
+  // says, so a change or a failure a later read observes stays concealed instead of being undone by
+  // painting held rows again.
   const [answered, setAnswered] = useState(false);
   const generation = useRef(0);
   const controller = useRef<AbortController | null>(null);
@@ -100,13 +100,13 @@ export function useProtectedData<T>(
       if (version !== generation.current || abort.signal.aborted) return;
       renderedFor.current = null;
       renderedAccessRevision.current = null;
+      setAnswered(true);
       setData(null);
       setEmployee(null);
       if (
         failure instanceof RequestError &&
         (failure.status === 401 || failure.status === 403)
       ) {
-        setAnswered(true);
         onClear?.();
         window.location.replace(
           failure.status === 403 ? '/access-denied' : '/login',

@@ -367,6 +367,13 @@
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+/* Before the surface's session answers, the quick view it would open says itself unavailable. */
+.inventory-row-control[disabled],
+.inventory-row-control[disabled]:hover {
+  color: var(--muted);
+  cursor: default;
+  text-decoration: none;
+}
 /* The price is the value people scan the row for: the strongest type in it, in
    the monospaced tabular figures a column of numbers lines up in. */
 .inventory-price {

@@ -25,6 +25,7 @@ export const TableChunk = memo(function TableChunk({
   resultLocation,
   addressFormat,
   matchedFormats,
+  quickView,
   onOpen,
   onMeasured,
 }: {
@@ -39,6 +40,9 @@ export const TableChunk = memo(function TableChunk({
   // The stored address format each property matched through, while a local search is filtering. It
   // decides the address the row states, and is named beside it when the search states no format.
   matchedFormats: ReadonlyMap<string, string>;
+  // Whether a row's quick view can open yet: it states the caller's own permissions, so it waits for
+  // this surface's session to answer. Both controls that open it state the same thing.
+  quickView: boolean;
   onOpen: (record: PropertySummary, opener: HTMLElement | null) => void;
   onMeasured: (index: number, height: number) => void;
 }) {
@@ -88,6 +92,7 @@ export const TableChunk = memo(function TableChunk({
                 type="button"
                 data-row-control
                 aria-label={row.title}
+                disabled={!quickView}
                 onClick={(event) => onOpen(record, event.currentTarget)}
               >
                 {record.propertyCode}
@@ -172,6 +177,7 @@ export const TableChunk = memo(function TableChunk({
                   className="btn btn-ghost btn-sm"
                   type="button"
                   aria-label={`${text.quickView}: ${record.propertyCode}`}
+                  disabled={!quickView}
                   onClick={(event) => onOpen(record, event.currentTarget)}
                 >
                   {text.quickView}

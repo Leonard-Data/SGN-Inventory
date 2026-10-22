@@ -64,27 +64,24 @@ export function writeListState(
 // which is the same identity, role and access revision the shell already holds. A return to the list
 // finds the rows the browser holds under that key, so the catalogue paints on the first render and a
 // search paints as soon as its cached window is answered, instead of a skeleton over rows that are
-// already there. The held scope is only ever the one in force: a read that failed, a catalogue that
-// holds nothing, and a surface whose own read has already answered - so a concealment it detected
-// cannot be undone by painting held rows again - read null or that surface's own key, and a session
-// that answers as another scope drops the windows read under the former one with it.
+// already there. The held scope is only ever the one in force: a surface whose own read has answered
+// or failed, one whose authority was discarded, and a catalogue that holds nothing read null or that
+// surface's own key, so a concealment the read detected cannot be undone by painting held rows again,
+// and a session that answers as another scope drops the windows read under the former one with it.
 export function readScope({
   own,
   held,
   answered,
-  failed,
 }: {
   // This surface's own session scope key, or null while its read is in flight.
   own: string | null;
   // The scope key the catalogue above the route was read under, or null when it holds nothing.
   held: string | null;
-  // This surface's own read has published since it mounted, or its authority was discarded.
+  // This surface's own read has already answered or failed, or its authority was discarded.
   answered: boolean;
-  // This surface's own session read stopped with an error.
-  failed: boolean;
 }): string | null {
   if (own !== null) return own;
-  return answered || failed ? null : held;
+  return answered ? null : held;
 }
 
 // Whether the stream has rendered enough to put a position on: the read has stated the total the

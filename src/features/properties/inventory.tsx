@@ -42,6 +42,7 @@ import {
   readScope,
   writeListState,
 } from './list-state';
+import { quickViewAvailable } from './quick-view-access';
 import {
   activeFilterCount,
   filterParams,
@@ -272,7 +273,6 @@ export function Inventory({
     own: sessionKey,
     held: heldScope,
     answered,
-    failed: sessionError !== null,
   });
   // The rows the browser already holds paint on arrival, instead of a skeleton over rows that are in
   // memory while this surface re-confirms the authority they were read under. Nothing is shown
@@ -740,6 +740,10 @@ export function Inventory({
   }, [band.first, band.last, chunkCount]);
 
   const showEntry = order !== null;
+  // The quick view states the caller's own permissions, so a row's controls are live only once this
+  // surface's session has answered. A list painted from the held catalogue shows them unavailable
+  // until then, instead of taking a click that opens nothing.
+  const quickView = quickViewAvailable(sessionKey);
   const openDrawer = useCallback(
     (record: PropertySummary, opener: HTMLElement | null) =>
       setOpened({ record, opener, scope: sessionKey }),
@@ -1294,6 +1298,7 @@ export function Inventory({
                         resultLocation={resultLocation}
                         addressFormat={addressFormat}
                         matchedFormats={matchedFormats}
+                        quickView={quickView}
                         onOpen={openDrawer}
                         onMeasured={reportHeight}
                       />
@@ -1331,6 +1336,7 @@ export function Inventory({
                         addressFormat={addressFormat}
                         matchedFormats={matchedFormats}
                         onDenied={denyFiles}
+                        quickView={quickView}
                         onOpen={openDrawer}
                         onMeasured={reportHeight}
                       />

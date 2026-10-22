@@ -33,6 +33,7 @@ export const PropertyCard = memo(function PropertyCard({
   resultLocation,
   onDenied,
   onQuickView,
+  quickViewReady = false,
   showEntry = false,
   addressFormat = null,
   matchedFormat,
@@ -44,6 +45,10 @@ export const PropertyCard = memo(function PropertyCard({
   // Opening the record's quick view in place. The control that was pressed travels with the
   // call, so closing the quick view returns focus to that same control.
   onQuickView?: (record: PropertySummary, opener: HTMLElement | null) => void;
+  // Whether the quick view can open yet: it states the caller's own permissions from this surface's
+  // session, so a card painted before that read answers states the control unavailable instead of
+  // taking a click that opens nothing.
+  quickViewReady?: boolean;
   showEntry?: boolean;
   // The format the search reads through, which decides the address the card states.
   addressFormat?: string | null;
@@ -151,6 +156,7 @@ export const PropertyCard = memo(function PropertyCard({
               <button
                 className="btn btn-secondary btn-sm"
                 type="button"
+                disabled={!quickViewReady}
                 onClick={(event) => onQuickView(record, event.currentTarget)}
               >
                 {label(locale, 'quickView')}

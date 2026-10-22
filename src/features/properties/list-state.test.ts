@@ -130,29 +130,21 @@ test('a position is only restored onto a stream that has rendered', () => {
 // A return to the list finds the rows the browser holds under the scope the shell last authorized,
 // so both result sets paint while the surface's own session read answers (issue #265): the catalogue
 // from its index, a submitted search as soon as its cached window is answered. That held scope is
-// only ever the one in force: a session read that stopped with an error, a catalogue holding nothing
-// under a scope, and a surface whose own read has already answered all read that other scope or
-// nothing, so a change the surface's own read detected stays concealed and the rows cached under the
-// former scope are dropped when the key moves.
+// only ever the one in force: a surface whose own read has answered, failed or been discarded, and a
+// catalogue holding nothing under a scope, read that other scope or nothing, so a change or a failure
+// the read observed stays concealed and the rows cached under the former scope are dropped when the
+// key moves.
 test('the list reads under the scope in force, held or its own', () => {
-  const pending = { own: null, answered: false, failed: false };
+  const pending = { own: null, answered: false };
   // The own session has not answered: the catalogue's authorized scope is the one in force.
   assert.equal(readScope({ ...pending, held: 'emp:staff:7' }), 'emp:staff:7');
-  // Nothing held under any scope, or a read that failed, paints nothing.
+  // Nothing held under any scope paints nothing.
   assert.equal(readScope({ ...pending, held: null }), null);
+  // The surface's own read answered without publishing a scope, failed, or had its authority
+  // discarded, so a scope it did not read outranks nothing: what that read observed stays concealed,
+  // whatever the catalogue above the route still holds.
   assert.equal(
-    readScope({ ...pending, held: 'emp:staff:7', failed: true }),
-    null,
-  );
-  // The surface's own read has answered, so a scope it did not read outranks nothing: a change that
-  // read concealed stays concealed, whatever the catalogue above the route still holds.
-  assert.equal(
-    readScope({
-      own: null,
-      answered: true,
-      held: 'emp:staff:7',
-      failed: false,
-    }),
+    readScope({ own: null, answered: true, held: 'emp:staff:7' }),
     null,
   );
   // The session answers as the same scope the rows were cached under: the same key, so nothing is
@@ -162,7 +154,6 @@ test('the list reads under the scope in force, held or its own', () => {
       own: 'emp:staff:7',
       answered: true,
       held: 'emp:staff:7',
-      failed: false,
     }),
     'emp:staff:7',
   );
@@ -173,7 +164,6 @@ test('the list reads under the scope in force, held or its own', () => {
       own: 'emp:staff:8',
       answered: true,
       held: 'emp:staff:7',
-      failed: false,
     }),
     'emp:staff:8',
   );

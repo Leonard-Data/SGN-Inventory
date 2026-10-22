@@ -55,10 +55,13 @@ describes instead of being clamped onto a height that is not there yet.
   answered: the read still runs and still governs. A session that answers as another scope empties the
   catalogue, the key becomes that session's own, and the windows read under the former scope are
   dropped with it; a concealment a later read detects stays concealed rather than being undone by held
-  rows, and a read that stopped with an error states its error rather than a list nothing confirmed.
-  This is also why `useProtectedData` conceals a surface only when that surface has rendered something:
-  hiding on the first answer of a read is not a change of identity, and it put a blank results area
-  over rows that were already painted.
+  rows, and a read that answered, failed or lost its authority states that rather than a list nothing
+  confirmed. A row painted under that held scope offers its controls reserved for the caller - the quick
+  view, which states their own permissions from the read - as visibly unavailable, and every other
+  control, the title link included, stays live; they become available with the answer. This is also why
+  `useProtectedData` conceals a surface only when that surface has rendered something: hiding on the
+  first answer of a read is not a change of identity, and it put a blank results area over rows that
+  were already painted.
 - A result set the carrier holds no entry for opens at its own first rows with the address's own
   search, which is what a reload and a first visit both do.
 - A later address inside one visit (another ordering, filter set or view) is a different result set
