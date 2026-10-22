@@ -406,29 +406,53 @@ test('the creator selection composes with the other filters and the address sear
   ]);
 });
 
-test('the catalogue orders newest-created first, then identity descending', () => {
-  const older = property('a', { createdAt: '2026-01-01T00:00:00.000Z' });
-  const newer = property('b', { createdAt: '2026-05-01T00:00:00.000Z' });
-  const tiedLow = property('c', { createdAt: '2026-05-01T00:00:00.000Z' });
-  const tiedHigh = property('d', { createdAt: '2026-05-01T00:00:00.000Z' });
+test('the catalogue orders most recently changed first, then identity descending', () => {
+  // The change time is what orders the list; the creation time is deliberately not, so a record
+  // created early and edited just now leads the list it used to sit at the bottom of.
+  const edited = property('a', {
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-05-01T00:00:00.000Z',
+  });
+  const createdLate = property('b', {
+    createdAt: '2026-05-01T00:00:00.000Z',
+    updatedAt: '2026-02-01T00:00:00.000Z',
+  });
+  const tiedLow = property('c', {
+    createdAt: '2026-03-01T00:00:00.000Z',
+    updatedAt: '2026-04-01T00:00:00.000Z',
+  });
+  const tiedHigh = property('d', {
+    createdAt: '2026-04-01T00:00:00.000Z',
+    updatedAt: '2026-04-01T00:00:00.000Z',
+  });
+  const never = property('e', { createdAt: '2026-04-01T00:00:00.000Z' });
   const ordered = orderCatalogue(
-    [older, tiedLow, newer, tiedHigh].map((record) => ({
+    [createdLate, tiedLow, edited, never, tiedHigh].map((record) => ({
       record,
       format: 'legacy',
     })),
   );
   assert.deepEqual(
     ordered.map((match) => match.record.id),
-    ['d', 'c', 'b', 'a'],
+    ['a', 'd', 'c', 'b', 'e'],
   );
 });
 
 test('a typed query keeps the address ranking and a browse takes the catalogue order', () => {
   // Equal-ranked matches tie on the property identity ascending, which is not the browse order.
   const index = buildAddressIndex([
-    property('a', { createdAt: '2026-01-01T00:00:00.000Z' }),
-    property('b', { createdAt: '2026-05-01T00:00:00.000Z' }),
-    property('c', { createdAt: '2026-03-01T00:00:00.000Z' }),
+    property('a', {
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }),
+    property('b', {
+      createdAt: '2026-05-01T00:00:00.000Z',
+      updatedAt: '2026-05-01T00:00:00.000Z',
+    }),
+    property('c', {
+      createdAt: '2026-03-01T00:00:00.000Z',
+      updatedAt: '2026-03-01T00:00:00.000Z',
+    }),
   ]);
   const ids = (query: string, filters: InventoryFilters = noInventoryFilters) =>
     catalogueMatches(index, { query, filters }).map((match) => match.record.id);

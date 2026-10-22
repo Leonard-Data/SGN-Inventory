@@ -4,22 +4,26 @@ import {
   CATALOGUE_PAGE_SIZE,
   CATALOGUE_SELECT,
   catalogueFailure,
+  catalogueKeyset,
   catalogueSummary,
   nextCatalogueCursor,
+  type CatalogueCursor,
   type CatalogueRow,
 } from './catalogue';
 import { propertyCreators, propertyModifiers } from './creator';
 import type { CataloguePage, PropertySummary } from './types';
 
 // One page of the browser catalogue: the caller's own authorized, unarchived inventory in one
-// stable identity order, with each property's address variants flattened into its row.
+// stable total order - the record's own modification time, then its identity - with each
+// property's address variants flattened into its row. It is the order the inventory list's own
+// browse states, so the first page painted here is the inventory's first window.
 //
 // The cursor names the position the page starts after and nothing else. The read runs on the
 // caller's own session client, so row level security is what decides which rows exist for them at
 // all, and it is reapplied on every page: a cursor can never reach a row the caller may not read.
 export async function cataloguePage(
   context: RouteContext,
-  after: string | null,
+  after: CatalogueCursor | null,
 ): Promise<CataloguePage> {
   const read = context.client
     .from('properties')
@@ -27,9 +31,12 @@ export async function cataloguePage(
     // The ordinary inventory boundary: an archived record is not part of the browsing catalogue,
     // exactly as the list's own stream excludes it.
     .is('archived_at', null)
-    .order('id', { ascending: true })
+    .order('updated_at', { ascending: false })
+    .order('id', { ascending: false })
     .limit(CATALOGUE_PAGE_SIZE);
-  const { data, error } = await (after === null ? read : read.gt('id', after));
+  const { data, error } = await (after === null
+    ? read
+    : read.or(catalogueKeyset(after)));
   if (error) {
     const failure = catalogueFailure(error.code);
     throw new ApiError(failure.status, failure.code);
@@ -44,7 +51,9 @@ export async function cataloguePage(
         attribution.modifiers.get(row.id) ?? null,
       ),
     ),
-    nextCursor: nextCatalogueCursor(rows.map((row) => row.id)),
+    nextCursor: nextCatalogueCursor(
+      rows.map((row) => ({ id: row.id, updatedAt: row.updated_at })),
+    ),
   };
 }
 
