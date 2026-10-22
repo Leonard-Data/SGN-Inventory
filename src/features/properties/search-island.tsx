@@ -699,10 +699,9 @@ export function SearchIsland({
               </div>
               <div className="field-group">
                 <div className="form-grid">
-                  {/* A legacy address offers its three levels - the district inside the chosen
-                    province and the ward inside the chosen district - while a current address has
-                    no district level, so each picker exists only once the level it narrows is
-                    chosen. */}
+                  {/* The panel offers every level the chosen address format has - a legacy
+                    address adds the district between the province and the ward - and a dependent
+                    list fills once the level above it is chosen. */}
                   <UnitCombobox
                     id="filter-province"
                     name="province"
@@ -717,7 +716,7 @@ export function SearchIsland({
                     anyLabel={text.filtersAny}
                     noMatch={text.comboboxNoMatch}
                   />
-                  {legacyUnits && province ? (
+                  {legacyUnits ? (
                     <UnitCombobox
                       id="filter-district"
                       name="district"
@@ -732,20 +731,16 @@ export function SearchIsland({
                       noMatch={text.comboboxNoMatch}
                     />
                   ) : null}
-                  {/* A legacy ward narrows the chosen district and a current commune the chosen
-                    province, so the ward picker exists once the level above it is chosen. */}
-                  {(legacyUnits ? district : province) ? (
-                    <UnitCombobox
-                      id="filter-ward"
-                      name="ward"
-                      label={text.ward}
-                      units={wards}
-                      value={ward}
-                      onChange={setWard}
-                      anyLabel={text.filtersAny}
-                      noMatch={text.comboboxNoMatch}
-                    />
-                  ) : null}
+                  <UnitCombobox
+                    id="filter-ward"
+                    name="ward"
+                    label={text.ward}
+                    units={wards}
+                    value={ward}
+                    onChange={setWard}
+                    anyLabel={text.filtersAny}
+                    noMatch={text.comboboxNoMatch}
+                  />
                 </div>
                 <p className="field-hint">{text.areaAdminHint}</p>
                 {provinceFailed || districtFailed || wardFailed ? (
