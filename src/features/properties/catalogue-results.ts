@@ -163,6 +163,10 @@ export function matchesLocalFilters(
     return false;
   if (filters.type !== null && record.propertyType !== filters.type)
     return false;
+  // The recorded access state, as the database read's own equality predicate; a recorded null is
+  // no state at all, so it never satisfies a stated one.
+  if (filters.accessType !== null && record.accessType !== filters.accessType)
+    return false;
   if (filters.priceMin !== null || filters.priceMax !== null) {
     const price = boundedPrice(record, filters.mode);
     if (

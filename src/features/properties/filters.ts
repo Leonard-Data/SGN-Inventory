@@ -1,6 +1,8 @@
 // The inventory filter set as it travels in the page address, plus the one place its bounds are
 // validated. The route validates the same strings the browser carries, so a filter is either
 // applied exactly as the address states or refused as invalid input — never silently dropped.
+// The access type is the way a property is reached, one of the five states every record records, so
+// it is filtered by that recorded value alone and an absent one applies no access condition.
 // The province/district/ward triple names official administrative units, each narrowing the level
 // above it: the district only exists in the closed pre-2025 three-tier generation, so it is a
 // legacy-address filter and no part of a current-address search. The read applies every level that
@@ -29,6 +31,15 @@ export const INVENTORY_PROPERTY_TYPES = [
   'serviced_apartment',
   'unclassified',
 ] as const;
+// The five recorded access states, in the record's own order. A property always records one, so the
+// state that means "not known" is a value to filter by rather than an unstated one.
+export const INVENTORY_ACCESS_TYPES = [
+  'unknown',
+  'street_front',
+  'car_alley',
+  'motorbike_alley',
+  'three_wheeler_alley',
+] as const;
 // The two formats a search is matched through. An `alternate` address is a recorded other address
 // rather than one of the two formats a property is searched by, so it is no filter value.
 export const INVENTORY_ADDRESS_FORMATS = ['legacy', 'current'] as const;
@@ -47,6 +58,7 @@ export const INVENTORY_FILTER_KEYS = [
   'status',
   'mode',
   'type',
+  'accessType',
   'addressFormat',
   'priceMin',
   'priceMax',
@@ -70,6 +82,7 @@ export const noInventoryFilters: InventoryFilters = {
   status: null,
   mode: null,
   type: null,
+  accessType: null,
   addressFormat: DEFAULT_ADDRESS_FORMAT,
   priceMin: null,
   priceMax: null,
@@ -109,6 +122,7 @@ export function inventoryFilters(
     status: read('status'),
     mode: read('mode'),
     type: read('type'),
+    accessType: read('accessType'),
     addressFormat: read('addressFormat') ?? absentAddressFormat,
     priceMin: read('priceMin'),
     priceMax: read('priceMax'),
@@ -134,6 +148,7 @@ export function parseInventoryFilters(
     status,
     mode,
     type,
+    accessType,
     addressFormat,
     priceMin,
     priceMax,
@@ -149,6 +164,8 @@ export function parseInventoryFilters(
   if (mode !== null && !includes(INVENTORY_LISTING_MODES, mode))
     return refuse();
   if (type !== null && !includes(INVENTORY_PROPERTY_TYPES, type))
+    return refuse();
+  if (accessType !== null && !includes(INVENTORY_ACCESS_TYPES, accessType))
     return refuse();
   if (!includes(INVENTORY_ADDRESS_FORMAT_VALUES, addressFormat ?? ''))
     return refuse();
@@ -244,6 +261,7 @@ export type InventoryFilterArgs = {
   p_status?: string;
   p_mode?: string;
   p_type?: string;
+  p_access_type?: string;
   p_price_min?: string;
   p_price_max?: string;
   p_area_min?: number;
@@ -279,6 +297,7 @@ export function filterRpcArgs(filters: InventoryFilters): InventoryFilterArgs {
   if (filters.status) args.p_status = filters.status;
   if (filters.mode) args.p_mode = filters.mode;
   if (filters.type) args.p_type = filters.type;
+  if (filters.accessType) args.p_access_type = filters.accessType;
   if (filters.priceMin) args.p_price_min = filters.priceMin;
   if (filters.priceMax) args.p_price_max = filters.priceMax;
   if (filters.areaMin) args.p_area_min = Number(filters.areaMin);

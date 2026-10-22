@@ -28,6 +28,14 @@ export async function inventoryStreamContract({
   // window of five, to cross date ties and to prove the creation-time default is not identity
   // order. One row also carries a rent price so the window's price fields are exercised.
   const base = Date.parse('2026-09-01T00:00:00.000Z');
+  // The access states cycle over the dated rows, so the access filter has several rows of each
+  // state to keep and several to drop.
+  const ACCESS_CYCLE = [
+    'street_front',
+    'car_alley',
+    'motorbike_alley',
+    'three_wheeler_alley',
+  ];
   const dated = [];
   for (let index = 0; index < 24; index++)
     dated.push({
@@ -36,33 +44,39 @@ export async function inventoryStreamContract({
       entryOn: `2025-0${(index % 4) + 1}-0${(index % 5) + 1}`,
       createdAt: new Date(base + (index % 6) * 3_600_000),
       status: index % 3 === 0 ? 'negotiating' : 'available',
+      accessType: ACCESS_CYCLE[index % ACCESS_CYCLE.length],
     });
   const unknownDated = {
     id: id('aa'),
+    accessType: 'unknown',
     code: 'SGN-STRM-AA',
     entryOn: null,
     createdAt: new Date(base - 86_400_000),
   };
   const unknownSecond = {
     id: id('ab'),
+    accessType: 'unknown',
     code: 'SGN-STRM-AB',
     entryOn: null,
     createdAt: new Date(base - 172_800_000),
   };
   const archived = {
     id: id('ac'),
+    accessType: 'street_front',
     code: 'SGN-STRM-AC',
     entryOn: '2025-01-01',
     createdAt: new Date(base + 10 * 3_600_000),
   };
   const archivedUnknown = {
     id: id('ad'),
+    accessType: 'unknown',
     code: 'SGN-STRM-AD',
     entryOn: null,
     createdAt: new Date(base - 259_200_000),
   };
   const sold = {
     id: id('ae'),
+    accessType: 'street_front',
     code: 'SGN-STRM-AE',
     entryOn: '2025-01-01',
     createdAt: new Date(base + 11 * 3_600_000),
@@ -87,11 +101,12 @@ export async function inventoryStreamContract({
     province = null,
     district = null,
     commune = null,
+    accessType = null,
   } = {}) {
     const result = await db.query(
       `select * from public.stream_inventory(p_order => $1::text,p_query => $2::text,p_offset => $3::integer,
         p_limit => $4::integer,p_status => $5::text,p_address_format => $6::text,p_province_id => $7::uuid,
-        p_district_id => $8::uuid,p_commune_id => $9::uuid)`,
+        p_district_id => $8::uuid,p_commune_id => $9::uuid,p_access_type => $10::text)`,
       [
         order,
         query,
@@ -102,6 +117,7 @@ export async function inventoryStreamContract({
         province,
         district,
         commune,
+        accessType,
       ],
     );
     // Every read answers at least one row: the window's rows, or the counting row alone when the
@@ -115,8 +131,8 @@ export async function inventoryStreamContract({
 
   await asOwner();
   await db.query(
-    `insert into public.properties(id,property_code,listing_mode,status,property_type,monthly_rent_vnd,created_by,entry_on,entry_source,created_at,archived_at)
-    select * from unnest($1::uuid[],$2::text[],$3::text[],$4::text[],$5::text[],$6::numeric[],$7::uuid[],$8::date[],$9::text[],$10::timestamptz[],$11::timestamptz[])`,
+    `insert into public.properties(id,property_code,listing_mode,status,property_type,monthly_rent_vnd,created_by,entry_on,entry_source,created_at,archived_at,access_type)
+    select * from unnest($1::uuid[],$2::text[],$3::text[],$4::text[],$5::text[],$6::numeric[],$7::uuid[],$8::date[],$9::text[],$10::timestamptz[],$11::timestamptz[],$12::text[])`,
     [
       all.map((row) => row.id),
       all.map((row) => row.code),
@@ -133,6 +149,7 @@ export async function inventoryStreamContract({
           ? new Date()
           : null,
       ),
+      all.map((row) => row.accessType),
     ],
   );
   await db.query(
@@ -467,6 +484,13 @@ export async function inventoryStreamContract({
           [order],
           '22023',
         );
+      // An access state is one of the five recorded values, never a re-spelling or a shorter word.
+      for (const access of ['car', 'Street_Front', 'street front', 'any'])
+        await fails(
+          'select * from public.stream_inventory(p_access_type => $1::text)',
+          [access],
+          '22023',
+        );
       // A recorded other address is no format this read searches through.
       for (const format of ['alternate', 'LEGACY', 'both'])
         await fails(
@@ -546,6 +570,85 @@ export async function inventoryStreamContract({
       // this function still gets.
       const unfiltered = await read({ addressFormat: null, limit: 100 });
       assert.equal(unfiltered.total, browseOrder.length);
+    },
+  );
+
+  await check(
+    'an access type keeps only the recorded value it states, and the not-known state is a value',
+    async () => {
+      const stating = (value) =>
+        browseOrder.filter(
+          (propertyId) =>
+            all.find((row) => row.id === propertyId).accessType === value,
+        );
+      for (const value of [
+        'street_front',
+        'car_alley',
+        'motorbike_alley',
+        'three_wheeler_alley',
+        'unknown',
+      ]) {
+        const kept = await read({ accessType: value, limit: 100 });
+        const expected = stating(value);
+        assert.ok(expected.length > 0, value);
+        assert.deepEqual(
+          kept.rows.map((row) => row.id),
+          expected,
+          `${value} keeps its own records in order`,
+        );
+        assert.equal(kept.total, expected.length, `${value} total`);
+        for (const row of kept.rows)
+          assert.equal(row.access_type, value, `${value} recorded state`);
+      }
+      // A recorded "not known" is a state to narrow to, never the unfiltered read.
+      const unknown = await read({ accessType: 'unknown', limit: 100 });
+      assert.equal(unknown.total, 2);
+      assert.ok(unknown.total < browseOrder.length);
+      // The archived record of a stated access state stays outside the answer.
+      assert.ok(
+        !(await read({ accessType: 'street_front', limit: 100 })).rows.some(
+          (row) => row.id === archived.id,
+        ),
+      );
+    },
+  );
+
+  await check(
+    'the access type composes with the other filters and their total',
+    async () => {
+      const streetFront = await read({
+        accessType: 'street_front',
+        status: 'negotiating',
+        limit: 100,
+      });
+      const expected = browseOrder.filter((propertyId) => {
+        const row = all.find((entry) => entry.id === propertyId);
+        return (
+          row.accessType === 'street_front' && row.status === 'negotiating'
+        );
+      });
+      assert.ok(expected.length > 0);
+      assert.deepEqual(
+        streetFront.rows.map((row) => row.id),
+        expected,
+      );
+      assert.equal(streetFront.total, expected.length);
+      // The address format and the access state narrow the same read: one record here records a
+      // current address and a street front, so both conditions must hold on it.
+      const scoped = await read({
+        accessType: 'street_front',
+        addressFormat: 'current',
+        limit: 100,
+      });
+      assert.deepEqual(
+        scoped.rows.map((row) => row.id),
+        [dated[0].id],
+      );
+      // An absent access parameter applies no access condition, which every earlier caller gets.
+      assert.equal(
+        (await read({ accessType: null, limit: 100 })).total,
+        browseOrder.length,
+      );
     },
   );
 

@@ -2470,6 +2470,7 @@ export type Database = {
           p_status?: string;
           p_mode?: string;
           p_type?: string;
+          p_access_type?: string;
           p_price_min?: string;
           p_price_max?: string;
           p_area_min?: number;
