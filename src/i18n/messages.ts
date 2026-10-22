@@ -79,7 +79,7 @@ const vi = {
   // browser holds, so a load that stopped says so beside its retry and nothing claims a count.
   catalogueLoadFailed: 'Không tải được danh mục.',
   catalogueLoadStopped:
-    'Đã dừng tải danh mục; danh sách đang hiển thị các bất động sản đã tải.',
+    'Đã dừng tải danh mục; vẫn tìm được trong các bất động sản đã tải.',
   catalogueMoreMatches: 'Có thể có thêm kết quả khi quá trình tải tiếp tục.',
   catalogueRefresh: 'Làm mới danh mục',
   catalogueRefreshKnown:
@@ -996,7 +996,7 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     // browser holds, so a load that stopped says so beside its retry and nothing claims a count.
     catalogueLoadFailed: 'The catalogue could not be loaded.',
     catalogueLoadStopped:
-      'The catalogue stopped loading; the list shows the properties already loaded.',
+      'The catalogue stopped loading; the properties already loaded stay searchable.',
     catalogueMoreMatches: 'More matches may appear as loading continues.',
     catalogueRefresh: 'Refresh catalogue',
     catalogueRefreshKnown:
