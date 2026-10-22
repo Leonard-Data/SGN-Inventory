@@ -25,6 +25,9 @@ export function UnitCombobox({
   anyLabel,
   noMatch,
   error,
+  selectedLabel,
+  disabled,
+  hint,
 }: {
   id: string;
   // The form field the committed identifier reaches; the visible field carries typed text.
