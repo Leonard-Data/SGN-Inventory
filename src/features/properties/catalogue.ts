@@ -213,9 +213,10 @@ export function catalogueKeyset(cursor: CatalogueCursor): string {
   return `updated_at.lt.${at},and(updated_at.eq.${at},id.lt."${cursor.id}")`;
 }
 
-// The one request a catalogue read answers: no cursor is the first page, a property identity is a
-// position in the traversal, and anything else in the address - a filter, a page number, a
-// mangled cursor - is refused rather than answered with a page the caller did not ask for.
+// The one request a catalogue read answers: no cursor is the first page, a change time with its
+// identity is a position in the traversal, and anything else in the address - a filter, a page
+// number, a mangled or identity-only cursor - is refused rather than answered with a page the
+// caller did not ask for.
 export function catalogueRequest(
   params: URLSearchParams,
 ): { ok: true; after: CatalogueCursor | null } | { ok: false } {
