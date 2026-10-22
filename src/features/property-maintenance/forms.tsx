@@ -169,6 +169,29 @@ export function RecordFields({
       : value == null
         ? ''
         : String(value);
+    // The district text is written by the legacy district picker and never typed here: a recorded
+    // value travels with the form on every other save and reads back as the text it holds.
+    if (name === 'district_text')
+      return initial ? (
+        <div className="field" key={name}>
+          <span className="field-label">{text}</span>
+          <p translate="no">{initial}</p>
+          <input
+            type="hidden"
+            name={name}
+            ref={refs?.[name]}
+            defaultValue={initial}
+          />
+        </div>
+      ) : (
+        <input
+          key={name}
+          type="hidden"
+          name={name}
+          ref={refs?.[name]}
+          defaultValue=""
+        />
+      );
     const wide =
       ['phones'].includes(field.kind ?? '') ||
       [
@@ -339,7 +362,8 @@ export function AddressFields({
   const selected = names ? new Set(names) : null,
     includes = (name: string) => selected === null || selected.has(name),
     id = useId(),
-    [format, setFormat] = useState(String(values.format ?? '')),
+    // A new address starts in the legacy format; a recorded one opens on the format it holds.
+    [format, setFormat] = useState(String(values.format ?? 'legacy')),
     [units, setUnits] = useState<AddressUnits>({
       province: String(values.province_unit_id ?? ''),
       district: String(values.district_unit_id ?? ''),
@@ -383,6 +407,8 @@ export function AddressFields({
                 <label className="field-label" htmlFor={id}>
                   {fields.format![locale]}
                 </label>
+                {/* Two formats are offered. A row an earlier import recorded as neither reads back
+                    as what it holds: its own format is stated here but never offered. */}
                 <select
                   id={id}
                   className="select"
@@ -397,7 +423,6 @@ export function AddressFields({
                   }}
                   disabled={!!values.id}
                 >
-                  <option value="">{text.unknown}</option>
                   {values.format === 'alternate' ? (
                     <option value="alternate">
                       {optionLabel(locale, 'alternate')}

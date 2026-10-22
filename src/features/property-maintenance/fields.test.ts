@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { label } from '../../i18n/messages.ts';
 import {
+  fields,
   validateChanges,
   formChanges,
   correctionFieldNames,
@@ -24,6 +26,31 @@ function legacyForm() {
   form.set('commune_unit_id', LEGACY_WARD);
   return form;
 }
+
+test('the address form offers two formats, reads them in both languages and keeps a recorded district', () => {
+  // Two choices, the stored values the schema holds, legacy first.
+  assert.deepEqual([...fields.format!.options!], ['legacy', 'current']);
+  assert.equal(label('vi', 'legacy'), 'Địa chỉ cũ');
+  assert.equal(label('en', 'legacy'), 'Legacy Address');
+  assert.equal(label('vi', 'current'), 'Địa chỉ mới');
+  assert.equal(label('en', 'current'), 'Current Address');
+  // The district text travels with the form the picker writes it into, so a save that changes
+  // something else leaves the recorded text out of the changes rather than clearing it.
+  const form = legacyForm();
+  form.set('house_number', '14');
+  assert.deepEqual(
+    formChanges('address', form, {
+      format: 'legacy',
+      address_text: '12 Nguyễn Du, Quận 1',
+      house_number: '12',
+      district_text: 'Quận 1',
+      province_unit_id: LEGACY_PROVINCE,
+      district_unit_id: LEGACY_DISTRICT,
+      commune_unit_id: LEGACY_WARD,
+    }),
+    { house_number: '14' },
+  );
+});
 
 test('a legacy address saves all three unit ids and its district text', () => {
   assert.deepEqual(formChanges('address', legacyForm()), {
