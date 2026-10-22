@@ -59,28 +59,32 @@ export function writeListState(
   carrier.state = { ...state };
 }
 
-// The authorized scope a list reads and paints under: this surface's own answered session, or - while
-// that read is still answering - the scope key the catalogue above the route was authorized under,
+// The authorized scope a list reads and paints under: this surface's own answered session, or - until
+// that read has answered once - the scope key the catalogue above the route was authorized under,
 // which is the same identity, role and access revision the shell already holds. A return to the list
-// finds the rows under that key in browser memory, so both result sets paint them on the first
-// render instead of a skeleton over rows that are already there. A session that answers as another
-// scope is that scope, and the windows read under the former one are dropped with the key; a
-// catalogue that holds nothing and a read that stopped with an error read null, so nothing cached
-// under an unknown or different scope is ever painted.
+// finds the rows the browser holds under that key, so the catalogue paints on the first render and a
+// search paints as soon as its cached window is answered, instead of a skeleton over rows that are
+// already there. The held scope is only ever the one in force: a read that failed, a catalogue that
+// holds nothing, and a surface whose own read has already answered - so a concealment it detected
+// cannot be undone by painting held rows again - read null or that surface's own key, and a session
+// that answers as another scope drops the windows read under the former one with it.
 export function readScope({
   own,
   held,
+  answered,
   failed,
 }: {
   // This surface's own session scope key, or null while its read is in flight.
   own: string | null;
   // The scope key the catalogue above the route was read under, or null when it holds nothing.
   held: string | null;
+  // This surface's own read has published since it mounted, or its authority was discarded.
+  answered: boolean;
   // This surface's own session read stopped with an error.
   failed: boolean;
 }): string | null {
   if (own !== null) return own;
-  return failed ? null : held;
+  return answered || failed ? null : held;
 }
 
 // Whether the stream has rendered enough to put a position on: the read has stated the total the

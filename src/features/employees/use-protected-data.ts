@@ -19,6 +19,12 @@ export function useProtectedData<T>(
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(true);
+  // Whether this surface's own read has published since it mounted, or the authority it rendered was
+  // discarded or refused. Rows the browser holds from a scope this surface did not read may be
+  // painted only until then: from the first answer on, what a surface shows is what its own read
+  // published, so a change a later read detects stays concealed instead of being undone by painting
+  // held rows again.
+  const [answered, setAnswered] = useState(false);
   const generation = useRef(0);
   const controller = useRef<AbortController | null>(null);
   const surfaceElement = useRef<HTMLDivElement | null>(null);
@@ -44,6 +50,7 @@ export function useProtectedData<T>(
     onClear?.();
     renderedFor.current = null;
     renderedAccessRevision.current = null;
+    setAnswered(true);
     setData(null);
     setEmployee(null);
   }, [conceal, onClear]);
@@ -70,11 +77,13 @@ export function useProtectedData<T>(
           // what put a blank results area over rows a returning list had already painted from the
           // catalogue the browser holds (#265); the first answer of a read is not a change of
           // identity. An identity that really moved is a surface with something rendered, and it is
-          // still hidden at once.
-          if (renderedFor.current !== null && surfaceElement.current)
+          // still hidden at once - and from then on it paints only what its own read publishes.
+          const changed = renderedFor.current !== null;
+          if (changed && surfaceElement.current)
             surfaceElement.current.hidden = true;
           renderedFor.current = null;
           renderedAccessRevision.current = null;
+          if (changed) setAnswered(true);
           setData(null);
           setEmployee(null);
         },
@@ -82,6 +91,7 @@ export function useProtectedData<T>(
       if (version !== generation.current) return;
       setEmployee(sessionEmployee);
       setData(result);
+      setAnswered(true);
       renderedFor.current = renderedSession(sessionEmployee);
       renderedAccessRevision.current = sessionAccessRevision;
       setError(null);
@@ -96,6 +106,7 @@ export function useProtectedData<T>(
         failure instanceof RequestError &&
         (failure.status === 401 || failure.status === 403)
       ) {
+        setAnswered(true);
         onClear?.();
         window.location.replace(
           failure.status === 403 ? '/access-denied' : '/login',
@@ -207,6 +218,7 @@ export function useProtectedData<T>(
     data,
     error,
     busy,
+    answered,
     surface: bindSurface,
     clear,
     reload,

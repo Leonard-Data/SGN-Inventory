@@ -226,6 +226,7 @@ export function Inventory({
     data: session,
     error: sessionError,
     busy,
+    answered,
     surface,
     logout,
     clear,
@@ -255,18 +256,22 @@ export function Inventory({
   // A replacement catalogue is not a new authority, so it neither reopens a submitted search nor
   // closes the quick view of a record that is still readable.
   const sessionKey = session ? sessionScope(session) : null;
-  // The scope key the catalogue above the route was authorized under, which is where the rows the
-  // browser already holds were cached.
-  const heldScope = catalogue.scope ? sessionScope(catalogue.scope) : null;
+  // The catalogue the browser holds, which may be painted only until this surface's own read has
+  // published: from then on what the list shows is its own read's, so a change that read detected
+  // stays concealed instead of the held rows reappearing behind it.
+  const heldCatalogue = answered ? null : catalogue.scope;
+  // The scope key that catalogue was authorized under, which is where its rows were cached.
+  const heldScope = heldCatalogue ? sessionScope(heldCatalogue) : null;
   // The scope this surface reads and paints under: its own answered session, or the catalogue's own
-  // scope while that read is still in flight. Both kinds of result set paint on arrival that way -
-  // the catalogue from the index the browser holds, an advanced search from the windows cached under
-  // this key - and the read that answers still governs: a session for another scope empties the
-  // catalogue, this falls back to that session's own key, and the windows read under the former one
-  // are dropped with it rather than left on screen.
+  // scope until then. Both kinds of result set paint on arrival that way - the catalogue from the
+  // index the browser holds, an advanced search from the windows cached under this key - and the
+  // read that answers still governs: a session for another scope empties the catalogue, this falls
+  // back to that session's own key, and the windows read under the former one are dropped with it
+  // rather than left on screen.
   const scope = readScope({
     own: sessionKey,
     held: heldScope,
+    answered,
     failed: sessionError !== null,
   });
   // The rows the browser already holds paint on arrival, instead of a skeleton over rows that are in
@@ -319,8 +324,7 @@ export function Inventory({
   // the same employee whenever it is answered, so a list painting from the held rows filters by the
   // creator before this surface's session read has answered; an absent one matches nothing rather
   // than everyone.
-  const employeeId =
-    session?.employee.id ?? catalogue.scope?.employee.id ?? null;
+  const employeeId = session?.employee.id ?? heldCatalogue?.employee.id ?? null;
   const matches = useMemo(() => {
     if (!localActive) return null;
     return localReady

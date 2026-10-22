@@ -128,33 +128,53 @@ test('a position is only restored onto a stream that has rendered', () => {
 });
 
 // A return to the list finds the rows the browser holds under the scope the shell last authorized,
-// so both result sets - the catalogue's index and an advanced search's cached windows - paint while
-// the surface's own session read answers (issue #265). That held scope is only ever the one in
-// force: a session read that stopped with an error, a catalogue holding nothing under a scope, and a
-// session that answers as another scope all read that other scope or nothing, so the rows cached
-// under the former one are never painted and are dropped when the key moves.
+// so both result sets paint while the surface's own session read answers (issue #265): the catalogue
+// from its index, a submitted search as soon as its cached window is answered. That held scope is
+// only ever the one in force: a session read that stopped with an error, a catalogue holding nothing
+// under a scope, and a surface whose own read has already answered all read that other scope or
+// nothing, so a change the surface's own read detected stays concealed and the rows cached under the
+// former scope are dropped when the key moves.
 test('the list reads under the scope in force, held or its own', () => {
+  const pending = { own: null, answered: false, failed: false };
   // The own session has not answered: the catalogue's authorized scope is the one in force.
-  assert.equal(
-    readScope({ own: null, held: 'emp:staff:7', failed: false }),
-    'emp:staff:7',
-  );
+  assert.equal(readScope({ ...pending, held: 'emp:staff:7' }), 'emp:staff:7');
   // Nothing held under any scope, or a read that failed, paints nothing.
-  assert.equal(readScope({ own: null, held: null, failed: false }), null);
+  assert.equal(readScope({ ...pending, held: null }), null);
   assert.equal(
-    readScope({ own: null, held: 'emp:staff:7', failed: true }),
+    readScope({ ...pending, held: 'emp:staff:7', failed: true }),
+    null,
+  );
+  // The surface's own read has answered, so a scope it did not read outranks nothing: a change that
+  // read concealed stays concealed, whatever the catalogue above the route still holds.
+  assert.equal(
+    readScope({
+      own: null,
+      answered: true,
+      held: 'emp:staff:7',
+      failed: false,
+    }),
     null,
   );
   // The session answers as the same scope the rows were cached under: the same key, so nothing is
   // read again.
   assert.equal(
-    readScope({ own: 'emp:staff:7', held: 'emp:staff:7', failed: false }),
+    readScope({
+      own: 'emp:staff:7',
+      answered: true,
+      held: 'emp:staff:7',
+      failed: false,
+    }),
     'emp:staff:7',
   );
   // The session answers as another scope - another user, role or access revision - so the key is
   // that scope and the windows cached under the held one are discarded with it.
   assert.equal(
-    readScope({ own: 'emp:staff:8', held: 'emp:staff:7', failed: false }),
+    readScope({
+      own: 'emp:staff:8',
+      answered: true,
+      held: 'emp:staff:7',
+      failed: false,
+    }),
     'emp:staff:8',
   );
 });
