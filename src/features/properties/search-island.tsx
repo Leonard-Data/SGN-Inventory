@@ -355,6 +355,8 @@ export function SearchIsland({
     wholeVnd(value) ? formatVnd(value, locale) : value;
   const m2 = (value: string) =>
     squareMetres(value) ? `${formatDecimal(value, locale)} m²` : value;
+  const metres = (value: string) =>
+    squareMetres(value) ? `${formatDecimal(value, locale)} m` : value;
   const priceLabel = (selectedMode: string | null, range: 'from' | 'to') => {
     if (selectedMode === 'rent')
       return range === 'from' ? text.rentPriceFrom : text.rentPriceTo;
@@ -447,6 +449,28 @@ export function SearchIsland({
     applied.push({
       key: 'areaMax',
       label: `${text.areaRangeTo}: ${m2(filters.areaMax)}`,
+    });
+  // Each dimension states its own two bounds, so a person can see which side of the range came from
+  // the address.
+  if (filters.frontageMin)
+    applied.push({
+      key: 'frontageMin',
+      label: `${text.frontageRangeFrom}: ${metres(filters.frontageMin)}`,
+    });
+  if (filters.frontageMax)
+    applied.push({
+      key: 'frontageMax',
+      label: `${text.frontageRangeTo}: ${metres(filters.frontageMax)}`,
+    });
+  if (filters.depthMin)
+    applied.push({
+      key: 'depthMin',
+      label: `${text.depthRangeFrom}: ${metres(filters.depthMin)}`,
+    });
+  if (filters.depthMax)
+    applied.push({
+      key: 'depthMax',
+      label: `${text.depthRangeTo}: ${metres(filters.depthMax)}`,
     });
   function remove(key: InventoryFilterKey) {
     // Each level narrows the one above it, so removing a level removes the levels beneath it too.
@@ -750,6 +774,15 @@ export function SearchIsland({
                   {bound('areaMax', text.areaRangeTo, ['m²'])}
                 </div>
                 <p className="field-hint">{text.areaFilterHint}</p>
+              </div>
+              <div className="field-group">
+                <div className="form-grid">
+                  {bound('frontageMin', text.frontageRangeFrom, ['m'])}
+                  {bound('frontageMax', text.frontageRangeTo, ['m'])}
+                  {bound('depthMin', text.depthRangeFrom, ['m'])}
+                  {bound('depthMax', text.depthRangeTo, ['m'])}
+                </div>
+                <p className="field-hint">{text.dimensionFilterHint}</p>
               </div>
             </div>
             <div className="form-section">

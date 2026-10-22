@@ -186,6 +186,21 @@ export function matchesLocalFilters(
     // Either recorded area satisfies the range, as it does in the database read.
     if (!within(land, low, high) && !within(floor, low, high)) return false;
   }
+  // Each dimension is its own range, mirroring the database read: a property with no recorded
+  // dimension never satisfies a stated bound, because an unknown dimension is not zero.
+  for (const [value, low, high] of [
+    [record.frontageM, filters.frontageMin, filters.frontageMax],
+    [record.depthM, filters.depthMin, filters.depthMax],
+  ] as const)
+    if (
+      (low !== null || high !== null) &&
+      !within(
+        hundredths(value),
+        low === null ? null : hundredths(low),
+        high === null ? null : hundredths(high),
+      )
+    )
+      return false;
   // The stated format is the address the record is searched through, so a property recording no
   // address in that format does not match - the database read's own exists-predicate, where nothing
   // is inferred for a property on its behalf. The choice that states no format narrows nothing.

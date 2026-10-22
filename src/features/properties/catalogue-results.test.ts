@@ -77,6 +77,10 @@ test('every filter the catalogue carries a field for is offered locally, and no 
     priceMax: '9000000000',
     areaMin: '20',
     areaMax: '90.5',
+    frontageMin: '4',
+    frontageMax: '12',
+    depthMin: '16',
+    depthMax: '30',
   };
   assert.deepEqual(advancedFilterKeys(stated), []);
   // The criteria whose fields the summaries do not carry are named as advanced, so they are never
@@ -104,6 +108,8 @@ test('a supported filter, a blank search and the plain browse are answered by th
     { query: '   ', filters: noInventoryFilters },
     { query: '', filters: { ...noInventoryFilters, status: 'available' } },
     { query: '', filters: { ...noInventoryFilters, areaMin: '20' } },
+    { query: '', filters: { ...noInventoryFilters, frontageMin: '4' } },
+    { query: '', filters: { ...noInventoryFilters, depthMax: '30' } },
     {
       query: '',
       filters: { ...noInventoryFilters, accessType: 'motorbike_alley' },
@@ -161,6 +167,10 @@ test('a stated filter set the database read would refuse is never applied locall
     { areaMax: '10.005' },
     { priceMin: '9000000000', priceMax: '1000000000' },
     { areaMin: '90', areaMax: '20' },
+    { frontageMin: '0' },
+    { depthMax: '10.005' },
+    { frontageMin: '12', frontageMax: '4' },
+    { depthMin: '30', depthMax: '16' },
     { ward: WARD },
     { province: 'not-a-unit' },
   ])
@@ -296,6 +306,22 @@ test('a local filter is applied to the recorded fields exactly as the database r
   );
   assert.equal(kept({ areaMin: '300' }, measured), false);
   assert.equal(kept({ areaMin: '10' }, unclassified), false);
+
+  // A dimension range follows the recorded frontage or depth exactly, as the database read does,
+  // and a property recording no dimension never matches a stated bound: unknown is not zero.
+  const sized = property('sized', { frontageM: '4.50', depthM: '16.00' });
+  assert.equal(kept({ frontageMin: '4', frontageMax: '5' }, sized), true);
+  assert.equal(kept({ frontageMax: '4' }, sized), false);
+  assert.equal(kept({ depthMin: '16', depthMax: '16.00' }, sized), true);
+  assert.equal(kept({ depthMin: '16.01' }, sized), false);
+  assert.equal(kept({ frontageMin: '1', depthMax: '20' }, sized), true);
+  assert.equal(kept({ frontageMin: '1' }, unclassified), false);
+  assert.equal(kept({ depthMax: '20' }, unclassified), false);
+  // A half dimension is the one recorded value the stated bound compares against.
+  assert.equal(
+    kept({ depthMin: '20' }, property('half', { frontageM: '30' })),
+    false,
+  );
 });
 
 test('the creator selection compares who created the record, not their name', () => {

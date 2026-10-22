@@ -31,6 +31,10 @@ test('a complete filter set is applied exactly as the address stated it', () => 
     priceMax: '25000000',
     areaMin: '45.5',
     areaMax: '120',
+    frontageMin: '4.5',
+    frontageMax: '12',
+    depthMin: '16',
+    depthMax: '30.25',
     province: '11111111-1111-4111-8111-111111111111',
     ward: '22222222-2222-4222-8222-222222222222',
     contact: '33333333-3333-4333-8333-333333333333',
@@ -47,12 +51,23 @@ test('a complete filter set is applied exactly as the address stated it', () => 
     priceMax: '25000000',
     areaMin: '45.5',
     areaMax: '120',
+    frontageMin: '4.5',
+    frontageMax: '12',
+    depthMin: '16',
+    depthMax: '30.25',
     province: '11111111-1111-4111-8111-111111111111',
     district: null,
     ward: '22222222-2222-4222-8222-222222222222',
     contact: '33333333-3333-4333-8333-333333333333',
     createdBy: 'mine',
   });
+  // The address this set produces reads back as the same set, so every stated bound survives a
+  // reload instead of being reopened empty.
+  const reloaded = parseInventoryFilters(
+    new URLSearchParams(filterParams(result.filters)),
+  );
+  assert.ok(reloaded.ok);
+  assert.deepEqual(reloaded.filters, result.filters);
 });
 
 // The panel offers exactly the two formats a search is matched through and opens on the legacy one;
@@ -206,6 +221,20 @@ test('an area bound is positive square metres with at most two decimals', () => 
     assert.equal(parse({ areaMin: value }).ok, false, `${value} area bound`);
 });
 
+test('a dimension bound is positive metres under the area bound’s own rule', () => {
+  for (const key of [
+    'frontageMin',
+    'frontageMax',
+    'depthMin',
+    'depthMax',
+  ] as const) {
+    for (const value of ['1', '4.5', '120.25', '9999999999.99'])
+      assert.equal(parse({ [key]: value }).ok, true, `${key} ${value}`);
+    for (const value of ['0', '0.00', '-3', '12.345', '10000000000', 'abc'])
+      assert.equal(parse({ [key]: value }).ok, false, `${key} ${value}`);
+  }
+});
+
 test('a reversed range and an equal bound', () => {
   assert.equal(
     parse({ priceMin: '9000', priceMax: '8000' }).ok,
@@ -217,9 +246,34 @@ test('a reversed range and an equal bound', () => {
     false,
     'reversed area range',
   );
+  // Each dimension's range is refused on its own, so a stated minimum above its maximum never
+  // becomes an inventory that matches nothing.
+  assert.equal(
+    parse({ frontageMin: '12', frontageMax: '4.5' }).ok,
+    false,
+    'reversed frontage range',
+  );
+  assert.equal(
+    parse({ depthMin: '30.25', depthMax: '16' }).ok,
+    false,
+    'reversed depth range',
+  );
+  // One reversed range refuses the whole set, and a sound pair beside it does not excuse it.
+  assert.equal(
+    parse({
+      frontageMin: '4.5',
+      frontageMax: '12',
+      depthMin: '30',
+      depthMax: '16',
+    }).ok,
+    false,
+    'one reversed dimension range',
+  );
   for (const values of [
     { priceMin: '9000', priceMax: '9000' },
     { areaMin: '45.50', areaMax: '45.5' },
+    { frontageMin: '4.50', frontageMax: '4.5' },
+    { depthMin: '16', depthMax: '16.00' },
   ])
     assert.equal(parse(values).ok, true, JSON.stringify(values));
 });
@@ -232,6 +286,10 @@ test('a bound size is compared exactly, never as a rounded number', () => {
   );
   assert.equal(
     parse({ areaMin: '9999999999.99', areaMax: '9999999999.98' }).ok,
+    false,
+  );
+  assert.equal(
+    parse({ frontageMin: '9999999999.99', frontageMax: '9999999999.98' }).ok,
     false,
   );
 });
@@ -312,6 +370,15 @@ test('only set filters become link and RPC parameters', () => {
     filterParams({ ...noInventoryFilters, mode: 'sale', areaMax: '80' }),
     { addressFormat: 'legacy', mode: 'sale', areaMax: '80' },
   );
+  // Each dimension bound is its own address parameter, so the bounds round-trip through the link.
+  assert.deepEqual(
+    filterParams({
+      ...noInventoryFilters,
+      frontageMin: '4.5',
+      depthMax: '30',
+    }),
+    { addressFormat: 'legacy', frontageMin: '4.5', depthMax: '30' },
+  );
   assert.equal(activeFilterCount(noInventoryFilters), 1);
   assert.equal(
     activeFilterCount({
@@ -337,12 +404,16 @@ test('only set filters become link and RPC parameters', () => {
       priceMin: '1000',
       priceMax: '2000',
       areaMin: '45.5',
+      frontageMax: '12',
+      depthMin: '16',
     }),
     {
       p_status: 'available',
       p_price_min: '1000',
       p_price_max: '2000',
       p_area_min: 45.5,
+      p_frontage_max: 12,
+      p_depth_min: 16,
       p_address_format: 'legacy',
     },
   );
