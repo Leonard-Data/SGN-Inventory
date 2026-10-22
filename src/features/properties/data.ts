@@ -6,8 +6,10 @@ import { propertyCreators, propertyModifiers } from './creator';
 import {
   catalogUnitsMatch,
   filterRpcArgs,
+  INVENTORY_ADDRESS_FORMAT_ANY,
   INVENTORY_FILTER_KEYS,
   parseInventoryFilters,
+  searchedAddressFormat,
   type InventoryFilters,
 } from './filters';
 import {
@@ -99,10 +101,12 @@ export async function browseProperties(
   );
   if (!records.length) return { ...summary, properties: [] };
   const ids = records.map((row) => row.id);
+  // The format the search read through, which decides the address each row states.
+  const addressFormat = searchedAddressFormat(filters.filters);
   // Both reads depend only on the window of rows, so they run together: the addresses the rows
   // draw, and the display name of each record's creator and modifier.
   const [addresses, attribution] = await Promise.all([
-    addressSummaries(context, ids, query),
+    addressSummaries(context, ids, query, addressFormat),
     attributionNames(context, ids),
   ]);
   return {
@@ -238,6 +242,7 @@ async function addressSummaries(
   context: RouteContext,
   ids: string[],
   query: string,
+  addressFormat: string,
 ): Promise<Map<string, AddressSummary[]>> {
   const result = new Map<string, AddressSummary[]>();
   if (!ids.length) return result;
@@ -258,6 +263,14 @@ async function addressSummaries(
     .replace(/[\u0300-\u036f]/g, '')
     .replaceAll('đ', 'd');
   for (const address of addresses ?? []) {
+    // The row states the address the search read through: the selected format's own address, which
+    // the read's own predicate guarantees for every row, or either recorded address when no format
+    // is stated.
+    if (
+      addressFormat !== INVENTORY_ADDRESS_FORMAT_ANY &&
+      address.format !== addressFormat
+    )
+      continue;
     const summary: AddressSummary = {
       id: address.id,
       format: address.format,

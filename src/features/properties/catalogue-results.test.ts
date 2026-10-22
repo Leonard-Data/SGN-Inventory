@@ -458,11 +458,33 @@ test('the address format decides which recorded address a search is matched thro
   assert.deepEqual(ids('BDS-current-only', { addressFormat: 'current' }), [
     'current-only',
   ]);
+  // The choice that states no format condition widens the search to both recorded formats, so a
+  // property recorded in only the other format stays reachable from the panel.
+  assert.deepEqual(ids('', { addressFormat: 'any' }), [
+    'both',
+    'current-only',
+    'legacy-only',
+  ]);
+  assert.deepEqual(ids('quan 1', { addressFormat: 'any' }), [
+    'both',
+    'legacy-only',
+  ]);
+  assert.deepEqual(ids('ben nghe', { addressFormat: 'any' }), [
+    'both',
+    'current-only',
+  ]);
   assert.equal(matchesLocalFilters(onlyCurrent, noInventoryFilters), false);
   assert.equal(
     matchesLocalFilters(onlyCurrent, {
       ...noInventoryFilters,
       addressFormat: 'current',
+    }),
+    true,
+  );
+  assert.equal(
+    matchesLocalFilters(onlyCurrent, {
+      ...noInventoryFilters,
+      addressFormat: 'any',
     }),
     true,
   );

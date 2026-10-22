@@ -18,6 +18,7 @@ export const CardChunk = memo(function CardChunk({
   locale,
   resultLocation,
   showEntry,
+  addressFormat,
   matchedFormats,
   onDenied,
   onOpen,
@@ -30,6 +31,8 @@ export const CardChunk = memo(function CardChunk({
   locale: Locale;
   resultLocation: string;
   showEntry: boolean;
+  // The format the search reads through, which decides the address each card states.
+  addressFormat: string | null;
   // The stored address format each property matched through, while a local search is filtering.
   matchedFormats: ReadonlyMap<string, string>;
   onDenied: (status: number) => void;
@@ -77,6 +80,7 @@ export const CardChunk = memo(function CardChunk({
               onDenied={onDenied}
               onQuickView={onOpen}
               showEntry={showEntry}
+              addressFormat={addressFormat}
               matchedFormat={matchedFormats.get(record.id)}
             />
           ))}

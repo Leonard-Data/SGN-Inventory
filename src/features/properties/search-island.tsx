@@ -11,7 +11,8 @@ import { ContactPicker } from '@/features/property-maintenance/contact-picker';
 import { UnitCombobox } from '@/features/property-maintenance/unit-combobox';
 import { type UnitOption } from '@/features/property-maintenance/units';
 import {
-  INVENTORY_ADDRESS_FORMATS,
+  INVENTORY_ADDRESS_FORMAT_ANY,
+  INVENTORY_ADDRESS_FORMAT_CHOICES,
   INVENTORY_FILTER_KEYS,
   INVENTORY_LISTING_MODES,
   INVENTORY_PROPERTY_TYPES,
@@ -63,9 +64,13 @@ export function SearchIsland({
   const appliedWard = filters.ward ?? '';
   const appliedContact = filters.contact ?? '';
   const appliedCreatedBy = filters.createdBy ?? '';
-  // The format the search reads through: the address always states one, and an address that states
-  // none is the legacy search the panel opens on.
+  // The format the search reads through: an address that states none is the legacy search the panel
+  // opens on, and the third choice states no format condition at all.
   const appliedFormat = searchedAddressFormat(filters);
+  const formatLabel = (format: string) =>
+    format === INVENTORY_ADDRESS_FORMAT_ANY
+      ? text.filtersAny
+      : label(locale, format);
   // The stated ordering, when the address carries one. A chronological ordering is an advanced
   // criterion: it names the eligible-status database view, which the loaded catalogue cannot
   // state, so it is submitted from this panel rather than run as soon as a control changes.
@@ -413,7 +418,7 @@ export function SearchIsland({
       {/* The applied summary always names the address format: the legacy search is itself a
           narrowing, so it is stated rather than left for a person to wonder where a property
           recorded in the other format went. It carries no remove control, and clearing is offered
-          only when another condition is stated, because the format is always one of the two. */}
+          only when another condition is stated, because the format is always stated. */}
       <div className="chips">
         {applied.length ? (
           <Link className="link" href={clearHref} prefetch={false}>
@@ -421,7 +426,7 @@ export function SearchIsland({
           </Link>
         ) : null}
         <span className="chip">
-          {text.addressFormat}: {label(locale, appliedFormat)}
+          {text.addressFormat}: {formatLabel(appliedFormat)}
         </span>
         {applied.map((condition) => (
           <span className="chip" key={condition.key}>
@@ -493,8 +498,8 @@ export function SearchIsland({
                 {select('mode', text.listingMode, INVENTORY_LISTING_MODES)}
                 {select('type', text.propertyType, INVENTORY_PROPERTY_TYPES)}
               </div>
-              {/* The format is one of the two formats a property is searched by, never an "any":
-                  it decides which recorded address the query is matched against. */}
+              {/* The format decides which recorded address the query is matched against; the choice
+                  that states none matches a property recorded in either format. */}
               <div
                 className="field-group"
                 key={`addressFormat=${appliedFormat}`}
@@ -513,9 +518,9 @@ export function SearchIsland({
                       name="addressFormat"
                       defaultValue={appliedFormat}
                     >
-                      {INVENTORY_ADDRESS_FORMATS.map((format) => (
+                      {INVENTORY_ADDRESS_FORMAT_CHOICES.map((format) => (
                         <option key={format} value={format}>
-                          {label(locale, format)}
+                          {formatLabel(format)}
                         </option>
                       ))}
                     </select>

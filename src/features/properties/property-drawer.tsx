@@ -59,7 +59,12 @@ import {
 import { wholeVnd, squareMetres } from './filters';
 import { detailMessages } from './messages';
 import { statusTone } from './property-card';
-import { MISSING_VALUE, recordFacts, totalAreaM2 } from './table';
+import {
+  MISSING_VALUE,
+  listedAddress,
+  recordFacts,
+  totalAreaM2,
+} from './table';
 import type { OwnerContactDisclosure, PropertySummary } from './types';
 
 // How many of the most recent comments the quick view repeats; the full record holds the rest.
@@ -86,6 +91,7 @@ export function PropertyDrawer({
   open,
   resultLocation,
   showEntry,
+  addressFormat,
   opener,
   onClose,
   onDenied,
@@ -97,6 +103,8 @@ export function PropertyDrawer({
   open: boolean;
   resultLocation: string;
   showEntry: boolean;
+  // The format the search reads through, which decides the address the quick view states.
+  addressFormat: string | null;
   opener: HTMLElement | null;
   onClose: () => void;
   onDenied: (status: number) => void;
@@ -126,7 +134,8 @@ export function PropertyDrawer({
         property ? (
           <>
             <p className="quick-view-address" translate="no">
-              {property.addresses[0]?.addressText || text.unknown}
+              {listedAddress(property, addressFormat)?.addressText ||
+                text.unknown}
             </p>
             <span className="badge" data-tone={statusTone(property.status)}>
               {label(locale, property.status)}

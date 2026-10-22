@@ -40,6 +40,7 @@ import { positionReady, readListState, writeListState } from './list-state';
 import {
   activeFilterCount,
   filterParams,
+  searchedAddressFormat,
   type InventoryFilters,
 } from './filters';
 import {
@@ -200,6 +201,8 @@ export function Inventory({
   // the ordering, the filter island and the view switch all carry the same set.
   const activeFilters = filterParams(filters);
   const filterCount = activeFilterCount(filters);
+  // The format the list's searches read through, which decides the address each row states.
+  const addressFormat = searchedAddressFormat(filters);
   // The address of the list as it stands: the search, the ordering, the view and the filters. It
   // names the result set this list is showing, so it is also what the carrier holds the list's own
   // state under and what a property's link carries back as `returnTo`.
@@ -1252,6 +1255,7 @@ export function Inventory({
                         reserved={heights[index] ?? STREAM_ESTIMATE_PX}
                         locale={locale}
                         resultLocation={resultLocation}
+                        addressFormat={addressFormat}
                         matchedFormats={matchedFormats}
                         onOpen={openDrawer}
                         onMeasured={reportHeight}
@@ -1287,6 +1291,7 @@ export function Inventory({
                         locale={locale}
                         resultLocation={resultLocation}
                         showEntry={showEntry}
+                        addressFormat={addressFormat}
                         matchedFormats={matchedFormats}
                         onDenied={denyFiles}
                         onOpen={openDrawer}
@@ -1315,6 +1320,7 @@ export function Inventory({
         open={currentOpened !== null}
         resultLocation={resultLocation}
         showEntry={showEntry}
+        addressFormat={addressFormat}
         opener={currentOpened?.opener ?? null}
         onClose={closeDrawer}
         onDenied={denyFiles}

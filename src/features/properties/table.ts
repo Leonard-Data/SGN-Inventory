@@ -13,7 +13,7 @@ import {
   relativeTime,
   vietnamDate,
 } from './format.ts';
-import type { PropertySummary } from './types.ts';
+import type { AddressSummary, PropertySummary } from './types.ts';
 
 // Exactly the ten columns the captain asked for, in this order.
 export const TABLE_COLUMNS = [
@@ -164,6 +164,20 @@ export function rowPrice(
       : null;
 }
 
+// The recorded address a listed property states: the address in the format the search reads
+// through, so a row listed under a format shows that address rather than whichever recorded
+// variant happens to be primary. A search that states no format, or a record with no address in
+// the named format, states the recorded primary address.
+export function listedAddress(
+  record: PropertySummary,
+  addressFormat: string | null = null,
+): AddressSummary | undefined {
+  return (
+    record.addresses.find((address) => address.format === addressFormat) ??
+    record.addresses[0]
+  );
+}
+
 // One row of the table: every column, in the table's own order, with the value it holds or the
 // missing-value marker. `now` is the browser's clock for the modified phrase, and null means the
 // page has not hydrated yet: the cell then states the recorded timestamp itself.
@@ -171,9 +185,10 @@ export function propertyTableRow(
   record: PropertySummary,
   locale: Locale,
   now: number | null = null,
+  addressFormat: string | null = null,
 ): PropertyTableRow {
   const text = messages[locale];
-  const address = record.addresses[0] ?? null;
+  const address = listedAddress(record, addressFormat) ?? null;
   const price = rowPrice(record);
   const area = totalAreaM2(record);
   const modified = relativeTime(record.updatedAt, locale, now);

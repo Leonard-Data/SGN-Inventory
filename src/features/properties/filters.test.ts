@@ -48,8 +48,9 @@ test('a complete filter set is applied exactly as the address stated it', () => 
   });
 });
 
-// The address format is always stated, so a search always names the address it reads through.
-test('the address format is the legacy address unless the address states the other one', () => {
+// The address format is always stated, so a search always names the address it reads through, or
+// states the choice that applies no format condition.
+test('the address format is the legacy address unless the address states another choice', () => {
   const unstated = parse({});
   assert.ok(unstated.ok);
   assert.equal(unstated.filters.addressFormat, 'legacy');
@@ -57,6 +58,9 @@ test('the address format is the legacy address unless the address states the oth
   const current = parse({ addressFormat: 'current' });
   assert.ok(current.ok);
   assert.equal(current.filters.addressFormat, 'current');
+  const either = parse({ addressFormat: 'any' });
+  assert.ok(either.ok);
+  assert.equal(either.filters.addressFormat, 'any');
   // The recorded third format is a property's other address, not one of the two a search reads
   // through, and nothing else is a format at all.
   for (const value of ['alternate', 'Legacy', 'CURRENT', 'both'])
@@ -275,6 +279,16 @@ test('only set filters become link and RPC parameters', () => {
   assert.deepEqual(
     filterRpcArgs({ ...noInventoryFilters, addressFormat: 'current' }),
     { p_address_format: 'current' },
+  );
+  // The choice that states no format is the read's own unconditional form: the address keeps the
+  // choice, and the read is asked with no format parameter at all.
+  assert.deepEqual(
+    filterParams({ ...noInventoryFilters, addressFormat: 'any' }),
+    { addressFormat: 'any' },
+  );
+  assert.deepEqual(
+    filterRpcArgs({ ...noInventoryFilters, addressFormat: 'any' }),
+    {},
   );
 });
 
