@@ -10,7 +10,13 @@ import {
 } from 'react';
 import { api, RequestError } from '@/features/employees/api';
 import type { Locale } from '@/i18n/messages';
-import { fields, formChanges, type Target, type Changes } from './fields';
+import {
+  addressFields,
+  fields,
+  formChanges,
+  type Target,
+  type Changes,
+} from './fields';
 import { maintenanceError, maintenanceText, optionLabel } from './messages';
 import { failureRoute } from './refusal-rules';
 import { UnitCombobox, type UnitChoice } from './unit-combobox';
@@ -371,7 +377,6 @@ export function AddressFields({
       String(values.district_text ?? ''),
     );
   const text = maintenanceText(locale),
-    current = variant === 'mapping' || format === 'current',
     // A legacy address is the only one with a district level, and its pickers read the closed
     // pre-2025 three-tier list, where a ward hangs off its district rather than the province.
     legacy = variant === 'address' && format === 'legacy',
@@ -412,8 +417,10 @@ export function AddressFields({
                   onChange={(event) => {
                     setFormat(event.target.value);
                     // The two formats read different catalog generations, so no recorded unit is
-                    // carried into a list that may not hold it.
+                    // carried into a list that may not hold it, nor the label the picker wrote for
+                    // the district that unit named.
                     setUnits(clearedUnits());
+                    setDistrictText('');
                   }}
                   disabled={!!values.id}
                 >
@@ -439,13 +446,7 @@ export function AddressFields({
             locale={locale}
             values={{ ...values, district_text: districtTextValue }}
             refs={{ district_text: districtText }}
-            names={[
-              'address_text',
-              'house_number',
-              'street',
-              ...(!current ? ['district_text'] : []),
-              'is_primary',
-            ].filter(includes)}
+            names={addressFields(names, legacy)}
           />
         </>
       ) : (

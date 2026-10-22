@@ -143,6 +143,13 @@ test('a district pick repairs an imported label and leaves the picked name alone
   assert.equal(filledDistrictText('', ''), null);
 });
 
+test('a format switch clears the district label with the units it described', () => {
+  // Switching legacy → current → legacy drops the picked levels and the label the picker wrote for
+  // the district they named, so no label is left without its unit.
+  assert.deepEqual(clearedUnits(), { province: '', district: '', commune: '' });
+  assert.equal(filledDistrictText('Bình Thạnh', ''), '');
+});
+
 test('a picker offers the unit an address recorded before this entry still holds', () => {
   const legacyProvince = {
     id: 'legacy-province',
