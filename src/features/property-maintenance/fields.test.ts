@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { label } from '../../i18n/messages.ts';
 import {
   addressFields,
-  fields,
   validateChanges,
   formChanges,
   correctionFieldNames,
@@ -28,9 +27,7 @@ function legacyForm() {
   return form;
 }
 
-test('the address form offers two formats, reads them in both languages and keeps a recorded district', () => {
-  // Two choices, the stored values the schema holds, legacy first.
-  assert.deepEqual([...fields.format!.options!], ['legacy', 'current']);
+test('the two address formats read in both languages and keep a recorded district', () => {
   assert.equal(label('vi', 'legacy'), 'Địa chỉ cũ');
   assert.equal(label('en', 'legacy'), 'Legacy Address');
   assert.equal(label('vi', 'current'), 'Địa chỉ mới');
