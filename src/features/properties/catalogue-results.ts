@@ -209,26 +209,27 @@ export function matchesLocalFilters(
   return record.addresses.some((address) => address.format === searched);
 }
 
-// Newest-created first, then the property identity descending: the total order the database's
-// ordinary browse read uses, and the one ordering the catalogue's own fields can produce.
+// Most recently changed first, then the property identity descending: the total order the
+// database's ordinary browse read and the catalogue's own pages use, so the list's first paint
+// holds the first window the inventory stream would answer with.
 export function orderCatalogue(
   matches: readonly CatalogueMatch[],
 ): CatalogueMatch[] {
   return [...matches].sort((left, right) => {
-    const created = compareCreatedDesc(left.record, right.record);
-    return created !== 0
-      ? created
+    const changed = compareChangedDesc(left.record, right.record);
+    return changed !== 0
+      ? changed
       : compareDesc(left.record.id, right.record.id);
   });
 }
 
-function compareCreatedDesc(
+function compareChangedDesc(
   left: PropertySummary,
   right: PropertySummary,
 ): number {
-  // The recorded creation time is not null in the database; a summary that states none sorts
+  // The recorded modification time is not null in the database; a summary that states none sorts
   // where PostgreSQL's descending order would put it.
-  return compareDesc(left.createdAt ?? '', right.createdAt ?? '');
+  return compareDesc(left.updatedAt ?? '', right.updatedAt ?? '');
 }
 
 function compareDesc(left: string, right: string): number {
@@ -237,7 +238,7 @@ function compareDesc(left: string, right: string): number {
 
 // The properties the loaded catalogue answers with: the recorded addresses matched against what
 // the person typed, narrowed by the filters the summaries carry. A typed query keeps the address
-// ranking; an unfiltered browse reads in the catalogue's own created ordering, so the ordinary
+// ranking; an unfiltered browse reads in the catalogue's own change ordering, so the ordinary
 // list reads the way the inventory browse does. An empty loaded catalogue is an empty result, and
 // the list states its coverage separately rather than presenting that as an empty inventory.
 export function catalogueMatches(

@@ -2,8 +2,9 @@
 // offers. The window arithmetic and the geometry it is read with live in `@/features/stream`,
 // which every streamed list shares.
 //
-// Both orderings - the ordinary newest-created browse and the eligible oldest-first/newest-first
-// entry chronology - are one read, so the count and the rows always describe one result set.
+// Both orderings - the ordinary most-recently-changed browse and the eligible oldest-first/
+// newest-first entry chronology - are one read, so the count and the rows always describe one
+// result set.
 export * from '../stream/window.ts';
 
 export type InventoryOrder = 'oldest' | 'newest';

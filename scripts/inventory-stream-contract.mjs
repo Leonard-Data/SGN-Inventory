@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict';
 
 // Ticket #154 embedded regressions: the inventory list is one stream of everything, ordered
-// newest-created first by default, fetched as consecutive offset windows of one filtered read.
-// It proves that the default order is the recorded creation time (identity breaking ties), that
-// consecutive windows walk the whole result set without repeats or gaps under all three
-// orderings, that the matching total rides on every window and comes from the same read, that
-// the archived and eligible-status boundaries apply to the count exactly as they apply to the
-// rows, that a window past the end answers no rows with the real total, and that an unusable
-// offset or ordering is refused rather than answered with a different result set.
+// most-recently-changed first by default, fetched as consecutive offset windows of one filtered
+// read. It proves that the default order is the record's own modification time (identity breaking
+// ties) and not its creation time, that an edit moves a record to the top of that order while the
+// chronology is left alone, that consecutive windows walk the whole result set without repeats or
+// gaps under all three orderings - including across records that share one change timestamp - that
+// the matching total rides on every window and comes from the same read, that the archived and
+// eligible-status boundaries apply to the count exactly as they apply to the rows, that a window
+// past the end answers no rows with the real total, and that an unusable offset or ordering is
+// refused rather than answered with a different result set.
 // Real Data API windowing and browser acceptance stay a staging gate.
 export async function inventoryStreamContract({
   db,
@@ -23,12 +25,14 @@ export async function inventoryStreamContract({
   const id = (suffix) => `4b000000-0000-4000-8000-0000000000${suffix}`;
   const sales = employees[0];
   const marker = 'STRMFIX Kiem Thu';
-  // Twenty-four dated rows on four dates with six distinct creation times, two unknown entry
-  // dates, one archived row of each and one ineligible status: enough to walk the stream with a
-  // window of five, to cross date ties and to prove the creation-time default is not identity
-  // order. One row also carries a rent price so the window's price fields are exercised, and each
-  // row records a frontage and twice it as depth so a dimension range selects known rows - except
-  // the first, which records neither, so a stated bound has to leave an unmeasured row out.
+  // Twenty-four dated rows on four dates with six distinct creation times and four distinct
+  // modification times (six rows each), two unknown entry dates, one archived row of each and one
+  // ineligible status: enough to walk the stream with a window of five, to cross date ties, to
+  // prove the default order is neither the creation time nor the identity order, and to prove a
+  // shared modification timestamp is decided by identity alone. One row also carries a rent price
+  // so the window's price fields are exercised, and each row records a frontage and twice it as
+  // depth so a dimension range selects known rows - except the first, which records neither, so a
+  // stated bound has to leave an unmeasured row out.
   const base = Date.parse('2026-09-01T00:00:00.000Z');
   // The access states cycle over the dated rows, so the access filter has several rows of each
   // state to keep and several to drop.
@@ -45,6 +49,9 @@ export async function inventoryStreamContract({
       code: `SGN-STRM-${String(index).padStart(2, '0')}`,
       entryOn: `2025-0${(index % 4) + 1}-0${(index % 5) + 1}`,
       createdAt: new Date(base + (index % 6) * 3_600_000),
+      // Deliberately not the creation time and deliberately shared by six rows: the browse order
+      // follows this value, and the six rows on one value are what the identity tie-break decides.
+      updatedAt: new Date(base + (index % 4) * 7_200_000),
       status: index % 3 === 0 ? 'negotiating' : 'available',
       accessType: ACCESS_CYCLE[index % ACCESS_CYCLE.length],
       frontage: index === 0 ? null : index + 1,
@@ -56,6 +63,7 @@ export async function inventoryStreamContract({
     code: 'SGN-STRM-AA',
     entryOn: null,
     createdAt: new Date(base - 86_400_000),
+    updatedAt: new Date(base - 86_400_000),
   };
   const unknownSecond = {
     id: id('ab'),
@@ -63,6 +71,7 @@ export async function inventoryStreamContract({
     code: 'SGN-STRM-AB',
     entryOn: null,
     createdAt: new Date(base - 172_800_000),
+    updatedAt: new Date(base - 172_800_000),
   };
   const archived = {
     id: id('ac'),
@@ -70,6 +79,9 @@ export async function inventoryStreamContract({
     code: 'SGN-STRM-AC',
     entryOn: '2025-01-01',
     createdAt: new Date(base + 10 * 3_600_000),
+    // The most recently changed of all the fixtures, and archived: the boundary excludes it from
+    // the first window it would otherwise lead.
+    updatedAt: new Date(base + 20 * 3_600_000),
   };
   const archivedUnknown = {
     id: id('ad'),
@@ -77,6 +89,7 @@ export async function inventoryStreamContract({
     code: 'SGN-STRM-AD',
     entryOn: null,
     createdAt: new Date(base - 259_200_000),
+    updatedAt: new Date(base - 259_200_000),
   };
   const sold = {
     id: id('ae'),
@@ -84,6 +97,9 @@ export async function inventoryStreamContract({
     code: 'SGN-STRM-AE',
     entryOn: '2025-01-01',
     createdAt: new Date(base + 11 * 3_600_000),
+    // Changed on the same instant as the six newest-changed dated rows, so the identity tie-break
+    // decides a group the default window slices through.
+    updatedAt: new Date(base + 6 * 3_600_000),
     status: 'sold',
   };
   const all = [
@@ -144,9 +160,12 @@ export async function inventoryStreamContract({
   }
 
   await asOwner();
+  // The property guard stamps `updated_at` on every write, so setting the fixtures' own change
+  // times states them with the guard off; every later edit in this contract runs with it on.
+  await db.exec('alter table public.properties disable trigger property_guard');
   await db.query(
-    `insert into public.properties(id,property_code,listing_mode,status,property_type,monthly_rent_vnd,created_by,entry_on,entry_source,created_at,archived_at,access_type,frontage_m,depth_m)
-    select * from unnest($1::uuid[],$2::text[],$3::text[],$4::text[],$5::text[],$6::numeric[],$7::uuid[],$8::date[],$9::text[],$10::timestamptz[],$11::timestamptz[],$12::text[],$13::numeric[],$14::numeric[])`,
+    `insert into public.properties(id,property_code,listing_mode,status,property_type,monthly_rent_vnd,created_by,entry_on,entry_source,created_at,updated_at,archived_at,access_type,frontage_m,depth_m)
+    select * from unnest($1::uuid[],$2::text[],$3::text[],$4::text[],$5::text[],$6::numeric[],$7::uuid[],$8::date[],$9::text[],$10::timestamptz[],$11::timestamptz[],$12::timestamptz[],$13::text[],$14::numeric[],$15::numeric[])`,
     [
       all.map((row) => row.id),
       all.map((row) => row.code),
@@ -158,6 +177,7 @@ export async function inventoryStreamContract({
       all.map((row) => row.entryOn),
       all.map((row) => (row.entryOn === null ? 'unknown' : 'legacy')),
       all.map((row) => row.createdAt),
+      all.map((row) => row.updatedAt),
       all.map((row) =>
         row.id === archived.id || row.id === archivedUnknown.id
           ? new Date()
@@ -168,6 +188,7 @@ export async function inventoryStreamContract({
       all.map((row) => row.depth ?? null),
     ],
   );
+  await db.exec('alter table public.properties enable trigger property_guard');
   await db.query(
     "insert into public.property_addresses(property_id,format,address_text,house_number,street,commune_text,district_text) select p.id,'legacy',$2||' '||p.property_code,'12','Le Loi','Ben Nghe','Quan 1' from public.properties p where p.id = any($1::uuid[])",
     [all.map((row) => row.id), marker],
@@ -294,14 +315,14 @@ export async function inventoryStreamContract({
     [textXaYenVien, textThiTranYenVien],
   );
 
-  // The default stream is newest-created first with identity breaking ties; the chronology lists
-  // the eligible statuses by entry date then identity with unknown dates placed last. Either way
-  // one total order covers the whole unarchived filtered set.
+  // The default stream is most-recently-changed first with identity breaking ties; the chronology
+  // lists the eligible statuses by entry date then identity with unknown dates placed last. Either
+  // way one total order covers the whole unarchived filtered set.
   const browseOrder = [...all]
     .filter((row) => row.id !== archived.id && row.id !== archivedUnknown.id)
     .sort(
       (left, right) =>
-        right.createdAt.getTime() - left.createdAt.getTime() ||
+        right.updatedAt.getTime() - left.updatedAt.getTime() ||
         right.id.localeCompare(left.id),
     )
     .map((row) => row.id);
@@ -323,7 +344,7 @@ export async function inventoryStreamContract({
 
   await asUser(0);
   await check(
-    'the default window is newest-created first with the matching total on every row',
+    'the default window is most-recently-changed first with the matching total on every row',
     async () => {
       const first = await read({ limit: 5 });
       assert.equal(first.total, browseOrder.length);
@@ -335,9 +356,35 @@ export async function inventoryStreamContract({
       // The total rides on every row of the same read, never on a second query.
       for (const row of first.rows)
         assert.equal(Number(row.total_count), browseOrder.length);
-      // A creation time older than every fixture's is not first: the order is the recorded
-      // creation time, not identity order.
-      assert.ok(!browseOrder.slice(0, 5).includes(unknownSecond.id));
+      // Neither the newest creation time nor the highest identity leads: the order is the recorded
+      // modification time, and the seven rows sharing the newest one are decided by identity alone.
+      const newestCreated = [...all]
+        .filter(
+          (row) => row.id !== archived.id && row.id !== archivedUnknown.id,
+        )
+        .sort(
+          (left, right) =>
+            right.createdAt.getTime() - left.createdAt.getTime() ||
+            right.id.localeCompare(left.id),
+        )
+        .map((row) => row.id);
+      assert.notDeepEqual(browseOrder, newestCreated);
+      const newestChangedAt = Math.max(
+        ...all
+          .filter(
+            (row) => row.id !== archived.id && row.id !== archivedUnknown.id,
+          )
+          .map((row) => row.updatedAt.getTime()),
+      );
+      const tiedOnNewest = all
+        .filter((row) => row.updatedAt.getTime() === newestChangedAt)
+        .map((row) => row.id)
+        .sort((left, right) => right.localeCompare(left));
+      assert.ok(tiedOnNewest.length > 1, 'the fixtures share one change time');
+      assert.deepEqual(
+        first.rows.map((row) => row.id),
+        tiedOnNewest.slice(0, 5),
+      );
     },
   );
 
@@ -346,7 +393,7 @@ export async function inventoryStreamContract({
     ['oldest', oldestOrder],
     ['newest', newestOrder],
   ]) {
-    const label = order ?? 'created';
+    const label = order ?? 'changed';
     await check(
       `the ${label} stream walks the whole result set without repeats or gaps`,
       async () => {
@@ -383,6 +430,39 @@ export async function inventoryStreamContract({
       },
     );
   }
+
+  await check(
+    'a window boundary inside one change timestamp neither repeats nor drops a row',
+    async () => {
+      // The fixtures state seven rows on one modification time, and a window of three starts in
+      // the middle of them: the identity tie-break is what keeps the two windows contiguous.
+      const newestChangedAt = Math.max(
+        ...all
+          .filter(
+            (row) => row.id !== archived.id && row.id !== archivedUnknown.id,
+          )
+          .map((row) => row.updatedAt.getTime()),
+      );
+      const tiedOnNewest = all
+        .filter((row) => row.updatedAt.getTime() === newestChangedAt)
+        .map((row) => row.id)
+        .sort((left, right) => right.localeCompare(left));
+      const before = await read({ offset: 0, limit: 3 });
+      const after = await read({ offset: 3, limit: 3 });
+      assert.deepEqual(
+        [...before.rows, ...after.rows].map((row) => row.id),
+        browseOrder.slice(0, 6),
+      );
+      assert.deepEqual(
+        before.rows.map((row) => row.id),
+        tiedOnNewest.slice(0, 3),
+      );
+      assert.equal(
+        new Set([...before.rows, ...after.rows].map((row) => row.id)).size,
+        6,
+      );
+    },
+  );
 
   await check(
     'a window past the end answers no rows and still states the real total',
@@ -839,6 +919,56 @@ export async function inventoryStreamContract({
   );
 
   await check(
+    'an edit moves the record to the top of the browse and leaves the chronology alone',
+    async () => {
+      // The oldest-created fixture, changed now: it leads the default browse because the order is
+      // the modification time, and the chronological orders are untouched because they read the
+      // recorded entry date - the modes' meaning did not change with the order.
+      const edited = dated[2];
+      // Written as the owner so the property guard - which stamps `updated_at` on every write - is
+      // the only thing that sets the change time; the employee write path is exercised elsewhere.
+      await asOwner();
+      await db.query(
+        "update public.properties set notes='STRMFIX edited just now' where id=$1",
+        [edited.id],
+      );
+      await asUser(0);
+      const browse = await read({ limit: 5 });
+      assert.equal(browse.rows[0].id, edited.id);
+      assert.equal(browse.total, browseOrder.length);
+      const moved = await read({ limit: 200 });
+      assert.deepEqual(
+        moved.rows.map((row) => row.id),
+        [edited.id, ...browseOrder.filter((rowId) => rowId !== edited.id)],
+      );
+      for (const [order, expected] of [
+        ['oldest', oldestOrder],
+        ['newest', newestOrder],
+      ]) {
+        const chronological = await read({ order, limit: 200 });
+        assert.deepEqual(
+          chronological.rows.map((row) => row.id),
+          expected,
+          order,
+        );
+      }
+      // The property's own row is what the read orders by, so the change time it states is the
+      // one the order used.
+      const stamped = (
+        await db.query('select updated_at from public.properties where id=$1', [
+          edited.id,
+        ])
+      ).rows[0].updated_at;
+      assert.ok(
+        stamped.getTime() >
+          Math.max(...all.map((row) => row.updatedAt.getTime())),
+      );
+    },
+  );
+
+  // What the index is, not what the planner does with it at fixture size: the plan is measured at
+  // the imported stock's size in scripts/recent-change-order-evidence.mjs.
+  await check(
     'an invalid or reversed dimension bound is refused, not matched',
     async () => {
       const bounds =
@@ -854,6 +984,20 @@ export async function inventoryStreamContract({
         [null, null, 910, 900],
       ])
         await fails(bounds, [marker, ...stated], '22023');
+    },
+  );
+
+  await check(
+    'the change-order index exists over unarchived rows',
+    async () => {
+      const index = (
+        await db.query(
+          "select indexdef from pg_indexes where schemaname='public' and indexname='properties_recent_change_idx'",
+        )
+      ).rows[0];
+      assert.ok(index, 'the browse order index exists');
+      assert.match(index.indexdef, /updated_at DESC, id DESC/i);
+      assert.match(index.indexdef, /WHERE \(archived_at IS NULL\)\s*$/i);
     },
   );
 

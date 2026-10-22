@@ -48,7 +48,7 @@ The browser reaches the private bucket directly and the database never touches f
 | Live employee authorization | Deactivation and role changes affect subsequent DB requests without waiting for JWT role refresh |
 | Private storage and immutable paths | Legal files remain internal; replacement means a new metadata record and object path |
 | PostgreSQL search first | Accent-normalized trigram search fits ~19k records; short numeric queries can need more work than long words |
-| UUID-ordered browsing | Stable, bounded retrieval; initial order is UUID, not newest-first. The inventory list pages by offset with a matching count from one filtered read (issue #140), and its chronological order uses `(entry_on,id)` and never converts `created_at` into an entry date ([schema.md](schema.md)) |
+| Stable browse order | Stable, bounded retrieval; the ordinary browse orders by the record's latest change then its identity (`updated_at desc, id desc`, issue #258), so window boundaries neither drop nor repeat a row and an edit leads the list. The inventory list pages by offset with a matching count from one filtered read (issue #140), and its chronological order uses `(entry_on,id)` and never converts `created_at` into an entry date ([schema.md](schema.md)) |
 | Independent approval | Prevents unilateral reservation claims; requires at least two active reviewers for reviewer-owned deals |
 | VND integer numeric, rent dues/receipts but no commission ledger | Supports inventory prices and rental month balances; commission remains attribution-only |
 

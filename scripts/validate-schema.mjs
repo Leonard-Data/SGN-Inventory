@@ -789,7 +789,8 @@ await inventoryAgeContract({db,asUser,check,fails,employees});
 await inventoryFilterContract({db,asUser,check,fails,employees});
 // Ticket #140: the counted, offset-paged inventory read that replaced the cursor walks.
 await inventoryPagingContract({db,asUser,check,fails,employees});
-// Ticket #154: the newest-created-first stream that replaced the numbered pager on the page.
+// Ticket #154: the streamed inventory read that replaced the numbered pager on the page, ordered
+// by the record's latest change since issue #258.
 await inventoryStreamContract({db,asUser,check,fails,employees});
 // Seeded Vietnamese province/city and ward/commune reference catalogue.
 await referenceCatalogContract({db,asUser,check,fails,employees,root});

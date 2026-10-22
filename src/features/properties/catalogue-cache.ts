@@ -29,7 +29,8 @@ export const CATALOGUE_RETENTION = { staleTime: Infinity, gcTime: Infinity };
 export const BOUNDED_RETENTION = { staleTime: 5 * 60_000, gcTime: 10 * 60_000 };
 
 // The catalogue read's own address: one bounded page after the cursor, and nothing else. The
-// cursor is a position in the identity ordering, never a grant of access to the rows it names.
+// cursor is an opaque position in the traversal's ordering, never a grant of access to the rows it
+// names.
 function cataloguePageUrl(after: string | null) {
   return after === null
     ? '/api/properties/catalogue'

@@ -13,6 +13,37 @@ shipped is implemented in the code on `main`; where a real-browser or hosted acc
 executed, that is stated in the entry rather than left implied. Correspondence between a feature and
 what was *verified* is in [testing.md](testing.md).
 
+## 22 October 2026 — the inventory opens on what changed most recently
+
+### The list's first window is the most recently changed inventory (#258)
+
+The properties list now opens on the record's own latest change instead of its creation. The order
+is the change time then the property identity — `updated_at desc, id desc` — where the change time
+is what `private.guard_property()` stamps on a property write and what
+`private.record_business_change()` moves on the parent row when an address, mapping or contact
+changes, and the identity is the tie-break that keeps one total order over the whole
+filtered set. A property somebody edited a minute ago leads the list however long ago it was
+created, so the imported stock — all created inside one import run — no longer buries every later
+correction under its own import position. The entry-date chronology is unchanged and is still chosen
+in the filter panel, whose default order option now names the change order in Vietnamese and
+English instead of the creation order it no longer describes.
+
+The browser catalogue reads in that same order, so the first page painted is the inventory's first
+window and a list answered locally from the loaded rows agrees with a server window on what belongs
+at the top. The migration adds one partial index over unarchived rows for the catalogue's page read;
+the whole-inventory read still sorts the set it materialises for its matching count, so that read's
+cost at the current size is unchanged.
+
+_Known gap:_ the browse key is mutable, and the ordering pays for it. A record edited while a
+catalogue load is walking the pages can be missed by that traversal — and so by every local search
+over the loaded rows — until the next refresh, and an edit that lands while someone is scrolling the
+whole-inventory windows can show one row in two consecutive windows and hide another, because the
+stream keeps each window by offset and does not dedupe across them. Both are accepted rather than
+fixed, since removing them needs a snapshot-capable read. The order, the cursor keyset and the local
+ordering have embedded schema and unit coverage only, and the plan was measured in embedded
+PostgreSQL at the imported stock's size: no real-browser or hosted Supabase run has exercised the
+new first window.
+
 ## 21 October 2026 — the inventory list answers from the browser
 
 ### The catalogue answers the list, and the database answers only what it cannot (#188–#194)
