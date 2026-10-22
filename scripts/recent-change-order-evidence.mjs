@@ -30,8 +30,9 @@ await db.query(
   [EMPLOYEE, USER],
 );
 
-// One import run: every row created inside the same minute, in the source sheet's own order, so
-// the created order is the sheet's order and the imported stock occupies the whole list.
+// One import run: the rows are created a second apart across the run's five hours, in the source
+// sheet's own order, so the created order is the sheet's order and the imported stock occupies the
+// whole list.
 await db.exec('alter table public.properties disable trigger property_guard');
 await db.query(
   `insert into public.properties(id,property_code,listing_mode,status,property_type,created_by,entry_on,entry_source,created_at,updated_at)
@@ -226,6 +227,6 @@ await timeRead(
 await as('owner');
 say('');
 say(
-  'conclusion: the shipped index is the node the change-ordered base-table window reads through, and it serves both orderings; the function\'s own window is sliced from the set it materialises for the count.',
+  'conclusion: the shipped index is the node the change-ordered base-table window reads through, so that window and the catalogue page that keeps its order are index walks, while a creation-ordered window is a scan with a top-N sort and the function\'s own window is sliced from the set it materialises for the count.',
 );
 await db.close();
