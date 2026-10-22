@@ -172,9 +172,38 @@ const shipped = (
      from pg_proc p where p.pronamespace='public'::regnamespace and p.proname='stream_inventory'`,
   )
 ).rows[0];
+// The browse order the inner window and the outer order each state, put back on the creation time.
+// Both occurrences are required: a body that no longer states them cannot be turned into the read
+// as it stood before this change, and measuring it would compare the shipped read with itself.
+const BROWSE_ORDER = 'updated_at end desc';
+const CREATED_ORDER = 'created_at end desc';
+const browsed = shipped.body.split(BROWSE_ORDER).length - 1;
+if (browsed !== 2) {
+  throw new Error(
+    `stream_inventory states '${BROWSE_ORDER}' ${browsed} time(s), not the 2 the before-comparison rewrites. Order clauses in the shipped body:\n` +
+      shipped.body
+        .split('\n')
+        .filter((line) => line.includes('end desc'))
+        .join('\n'),
+  );
+}
+const createdOrderBody = shipped.body.replaceAll(BROWSE_ORDER, CREATED_ORDER);
+if (
+  createdOrderBody.includes(BROWSE_ORDER) ||
+  !createdOrderBody.includes(CREATED_ORDER)
+) {
+  throw new Error(
+    `rewriting '${BROWSE_ORDER}' to '${CREATED_ORDER}' left the shipped body unsubstituted: the
+before-comparison would time the shipped order twice. Order clauses in the derived body:\n` +
+      createdOrderBody
+        .split('\n')
+        .filter((line) => line.includes('end desc'))
+        .join('\n'),
+  );
+}
 await db.query(
   `create function public.evidence_created_order(${shipped.args}) returns ${shipped.result}
-   language plpgsql stable security invoker set search_path='' as $body$${shipped.body.replaceAll('updated_at end desc', 'created_at end desc')}$body$`,
+   language plpgsql stable security invoker set search_path='' as $body$${createdOrderBody}$body$`,
 );
 await db.query(
   'grant execute on function public.evidence_created_order to authenticated',
