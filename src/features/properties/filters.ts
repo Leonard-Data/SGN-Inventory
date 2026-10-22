@@ -261,6 +261,17 @@ export function searchedAddressFormat(filters: InventoryFilters): string {
   return filters.addressFormat ?? DEFAULT_ADDRESS_FORMAT;
 }
 
+// The address levels the panel offers for the format it is set to: a legacy address names three
+// levels and a current one two. A cleared format states no condition, so it keeps the legacy shape
+// the panel opens on.
+export function offeredAddressLevels(
+  format: string,
+): readonly ('province' | 'district' | 'ward')[] {
+  return format === 'current'
+    ? ['province', 'ward']
+    : ['province', 'district', 'ward'];
+}
+
 // Half of each range is optional; an absent bound leaves the database default (no bound) in
 // place instead of sending a zero that would mean a real limit.
 export function filterRpcArgs(filters: InventoryFilters): InventoryFilterArgs {

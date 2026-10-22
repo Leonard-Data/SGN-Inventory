@@ -8,6 +8,7 @@ import {
   INVENTORY_ADDRESS_FORMAT_ANY,
   INVENTORY_ADDRESS_FORMATS,
   noInventoryFilters,
+  offeredAddressLevels,
   parseInventoryFilters,
 } from './filters.ts';
 
@@ -79,6 +80,20 @@ test('the address format offers two formats and a cleared state the address carr
   // through, and nothing else is a format at all.
   for (const value of ['alternate', 'Legacy', 'CURRENT', 'both'])
     assert.equal(parse({ addressFormat: value }).ok, false, value);
+});
+
+// The panel keeps every control of the chosen format in place from the moment it opens, so the
+// dependent ones are visible and only wait for the level above them to be chosen.
+test('the panel offers every level of the chosen address format at once', () => {
+  assert.deepEqual(
+    [...offeredAddressLevels('legacy')],
+    ['province', 'district', 'ward'],
+  );
+  assert.deepEqual([...offeredAddressLevels('current')], ['province', 'ward']);
+  assert.deepEqual(
+    [...offeredAddressLevels(INVENTORY_ADDRESS_FORMAT_ANY)],
+    ['province', 'district', 'ward'],
+  );
 });
 
 // The whole-inventory read takes its criteria as optional parameters, so a caller that states no

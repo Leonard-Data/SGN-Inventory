@@ -21,6 +21,7 @@ import {
   INVENTORY_PROPERTY_TYPES,
   INVENTORY_STATUSES,
   noInventoryFilters,
+  offeredAddressLevels,
   parseInventoryFilters,
   searchedAddressFormat,
   squareMetres,
@@ -105,6 +106,7 @@ export function SearchIsland({
   const [provinceFailed, setProvinceFailed] = useState(false);
   const [districtFailed, setDistrictFailed] = useState(false);
   const [wardFailed, setWardFailed] = useState(false);
+  const [appliedNames, setAppliedNames] = useState<Record<string, string>>({});
   const dialogRef = useRef<HTMLDialogElement>(null);
   function dismiss() {
     onOpen(false);
@@ -154,9 +156,11 @@ export function SearchIsland({
   // two-tier list a current one names. A cleared format filter states no condition, so it keeps the
   // legacy generation the panel opens on, where the district level exists at all.
   const legacyUnits = format !== 'current';
-  // A cleared format states no generation, so there the applied unit keeps its own row in the
-  // list; a stated format reads that generation's units alone.
-  const includeAppliedUnit = format === INVENTORY_ADDRESS_FORMAT_ANY;
+  const levels = offeredAddressLevels(format);
+  // A dependent level waits for the level above it, unless the address already states a ward the
+  // panel must keep visible and removable.
+  const wardParent = legacyUnits ? district : province;
+  const wardDisabled = !wardParent && !ward;
   // A denial clears the protected surface through the handler the inventory list already uses.
   useEffect(() => {
     setProvinces([]);
@@ -164,8 +168,6 @@ export function SearchIsland({
     const abort = new AbortController();
     const params = new URLSearchParams({ level: 'province' });
     if (legacyUnits) params.set('on', LEGACY_CATALOG_DAY);
-    if (includeAppliedUnit && appliedProvince)
-      params.set('include', appliedProvince);
     void api<{ units: AdminUnit[] }>(
       '/api/admin-units?' + params,
       undefined,
@@ -186,7 +188,7 @@ export function SearchIsland({
         else setProvinceFailed(true);
       });
     return () => abort.abort();
-  }, [legacyUnits, includeAppliedUnit, appliedProvince, onDenied]);
+  }, [legacyUnits, onDenied]);
   // The district level exists only in the legacy generation, and only inside the chosen province.
   useEffect(() => {
     setDistricts([]);
@@ -198,8 +200,6 @@ export function SearchIsland({
       parent: province,
       on: LEGACY_CATALOG_DAY,
     });
-    if (includeAppliedUnit && appliedDistrict)
-      params.set('include', appliedDistrict);
     void api<{ units: AdminUnit[] }>(
       '/api/admin-units?' + params,
       undefined,
@@ -220,20 +220,17 @@ export function SearchIsland({
         else setDistrictFailed(true);
       });
     return () => abort.abort();
-  }, [legacyUnits, province, includeAppliedUnit, appliedDistrict, onDenied]);
+  }, [legacyUnits, province, onDenied]);
   // A legacy ward hangs off its district and a current commune off its province, so the ward list
   // narrows by the level the chosen generation has above it.
   useEffect(() => {
     setWards([]);
     setWardFailed(false);
     const parent = legacyUnits ? district : province;
-    const include = includeAppliedUnit ? appliedWard : '';
-    if (!parent && !include) return;
+    if (!parent) return;
     const abort = new AbortController();
-    const params = new URLSearchParams({ level: 'commune' });
-    if (parent) params.set('parent', parent);
+    const params = new URLSearchParams({ level: 'commune', parent });
     if (legacyUnits) params.set('on', LEGACY_CATALOG_DAY);
-    if (include) params.set('include', include);
     void api<{ units: AdminUnit[] }>(
       '/api/admin-units?' + params,
       undefined,
@@ -254,13 +251,61 @@ export function SearchIsland({
         else setWardFailed(true);
       });
     return () => abort.abort();
+  }, [legacyUnits, district, province, onDenied]);
+  // An applied unit the panel's list does not carry keeps its own recorded name, so a chip and a
+  // field state the unit without offering it as a choice.
+  useEffect(() => {
+    const missing: [string, string][] = [];
+    if (
+      appliedProvince &&
+      !appliedNames[appliedProvince] &&
+      !provinces.some((unit) => unit.id === appliedProvince)
+    )
+      missing.push(['province', appliedProvince]);
+    if (
+      appliedDistrict &&
+      !appliedNames[appliedDistrict] &&
+      !districts.some((unit) => unit.id === appliedDistrict)
+    )
+      missing.push(['district', appliedDistrict]);
+    if (
+      appliedWard &&
+      !appliedNames[appliedWard] &&
+      !wards.some((unit) => unit.id === appliedWard)
+    )
+      missing.push(['commune', appliedWard]);
+    if (!missing.length) return;
+    const abort = new AbortController();
+    void Promise.all(
+      missing.map(([level, id]) =>
+        api<{ units: AdminUnit[] }>(
+          '/api/admin-units?' + new URLSearchParams({ level, include: id }),
+          undefined,
+          abort.signal,
+        )
+          .then(
+            (result) => result.units.find((unit) => unit.id === id)?.name_vi,
+          )
+          .catch(() => undefined),
+      ),
+    ).then((names) => {
+      if (abort.signal.aborted) return;
+      const found: Record<string, string> = {};
+      missing.forEach(([, id], index) => {
+        const name = names[index];
+        if (name) found[id] = name;
+      });
+      setAppliedNames((current) => ({ ...current, ...found }));
+    });
+    return () => abort.abort();
   }, [
-    legacyUnits,
-    district,
-    province,
-    includeAppliedUnit,
+    appliedProvince,
+    appliedDistrict,
     appliedWard,
-    onDenied,
+    appliedNames,
+    provinces,
+    districts,
+    wards,
   ]);
   // The contact filter lists only identities the caller may read, through the bounded name
   // search and paging the property maintenance picker already uses: a page at a time on
@@ -374,7 +419,7 @@ export function SearchIsland({
   if (filters.createdBy)
     applied.push({ key: 'createdBy', label: label(locale, filters.createdBy) });
   const unitName = (units: readonly AdminUnit[], id: string) =>
-    units.find((unit) => unit.id === id)?.name_vi ?? id;
+    units.find((unit) => unit.id === id)?.name_vi ?? appliedNames[id] ?? id;
   if (filters.province)
     applied.push({
       key: 'province',
@@ -720,15 +765,16 @@ export function SearchIsland({
               </div>
               <div className="field-group">
                 <div className="form-grid">
-                  {/* The panel offers every level the chosen address format has - a legacy
+                  {/* The panel keeps every level the chosen address format has - a legacy
                     address adds the district between the province and the ward - and a dependent
-                    list fills once the level above it is chosen. */}
+                    level waits, disabled with its hint, until the level above it is chosen. */}
                   <UnitCombobox
                     id="filter-province"
                     name="province"
                     label={text.province}
                     units={provinces}
                     value={province}
+                    selectedLabel={appliedNames[province]}
                     onChange={(next) => {
                       setProvince(next);
                       setDistrict('');
@@ -737,13 +783,16 @@ export function SearchIsland({
                     anyLabel={text.filtersAny}
                     noMatch={text.comboboxNoMatch}
                   />
-                  {legacyUnits ? (
+                  {levels.includes('district') ? (
                     <UnitCombobox
                       id="filter-district"
                       name="district"
                       label={text.district}
                       units={districts}
                       value={district}
+                      selectedLabel={appliedNames[district]}
+                      disabled={!province}
+                      hint={province ? undefined : text.areaLevelHint}
                       onChange={(next) => {
                         setDistrict(next);
                         setWard('');
@@ -758,6 +807,9 @@ export function SearchIsland({
                     label={text.ward}
                     units={wards}
                     value={ward}
+                    selectedLabel={appliedNames[ward]}
+                    disabled={wardDisabled}
+                    hint={wardDisabled ? text.areaLevelHint : undefined}
                     onChange={setWard}
                     anyLabel={text.filtersAny}
                     noMatch={text.comboboxNoMatch}
