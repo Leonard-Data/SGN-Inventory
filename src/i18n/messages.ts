@@ -129,7 +129,7 @@ const vi = {
     'Nhập một đoạn địa chỉ liền nhau hoặc một mã hồ sơ; không cần dấu. % và _ là ký tự thường, không phải ký tự đại diện.',
   queryTooLong: 'Địa chỉ hoặc mã hồ sơ tìm kiếm tối đa 120 ký tự.',
   sortLabel: 'Thứ tự',
-  sortDefault: 'Mới tạo gần đây',
+  sortDefault: 'Mới cập nhật gần đây',
   sortOldest: 'Ngày nhập kho: cũ nhất trước',
   sortNewest: 'Ngày nhập kho: mới nhất trước',
   ageHint:
@@ -1052,7 +1052,7 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     queryTooLong:
       'Search addresses or property codes must be at most 120 characters.',
     sortLabel: 'Order',
-    sortDefault: 'Newest created first',
+    sortDefault: 'Most recently changed first',
     sortOldest: 'Oldest inventory entry first',
     sortNewest: 'Newest first',
     ageHint:

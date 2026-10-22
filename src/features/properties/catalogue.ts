@@ -3,7 +3,7 @@
 // summary the list draws. Everything here is shaping and arithmetic over values, so the page
 // length, the cursor and the projection are testable without a database or a browser. The read
 // that uses them is `catalogue-data.ts`; the decision behind it is ADR 0003.
-import { isUuid } from '../../lib/supabase/query.ts';
+import { isUuid, timestamp } from '../../lib/supabase/query.ts';
 import type { AddressSummary, PropertySummary } from './types';
 
 // Rows per catalogue read. The specification's starting point for the first batch is 100 to 200
@@ -196,7 +196,10 @@ export function parseCatalogueCursor(
   const after = params.get('after');
   if (after === null) return { ok: true, after: null };
   const [updatedAt = '', id = '', ...rest] = after.split(CURSOR_SEPARATOR);
-  return rest.length === 0 && isUuid(id) && !Number.isNaN(Date.parse(updatedAt))
+  return rest.length === 0 &&
+    isUuid(id) &&
+    timestamp.test(updatedAt) &&
+    Number.isFinite(Date.parse(updatedAt))
     ? { ok: true, after: { updatedAt, id } }
     : { ok: false };
 }

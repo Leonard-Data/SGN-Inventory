@@ -394,6 +394,10 @@ test('an absent cursor is the first page and a mangled one is refused', () => {
     `${CHANGED_AT}|not-a-uuid`,
     `${CHANGED_AT}|${PROPERTY_ID}|extra`,
     `not-a-date|${PROPERTY_ID}`,
+    // A form the legacy date parser accepts but the read's own timestamp grammar refuses, so the
+    // value cannot carry filter characters into the keyset.
+    `Thu, 22 Oct 2026 00:00:00 GMT" (x)|${PROPERTY_ID}`,
+    `2026-13-45T00:00:00+00:00|${PROPERTY_ID}`,
     `${CHANGED_AT}|${PROPERTY_ID} or true`,
     `${CHANGED_AT}|${PROPERTY_ID} `,
     `${CHANGED_AT}|${PROPERTY_ID.toUpperCase()}x`,
