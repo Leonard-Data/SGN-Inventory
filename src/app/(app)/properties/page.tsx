@@ -19,6 +19,7 @@ export default async function Properties({
     areaMin?: string | string[];
     areaMax?: string | string[];
     province?: string | string[];
+    district?: string | string[];
     ward?: string | string[];
     contact?: string | string[];
   }>;

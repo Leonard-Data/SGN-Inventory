@@ -156,9 +156,12 @@ export function SearchIsland({
   const legacyUnits = format !== 'current';
   // A denial clears the protected surface through the handler the inventory list already uses.
   useEffect(() => {
+    setProvinces([]);
+    setProvinceFailed(false);
     const abort = new AbortController();
     const params = new URLSearchParams({ level: 'province' });
     if (legacyUnits) params.set('on', LEGACY_CATALOG_DAY);
+    if (appliedProvince) params.set('include', appliedProvince);
     void api<{ units: AdminUnit[] }>(
       '/api/admin-units?' + params,
       undefined,
@@ -179,20 +182,21 @@ export function SearchIsland({
         else setProvinceFailed(true);
       });
     return () => abort.abort();
-  }, [legacyUnits, onDenied]);
+  }, [legacyUnits, appliedProvince, onDenied]);
   // The district level exists only in the legacy generation, and only inside the chosen province.
   useEffect(() => {
     setDistricts([]);
     setDistrictFailed(false);
     if (!legacyUnits || !province) return;
     const abort = new AbortController();
+    const params = new URLSearchParams({
+      level: 'district',
+      parent: province,
+      on: LEGACY_CATALOG_DAY,
+    });
+    if (appliedDistrict) params.set('include', appliedDistrict);
     void api<{ units: AdminUnit[] }>(
-      '/api/admin-units?' +
-        new URLSearchParams({
-          level: 'district',
-          parent: province,
-          on: LEGACY_CATALOG_DAY,
-        }),
+      '/api/admin-units?' + params,
       undefined,
       abort.signal,
     )
@@ -211,17 +215,19 @@ export function SearchIsland({
         else setDistrictFailed(true);
       });
     return () => abort.abort();
-  }, [legacyUnits, province, onDenied]);
+  }, [legacyUnits, province, appliedDistrict, onDenied]);
   // A legacy ward hangs off its district and a current commune off its province, so the ward list
   // narrows by the level the chosen generation has above it.
   useEffect(() => {
     setWards([]);
     setWardFailed(false);
     const parent = legacyUnits ? district : province;
-    if (!parent) return;
+    if (!parent && !appliedWard) return;
     const abort = new AbortController();
-    const params = new URLSearchParams({ level: 'commune', parent });
+    const params = new URLSearchParams({ level: 'commune' });
+    if (parent) params.set('parent', parent);
     if (legacyUnits) params.set('on', LEGACY_CATALOG_DAY);
+    if (appliedWard) params.set('include', appliedWard);
     void api<{ units: AdminUnit[] }>(
       '/api/admin-units?' + params,
       undefined,
@@ -242,7 +248,7 @@ export function SearchIsland({
         else setWardFailed(true);
       });
     return () => abort.abort();
-  }, [legacyUnits, district, province, onDenied]);
+  }, [legacyUnits, district, province, appliedWard, onDenied]);
   // The contact filter lists only identities the caller may read, through the bounded name
   // search and paging the property maintenance picker already uses: a page at a time on
   // request, never a walk over the whole directory. The applied filter's label is the one
@@ -397,15 +403,17 @@ export function SearchIsland({
       label: `${text.areaRangeTo}: ${m2(filters.areaMax)}`,
     });
   function remove(key: InventoryFilterKey) {
-    // The ward narrows its province, so removing the province removes the dependent ward too. The
-    // format is cleared rather than unstated, so the next load reads the cleared search back instead
-    // of reopening the default legacy one.
+    // Each level narrows the one above it, so removing a level removes the levels beneath it too.
+    // The format is cleared rather than unstated, so the next load reads the cleared search back
+    // instead of reopening the default legacy one.
     const next =
       key === 'province'
-        ? { ...filters, province: null, ward: null }
-        : key === 'addressFormat'
-          ? { ...filters, addressFormat: INVENTORY_ADDRESS_FORMAT_ANY }
-          : { ...filters, [key]: null };
+        ? { ...filters, province: null, district: null, ward: null }
+        : key === 'district'
+          ? { ...filters, district: null, ward: null }
+          : key === 'addressFormat'
+            ? { ...filters, addressFormat: INVENTORY_ADDRESS_FORMAT_ANY }
+            : { ...filters, [key]: null };
     router.push(inventoryHref({ query, sort, view, filters: next }));
   }
   const clearHref = inventoryHref({
