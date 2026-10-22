@@ -22,12 +22,7 @@ import { TableChunk, TableHead } from './property-table';
 import { SearchIsland } from './search-island';
 import { useInventoryStream } from './use-inventory-stream';
 import { useCatalogue } from './catalogue-provider';
-import {
-  catalogueProgressView,
-  emptyResultWording,
-  type CatalogueProgressView,
-  type EmptyResultSource,
-} from './catalogue-load';
+import { emptyResultWording, type EmptyResultSource } from './catalogue-load';
 import type { CatalogueRefreshView } from './catalogue-refresh';
 import {
   catalogueMatches,
@@ -89,39 +84,6 @@ function subscribeWide(onChange: () => void) {
 }
 const wideSnapshot = () => window.matchMedia(WIDE_QUERY).matches;
 const wideOnServer = () => false;
-
-// The one line the progress indicator states for each state of the load: how much is indexed and,
-// when the authorized total and a determinate percentage are known, out of how much and
-// approximately how far along. An unknown, failed or still-zero total states the loaded count
-// alone rather than inventing a percentage.
-function catalogueProgressText(
-  text: typeof messages.vi,
-  numberFormat: Intl.NumberFormat,
-  view: CatalogueProgressView,
-): string {
-  switch (view.kind) {
-    case 'loading-known':
-      return text.catalogueLoadingKnown
-        .replace('{loaded}', numberFormat.format(view.loaded))
-        .replace('{total}', numberFormat.format(view.total))
-        .replace('{percent}', numberFormat.format(view.percent));
-    case 'loading-unknown':
-      return text.catalogueLoadingUnknown.replace(
-        '{loaded}',
-        numberFormat.format(view.loaded),
-      );
-    case 'incomplete':
-      return text.catalogueIncomplete.replace(
-        '{loaded}',
-        numberFormat.format(view.loaded),
-      );
-    case 'complete':
-      return text.catalogueComplete.replace(
-        '{loaded}',
-        numberFormat.format(view.loaded),
-      );
-  }
-}
 
 // The empty result area's own wording, chosen by the catalogue module: an answer drawn from the
 // loaded properties is never presented as an empty inventory.
@@ -776,14 +738,8 @@ export function Inventory({
   // The ordering is not offered beside the box any more: the chronological orderings the database
   // answers are advanced criteria, and they are submitted from the filter panel with the rest of
   // them instead of running the moment a control changes (issue #194).
-  // What the progress indicator states, and where an empty result area may draw its own wording
-  // from. Both are decided by the catalogue module so the honest-coverage rules are tested rather
-  // than buried in a render branch.
-  const progressText = catalogueProgressText(
-    text,
-    numberFormat,
-    catalogueProgressView(catalogue.progress, catalogueFailed),
-  );
+  // Where an empty result area may draw its own wording from, decided by the catalogue module so
+  // the honest-coverage rules are tested rather than buried in a render branch.
   // The refresh's own line, computed from the replacement generation alone: it never reads the
   // progress of the catalogue the user is still searching.
   const refreshText = refreshStatusText(text, numberFormat, catalogue.refresh);
@@ -822,12 +778,11 @@ export function Inventory({
           numberFormat.format(catalogue.progress.loadedCount),
         )
     : emptyText;
-  const syncedTime = catalogue.progress.lastSyncedAt
-    ? new Intl.DateTimeFormat(locale === 'vi' ? 'vi-VN' : 'en-GB', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-      }).format(new Date(catalogue.progress.lastSyncedAt))
-    : null;
+  // The catalogue states no progress of its own: the rows paint from what the browser holds, so a
+  // load that stopped is stated plainly with its retry and a complete one offers the Refresh
+  // control, and nothing else claims to be loading.
+  const offersRefresh =
+    catalogue.progress.isComplete && catalogue.refresh.status === 'idle';
   const failureMessage = (code: string) =>
     code === 'query-too-long'
       ? text.queryTooLong
@@ -1034,7 +989,7 @@ export function Inventory({
             {local ? (
               <>
                 <p className="search-hint">{text.catalogueLocalNote}</p>
-                {!catalogue.progress.isComplete ? (
+                {!catalogue.progress.isComplete && !catalogueFailed ? (
                   <p className="search-hint">{text.catalogueMoreMatches}</p>
                 ) : null}
               </>
@@ -1050,40 +1005,27 @@ export function Inventory({
               <p>{text.inventorySearchHelp}</p>
             </details>
           </div>
-          {catalogue.scope || catalogueFailed ? (
-            <div className="catalogue-progress" data-state={catalogue.status}>
-              {/* A numeric value is exposed only when the load can state a determinate percentage;
-                  the text label carries the count either way. It is not a live region, so a batch
-                  arriving never interrupts a screen reader. */}
-              <progress
-                id="catalogue-progress"
-                className="catalogue-progress-bar"
-                max={100}
-                {...(catalogue.progress.progressPercent === null
-                  ? {}
-                  : { value: catalogue.progress.progressPercent })}
-                aria-labelledby="catalogue-progress-label"
-              />
-              <p
-                id="catalogue-progress-label"
-                className="catalogue-progress-text"
-              >
-                {progressText}
-                {syncedTime ? (
-                  <> {text.catalogueSyncedAt.replace('{time}', syncedTime)}</>
-                ) : null}
-              </p>
+          {catalogueFailed || offersRefresh ? (
+            <div className="catalogue-progress">
+              {/* A stopped load is a failure rather than progress, so it keeps its own statement
+                  beside the retry that resumes it. */}
               {catalogueFailed ? (
-                <button
-                  className="btn btn-ghost btn-sm"
-                  type="button"
-                  onClick={catalogue.retry}
-                >
-                  {text.retry}
-                </button>
+                <>
+                  <p className="catalogue-progress-text">
+                    {catalogue.progress.loadedCount > 0
+                      ? text.catalogueLoadStopped
+                      : text.catalogueLoadFailed}
+                  </p>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    type="button"
+                    onClick={catalogue.retry}
+                  >
+                    {text.retry}
+                  </button>
+                </>
               ) : null}
-              {catalogue.progress.isComplete &&
-              catalogue.refresh.status === 'idle' ? (
+              {offersRefresh ? (
                 <button
                   className="btn btn-ghost btn-sm"
                   type="button"

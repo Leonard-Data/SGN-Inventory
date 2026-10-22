@@ -153,34 +153,6 @@ export async function readEveryCataloguePage(options: {
   }
 }
 
-// What the progress indicator states. A total that is unknown, failed or still zero states the
-// loaded count alone; only a determinate percentage carries a number.
-export type CatalogueProgressView =
-  | { kind: 'loading-known'; loaded: number; total: number; percent: number }
-  | { kind: 'loading-unknown'; loaded: number }
-  | { kind: 'incomplete'; loaded: number }
-  | { kind: 'complete'; loaded: number };
-
-export function catalogueProgressView(
-  progress: CatalogueProgress,
-  failed: boolean,
-): CatalogueProgressView {
-  if (progress.isComplete)
-    return { kind: 'complete', loaded: progress.loadedCount };
-  if (failed) return { kind: 'incomplete', loaded: progress.loadedCount };
-  const { totalCount, progressPercent } = progress;
-  // A zero total with loading still active is indeterminate: there is nothing yet to divide by
-  // and nothing to claim about an inventory the traversal has not finished reading.
-  return totalCount !== null && totalCount > 0 && progressPercent !== null
-    ? {
-        kind: 'loading-known',
-        loaded: progress.loadedCount,
-        total: totalCount,
-        percent: progressPercent,
-      }
-    : { kind: 'loading-unknown', loaded: progress.loadedCount };
-}
-
 // Where an empty result area may draw its answer from, and which wording that earns. A result the
 // browser answered from the catalogue it holds can only say that nothing in the loaded properties
 // matched: while the catalogue is incomplete that is never the whole inventory, and even a

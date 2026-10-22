@@ -4,7 +4,6 @@ import {
   CATALOGUE_INCOMPLETE_PERCENT,
   cataloguePercent,
   catalogueProgress,
-  catalogueProgressView,
   emptyResultWording,
   indexCataloguePage,
   readEveryCataloguePage,
@@ -201,25 +200,13 @@ test('an unknown total states no percentage, and a zero total while loading stay
   assert.equal(cataloguePercent(0, 0, true), 100);
 
   const empty = startCatalogueLoad('generation-1');
-  assert.deepEqual(
-    catalogueProgressView(
-      catalogueProgress(empty, { total: null, capturedAt: null }),
-      false,
-    ),
-    {
-      kind: 'loading-unknown',
-      loaded: 0,
-    },
+  assert.equal(
+    catalogueProgress(empty, { total: null, capturedAt: null }).progressPercent,
+    null,
   );
-  assert.deepEqual(
-    catalogueProgressView(
-      catalogueProgress(empty, { total: 0, capturedAt: AT }),
-      false,
-    ),
-    {
-      kind: 'loading-unknown',
-      loaded: 0,
-    },
+  assert.equal(
+    catalogueProgress(empty, { total: 0, capturedAt: AT }).progressPercent,
+    null,
   );
 });
 
@@ -233,20 +220,11 @@ test('the authorized total folds into a load without changing its rows', () => {
   const before = catalogueProgress(first, { total: null, capturedAt: null });
   assert.equal(before.loadedCount, 1);
   assert.equal(before.progressPercent, null);
-  assert.deepEqual(catalogueProgressView(before, false), {
-    kind: 'loading-unknown',
-    loaded: 1,
-  });
   const after = catalogueProgress(first, { total: 4, capturedAt: AT });
   assert.equal(after.loadedCount, 1);
   assert.equal(after.totalCount, 4);
   assert.equal(after.countCapturedAt, AT);
-  assert.deepEqual(catalogueProgressView(after, false), {
-    kind: 'loading-known',
-    loaded: 1,
-    total: 4,
-    percent: 25,
-  });
+  assert.equal(after.progressPercent, 25);
 });
 
 test('an interrupted load keeps its rows and offers an incomplete state', () => {
@@ -258,10 +236,6 @@ test('an interrupted load keeps its rows and offers an incomplete state', () => 
   const progress = catalogueProgress(first, { total: 10, capturedAt: AT });
   assert.equal(progress.loadedCount, 2);
   assert.equal(progress.isComplete, false);
-  assert.deepEqual(catalogueProgressView(progress, true), {
-    kind: 'incomplete',
-    loaded: 2,
-  });
   // The failed generation resumes from the cursor it stopped at, not from the first page.
   assert.equal(first.nextCursor, 'b');
 });
