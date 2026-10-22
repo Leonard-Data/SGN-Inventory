@@ -2,8 +2,10 @@
 -- unit ids, so a province, district or ward filter that compares only ids can never match the
 -- stock that actually exists. A stated level now also matches the recorded text of that same
 -- level when it equals the selected unit's official name after normalisation - case, Vietnamese
--- diacritics, spacing and a leading administrative type prefix aside - never a substring and
--- never across levels, so an empty or unknown recorded label simply does not match. The id path
+-- diacritics and spacing folded, with the common administrative type abbreviations expanded to
+-- their full type - never a substring and never across levels. An empty or unknown recorded label
+-- simply does not match, and two units of one parent whose names differ only by their type stay
+-- different units: "Xa Yen Vien" never answers a filter for "Thi tran Yen Vien". The id path
 -- is unchanged, so an address that carries units matches exactly as before; the levels still
 -- compose on one address of the searched format.
 -- Nothing else about the stream changes: the ordering, the offset windows, the matching total, the
@@ -22,16 +24,33 @@
 -- measurement in a scratch database and `docs/testing.md` records the run; see ticket #247.
 begin;
 
--- Both sides of one level comparison go through this: lowercase, diacritics removed, one space
--- between words, and a leading administrative type prefix dropped. Matching is equality after it,
--- so a recorded "Q. Binh Thanh" states the official "Binh Thanh" district and a recorded
--- "TP. Ho Chi Minh" the official "Thanh pho Ho Chi Minh", while an unlisted label matches nothing.
+-- Both sides of one level comparison go through this: the administrative type abbreviation is
+-- expanded to its full type, then case, diacritics and spacing are folded, so a recorded
+-- "Q. Binh Thanh" equals the official "Quan Binh Thanh" while "Thi tran Yen Vien" and
+-- "Xa Yen Vien" stay different units. An unlisted label matches nothing.
 create function private.normalize_unit_text(value text) returns text
 language sql stable security invoker set search_path='' as $$
-  select btrim(regexp_replace(
-    regexp_replace(lower(extensions.unaccent(coalesce(value,''))),
-      '^\s*(thanh pho|thi tran|thi xa|tinh|quan|huyen|phuong|xa|tp\.|q\.|p\.|x\.)\s*', ''),
-    '\s+', ' ', 'g'));
+  with folded as (
+    select lower(extensions.unaccent(coalesce(value,''))) as unit_text
+  ), typed as (
+    select
+      regexp_replace(
+        regexp_replace(
+          regexp_replace(
+            regexp_replace(
+              regexp_replace(
+                regexp_replace(
+                  regexp_replace(unit_text, '^\s*tp(\s*\.\s*|\s+)', 'thanh pho '),
+                  '^\s*tt(\s*\.\s*|\s+)', 'thi tran '),
+                '^\s*tx(\s*\.\s*|\s+)', 'thi xa '),
+              '^\s*q(\s*\.\s*|\s+)', 'quan '),
+            '^\s*p(\s*\.\s*|\s+)', 'phuong '),
+          '^\s*x(\s*\.\s*|\s+)', 'xa '),
+        '^\s*t(\s*\.\s*|\s+)', 'tinh ')
+      as unit_text
+    from folded
+  )
+  select btrim(regexp_replace(unit_text, '\s+', ' ', 'g')) from typed;
 $$;
 revoke all on function private.normalize_unit_text(text) from public,anon,authenticated;
 grant execute on function private.normalize_unit_text(text) to authenticated;

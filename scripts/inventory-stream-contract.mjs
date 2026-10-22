@@ -193,8 +193,26 @@ export async function inventoryStreamContract({
   );
   const unitName = (unitId) =>
     textNames.rows.find((row) => row.id === unitId).name_vi;
-  const abbreviated = (name, prefix) =>
-    `${prefix} ${name.replace(/^(Thành phố|Tỉnh|Quận|Huyện|Thị xã|Thị trấn|Phường|Xã)\s+/u, '')}`;
+  // The abbreviation the source sheets use for a unit's own type; a type with no common
+  // abbreviation keeps its official name, which the text path matches once folded.
+  const TYPE_ABBREVIATION = {
+    'Thành phố': 'TP. ',
+    Tỉnh: 'T. ',
+    Quận: 'Q. ',
+    Phường: 'P. ',
+    Xã: 'X. ',
+    'Thị trấn': 'TT ',
+    'Thị xã': 'TX ',
+  };
+  const abbreviated = (name) => {
+    const [, type, rest] =
+      name.match(
+        /^(Thành phố|Tỉnh|Quận|Huyện|Thị trấn|Thị xã|Phường|Xã)\s+(.*)$/u,
+      ) ?? [];
+    return type && TYPE_ABBREVIATION[type]
+      ? `${TYPE_ABBREVIATION[type]}${rest}`
+      : name;
+  };
   await db.query(
     `insert into public.properties(id,property_code,listing_mode,status,property_type,created_by,entry_on,entry_source)
       values ($1,'SGN-TXT-01','sale','available','house',$2,'2025-02-02','legacy'),
@@ -207,14 +225,40 @@ export async function inventoryStreamContract({
         ($5,'legacy','TXT cu 02',$6,$7,$8)`,
     [
       textImported,
-      abbreviated(unitName(legacyProvince), 'TP.'),
-      abbreviated(unitName(legacyDistrict.id), 'Q.'),
-      abbreviated(unitName(legacyWard.id), 'P.'),
+      abbreviated(unitName(legacyProvince)),
+      abbreviated(unitName(legacyDistrict.id)),
+      abbreviated(unitName(legacyWard.id)),
       textNearMiss,
-      `${abbreviated(unitName(legacyProvince), 'TP.')} cu`,
+      `${abbreviated(unitName(legacyProvince))} cu`,
       `${unitName(legacyDistrict.id)} cu`,
       `${unitName(legacyWard.id)} cu`,
     ],
+  );
+
+  // Two wards of one district whose names differ only by their administrative type. The text path
+  // expands the type abbreviation but never drops the type, so a filter for one ward must not answer
+  // addresses recorded under the other.
+  const yenVien = await db.query(
+    "select id,name_vi from public.admin_unit_versions where unit_level='commune' and valid_to='2025-07-01' and name_vi in ('Xã Yên Viên','Thị trấn Yên Viên')",
+  );
+  const xaYenVien = yenVien.rows.find((row) => row.name_vi === 'Xã Yên Viên');
+  const thiTranYenVien = yenVien.rows.find(
+    (row) => row.name_vi === 'Thị trấn Yên Viên',
+  );
+  assert.ok(xaYenVien && thiTranYenVien, 'both Yên Viên wards are seeded');
+  const textXaYenVien = id('b3');
+  const textThiTranYenVien = id('b4');
+  await db.query(
+    `insert into public.properties(id,property_code,listing_mode,status,property_type,created_by,entry_on,entry_source)
+      values ($1,'SGN-TXT-03','sale','available','house',$2,'2025-02-04','legacy'),
+        ($3,'SGN-TXT-04','sale','available','house',$2,'2025-02-05','legacy')`,
+    [textXaYenVien, sales, textThiTranYenVien],
+  );
+  await db.query(
+    `insert into public.property_addresses(property_id,format,address_text,commune_text)
+      values ($1,'legacy','TXT cu 03','Xa Yen Vien'),
+        ($2,'legacy','TXT cu 04','Thi tran Yen Vien')`,
+    [textXaYenVien, textThiTranYenVien],
   );
 
   // The default stream is newest-created first with identity breaking ties; the chronology lists
@@ -600,6 +644,28 @@ export async function inventoryStreamContract({
         limit: 200,
       });
       assert.ok(!crossLevel.rows.some((row) => row.id === textImported));
+    },
+  );
+
+  await check(
+    'an area text match keeps the administrative type of the unit',
+    async () => {
+      // The same name under two types is two units: equality is on the expanded type, never on the
+      // name with the type dropped, so neither ward answers the other's filter.
+      const byXa = await read({
+        commune: xaYenVien.id,
+        query: '',
+        limit: 200,
+      });
+      assert.ok(byXa.rows.some((row) => row.id === textXaYenVien));
+      assert.ok(!byXa.rows.some((row) => row.id === textThiTranYenVien));
+      const byThiTran = await read({
+        commune: thiTranYenVien.id,
+        query: '',
+        limit: 200,
+      });
+      assert.ok(byThiTran.rows.some((row) => row.id === textThiTranYenVien));
+      assert.ok(!byThiTran.rows.some((row) => row.id === textXaYenVien));
     },
   );
 

@@ -762,6 +762,7 @@ export function SearchIsland({
                     value={province}
                     selectedLabel={appliedNames[province]}
                     onChange={(next) => {
+                      if (next === province) return;
                       setProvince(next);
                       setDistrict('');
                       setWard('');
@@ -780,6 +781,7 @@ export function SearchIsland({
                       disabled={!province}
                       hint={province ? undefined : text.areaLevelHint}
                       onChange={(next) => {
+                        if (next === district) return;
                         setDistrict(next);
                         setWard('');
                       }}
