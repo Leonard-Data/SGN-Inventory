@@ -64,6 +64,10 @@ export const INVENTORY_FILTER_KEYS = [
   'priceMax',
   'areaMin',
   'areaMax',
+  'frontageMin',
+  'frontageMax',
+  'depthMin',
+  'depthMax',
   'province',
   'district',
   'ward',
@@ -88,6 +92,10 @@ export const noInventoryFilters: InventoryFilters = {
   priceMax: null,
   areaMin: null,
   areaMax: null,
+  frontageMin: null,
+  frontageMax: null,
+  depthMin: null,
+  depthMax: null,
   province: null,
   district: null,
   ward: null,
@@ -102,6 +110,9 @@ export function wholeVnd(value: string): boolean {
   return WHOLE_VND.test(value);
 }
 
+// The one measured-value rule: a positive number with at most two decimals and inside the numeric
+// ceiling. An area and a frontage or depth bound are both stated by it, as the database read states
+// them.
 export function squareMetres(value: string): boolean {
   return AREA_M2.test(value) && areaHundredths(value) > 0n;
 }
@@ -128,6 +139,10 @@ export function inventoryFilters(
     priceMax: read('priceMax'),
     areaMin: read('areaMin'),
     areaMax: read('areaMax'),
+    frontageMin: read('frontageMin'),
+    frontageMax: read('frontageMax'),
+    depthMin: read('depthMin'),
+    depthMax: read('depthMax'),
     province: read('province'),
     district: read('district'),
     ward: read('ward'),
@@ -154,6 +169,10 @@ export function parseInventoryFilters(
     priceMax,
     areaMin,
     areaMax,
+    frontageMin,
+    frontageMax,
+    depthMin,
+    depthMax,
     province,
     district,
     ward,
@@ -188,18 +207,31 @@ export function parseInventoryFilters(
     return refuse();
   for (const price of [priceMin, priceMax])
     if (price !== null && !wholeVnd(price)) return refuse();
-  for (const area of [areaMin, areaMax])
-    if (area !== null && !squareMetres(area)) return refuse();
+  // An area and a frontage or depth bound are the same kind of measured value, so one rule
+  // validates them all.
+  for (const measure of [
+    areaMin,
+    areaMax,
+    frontageMin,
+    frontageMax,
+    depthMin,
+    depthMax,
+  ])
+    if (measure !== null && !squareMetres(measure)) return refuse();
   if (
     priceMin !== null &&
     priceMax !== null &&
     BigInt(priceMin) > BigInt(priceMax)
   )
     return refuse();
+  // Each range is its own: a stated minimum above its maximum is refused rather than answered as
+  // an inventory that matches nothing.
+  const reversed = (low: string | null, high: string | null): boolean =>
+    low !== null && high !== null && areaHundredths(low) > areaHundredths(high);
   if (
-    areaMin !== null &&
-    areaMax !== null &&
-    areaHundredths(areaMin) > areaHundredths(areaMax)
+    reversed(areaMin, areaMax) ||
+    reversed(frontageMin, frontageMax) ||
+    reversed(depthMin, depthMax)
   )
     return refuse();
   return { ok: true, filters };
@@ -266,6 +298,10 @@ export type InventoryFilterArgs = {
   p_price_max?: string;
   p_area_min?: number;
   p_area_max?: number;
+  p_frontage_min?: number;
+  p_frontage_max?: number;
+  p_depth_min?: number;
+  p_depth_max?: number;
   p_province_id?: string;
   p_district_id?: string;
   p_commune_id?: string;
@@ -302,6 +338,10 @@ export function filterRpcArgs(filters: InventoryFilters): InventoryFilterArgs {
   if (filters.priceMax) args.p_price_max = filters.priceMax;
   if (filters.areaMin) args.p_area_min = Number(filters.areaMin);
   if (filters.areaMax) args.p_area_max = Number(filters.areaMax);
+  if (filters.frontageMin) args.p_frontage_min = Number(filters.frontageMin);
+  if (filters.frontageMax) args.p_frontage_max = Number(filters.frontageMax);
+  if (filters.depthMin) args.p_depth_min = Number(filters.depthMin);
+  if (filters.depthMax) args.p_depth_max = Number(filters.depthMax);
   // The no-format choice is the read's own unconditional form: the parameter stays absent so no
   // format condition is applied.
   const format = searchedAddressFormat(filters);

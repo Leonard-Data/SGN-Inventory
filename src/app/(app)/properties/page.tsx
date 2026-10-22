@@ -15,14 +15,20 @@ export default async function Properties({
     mode?: string | string[];
     type?: string | string[];
     accessType?: string | string[];
+    addressFormat?: string | string[];
     priceMin?: string | string[];
     priceMax?: string | string[];
     areaMin?: string | string[];
     areaMax?: string | string[];
+    frontageMin?: string | string[];
+    frontageMax?: string | string[];
+    depthMin?: string | string[];
+    depthMax?: string | string[];
     province?: string | string[];
     district?: string | string[];
     ward?: string | string[];
     contact?: string | string[];
+    createdBy?: string | string[];
   }>;
 }) {
   const params = await searchParams;

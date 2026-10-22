@@ -150,7 +150,8 @@ const vi = {
   filtersClear: 'Xoá bộ lọc',
   filtersRemove: 'Bỏ điều kiện lọc',
   filtersAny: 'Tất cả',
-  filtersInvalid: 'Bộ lọc chưa hợp lệ. Kiểm tra lại giá và diện tích đã nhập.',
+  filtersInvalid:
+    'Bộ lọc chưa hợp lệ. Kiểm tra lại giá, diện tích, chiều ngang và chiều sâu đã nhập.',
   addressFormat: 'Định dạng địa chỉ',
   addressFormatHint:
     'Chỉ hồ sơ có địa chỉ ở định dạng đã chọn mới khớp, và nội dung tìm kiếm chỉ so với địa chỉ ở định dạng đó: địa chỉ cũ là mặc định, địa chỉ mới khi bạn chọn. Bỏ điều kiện định dạng để tìm trong cả hai định dạng; hồ sơ không có địa chỉ ở định dạng đã chọn không xuất hiện.',
@@ -187,6 +188,12 @@ const vi = {
   rentPriceTo: 'Giá thuê tháng đến',
   areaRangeFrom: 'Diện tích từ',
   areaRangeTo: 'Diện tích đến',
+  frontageRangeFrom: 'Chiều ngang từ',
+  frontageRangeTo: 'Chiều ngang đến',
+  depthRangeFrom: 'Chiều sâu từ',
+  depthRangeTo: 'Chiều sâu đến',
+  dimensionFilterHint:
+    'Chiều ngang và chiều sâu tính theo mét và khớp khi giá trị đã ghi nằm trong khoảng. Hồ sơ chưa ghi kích thước không khớp với khoảng đã đặt.',
   emptyFiltered: 'Không có bất động sản khớp bộ lọc.',
   entryDate: 'Ngày nhập kho gốc',
   createdBy: 'Người tạo hồ sơ',
@@ -1067,7 +1074,7 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     filtersRemove: 'Remove filter',
     filtersAny: 'Any',
     filtersInvalid:
-      'The filter set is not valid. Check the entered price and area bounds.',
+      'The filter set is not valid. Check the entered price, area, frontage and depth bounds.',
     addressFormat: 'Address format',
     addressFormatHint:
       'Only a property recording an address in the selected format matches, and a typed search is compared with that format’s address: the legacy address by default, the current one when you choose it. Clear the format filter to search both formats; a property with no address in the selected format does not appear.',
@@ -1102,6 +1109,12 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     rentPriceTo: 'Monthly rent to',
     areaRangeFrom: 'Area from',
     areaRangeTo: 'Area to',
+    frontageRangeFrom: 'Frontage from',
+    frontageRangeTo: 'Frontage to',
+    depthRangeFrom: 'Depth from',
+    depthRangeTo: 'Depth to',
+    dimensionFilterHint:
+      'Frontage and depth are in metres and match when the recorded value is inside the range. A record with no recorded dimension does not match a stated range.',
     emptyFiltered: 'No property matches these filters.',
     entryDate: 'Original inventory entry date',
     createdBy: 'Record created by',

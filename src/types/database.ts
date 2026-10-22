@@ -2480,6 +2480,10 @@ export type Database = {
           p_commune_id?: string;
           p_contact_id?: string;
           p_address_format?: string;
+          p_frontage_min?: number;
+          p_frontage_max?: number;
+          p_depth_min?: number;
+          p_depth_max?: number;
         };
         // One window of the stream beside the matching total. A window past the end, or a filter
         // that matches nothing, answers one row whose window columns are null, so the total is

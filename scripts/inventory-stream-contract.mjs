@@ -26,7 +26,9 @@ export async function inventoryStreamContract({
   // Twenty-four dated rows on four dates with six distinct creation times, two unknown entry
   // dates, one archived row of each and one ineligible status: enough to walk the stream with a
   // window of five, to cross date ties and to prove the creation-time default is not identity
-  // order. One row also carries a rent price so the window's price fields are exercised.
+  // order. One row also carries a rent price so the window's price fields are exercised, and each
+  // row records a frontage and twice it as depth so a dimension range selects known rows - except
+  // the first, which records neither, so a stated bound has to leave an unmeasured row out.
   const base = Date.parse('2026-09-01T00:00:00.000Z');
   // The access states cycle over the dated rows, so the access filter has several rows of each
   // state to keep and several to drop.
@@ -45,6 +47,8 @@ export async function inventoryStreamContract({
       createdAt: new Date(base + (index % 6) * 3_600_000),
       status: index % 3 === 0 ? 'negotiating' : 'available',
       accessType: ACCESS_CYCLE[index % ACCESS_CYCLE.length],
+      frontage: index === 0 ? null : index + 1,
+      depth: index === 0 ? null : (index + 1) * 2,
     });
   const unknownDated = {
     id: id('aa'),
@@ -102,11 +106,17 @@ export async function inventoryStreamContract({
     district = null,
     commune = null,
     accessType = null,
+    frontageMin = null,
+    frontageMax = null,
+    depthMin = null,
+    depthMax = null,
   } = {}) {
     const result = await db.query(
       `select * from public.stream_inventory(p_order => $1::text,p_query => $2::text,p_offset => $3::integer,
         p_limit => $4::integer,p_status => $5::text,p_address_format => $6::text,p_province_id => $7::uuid,
-        p_district_id => $8::uuid,p_commune_id => $9::uuid,p_access_type => $10::text)`,
+        p_district_id => $8::uuid,p_commune_id => $9::uuid,p_access_type => $10::text,
+        p_frontage_min => $11::numeric,p_frontage_max => $12::numeric,p_depth_min => $13::numeric,
+        p_depth_max => $14::numeric)`,
       [
         order,
         query,
@@ -118,6 +128,10 @@ export async function inventoryStreamContract({
         district,
         commune,
         accessType,
+        frontageMin,
+        frontageMax,
+        depthMin,
+        depthMax,
       ],
     );
     // Every read answers at least one row: the window's rows, or the counting row alone when the
@@ -131,8 +145,8 @@ export async function inventoryStreamContract({
 
   await asOwner();
   await db.query(
-    `insert into public.properties(id,property_code,listing_mode,status,property_type,monthly_rent_vnd,created_by,entry_on,entry_source,created_at,archived_at,access_type)
-    select * from unnest($1::uuid[],$2::text[],$3::text[],$4::text[],$5::text[],$6::numeric[],$7::uuid[],$8::date[],$9::text[],$10::timestamptz[],$11::timestamptz[],$12::text[])`,
+    `insert into public.properties(id,property_code,listing_mode,status,property_type,monthly_rent_vnd,created_by,entry_on,entry_source,created_at,archived_at,access_type,frontage_m,depth_m)
+    select * from unnest($1::uuid[],$2::text[],$3::text[],$4::text[],$5::text[],$6::numeric[],$7::uuid[],$8::date[],$9::text[],$10::timestamptz[],$11::timestamptz[],$12::text[],$13::numeric[],$14::numeric[])`,
     [
       all.map((row) => row.id),
       all.map((row) => row.code),
@@ -150,6 +164,8 @@ export async function inventoryStreamContract({
           : null,
       ),
       all.map((row) => row.accessType),
+      all.map((row) => row.frontage ?? null),
+      all.map((row) => row.depth ?? null),
     ],
   );
   await db.query(
@@ -769,6 +785,75 @@ export async function inventoryStreamContract({
       });
       assert.ok(byThiTran.rows.some((row) => row.id === textThiTranYenVien));
       assert.ok(!byThiTran.rows.some((row) => row.id === textXaYenVien));
+    },
+  );
+
+  await check(
+    'a frontage or depth range keeps only the properties inside it',
+    async () => {
+      // Each dated row states its index as frontage and twice it as depth; the first records
+      // neither, so a stated bound has an unmeasured row to leave out.
+      const one = await read({ frontageMin: 2, frontageMax: 2, limit: 100 });
+      assert.deepEqual(
+        one.rows.map((row) => row.id),
+        [dated[1].id],
+      );
+      assert.equal(one.total, 1);
+      const pair = await read({ frontageMin: 2, frontageMax: 3, limit: 100 });
+      assert.deepEqual(
+        pair.rows.map((row) => row.id).sort(),
+        [dated[1].id, dated[2].id].sort(),
+      );
+      // The depth range is its own condition, and half a range is still a range.
+      const depth = await read({ depthMin: 10, depthMax: 12, limit: 100 });
+      assert.deepEqual(
+        depth.rows.map((row) => row.id).sort(),
+        [dated[4].id, dated[5].id].sort(),
+      );
+      const open = await read({ depthMin: 40, limit: 100 });
+      assert.deepEqual(
+        open.rows.map((row) => row.id).sort(),
+        dated
+          .slice(19)
+          .map((row) => row.id)
+          .sort(),
+      );
+      // Both dimensions compose with each other and with the other filters.
+      const composed = await read({
+        frontageMin: 5,
+        frontageMax: 8,
+        depthMax: 12,
+        status: 'available',
+        limit: 100,
+      });
+      assert.deepEqual(
+        composed.rows.map((row) => row.id).sort(),
+        [dated[4].id, dated[5].id].sort(),
+      );
+      // A property recording no dimension never matches a stated bound: the unmeasured row is
+      // outside the range rather than at its start, so zero is not read as a frontage of zero.
+      const unmeasured = await read({ frontageMax: 1, limit: 100 });
+      assert.deepEqual(unmeasured.rows, []);
+      assert.equal(unmeasured.total, 0);
+    },
+  );
+
+  await check(
+    'an invalid or reversed dimension bound is refused, not matched',
+    async () => {
+      const bounds =
+        'select * from public.stream_inventory(p_query => $1::text,p_frontage_min => $2::numeric,p_frontage_max => $3::numeric,p_depth_min => $4::numeric,p_depth_max => $5::numeric)';
+      for (const stated of [
+        [0, null, null, null],
+        [null, 12.345, null, null],
+        [10000000000, null, null, null],
+        [null, null, 0, null],
+        [null, null, null, 12.345],
+        [null, null, null, 10000000000],
+        [10, 9, null, null],
+        [null, null, 910, 900],
+      ])
+        await fails(bounds, [marker, ...stated], '22023');
     },
   );
 
