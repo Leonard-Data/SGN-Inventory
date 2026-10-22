@@ -39,6 +39,9 @@ function openInMapUrl(lat: number, lng: number): string {
   return `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=17/${lat}/${lng}`;
 }
 
+// The record screen states the recorded point as plain text: the map it used to draw beside it
+// does not work, so the coordinates are kept, as recorded, with the way out to an external map.
+// The map itself stays for choosing a point in the edit form (LocationEditor below).
 export function PropertyLocation({
   latitude,
   longitude,
@@ -49,55 +52,26 @@ export function PropertyLocation({
   locale: Locale;
 }) {
   const dt = detailMessages[locale];
-  const [tilesFailed, setTilesFailed] = useState(false);
   const lat = parseCoordinate(latitude),
     lng = parseCoordinate(longitude);
-  const point: MapPoint | null =
-    lat !== null && lng !== null ? { lat, lng } : null;
 
-  if (!point) {
+  if (lat === null || lng === null) {
     return <p className="field-hint">{dt.noLocation}</p>;
   }
-  const openLink = openInMapUrl(point.lat, point.lng);
 
   return (
-    <div className="sgn-location">
-      {openLink ? (
-        <div className="sgn-map-actions">
-          <span className="sgn-map-caption">
-            {dt.locationRecorded}: {coordinateLabel(point.lat)},{' '}
-            {coordinateLabel(point.lng)}
-          </span>
-          <a
-            className="link"
-            href={openLink}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {dt.openInMap}
-          </a>
-        </div>
-      ) : null}
-      <div
-        className="sgn-map-frame"
-        role="group"
-        aria-label={
-          dt.locationRecorded +
-          ': ' +
-          coordinateLabel(point.lat) +
-          ', ' +
-          coordinateLabel(point.lng)
-        }
+    <div className="sgn-map-actions">
+      <span className="sgn-map-caption" translate="no">
+        {dt.locationRecorded}: {coordinateLabel(lat)}, {coordinateLabel(lng)}
+      </span>
+      <a
+        className="link"
+        href={openInMapUrl(lat, lng)}
+        target="_blank"
+        rel="noopener noreferrer"
       >
-        <LocationMap
-          center={[point.lat, point.lng]}
-          marker={[point.lat, point.lng]}
-          zoom={16}
-          onTileError={() => setTilesFailed(true)}
-          onTileLoad={() => setTilesFailed(false)}
-        />
-      </div>
-      {tilesFailed ? <p className="field-hint">{dt.mapUnavailable}</p> : null}
+        {dt.openInMap}
+      </a>
     </div>
   );
 }

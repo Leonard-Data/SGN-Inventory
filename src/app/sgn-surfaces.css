@@ -534,6 +534,12 @@ dialog.sgn-dialog[data-size='drawer']::backdrop {
 .quick-view .span-all {
   grid-column: 1 / -1;
 }
+/* The record's note is source text: its own line breaks are kept, and a long unbroken run wraps
+   inside the panel instead of widening it. */
+.quick-view-note {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .quick-view-summary dd {
   font-size: var(--text-lg);
   font-weight: 600;

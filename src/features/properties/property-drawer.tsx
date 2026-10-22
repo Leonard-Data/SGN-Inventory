@@ -525,6 +525,9 @@ function QuickView({
   // Frontage, depth, floors and the creator are the same four facts the list states in its own
   // columns, read from the same projection so the row and this panel agree.
   const shared = recordFacts(property, locale);
+  // The record's own note, as recorded, once the detail read that carries it has answered. A record
+  // with no note shows no row at all rather than an empty heading.
+  const note = record?.notes?.trim() ? record.notes : null;
   const facts: { label: string; value: string; known: boolean }[] = [
     {
       label: text.listingMode,
@@ -676,6 +679,16 @@ function QuickView({
               </dd>
             </div>
           ))}
+          {/* The note is source text: shown as recorded, never translated, with its own line
+              breaks kept and the full width of the panel for a long one. */}
+          {note ? (
+            <div className="fact span-all">
+              <dt>{text.notes}</dt>
+              <dd className="quick-view-note" translate="no">
+                {note}
+              </dd>
+            </div>
+          ) : null}
         </dl>
       </section>
       <section className="quick-view-section" aria-labelledby={ownersId}>
