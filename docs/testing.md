@@ -1325,20 +1325,20 @@ Embedded coverage: `src/features/properties/catalogue.test.ts` (in `npm run test
 
 ## Progressive catalogue loading acceptance (issue #189)
 
-Scope: the second slice of [#186](https://github.com/Leonard-Data/SGN-Inventory/issues/186) — the browser walks the catalogue endpoint's cursor to the end of the authorized inventory, deduplicating and indexing every batch, and the list states how complete its snapshot is. Use the authorized isolated development/staging target with real Supabase Auth, Data API/RLS and the actual VI/EN browser interface. Embedded coverage is the deterministic supplement, not this acceptance.
+Scope: the second slice of [#186](https://github.com/Leonard-Data/SGN-Inventory/issues/186) — the browser walks the catalogue endpoint's cursor to the end of the authorized inventory, deduplicating and indexing every batch, and the list states no loading progress of its own (issue #267). Use the authorized isolated development/staging target with real Supabase Auth, Data API/RLS and the actual VI/EN browser interface. Embedded coverage is the deterministic supplement, not this acceptance.
 
 | Scenario | Required observation |
 | --- | --- |
 | Cold load beyond one page | Opening `/properties` issues the first `GET /api/properties/catalogue` (no `after`) and then one request per cursor until `nextCursor` is null; the batches arrive sequentially, not in parallel |
 | First page searchable early | Typing in the address box narrows the first batch before the traversal finishes and before `GET /api/properties/catalogue/count` returns |
-| Known total | The progress line states the loaded count, the authorized total and an approximate percentage, and the bar is determinate; the percentage stays below 100% while a cursor remains and reaches 100% only after the final batch is indexed |
-| Slow or failed total | A count request delayed or answered `503`/`403` delays no batch; the line states the loaded count with an indeterminate bar and no percentage |
+| Known total | No progress line, fraction, percentage or bar appears in the list in either language; the loaded count, the authorized total and the approximate percentage stay loader-internal, and only the deliberate refresh's own line states them (issue #190) |
+| Slow or failed total | A count request delayed or answered `503`/`403` delays no batch and states nothing in the list; a traversal that stops states the failure with Retry |
 | Retried or duplicated rows | A repeated page (a reload or a resumed traversal) never increases the loaded count or the percentage |
 | Interrupted load | Stopping the network mid-traversal keeps the loaded rows searchable, marks coverage incomplete and shows Retry; Retry resumes from the cursor it stopped at and finishes the traversal |
-| Zero or unknown total | An empty authorized inventory completes with zero rows and no division error; a zero count while loading keeps the indeterminate bar |
+| Zero or unknown total | An empty authorized inventory completes with zero rows and no division error, with no progress line either way |
 | Incomplete empty result | A query with no match while the catalogue is incomplete reads as no matches in the loaded properties plus that more matches may appear, never as no properties found |
-| Accessibility | The progress indication has a text label, exposes a numeric value only when determinate, and a batch arriving does not announce every update |
-| VI/EN | Every progress, retry, partial-coverage and loading line is equivalent in both languages |
+| Accessibility | The list renders no progress indication at all; a stopped load is stated plainly beside its Retry, and a batch arriving announces nothing |
+| VI/EN | Every retry, failed-load and partial-coverage line is equivalent in both languages, and neither language states a loading count, fraction or percentage |
 
 Embedded coverage: `src/features/properties/catalogue-load.test.ts` (in `npm run test:unit`) proves the sequential traversal follows every cursor and indexes each batch as it arrives, that a retried or duplicated row adds nothing, that the catalogue is complete only after the final batch is indexed, that the percentage is clamped below 100% until then and never moves for a duplicate row, that an unknown total states no percentage and a zero total while loading stays indeterminate, that a count folding into a load does not change its rows, that an interrupted generation resumes from the cursor it stopped at, and that an empty result from an incomplete catalogue is never the inventory is empty; `src/features/properties/catalogue-cache.test.ts` proves the traversal keeps the #188 scope cache, cancellation and authority-change behaviour.
 
@@ -1351,9 +1351,9 @@ Scope: the third slice of [#186](https://github.com/Leonard-Data/SGN-Inventory/i
 | --- | --- |
 | Complete catalogue, Refresh | The Refresh control appears only once the catalogue is complete; selecting it starts a second traversal of `GET /api/properties/catalogue` and issues `GET /api/properties/catalogue/count` once for the replacement generation; the same count survives Retry and promotion to working, even when still in flight |
 | Searching during a refresh | Typing in the address box and the local filtering keep answering from the previous complete catalogue for the whole traversal, the header still states its own counts, and no search or catalogue request is issued |
-| Refresh progress reported separately | The refresh line states the replacement's loaded count, its authorized total and its approximate percentage while the catalogue's own line still states "Catalogue ready" with the previous "Last updated at" time; the bar reaches 100% only when the final cursor is consumed |
+| Refresh progress reported separately | The refresh line states the replacement's loaded count, its authorized total and its approximate percentage while the list itself states no progress of the catalogue in use; the bar reaches 100% only when the final cursor is consumed |
 | Successful swap | After traversal and the final authority check, properties added and changed in the database appear, and properties deleted or no longer readable by this person are gone from the list and local search; the swap re-reads no submitted whole-inventory search, whose own windows and cached pages stay until the person re-runs it |
-| Failed refresh | Stopping the network mid-refresh leaves the previous catalogue searchable with its unchanged "Last updated at", states the failure with the loaded count and offers Retry; the refresh line never reads as a completed load |
+| Failed refresh | Stopping the network mid-refresh leaves the previous catalogue searchable and unchanged, states the failure with the loaded count and offers Retry; the refresh line never reads as a completed load |
 | Retry after a transient failure | Retry continues the same traversal from its own cursor: the loaded count does not reset and the line says it is continuing |
 | Authorization failure | A `401` or `403` from a page, count or session check ends loading, clears both generations and the scoped cache, and follows the existing login/access-denied navigation; no old catalogue can be searched or resumed before access is re-established |
 | Overlapping loads | Pressing Refresh twice, or pressing it while a refresh is running, starts no second traversal |
