@@ -18,7 +18,8 @@
 -- (using (true)) and was ignored under conditions as simple as id > 0. The security barrier keeps
 -- an expression restriction above the scan, so indexing this text needs a stored normalised column
 -- instead, which is new durable state and not part of this change; the expression indexes were
--- dropped rather than left unused. See ticket #247.
+-- dropped rather than left unused. `scripts/area-text-index-evidence.mjs` reproduces the
+-- measurement in a scratch database and `docs/testing.md` records the run; see ticket #247.
 begin;
 
 -- Both sides of one level comparison go through this: lowercase, diacritics removed, one space

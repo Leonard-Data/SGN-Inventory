@@ -10,6 +10,19 @@ Python preparation tests validate source-sensitive unit conversions, datetime as
 
 Rental/locale tests also cover preferred language, activation, month generation, one-active-rental exclusivity, role/payment privacy, integer VND, payment idempotency, independent review, overpayment/refund guards and termination.
 
+### Area-filter text predicate and the refused expression index (ticket #247)
+
+The area filter matches an address level by its recorded unit id or, for the imported text-only stock, by that level's own recorded text normalised by `private.normalize_unit_text` in `supabase/migrations/20261022060000_inventory_area_text_match.sql`. The predicate pays one normalisation per recorded text per candidate address, and no expression index ships, because the planner refuses one for the read that actually runs. `node scripts/area-text-index-evidence.mjs` reproduces the measurement in embedded PostgreSQL 18.3 (PGlite 0.5.8); it builds the candidate immutable function and the three expression indexes in a scratch database only and changes no migration. The recorded run reads 18,801 properties and 18,801 text-only legacy addresses spread over the 63 legacy provinces, 298 of them stating Thành phố Hồ Chí Minh.
+
+- As the owner, the level equality used the index: `Bitmap Index Scan on evidence_province_text_idx ... Index Cond: (private.evidence_normalize_unit_text(province_text) = 'ho chi minh'::text)`, 298 rows, under 2 ms.
+- As the authenticated employee with the table's own row security, the same equality became `Seq Scan on property_addresses a ... Filter: ... (private.evidence_normalize_unit_text(province_text) = 'ho chi minh'::text)`, 18,801 rows scanned with 18,503 removed, over 400 ms.
+- The same split holds for the window predicate `stream_inventory` runs: as owner a `Hash Semi Join` whose address side is a `BitmapOr` of `addresses_area_idx` and `evidence_province_text_idx` (under 15 ms); as the authenticated employee a `Nested Loop` whose address side is a `Seq Scan` of all 18,801 addresses (over 400 ms).
+- The mechanism, on a 20,000-row probe: an expression index on `lower(label)` is used as `Index Scan using evidence_probe_lower_idx` under a policy that states no condition (`using (true)`, under 0.1 ms) and is ignored under a policy stating `id > 0` (`Seq Scan on evidence_probe`, about 4 ms) or the session-function policy this database uses (about 85 ms). The security barrier, not the function's volatility, keeps the expression restriction above the scan.
+- Timings are as recorded on the machine that ran it and vary between runs; the plan node each role gets does not.
+- Conclusion printed by the script: "with a policy that states a condition, PostgreSQL 18.3 keeps the expression restriction above the security barrier, so the text level is normalised per candidate address and the expression index cannot serve the read. The candidate indexes were therefore not shipped; making the text path fast needs persisted normalised text with its own index."
+
+The per-window cost is accepted in this ticket. The migration header records the same account for the next reader, and persisted normalised text with its own index is a separate follow-up.
+
 ### Executed canonical authentication design comparison (tickets #50–#52)
 
 - `npm run test:unit` now also runs `src/i18n/messages.test.ts` (VI/EN key parity, non-blank strings, canonical copy) and `src/features/employees/password-policy.test.ts` (four rules and their independent evaluation, the level↔verdict mapping, and the deliberately stricter nine-character case). Both pass.
