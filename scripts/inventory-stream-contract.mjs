@@ -182,6 +182,41 @@ export async function inventoryStreamContract({
     ],
   );
 
+  // Two imported-shaped addresses: free text only, no unit ids, and abbreviated the way a source
+  // sheet writes it. They carry no STRMFIX marker, so the reads above and below that state a query
+  // neither see them nor count them.
+  const textImported = id('b1');
+  const textNearMiss = id('b2');
+  const textNames = await db.query(
+    'select id,name_vi from public.admin_unit_versions where id = any($1::uuid[])',
+    [[legacyProvince, legacyDistrict.id, legacyWard.id]],
+  );
+  const unitName = (unitId) =>
+    textNames.rows.find((row) => row.id === unitId).name_vi;
+  const abbreviated = (name, prefix) =>
+    `${prefix} ${name.replace(/^(Thành phố|Tỉnh|Quận|Huyện|Thị xã|Thị trấn|Phường|Xã)\s+/u, '')}`;
+  await db.query(
+    `insert into public.properties(id,property_code,listing_mode,status,property_type,created_by,entry_on,entry_source)
+      values ($1,'SGN-TXT-01','sale','available','house',$2,'2025-02-02','legacy'),
+        ($3,'SGN-TXT-02','sale','available','house',$2,'2025-02-03','legacy')`,
+    [textImported, sales, textNearMiss],
+  );
+  await db.query(
+    `insert into public.property_addresses(property_id,format,address_text,province_text,district_text,commune_text)
+      values ($1,'legacy','TXT cu 01',$2,$3,$4),
+        ($5,'legacy','TXT cu 02',$6,$7,$8)`,
+    [
+      textImported,
+      abbreviated(unitName(legacyProvince), 'TP.'),
+      abbreviated(unitName(legacyDistrict.id), 'Q.'),
+      abbreviated(unitName(legacyWard.id), 'P.'),
+      textNearMiss,
+      `${abbreviated(unitName(legacyProvince), 'TP.')} cu`,
+      `${unitName(legacyDistrict.id)} cu`,
+      `${unitName(legacyWard.id)} cu`,
+    ],
+  );
+
   // The default stream is newest-created first with identity breaking ties; the chronology lists
   // the eligible statuses by entry date then identity with unknown dates placed last. Either way
   // one total order covers the whole unarchived filtered set.
@@ -540,39 +575,8 @@ export async function inventoryStreamContract({
     'an area level matches the recorded text of an imported legacy address',
     async () => {
       // The imported inventory records each old address as free text and no unit ids, so a level
-      // filter has to read that level's own text. These fixtures name the catalog units above the
-      // way the source sheets abbreviate them, and one states an extra word that is not the unit.
-      const names = await db.query(
-        'select id,name_vi from public.admin_unit_versions where id = any($1::uuid[])',
-        [[legacyProvince, legacyDistrict.id, legacyWard.id]],
-      );
-      const nameOf = (unitId) =>
-        names.rows.find((row) => row.id === unitId).name_vi;
-      const abbreviated = (name, prefix) =>
-        `${prefix} ${name.replace(/^(Thành phố|Tỉnh|Quận|Huyện|Thị xã|Thị trấn|Phường|Xã)\s+/u, '')}`;
-      const imported = id('ae');
-      const nearMiss = id('af');
-      await db.query(
-        `insert into public.properties(id,property_code,listing_mode,status,property_type,created_by,entry_on,entry_source)
-          values ($1,'SGN-TXT-01','sale','available','house',$2,'2025-02-02','legacy'),
-            ($3,'SGN-TXT-02','sale','available','house',$2,'2025-02-03','legacy')`,
-        [imported, sales, nearMiss],
-      );
-      await db.query(
-        `insert into public.property_addresses(property_id,format,address_text,province_text,district_text,commune_text)
-          values ($1,'legacy','TXT cu 01',$2,$3,$4),
-            ($5,'legacy','TXT cu 02',$6,$7,$8)`,
-        [
-          imported,
-          abbreviated(nameOf(legacyProvince), 'TP.'),
-          abbreviated(nameOf(legacyDistrict.id), 'Q.'),
-          abbreviated(nameOf(legacyWard.id), 'P.'),
-          nearMiss,
-          `${abbreviated(nameOf(legacyProvince), 'TP.')} cu`,
-          `${nameOf(legacyDistrict.id)} cu`,
-          `${nameOf(legacyWard.id)} cu`,
-        ],
-      );
+      // filter has to read that level's own text. These fixtures name the catalog units the way
+      // the source sheets abbreviate them, and one states an extra word that is not the unit.
       // Each stated level matches the text recorded for that same level, though the address records
       // no unit id at all.
       for (const level of [
@@ -582,12 +586,12 @@ export async function inventoryStreamContract({
       ]) {
         const result = await read({ ...level, query: '', limit: 200 });
         assert.ok(
-          result.rows.some((row) => row.id === imported),
+          result.rows.some((row) => row.id === textImported),
           JSON.stringify(level),
         );
         // Matching is equality after normalisation, so a text carrying another word is not the
         // unit and is not read as one.
-        assert.ok(!result.rows.some((row) => row.id === nearMiss));
+        assert.ok(!result.rows.some((row) => row.id === textNearMiss));
       }
       // A level's text is compared with that level alone: the ward recorded here is no province.
       const crossLevel = await read({
@@ -595,7 +599,7 @@ export async function inventoryStreamContract({
         query: '',
         limit: 200,
       });
-      assert.ok(!crossLevel.rows.some((row) => row.id === imported));
+      assert.ok(!crossLevel.rows.some((row) => row.id === textImported));
     },
   );
 

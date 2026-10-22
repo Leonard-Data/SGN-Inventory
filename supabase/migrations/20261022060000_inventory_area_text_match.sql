@@ -9,6 +9,16 @@
 -- Nothing else about the stream changes: the ordering, the offset windows, the matching total, the
 -- archived and eligible-status boundaries, the address-format and text predicates, the contact
 -- condition, the employee guard and the grants are as they were.
+-- The level predicate pays one normalisation per recorded text per candidate address, because an
+-- expression index cannot serve it under this table's row security. Measured on PostgreSQL 18.3
+-- over 18,801 properties and 18,801 text-only legacy addresses: with the three indexes built and
+-- ANALYZE run, the predicate's plan was a bitmap index scan on the expression index as the owner
+-- and a sequential scan as the authenticated employee with the policies in force; on a 20,000-row
+-- probe, the same lower() expression index was used only under a policy that states no condition
+-- (using (true)) and was ignored under conditions as simple as id > 0. The security barrier keeps
+-- an expression restriction above the scan, so indexing this text needs a stored normalised column
+-- instead, which is new durable state and not part of this change; the expression indexes were
+-- dropped rather than left unused. See ticket #247.
 begin;
 
 -- Both sides of one level comparison go through this: lowercase, diacritics removed, one space
@@ -42,9 +52,9 @@ declare row_limit integer; price_lo numeric:=coalesce(p_price_min,0); price_hi n
 begin
   -- The official name each stated level is also matched by, normalised once here rather than per
   -- address row.
-  province_name:=private.normalize_unit_text((select name_vi from public.admin_unit_versions where id=p_province_id));
-  district_name:=private.normalize_unit_text((select name_vi from public.admin_unit_versions where id=p_district_id));
-  commune_name:=private.normalize_unit_text((select name_vi from public.admin_unit_versions where id=p_commune_id));
+  province_name:=private.normalize_unit_text((select u.name_vi from public.admin_unit_versions u where u.id = p_province_id));
+  district_name:=private.normalize_unit_text((select u.name_vi from public.admin_unit_versions u where u.id = p_district_id));
+  commune_name:=private.normalize_unit_text((select u.name_vi from public.admin_unit_versions u where u.id = p_commune_id));
   -- The chronological order is the eligible-status, employee-only view; an absent `p_order` is
   -- the ordinary unarchived browse, which keeps its own unchanged RLS boundary.
   if p_order is not null then
