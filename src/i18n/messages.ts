@@ -78,6 +78,8 @@ const vi = {
   // The progressive load states no progress of its own: the rows paint from the catalogue the
   // browser holds, so a load that stopped says so beside its retry and nothing claims a count.
   catalogueLoadFailed: 'Không tải được danh mục.',
+  catalogueLoadStopped:
+    'Đã dừng tải danh mục; danh sách đang hiển thị các bất động sản đã tải.',
   catalogueMoreMatches: 'Có thể có thêm kết quả khi quá trình tải tiếp tục.',
   catalogueRefresh: 'Làm mới danh mục',
   catalogueRefreshKnown:
@@ -993,6 +995,8 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     // The progressive load states no progress of its own: the rows paint from the catalogue the
     // browser holds, so a load that stopped says so beside its retry and nothing claims a count.
     catalogueLoadFailed: 'The catalogue could not be loaded.',
+    catalogueLoadStopped:
+      'The catalogue stopped loading; the list shows the properties already loaded.',
     catalogueMoreMatches: 'More matches may appear as loading continues.',
     catalogueRefresh: 'Refresh catalogue',
     catalogueRefreshKnown:

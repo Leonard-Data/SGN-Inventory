@@ -974,7 +974,9 @@ export function Inventory({
               {catalogueFailed ? (
                 <>
                   <p className="catalogue-progress-text">
-                    {text.catalogueLoadFailed}
+                    {catalogue.progress.loadedCount > 0
+                      ? text.catalogueLoadStopped
+                      : text.catalogueLoadFailed}
                   </p>
                   <button
                     className="btn btn-ghost btn-sm"
