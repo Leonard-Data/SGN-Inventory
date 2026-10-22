@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { Locale } from '@/i18n/messages';
 import { label, messages } from '@/i18n/messages';
 import { formatDecimal, formatVnd } from './format';
+import { PriceInput } from './price-input';
 import { api, RequestError } from '@/features/employees/api';
 import { contactName } from '@/features/contacts/directory';
 import { ContactPicker } from '@/features/property-maintenance/contact-picker';
@@ -258,12 +259,6 @@ export function SearchIsland({
       return range === 'from' ? text.salePriceFrom : text.salePriceTo;
     return range === 'from' ? text.priceRangeFrom : text.priceRangeTo;
   };
-  const priceUnits = (selectedMode: string | null) =>
-    selectedMode === 'rent'
-      ? [text.priceUnitMonthly]
-      : selectedMode
-        ? [text.priceUnitVnd]
-        : [text.priceUnitVnd, text.priceUnitMonthly];
   // Whether this run reads the database, judged by the same function the list uses on the address it
   // is handed: a run carries the address's submitted query and the draft's own criteria, so the
   // action and its hint can never promise a local filter the run does not answer locally. Asking
@@ -389,6 +384,32 @@ export function SearchIsland({
       </div>
     );
   };
+  // A price bound is typed in a unit and submitted as whole VND, through the same control the
+  // record's own price fields use, so a search typed as 16 tỷ is the amount a record typed as
+  // 16 tỷ holds. The bound a rental search states is a monthly rent, which opens on triệu.
+  const priceBound = (
+    name: 'priceMin' | 'priceMax',
+    heading: string,
+    selectedMode: string | null,
+  ) => (
+    <div
+      className={invalid ? 'field is-invalid' : 'field'}
+      key={`${name}=${filters[name] ?? ''}`}
+    >
+      <label className="field-label" htmlFor={'filter-' + name}>
+        {heading}
+      </label>
+      <PriceInput
+        id={'filter-' + name}
+        name={name}
+        value={filters[name]}
+        locale={locale}
+        unit={selectedMode === 'rent' ? 'trieu' : 'ty'}
+        kind={selectedMode === 'rent' ? 'rent' : 'sale'}
+        invalid={invalid}
+      />
+    </div>
+  );
   // A field is keyed by its applied value so a soft navigation that changes the address
   // rebuilds the control with the filter set the address now states.
   const bound = (
@@ -589,12 +610,8 @@ export function SearchIsland({
               </div>
               <div className="field-group">
                 <div className="form-grid">
-                  {bound(
-                    'priceMin',
-                    priceLabel(mode, 'from'),
-                    priceUnits(mode),
-                  )}
-                  {bound('priceMax', priceLabel(mode, 'to'), priceUnits(mode))}
+                  {priceBound('priceMin', priceLabel(mode, 'from'), mode)}
+                  {priceBound('priceMax', priceLabel(mode, 'to'), mode)}
                 </div>
                 <p className="field-hint">{text.priceFilterHint}</p>
               </div>

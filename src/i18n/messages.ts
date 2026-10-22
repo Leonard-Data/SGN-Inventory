@@ -157,7 +157,7 @@ const vi = {
   // Matches nothing, so nothing is committed: the picker states why.
   comboboxNoMatch: 'Không có đơn vị chính thức nào khớp với nội dung đã gõ.',
   priceFilterHint:
-    'Không chọn loại giao dịch: mỗi hồ sơ dùng giá chào riêng — hồ sơ cho thuê dùng giá thuê tháng (VND/tháng), còn hồ sơ bán và bán và cho thuê dùng giá bán (nguyên VND). Chọn Bán hoặc Bán và cho thuê để chỉ so sánh giá bán; chọn Cho thuê để chỉ so sánh giá thuê tháng.',
+    'Giá nhập theo đơn vị tỷ, triệu hoặc VND và được so sánh bằng VND nguyên. Không chọn loại giao dịch: mỗi hồ sơ dùng giá chào riêng — hồ sơ cho thuê dùng giá thuê tháng, còn hồ sơ bán và bán và cho thuê dùng giá bán. Chọn Bán hoặc Bán và cho thuê để chỉ so sánh giá bán; chọn Cho thuê để chỉ so sánh giá thuê tháng.',
   areaFilterHint:
     'Diện tích khớp khi diện tích đất hoặc diện tích sàn nằm trong khoảng.',
   province: 'Tỉnh / thành phố',
@@ -169,6 +169,12 @@ const vi = {
   contactFilter: 'Người liên hệ',
   contactFilterHint:
     'Chỉ gồm người liên hệ bạn được phép đọc. Bộ lọc này kết hợp với các điều kiện khác.',
+  // The price field: the unit the amount is typed in, and the whole-VND amount it will save.
+  priceUnit: 'Đơn vị giá',
+  priceSaves: 'Sẽ lưu:',
+  priceInvalid:
+    'Số tiền không hợp lệ. Chỉ dùng chữ số và tối đa một dấu phẩy hoặc dấu chấm cho phần thập phân mà đơn vị đã chọn có.',
+  priceConfirm: 'Số tiền này có vẻ bất thường. Lưu đúng số tiền đang hiển thị?',
   priceUnitVnd: 'VND',
   priceUnitMonthly: 'VND/tháng',
   priceRangeFrom: 'Giá từ',
@@ -1065,7 +1071,7 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
       'Only a property recording an address in the selected format matches, and a typed search is compared with that format’s address: the legacy address by default, the current one when you choose it. Clear the format filter to search both formats; a property with no address in the selected format does not appear.',
     comboboxNoMatch: 'No official unit matches what you typed.',
     priceFilterHint:
-      'With no listing mode selected, each record uses its own asking price: rental records use monthly asking rent (VND/month), while sale and sale-and-rent records use asking sale price in whole VND. Select Sale or Sale and rent to compare asking sale prices only; select Rent to compare monthly asking rents only.',
+      'Prices take a tỷ, triệu or VND unit and are compared as whole VND. With no listing mode selected, each record uses its own asking price: rental records use monthly asking rent, while sale and sale-and-rent records use asking sale price. Select Sale or Sale and rent to compare asking sale prices only; select Rent to compare monthly asking rents only.',
     areaFilterHint:
       'Area matches when the land area or the floor area is inside the range.',
     province: 'Province / city',
@@ -1077,6 +1083,11 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     contactFilter: 'Contact',
     contactFilterHint:
       'Only contacts you may read. This filter combines with the other conditions.',
+    priceUnit: 'Price unit',
+    priceSaves: 'Saves:',
+    priceInvalid:
+      'Invalid amount. Use digits and at most one comma or dot for the decimal places the selected unit holds.',
+    priceConfirm: 'This amount looks unusual. Save exactly the amount shown?',
     priceUnitVnd: 'VND',
     priceUnitMonthly: 'VND/month',
     priceRangeFrom: 'Price from',

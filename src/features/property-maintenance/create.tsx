@@ -2,6 +2,7 @@
 import { useId, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, RequestError } from '@/features/employees/api';
+import { confirmsPrice } from '@/features/properties/price-input';
 import { applyServerSummary } from '@/features/properties/catalogue-changes';
 import { useCatalogueChange } from '@/features/properties/catalogue-provider';
 import type { PropertySummary } from '@/features/properties/types';
@@ -39,7 +40,7 @@ export function CreateProperty({
     contactPhoneId = useId();
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy) return;
+    if (busy || !confirmsPrice(event.currentTarget, locale)) return;
     const form = new FormData(event.currentTarget);
     // The owner's contact details are optional, but half a pair is not a contact: saying so here
     // keeps the record from being created for details that cannot be recorded.
