@@ -297,9 +297,7 @@ export function Inventory({
     // A catalogue result names no endpoint at all, so the browser answers from the rows it holds
     // and no search-data request is made until the person runs an advanced search.
     source:
-      scope !== null && parsedView.ok && mode === 'advanced'
-        ? endpoint
-        : null,
+      scope !== null && parsedView.ok && mode === 'advanced' ? endpoint : null,
     scope: scope ?? 'no-session',
     onDenied: denyFiles,
   });

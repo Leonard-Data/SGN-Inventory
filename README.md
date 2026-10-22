@@ -71,9 +71,10 @@ server's own answer, so the change itself needs no Refresh
 ([ADR 0003](docs/adr/0003-browser-property-catalogue-and-local-address-search.md),
 [ADR 0004](docs/adr/0004-committed-changes-and-the-browser-catalogue.md)).
 
-Opening a property from the list and coming back restores the list the person left — the text in
-the box, the filters, the ordering, the view, the position in the stream — without reading the
-catalogue again; a reload of the application starts over
+Opening a property from the list and coming back paints the list the person left straight away — the
+text in the box, the filters, the ordering, the view, the position in the stream — from the rows the
+browser already holds, instead of a loading skeleton, and without reading the catalogue again; a
+reload of the application starts over
 ([ADR 0005](docs/adr/0005-inventory-list-state-across-a-property-visit.md)).
 
 ### Review and decision queues
