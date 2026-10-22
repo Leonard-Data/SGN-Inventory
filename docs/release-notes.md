@@ -20,8 +20,8 @@ what was *verified* is in [testing.md](testing.md).
 The properties list now opens on the record's own latest change instead of its creation. The order
 is the change time then the property identity — `updated_at desc, id desc` — where the change time
 is what `private.guard_property()` stamps on a property write and what
-`private.record_business_change()` moves on the parent row when an address, mapping, contact or
-vendor link changes, and the identity is the tie-break that keeps one total order over the whole
+`private.record_business_change()` moves on the parent row when an address, mapping or contact
+changes, and the identity is the tie-break that keeps one total order over the whole
 filtered set. A property somebody edited a minute ago leads the list however long ago it was
 created, so the imported stock — all created inside one import run — no longer buries every later
 correction under its own import position. The entry-date chronology is unchanged and is still chosen
