@@ -36,7 +36,8 @@ export const TableChunk = memo(function TableChunk({
   resultLocation: string;
   // The format the search reads through, which decides the address each row states.
   addressFormat: string | null;
-  // The stored address format each property matched through, while a local search is filtering.
+  // The stored address format each property matched through, while a local search is filtering. It
+  // decides the address the row states, and is named beside it when the search states no format.
   matchedFormats: ReadonlyMap<string, string>;
   onOpen: (record: PropertySummary, opener: HTMLElement | null) => void;
   onMeasured: (index: number, height: number) => void;
@@ -69,12 +70,12 @@ export const TableChunk = memo(function TableChunk({
   return (
     <tbody ref={element}>
       {rows.map((record) => {
-        const row = propertyTableRow(record, locale, now, addressFormat);
+        const matchedFormat = matchedFormats.get(record.id) ?? null;
+        const address = listedAddress(record, addressFormat, matchedFormat);
+        const row = propertyTableRow(record, locale, now, address);
         // The facts the row and the quick view both state come from one projection.
         const facts = recordFacts(record, locale);
         const price = rowPrice(record);
-        const address = listedAddress(record, addressFormat);
-        const matchedFormat = matchedFormats.get(record.id);
         const modified = row.cells.find(
           (cell) => cell.column === 'modifiedTime',
         )!;
@@ -108,7 +109,7 @@ export const TableChunk = memo(function TableChunk({
                   [address?.commune, address?.district]
                     .filter(Boolean)
                     .join(' · '),
-                  matchedFormat && matchedFormat !== address?.format
+                  matchedFormat && matchedFormat !== addressFormat
                     ? label(locale, matchedFormat)
                     : '',
                 ]

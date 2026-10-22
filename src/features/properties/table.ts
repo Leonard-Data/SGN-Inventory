@@ -164,31 +164,32 @@ export function rowPrice(
       : null;
 }
 
-// The recorded address a listed property states: the address in the format the search reads
-// through, so a row listed under a format shows that address rather than whichever recorded
-// variant happens to be primary. A search that states no format, or a record with no address in
-// the named format, states the recorded primary address.
+// The recorded address a listed property states: the variant the search matched it through, else the
+// address in the format the search reads through, else the recorded primary address. The row's text,
+// its parts and any format it is listed under therefore always describe one recorded address.
 export function listedAddress(
   record: PropertySummary,
   addressFormat: string | null = null,
+  matchedFormat: string | null = null,
 ): AddressSummary | undefined {
+  const format = matchedFormat || addressFormat;
   return (
-    record.addresses.find((address) => address.format === addressFormat) ??
+    record.addresses.find((address) => address.format === format) ??
     record.addresses[0]
   );
 }
 
 // One row of the table: every column, in the table's own order, with the value it holds or the
 // missing-value marker. `now` is the browser's clock for the modified phrase, and null means the
-// page has not hydrated yet: the cell then states the recorded timestamp itself.
+// page has not hydrated yet: the cell then states the recorded timestamp itself. `address` is the
+// recorded variant the row states, which is the one `listedAddress` chooses when it is not stated.
 export function propertyTableRow(
   record: PropertySummary,
   locale: Locale,
   now: number | null = null,
-  addressFormat: string | null = null,
+  address: AddressSummary | undefined = listedAddress(record),
 ): PropertyTableRow {
   const text = messages[locale];
-  const address = listedAddress(record, addressFormat) ?? null;
   const price = rowPrice(record);
   const area = totalAreaM2(record);
   const modified = relativeTime(record.updatedAt, locale, now);

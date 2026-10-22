@@ -11,7 +11,6 @@ import { ContactPicker } from '@/features/property-maintenance/contact-picker';
 import { UnitCombobox } from '@/features/property-maintenance/unit-combobox';
 import { type UnitOption } from '@/features/property-maintenance/units';
 import {
-  DEFAULT_ADDRESS_FORMAT,
   INVENTORY_ADDRESS_FORMAT_ANY,
   INVENTORY_ADDRESS_FORMATS,
   INVENTORY_FILTER_KEYS,
@@ -90,6 +89,9 @@ export function SearchIsland({
   const [province, setProvince] = useState(appliedProvince);
   const [ward, setWard] = useState(appliedWard);
   const [contact, setContact] = useState(appliedContact);
+  // The format the panel will apply: one of the two formats, or the cleared state it inherited from
+  // the address, which the two-value control cannot display but a submission keeps.
+  const [format, setFormat] = useState(appliedFormat);
   const [createdBy, setCreatedBy] = useState(appliedCreatedBy);
   const [contactLabel, setContactLabel] = useState<string | null>(null);
   const [provinces, setProvinces] = useState<AdminUnit[]>([]);
@@ -106,6 +108,7 @@ export function SearchIsland({
     setWard(appliedWard);
     setContact(appliedContact);
     setCreatedBy(appliedCreatedBy);
+    setFormat(appliedFormat);
   }
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -125,7 +128,9 @@ export function SearchIsland({
     setWard(appliedWard);
     setContact(appliedContact);
     setCreatedBy(appliedCreatedBy);
+    setFormat(appliedFormat);
   }, [
+    appliedFormat,
     appliedMode,
     appliedOrder,
     appliedProvince,
@@ -522,10 +527,7 @@ export function SearchIsland({
               </div>
               {/* The panel offers the two formats a search is matched through; the cleared state
                   that searches both is reached from the format chip above, not from here. */}
-              <div
-                className="field-group"
-                key={`addressFormat=${appliedFormat}`}
-              >
+              <div className="field-group">
                 <div className="form-grid">
                   <div className="field">
                     <label
@@ -537,19 +539,18 @@ export function SearchIsland({
                     <select
                       id="filter-addressFormat"
                       className="select"
-                      name="addressFormat"
-                      defaultValue={
-                        appliedFormat === INVENTORY_ADDRESS_FORMAT_ANY
-                          ? DEFAULT_ADDRESS_FORMAT
-                          : appliedFormat
+                      value={
+                        format === INVENTORY_ADDRESS_FORMAT_ANY ? '' : format
                       }
+                      onChange={(event) => setFormat(event.currentTarget.value)}
                     >
-                      {INVENTORY_ADDRESS_FORMATS.map((format) => (
-                        <option key={format} value={format}>
-                          {label(locale, format)}
+                      {INVENTORY_ADDRESS_FORMATS.map((value) => (
+                        <option key={value} value={value}>
+                          {label(locale, value)}
                         </option>
                       ))}
                     </select>
+                    <input type="hidden" name="addressFormat" value={format} />
                   </div>
                 </div>
                 <p className="field-hint">{text.addressFormatHint}</p>

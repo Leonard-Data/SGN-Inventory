@@ -331,6 +331,10 @@ export function Inventory({
   } | null>(null);
   const currentOpened =
     sessionKey !== null && opened?.scope === sessionKey ? opened : null;
+  // The quick view states the address the row it was opened from states.
+  const openedAddressFormat = currentOpened
+    ? matchedFormats.get(currentOpened.record.id) || addressFormat
+    : addressFormat;
   const numberFormat = useMemo(
     () => new Intl.NumberFormat(locale === 'vi' ? 'vi-VN' : 'en-GB'),
     [locale],
@@ -1320,7 +1324,7 @@ export function Inventory({
         open={currentOpened !== null}
         resultLocation={resultLocation}
         showEntry={showEntry}
-        addressFormat={addressFormat}
+        addressFormat={openedAddressFormat}
         opener={currentOpened?.opener ?? null}
         onClose={closeDrawer}
         onDenied={denyFiles}
