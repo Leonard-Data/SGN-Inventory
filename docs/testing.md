@@ -34,7 +34,7 @@ The run loads 18,801 properties created inside one import run (2026-09-30 17:00 
 - The whole `stream_inventory` first-window call costs the same before and after at this size, roughly 130–180 ms between runs and within the run-to-run spread: the read states its matching total beside the window and materialises the filtered set once for both, so that one counting pass - unchanged by this ticket - dominates it. The index is what the catalogue's page read (the initial paint) uses; inside the function the window is sliced from the set it has already materialised.
 - Timings are as recorded on the machine that ran it and vary between runs; the plan nodes do not.
 
-The stream contract (`scripts/inventory-stream-contract.mjs`) pins the rest: the default order follows a record's own change and not its creation, a shared change timestamp is decided by identity so a window boundary neither repeats nor drops a row, an edit moves a record to the top of the browse while `sort=oldest`/`sort=newest` keep their recorded entry-date order, and the index the order reads through exists.
+The stream contract (`scripts/inventory-stream-contract.mjs`) pins the rest: the default order follows a record's own change and not its creation, a shared change timestamp is decided by identity so a window boundary neither repeats nor drops a row, an edit moves a record to the top of the browse while `sort=oldest`/`sort=newest` keep their recorded entry-date order, and the index backing that order exists.
 
 ### Executed canonical authentication design comparison (tickets #50–#52)
 

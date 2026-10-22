@@ -986,7 +986,7 @@ export async function inventoryStreamContract({
   );
 
   await check(
-    'the change-time order is indexed, so a first window is not a whole-set sort',
+    'the change-time order is indexed, so the catalogue page that states it is an index walk',
     async () => {
       const index = (
         await db.query(
