@@ -5,6 +5,7 @@ import {
   catalogUnitsMatch,
   filterParams,
   filterRpcArgs,
+  INVENTORY_ACCESS_TYPES,
   INVENTORY_ADDRESS_FORMAT_ANY,
   INVENTORY_ADDRESS_FORMATS,
   noInventoryFilters,
@@ -24,6 +25,7 @@ test('a complete filter set is applied exactly as the address stated it', () => 
     status: 'available',
     mode: 'rent',
     type: 'house',
+    accessType: 'car_alley',
     addressFormat: 'current',
     priceMin: '5000000',
     priceMax: '25000000',
@@ -39,6 +41,7 @@ test('a complete filter set is applied exactly as the address stated it', () => 
     status: 'available',
     mode: 'rent',
     type: 'house',
+    accessType: 'car_alley',
     addressFormat: 'current',
     priceMin: '5000000',
     priceMax: '25000000',
@@ -148,6 +151,41 @@ test('unknown status, mode or type values are refused', () => {
     { type: 'shophouse' },
   ])
     assert.equal(parse(values).ok, false, JSON.stringify(values));
+});
+
+test('an access type is one of the five recorded states, and nothing else', () => {
+  assert.deepEqual(
+    [...INVENTORY_ACCESS_TYPES],
+    [
+      'unknown',
+      'street_front',
+      'car_alley',
+      'motorbike_alley',
+      'three_wheeler_alley',
+    ],
+  );
+  // The "not known" state is a recorded value to filter by, not the cleared filter.
+  for (const value of INVENTORY_ACCESS_TYPES) {
+    const result = parse({ accessType: value });
+    assert.ok(result.ok, value);
+    assert.equal(result.filters.accessType, value);
+    assert.equal(result.filters.status, null);
+  }
+  const carAlley = parse({ accessType: 'car_alley' });
+  assert.ok(carAlley.ok);
+  assert.deepEqual(filterParams(carAlley.filters), {
+    addressFormat: 'legacy',
+    accessType: 'car_alley',
+  });
+  assert.deepEqual(filterRpcArgs(carAlley.filters), {
+    p_address_format: 'legacy',
+    p_access_type: 'car_alley',
+  });
+  // A re-spelling, an unknown word or the cleared state is refused rather than applied as a filter
+  // that matches nothing; a blank value is simply no access condition.
+  for (const value of ['car', 'Car_Alley', 'CAR_ALLEY', 'street', 'any'])
+    assert.equal(parse({ accessType: value }).ok, false, value);
+  assert.equal(parse({ accessType: '' }).ok, true);
 });
 
 test('a price bound is whole VND across the database range', () => {

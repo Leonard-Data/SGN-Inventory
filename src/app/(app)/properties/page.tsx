@@ -14,6 +14,7 @@ export default async function Properties({
     status?: string | string[];
     mode?: string | string[];
     type?: string | string[];
+    accessType?: string | string[];
     priceMin?: string | string[];
     priceMax?: string | string[];
     areaMin?: string | string[];

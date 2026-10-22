@@ -15,6 +15,7 @@ import {
   type UnitOption,
 } from '@/features/property-maintenance/units';
 import {
+  INVENTORY_ACCESS_TYPES,
   INVENTORY_ADDRESS_FORMAT_ANY,
   INVENTORY_ADDRESS_FORMATS,
   INVENTORY_FILTER_KEYS,
@@ -395,6 +396,12 @@ export function SearchIsland({
       key: 'type',
       label: `${text.propertyType}: ${label(locale, filters.type)}`,
     });
+  // The recorded access state, named with the same words the record screen states for it.
+  if (filters.accessType)
+    applied.push({
+      key: 'accessType',
+      label: `${text.accessType}: ${label(locale, filters.accessType)}`,
+    });
   // The creator selection is its own condition, so the chip states it directly rather than as a
   // heading with the same words repeated after it.
   if (filters.createdBy)
@@ -655,6 +662,7 @@ export function SearchIsland({
                 {select('status', text.status, INVENTORY_STATUSES, true)}
                 {select('mode', text.listingMode, INVENTORY_LISTING_MODES)}
                 {select('type', text.propertyType, INVENTORY_PROPERTY_TYPES)}
+                {select('accessType', text.accessType, INVENTORY_ACCESS_TYPES)}
               </div>
               {/* The panel offers the two formats a search is matched through; the cleared state
                   that searches both is reached from the format chip above, not from here. */}

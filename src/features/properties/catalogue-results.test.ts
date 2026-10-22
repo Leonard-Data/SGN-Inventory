@@ -72,6 +72,7 @@ test('every filter the catalogue carries a field for is offered locally, and no 
     status: 'available',
     mode: 'rent',
     type: 'house',
+    accessType: 'street_front',
     priceMin: '1000000000',
     priceMax: '9000000000',
     areaMin: '20',
@@ -103,6 +104,10 @@ test('a supported filter, a blank search and the plain browse are answered by th
     { query: '   ', filters: noInventoryFilters },
     { query: '', filters: { ...noInventoryFilters, status: 'available' } },
     { query: '', filters: { ...noInventoryFilters, areaMin: '20' } },
+    {
+      query: '',
+      filters: { ...noInventoryFilters, accessType: 'motorbike_alley' },
+    },
     {
       query: '',
       filters: { ...noInventoryFilters, priceMin: '1000000000', mode: 'rent' },
@@ -248,6 +253,15 @@ test('a local filter is applied to the recorded fields exactly as the database r
   assert.equal(kept({ mode: 'rent' }, sale), false);
   assert.equal(kept({ status: 'available' }, unclassified), false);
   assert.equal(kept({ type: 'house' }, unclassified), false);
+
+  // The access type is the recorded state itself: the value recorded as "not known" is a state to
+  // filter by, not the cleared filter, and a record with no recorded state never matches one.
+  const streetFront = property('street-front', { accessType: 'street_front' });
+  assert.equal(kept({ accessType: 'street_front' }, streetFront), true);
+  assert.equal(kept({ accessType: 'car_alley' }, streetFront), false);
+  assert.equal(kept({ accessType: 'unknown' }, streetFront), false);
+  assert.equal(kept({ accessType: 'unknown' }, unclassified), false);
+  assert.equal(kept({}, unclassified), true);
 
   // A price bound follows the stated mode, or the record's own listing mode when none is stated.
   assert.equal(
