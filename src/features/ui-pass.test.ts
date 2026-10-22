@@ -228,3 +228,31 @@ test('the create screen picks its province and commune by typing, not by scrolli
   assert.match(combobox, /comboboxKey\(/);
   assert.match(combobox, /ref=\{hidden\}/);
 });
+
+test('contact choices read as a list of people, never as raw identifiers', () => {
+  const picker = source('./property-maintenance/contact-picker.tsx');
+  const css = source('../app/globals.css');
+  // The identifier is the submitted value only; a chooser of five people reads by name.
+  assert.match(picker, /onClick=\{\(\) => onSelected\(contact\.id\)\}/);
+  assert.doesNotMatch(picker, /<small>\{contact\.id\}<\/small>/);
+  // The row leads with the name and carries the type with its recorded number beneath it.
+  assert.match(picker, /\{contact\.displayName\}\s*<small>/);
+  assert.match(
+    picker,
+    /optionLabel\(locale, contact\.contactType\)\} ·\{' '\}/,
+  );
+  assert.match(picker, /contact\.rawPhoneText \|\|/);
+  // The chosen-contact summary still names the person.
+  assert.match(picker, /selectedName \?\?/);
+  // Keyboard, selection state, source text and paging are unchanged.
+  assert.match(picker, /event\.key !== 'Enter'/);
+  assert.match(picker, /aria-pressed=\{selected === contact\.id\}/);
+  assert.match(picker, /translate="no"/);
+  assert.match(picker, /search\(page\.nextCursor!\)/);
+  // Rows are full-width and wrap inside the narrow property forms.
+  assert.match(
+    css,
+    /\.contact-choices > li > \.btn \{[^}]*width: 100%;[^}]*white-space: normal;/,
+  );
+  assert.match(css, /\.contact-choices small \{[^}]*color: var\(--muted\);/);
+});
