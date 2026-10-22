@@ -227,6 +227,6 @@ await timeRead(
 await as('owner');
 say('');
 say(
-  'conclusion: the shipped index is the node the change-ordered base-table window reads through, so that window and the catalogue page that keeps its order are index walks, while a creation-ordered window is a scan with a top-N sort and the function\'s own window is sliced from the set it materialises for the count.',
+  "conclusion: the shipped index is the node the change-ordered base-table window reads through, so that window and the catalogue page that keeps its order are index walks, while a creation-ordered window is a scan with a top-N sort and the function's own window is sliced from the set it materialises for the count.",
 );
 await db.close();

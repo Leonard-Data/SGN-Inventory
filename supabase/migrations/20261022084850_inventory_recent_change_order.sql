@@ -3,9 +3,9 @@
 -- edited a minute ago sat at the bottom of the list beside the row it was created next to.
 -- The default browse now reads in the record's own modification order - `properties.updated_at`,
 -- which `property_guard` sets to `now()` on every update of a property row, and which
--- `private.record_business_change()` moves on the parent row when an address or mapping changes -
--- and keeps the property identity as the tie-break, so one total order still covers the whole
--- filtered set and a window boundary can neither drop nor repeat a row.
+-- `private.record_business_change()` moves on the parent row when an address, mapping or contact
+-- changes - and keeps the property identity as the tie-break, so one total order still covers the
+-- whole filtered set and a window boundary can neither drop nor repeat a row.
 -- Nothing else about the read changes: the eligible-status chronology still orders by the recorded
 -- entry date with unknown dates last (`p_order` = `oldest`/`newest`), the filters, the matching
 -- total, the archived boundary, the employee guard and the grants are as they were, and no record
