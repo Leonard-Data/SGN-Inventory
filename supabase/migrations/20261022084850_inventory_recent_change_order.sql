@@ -12,12 +12,14 @@
 -- becomes eligible or ineligible.
 begin;
 
--- The order the ordinary browse slices: one partial index on the modification time and the
--- identity, in the direction the read states, over the rows the read may reach, so the first
--- window is an index walk instead of a top-N sort of the whole filtered set. The predicate is the
--- one both readers already state - `stream_inventory`'s `p.archived_at is null` and the
--- catalogue's own `archived_at is null` filter - so it is provable and the index is used
--- (measurement in `docs/testing.md`).
+-- The order the ordinary browse states: one partial index on the modification time and the
+-- identity, in the direction the read states, over the rows the read may reach. It serves the
+-- catalogue's page read and an unfiltered base-table window as an index walk instead of a top-N
+-- sort of the whole set. `stream_inventory` slices its window from the filtered set it has already
+-- materialised for the matching count, so the index does not order the function's own window and
+-- that first-window cost is unchanged at this size. The predicate is the one both readers already
+-- state - `stream_inventory`'s `p.archived_at is null` and the catalogue's own `archived_at is
+-- null` filter - so it is provable (measurement in `docs/testing.md`).
 create index properties_recent_change_idx on public.properties (updated_at desc, id desc)
   where archived_at is null;
 

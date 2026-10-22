@@ -226,6 +226,6 @@ await timeRead(
 await as('owner');
 say('');
 say(
-  'conclusion: the shipped index is the node the first window reads through, and it serves both orderings.',
+  'conclusion: the shipped index is the node the change-ordered base-table window reads through, and it serves both orderings; the function\'s own window is sliced from the set it materialises for the count.',
 );
 await db.close();
