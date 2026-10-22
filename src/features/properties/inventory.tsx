@@ -483,13 +483,16 @@ export function Inventory({
     rows: null,
     attempted: false,
   });
-  // A new column count or a new result set relabels every chunk, so old measurements describe
+  // A new column count, result set or read scope relabels every chunk, so old measurements describe
   // rows the chunk no longer holds and are dropped; the mounted chunks measure themselves again.
+  // The scope, not this surface's own session key: the rows painted from the held catalogue are read
+  // under the same scope key, and the answer that confirms it must not throw away the layout the
+  // person is already looking at.
   useEffect(() => {
     measuredRef.current = new Map();
     // eslint-disable-next-line react-hooks/set-state-in-effect -- the chunk layout changed, so previous measurements describe different rows
     setMeasured(NO_MEASURED);
-  }, [chunkRows, endpoint, sessionKey]);
+  }, [chunkRows, endpoint, scope]);
   const heights = useMemo(
     () => streamChunkHeights(measured, chunkCount),
     [measured, chunkCount],
