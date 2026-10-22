@@ -30,7 +30,12 @@ export async function inventoryStreamContract({
   const base = Date.parse('2026-09-01T00:00:00.000Z');
   // The access states cycle over the dated rows, so the access filter has several rows of each
   // state to keep and several to drop.
-  const ACCESS_CYCLE = ['street_front', 'car_alley', 'motorbike_alley'];
+  const ACCESS_CYCLE = [
+    'street_front',
+    'car_alley',
+    'motorbike_alley',
+    'three_wheeler_alley',
+  ];
   const dated = [];
   for (let index = 0; index < 24; index++)
     dated.push({
@@ -580,6 +585,7 @@ export async function inventoryStreamContract({
         'street_front',
         'car_alley',
         'motorbike_alley',
+        'three_wheeler_alley',
         'unknown',
       ]) {
         const kept = await read({ accessType: value, limit: 100 });
