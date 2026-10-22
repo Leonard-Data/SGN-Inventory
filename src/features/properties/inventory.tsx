@@ -13,7 +13,7 @@ import {
 import Link from 'next/link';
 import { messages, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
-import { renderedSession } from '@/features/employees/protected-load';
+import { sessionScope } from '@/features/employees/protected-load';
 import type { EmployeeSession } from '@/features/employees/types';
 import { SkeletonCards } from '@/features/skeleton';
 import { CardChunk } from './property-cards';
@@ -37,9 +37,9 @@ import {
 import type { CatalogueMatch } from './address-index';
 import { useListStateCarrier } from './list-state-provider';
 import {
-  paintsHeldRows,
   positionReady,
   readListState,
+  readScope,
   writeListState,
 } from './list-state';
 import {
@@ -219,7 +219,8 @@ export function Inventory({
   });
   const endpoint = searchEndpoint({ query: initialQuery, sort, filters });
   // The session is this surface's own protection: the shell reads it, and the stream below reads
-  // nothing until it has answered.
+  // nothing under any scope but the one in force - this surface's own once it has answered, and the
+  // catalogue's until then.
   const {
     employee,
     data: session,
@@ -250,22 +251,29 @@ export function Inventory({
     () => restored?.edited ?? false,
   );
   const catalogue = useCatalogue(session);
-  // The rows the browser already holds paint on arrival: a return to the list shows the catalogue
-  // the provider above the route still holds, instead of putting a skeleton over rows that are in
-  // memory while this surface re-confirms the authority the catalogue was read under. Nothing is
-  // shown before the first answer, and a read that failed states its own error.
-  const showsList =
-    (employee !== null && !busy) ||
-    paintsHeldRows({
-      held: catalogue.scope !== null,
-      failed: sessionError !== null,
-    });
   // The authorization scope: the employee, their role and the server-maintained access revision.
   // A replacement catalogue is not a new authority, so it neither reopens a submitted search nor
   // closes the quick view of a record that is still readable.
-  const sessionKey = session
-    ? `${renderedSession(session.employee)}:${session.accessRevision}`
-    : null;
+  const sessionKey = session ? sessionScope(session) : null;
+  // The scope key the catalogue above the route was authorized under, which is where the rows the
+  // browser already holds were cached.
+  const heldScope = catalogue.scope ? sessionScope(catalogue.scope) : null;
+  // The scope this surface reads and paints under: its own answered session, or the catalogue's own
+  // scope while that read is still in flight. Both kinds of result set paint on arrival that way -
+  // the catalogue from the index the browser holds, an advanced search from the windows cached under
+  // this key - and the read that answers still governs: a session for another scope empties the
+  // catalogue, this falls back to that session's own key, and the windows read under the former one
+  // are dropped with it rather than left on screen.
+  const scope = readScope({
+    own: sessionKey,
+    held: heldScope,
+    failed: sessionError !== null,
+  });
+  // The rows the browser already holds paint on arrival, instead of a skeleton over rows that are in
+  // memory while this surface re-confirms the authority they were read under. Nothing is shown
+  // before the first answer, and a read that failed states its own error.
+  const showsList =
+    (employee !== null && !busy) || (sessionKey === null && scope !== null);
   // Which result set the address describes: the filters, the ordering and the paging the loaded
   // catalogue can answer are computed in the browser, and a criterion the catalogue has no field
   // for is an explicit whole-inventory search (issue #194). The split is `catalogue-results.ts`,
@@ -283,8 +291,11 @@ export function Inventory({
   } = useInventoryStream({
     // A catalogue result names no endpoint at all, so the browser answers from the rows it holds
     // and no search-data request is made until the person runs an advanced search.
-    source: employee && parsedView.ok && mode === 'advanced' ? endpoint : null,
-    scope: sessionKey ?? 'no-session',
+    source:
+      scope !== null && parsedView.ok && mode === 'advanced'
+        ? endpoint
+        : null,
+    scope: scope ?? 'no-session',
     onDenied: denyFiles,
   });
   // The text the box narrows the loaded catalogue with, or null while the result set is the

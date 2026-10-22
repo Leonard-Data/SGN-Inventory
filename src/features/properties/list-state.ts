@@ -59,24 +59,28 @@ export function writeListState(
   carrier.state = { ...state };
 }
 
-// Whether the list paints the rows the browser already holds while this surface's own session read
-// is still answering. A return to the list finds the catalogue in the provider above the route, so
-// the rows are there to show on the first render; waiting for the session read that confirms them
-// would put a skeleton over rows that are already in memory, which is the wait the person reports.
-// The catalogue's own loader owns the authority check - a changed scope empties what it holds and
-// this reads false again - and a read that failed states its own error instead of a list nothing
-// confirmed.
-export function paintsHeldRows({
+// The authorized scope a list reads and paints under: this surface's own answered session, or - while
+// that read is still answering - the scope key the catalogue above the route was authorized under,
+// which is the same identity, role and access revision the shell already holds. A return to the list
+// finds the rows under that key in browser memory, so both result sets paint them on the first
+// render instead of a skeleton over rows that are already there. A session that answers as another
+// scope is that scope, and the windows read under the former one are dropped with the key; a
+// catalogue that holds nothing and a read that stopped with an error read null, so nothing cached
+// under an unknown or different scope is ever painted.
+export function readScope({
+  own,
   held,
   failed,
 }: {
-  // The catalogue's authorized scope is present: `useCatalogue` answered with it rather than the
-  // empty state it falls back to for another scope.
-  held: boolean;
+  // This surface's own session scope key, or null while its read is in flight.
+  own: string | null;
+  // The scope key the catalogue above the route was read under, or null when it holds nothing.
+  held: string | null;
   // This surface's own session read stopped with an error.
   failed: boolean;
-}): boolean {
-  return held && !failed;
+}): string | null {
+  if (own !== null) return own;
+  return failed ? null : held;
 }
 
 // Whether the stream has rendered enough to put a position on: the read has stated the total the

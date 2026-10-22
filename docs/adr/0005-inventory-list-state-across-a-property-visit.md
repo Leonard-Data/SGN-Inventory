@@ -33,22 +33,30 @@ describes instead of being clamped onto a height that is not there yet.
 - Persistent storage (sessionStorage, IndexedDB) — rejected: the acceptance is that a reload of the
   application starts a fresh list, and this release has no persistent browser state (ADR 0003).
 - Lifting the stream's own windows into the shared layout as well — not in this slice: the criterion
-  is that returning reloads no catalogue, and the list's windows are its own read's machinery
-  (ADR 0002). The restored position re-reads the windows around it.
+  is that returning reloads no catalogue, and a catalogue result reads nothing at all. An advanced
+  search paints from the pages its own bounded cache retains and reads no page while they are within
+  the retention window, so its windows stay that read's machinery (ADR 0002) rather than being
+  duplicated above the routes.
 
 ## Consequences
 
 - The carrier holds nothing authoritative and no row: it is where a list was left, not what it
   showed. Nothing about authorization changes, and the catalogue's own cache key still decides
   which rows exist for a caller.
-- The list paints the rows the browser already holds (issue #265): a return renders the catalogue the
-  provider above the route keeps for the session instead of waiting for the list's own session read,
-  which only re-confirms the authority the catalogue was read under. The catalogue's loader still
-  owns that check - a changed scope empties what it holds, and the list follows - and a read that
-  stopped with an error states its error rather than a list nothing confirmed. This is also why
-  `useProtectedData` conceals a surface only when that surface has rendered something: hiding on the
-  first answer of a read is not a change of identity, and it put a blank results area over rows that
-  were already painted.
+- The list paints the rows the browser already holds (issue #265): a return renders both kinds of result
+  set without waiting for the list's own session read. A catalogue result paints the index the provider
+  above the route keeps for the session, and an advanced search paints the windows its own bounded
+  cache holds - a page still within the retention window is answered to the first read without a
+  request, and a page past it is read again, as that cache already rules. Both read and paint under one
+  scope: the session's own once it answers, and until then the scope key the catalogue above the route
+  was authorized under, which is the identity, role and access revision the shell already holds. The
+  first paint is a cached view under that last known authorized scope, not a fresh authorization: the
+  session read still runs and still governs. A session that answers as another scope empties the
+  catalogue, the key becomes that session's own, and the windows read under the former scope are
+  dropped with it; a read that stopped with an error states its error rather than a list nothing
+  confirmed. This is also why `useProtectedData` conceals a surface only when that surface has
+  rendered something: hiding on the first answer of a read is not a change of identity, and it put a
+  blank results area over rows that were already painted.
 - A result set the carrier holds no entry for opens at its own first rows with the address's own
   search, which is what a reload and a first visit both do.
 - A later address inside one visit (another ordering, filter set or view) is a different result set

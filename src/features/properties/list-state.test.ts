@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   newListStateCarrier,
-  paintsHeldRows,
   positionReady,
   readListState,
+  readScope,
   writeListState,
   type InventoryListState,
 } from './list-state.ts';
@@ -127,11 +127,34 @@ test('a position is only restored onto a stream that has rendered', () => {
   );
 });
 
-// A return to the list finds the catalogue in the provider above the route, so the rows are there
-// to paint on the first render (issue #265). Only the absence of that catalogue, or a session read
-// that stopped with an error, puts the list back to waiting.
-test('the list paints the rows the browser holds while the session read answers', () => {
-  assert.equal(paintsHeldRows({ held: true, failed: false }), true);
-  assert.equal(paintsHeldRows({ held: false, failed: false }), false);
-  assert.equal(paintsHeldRows({ held: true, failed: true }), false);
+// A return to the list finds the rows the browser holds under the scope the shell last authorized,
+// so both result sets - the catalogue's index and an advanced search's cached windows - paint while
+// the surface's own session read answers (issue #265). That held scope is only ever the one in
+// force: a session read that stopped with an error, a catalogue holding nothing under a scope, and a
+// session that answers as another scope all read that other scope or nothing, so the rows cached
+// under the former one are never painted and are dropped when the key moves.
+test('the list reads under the scope in force, held or its own', () => {
+  // The own session has not answered: the catalogue's authorized scope is the one in force.
+  assert.equal(
+    readScope({ own: null, held: 'emp:staff:7', failed: false }),
+    'emp:staff:7',
+  );
+  // Nothing held under any scope, or a read that failed, paints nothing.
+  assert.equal(readScope({ own: null, held: null, failed: false }), null);
+  assert.equal(
+    readScope({ own: null, held: 'emp:staff:7', failed: true }),
+    null,
+  );
+  // The session answers as the same scope the rows were cached under: the same key, so nothing is
+  // read again.
+  assert.equal(
+    readScope({ own: 'emp:staff:7', held: 'emp:staff:7', failed: false }),
+    'emp:staff:7',
+  );
+  // The session answers as another scope - another user, role or access revision - so the key is
+  // that scope and the windows cached under the held one are discarded with it.
+  assert.equal(
+    readScope({ own: 'emp:staff:8', held: 'emp:staff:7', failed: false }),
+    'emp:staff:8',
+  );
 });

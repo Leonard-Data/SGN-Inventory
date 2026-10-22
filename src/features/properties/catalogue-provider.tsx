@@ -21,6 +21,7 @@ import {
   AccessChangedError,
   renderedSession,
   sessionDiffers,
+  sessionScope,
 } from '@/features/employees/protected-load';
 import type { EmployeeSession } from '@/features/employees/types';
 import type { CatalogueIndexEntry } from './address-index';
@@ -199,7 +200,7 @@ function CatalogueLoader({ children }: { children: ReactNode }) {
   );
   const read = useCallback(
     (signal: AbortSignal, session: EmployeeSession) => {
-      const identity = `${renderedSession(session.employee)}:${session.accessRevision}`;
+      const identity = sessionScope(session);
       const freshRead = fresh.current;
       fresh.current = false;
       // A scope this loader already started resumes it; a changed scope, and a read that has
@@ -230,8 +231,7 @@ function CatalogueLoader({ children }: { children: ReactNode }) {
   const onAuthorityFailure = useCallback(
     (failure: unknown, failedScope: EmployeeSession) => {
       if (
-        sessionRef.current !==
-          `${renderedSession(failedScope.employee)}:${failedScope.accessRevision}` ||
+        sessionRef.current !== sessionScope(failedScope) ||
         !(
           failure instanceof AccessChangedError ||
           (failure instanceof RequestError &&
