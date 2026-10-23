@@ -16,7 +16,6 @@ import { EyeIcon } from '@/features/employees/auth-ui';
 import { messages, label, type Locale } from '@/i18n/messages';
 import { useToast } from '@/features/toasts/toast-host';
 import { contactRows, type ContactRow } from './contact-rows';
-import { AddContactNumber } from './add-contact-number';
 import { applyServerSummary } from './catalogue-changes';
 import { useCatalogueChange } from './catalogue-provider';
 import type { PropertyDetail } from './detail-data';
@@ -226,12 +225,8 @@ function QuickView({
   // null while they are still being read; an empty list is a real answer.
   const [owners, setOwners] = useState<ContactRow[] | null>(null);
   const [ownersFailed, setOwnersFailed] = useState(false);
-  // The newest recorded contact and whether the record still accepts a new one: both come from
-  // the same detail read, so a number recorded here replaces nothing.
+  // The newest recorded contact, read from the same detail read the full record uses.
   const [newest, setNewest] = useState<ContactRow | null>(null);
-  // null until the read answers, so an archived record never shows the capture form first.
-  const [archived, setArchived] = useState<boolean | null>(null);
-  const [contactTick, setContactTick] = useState(0);
   // The record's own row as the server states it: the prices the panel shows and the revision the
   // price edit is decided against. The summary the list handed over is a snapshot taken when the
   // row was opened, so the panel reads the record itself rather than editing what it remembers.
@@ -296,7 +291,6 @@ function QuickView({
         const rows = contactRows(detail.contacts);
         setOwners(rows.filter((row) => row.relation === 'owner'));
         setNewest(rows[0] ?? null);
-        setArchived(!!detail.property.archived_at);
         setRecord(detail.property);
         setOwnersFailed(false);
       })
@@ -306,7 +300,7 @@ function QuickView({
         else setOwnersFailed(true);
       });
     return () => abort.abort();
-  }, [propertyId, onDenied, onPermission, contactTick]);
+  }, [propertyId, onDenied, onPermission]);
 
   const phone = ownerPhoneView(disclosure);
 
@@ -828,14 +822,6 @@ function QuickView({
           </p>
         ) : (
           <p className="field-hint">{text.noContacts}</p>
-        )}
-        {archived !== false ? null : (
-          <AddContactNumber
-            propertyId={propertyId}
-            locale={locale}
-            onAdded={() => setContactTick((value) => value + 1)}
-            onDenied={onDenied}
-          />
         )}
       </section>
       <section className="quick-view-section">

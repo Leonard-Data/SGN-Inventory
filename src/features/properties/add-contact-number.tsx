@@ -4,9 +4,9 @@ import { messages, type Locale } from '@/i18n/messages';
 import { api, RequestError } from '@/features/employees/api';
 import { useToast } from '@/features/toasts/toast-host';
 
-// One capture form for every surface that offers it: the quick view and the property record
-// submit the same name and number to the same endpoint, so the validation and the refusal
-// wording cannot drift apart. The recorded number is a new contact beside the earlier ones.
+// The capture form the property record offers: one surface submits this name and number to the
+// endpoint, so the validation and the refusal wording stay in one place. The recorded number is a
+// new contact beside the earlier ones.
 export function AddContactNumber({
   propertyId,
   locale,
