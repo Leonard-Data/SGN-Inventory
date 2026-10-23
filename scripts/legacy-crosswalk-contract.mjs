@@ -16,6 +16,10 @@ const SOURCE_URL =
 const INGEST_SUFFIX = '_admin_unit_crosswalks_official_ingest.sql';
 const LEGACY_FROM = '2025-01-04';
 const EFFECTIVE_ON = '2025-07-01';
+// The official pre-2025 snapshot the conversion table indexes: the crosswalk covers those wards and
+// no others, so the captain-requested local entries the catalog also carries are counted apart.
+const LEGACY_SOURCE_URL =
+  'https://github.com/sunshine-tech/VietnamProvinces/blob/4cc4038d0e89bd8affbda864119c1ab1e0360523/dev/seed-data/Pre-2025-07/Xa_2025-01-04.csv';
 // The 28 legacy wards the conversion table leaves without an accepted row.
 const UNCOVERED = [
   '01651',
@@ -246,10 +250,12 @@ export async function legacyCrosswalkContract({
       const mapped = await rows(
         `select distinct f.official_code from public.admin_unit_crosswalks x
          join public.admin_unit_versions f on f.id=x.from_unit_id
-         where f.unit_level='commune' and f.valid_to=date '${EFFECTIVE_ON}'`,
+         where f.unit_level='commune' and f.source_url=$1`,
+        [LEGACY_SOURCE_URL],
       );
       const legacyWards = await rows(
-        `select official_code from public.admin_unit_versions where unit_level='commune' and valid_to=date '${EFFECTIVE_ON}'`,
+        `select official_code from public.admin_unit_versions where unit_level='commune' and source_url=$1`,
+        [LEGACY_SOURCE_URL],
       );
       assert.equal(legacyWards.length, 10051);
       assert.equal(mapped.length, 10023);
@@ -260,6 +266,17 @@ export async function legacyCrosswalkContract({
           .filter((code) => !names.has(code))
           .sort(),
         UNCOVERED,
+      );
+      // The captain-requested local entries are catalog rows only: the conversion table does not
+      // carry them, so nothing invents a successor for one.
+      assert.equal(
+        await count(
+          `select count(*)::int as n from public.admin_unit_crosswalks x
+           join public.admin_unit_versions f on f.id=x.from_unit_id
+           where f.valid_to=date '${EFFECTIVE_ON}' and f.source_url<>$1`,
+          [LEGACY_SOURCE_URL],
+        ),
+        0,
       );
       // Each legacy province carries exactly one row; five districts carry one.
       assert.equal(
