@@ -5,7 +5,11 @@ import { api, RequestError } from '@/features/employees/api';
 import { confirmsPrice } from '@/features/properties/price-input';
 import { applyServerSummary } from '@/features/properties/catalogue-changes';
 import { useCatalogueChange } from '@/features/properties/catalogue-provider';
-import type { PropertySummary } from '@/features/properties/types';
+import type {
+  AddressMatch,
+  PropertySummary,
+} from '@/features/properties/types';
+import { formatInteger } from '@/features/properties/format';
 import type { Locale } from '@/i18n/messages';
 import { messages } from '@/i18n/messages';
 import {
@@ -14,6 +18,7 @@ import {
   recordsAddressPart,
 } from './fields';
 import { AddressFields, RecordFields } from './forms';
+import { duplicateCheck } from './create-duplicate';
 import { CrosswalkOffer } from './crosswalk-offer';
 import type { AddressCrosswalk } from './crosswalk';
 import { maintenanceError, maintenanceText, optionLabel } from './messages';
@@ -40,6 +45,10 @@ export function CreateProperty({
       address?: AddressCrosswalk;
     } | null>(null),
     [contactProblem, setContactProblem] = useState<string | null>(null),
+    // The addresses the save is about to join, once the database has named them. A non-null list is
+    // the warning: the same submit then creates anyway, and editing the address drops it so the
+    // check runs again on what will actually be saved.
+    [duplicates, setDuplicates] = useState<AddressMatch[] | null>(null),
     contactNameId = useId(),
     contactPhoneId = useId();
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -64,6 +73,26 @@ export function CreateProperty({
       // saying so here shows the refusal in the panel instead of after a round trip.
       if (!recordsAddressPart(address)) {
         setError('address-parts-required');
+        setBusy(false);
+        return;
+      }
+      // Before the record exists: the address this save stores may already be recorded. The
+      // database composes the text from these parts and compares it with the one rule the
+      // post-create group uses, so a match names exactly the properties that will share it.
+      const found = await duplicateCheck(
+        (parts) =>
+          api<AddressMatch[]>('/api/properties/address-duplicates', {
+            address: parts,
+          }),
+        address,
+        duplicates,
+      );
+      if ('denied' in found) {
+        onDenied(found.denied);
+        return;
+      }
+      if (found.matches.length) {
+        setDuplicates(found.matches);
         setBusy(false);
         return;
       }
@@ -151,7 +180,12 @@ export function CreateProperty({
     <section className="panel maintenance">
       <div className="panel-body">
         <p>{text.immediate}</p>
-        <form onSubmit={submit}>
+        <form
+          onSubmit={submit}
+          // A draft that changes after the warning was read is a different address, so the next
+          // submit asks again rather than confirming a stale match.
+          onInput={() => setDuplicates(null)}
+        >
           {/* One form, three stated sections: the sections carry the rhythm, and each one's
               fields sit on the shared two-column grid rather than on the inline editor's
               auto-fit arrangement. */}
@@ -229,6 +263,32 @@ export function CreateProperty({
                 </p>
               ) : null}
             </div>
+            {duplicates?.length ? (
+              <div className="alert" data-tone="neutral" role="alert">
+                <div>
+                  <p>
+                    {text.duplicateAddressBefore.replace(
+                      '{n}',
+                      formatInteger(duplicates.length, locale),
+                    )}
+                  </p>
+                  <ul>
+                    {duplicates.map((match) => (
+                      <li key={match.id}>
+                        <a
+                          href={'/properties/' + match.id}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {match.propertyCode}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                  <p>{text.duplicateAddressHint}</p>
+                </div>
+              </div>
+            ) : null}
           </fieldset>
           {error ? (
             <p role="alert" className="field-error">
@@ -236,8 +296,22 @@ export function CreateProperty({
             </p>
           ) : null}
           <div className="form-foot">
+            {duplicates ? (
+              <button
+                className="btn"
+                type="button"
+                disabled={busy}
+                onClick={() => setDuplicates(null)}
+              >
+                {text.createBack}
+              </button>
+            ) : null}
             <button className="btn btn-primary" disabled={busy}>
-              {busy ? text.saving : text.create}
+              {busy
+                ? text.saving
+                : duplicates
+                  ? text.createAnyway
+                  : text.create}
             </button>
           </div>
         </form>

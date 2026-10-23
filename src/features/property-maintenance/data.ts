@@ -3,6 +3,7 @@ import type { Json } from '@/types/database';
 import { ApiError, uuid, type RouteContext } from '@/lib/supabase/route';
 import { cursorPair } from '@/lib/supabase/query';
 import { catalogueSummaryOf } from '@/features/properties/catalogue-data';
+import type { AddressMatch } from '@/features/properties/types';
 import {
   InputError,
   recordsAddressPart,
@@ -116,6 +117,23 @@ export async function createProperty(
     summary: await catalogueSummaryOf(context, id),
   };
 }
+// Which unarchived properties already record the address this creation is about to save. The
+// database composes the text from the same parts the save stores and compares it with the one
+// definition of "the same address" the post-create group uses, so the warning and the group can
+// never disagree. It is the caller's own read under ordinary row-level security, so a match is
+// never a property the person may not open.
+export async function addressDuplicates(
+  context: RouteContext,
+  value: unknown,
+): Promise<AddressMatch[]> {
+  const { data, error } = await context.client.rpc(
+    'property_address_duplicates',
+    { p_address: changes('address', value) },
+  );
+  databaseError(error);
+  return (data ?? []) as AddressMatch[];
+}
+
 // What the official crosswalk says about the ward of the legacy address a save just recorded. It is
 // read from the committed row, and only its own ward unit: nothing is inferred from address text.
 export async function savedLegacyAddress(

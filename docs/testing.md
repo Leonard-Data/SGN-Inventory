@@ -568,6 +568,9 @@ Prepare distinct active sales/staff/manager/admin identities, an inactive and an
 | Scenario | Required observation |
 | --- | --- |
 | Create with listing mode and a known legacy address, without price/dimensions/contact | One property receives a stable unique code; the initial address commits with it and no history row is recorded without an asking price; unknown facts remain unknown; the record is immediately searchable without maintenance approval |
+| Create a property whose composed address an unarchived property already records | Before anything is written the form names those properties, links each by code in a new tab, and one deliberate confirmation then creates the second property; the post-create group shows the same records ([issue #279](database-contract.md#issue-279--the-warning-before-a-record-exists)) |
+| Create the same address in another case and without accents, or with an archived record at that address | The warning names the same properties the post-create group does, and never an archived record |
+| Create a property at an address nobody records, in VI and then EN | The record is created exactly as before: no warning appears and no extra confirmation is asked |
 | Blank/missing required address or listing mode; invalid typed values | Localized validation and database guards reject invalid input; no partial property/address/history state remains |
 | Fail the initial creation after beginning it | Entire creation rolls back; no addressless orphan property or misleading success |
 | Create a current address naming a house number or street but no catalog commune | Save unverified without district or guessed ward, with the text composed from the parts recorded; later verification requires valid reviewed unit data/evidence |

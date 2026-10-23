@@ -70,6 +70,18 @@ const copy = {
     'Request recorded; inventory has not been changed.',
   ],
   noChange: ['Chưa có thay đổi.', 'No changes to save.'],
+  // The pre-create warning: it names what already sits at the address and still lets the person
+  // make a second property, because separate units in one building are ordinary.
+  duplicateAddressBefore: [
+    'Hồ sơ khác cùng địa chỉ: {n}. Mở để xem trước khi tạo thêm.',
+    'Other properties at this address: {n}. Open them before creating another.',
+  ],
+  duplicateAddressHint: [
+    'Xem xong vẫn tạo được hồ sơ mới — cả hai sẽ cùng địa chỉ và có thể so sánh sau khi tạo.',
+    'You can still create it — both records will share the address and can be compared once created.',
+  ],
+  createAnyway: ['Vẫn tạo hồ sơ', 'Create anyway'],
+  createBack: ['Quay lại chỉnh sửa', 'Back to editing'],
   addressPartsRequired: [
     'Nhập số nhà, tên đường hoặc chọn xã/phường. Chỉ riêng tỉnh/thành phố chưa phải là địa chỉ; chưa có dữ liệu nào được lưu.',
     'Enter a house number, a street, or pick the commune / ward. The province alone is not an address; nothing was saved.',

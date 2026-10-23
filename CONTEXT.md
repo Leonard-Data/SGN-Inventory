@@ -140,6 +140,10 @@ _Avoid_: Contact inferred from sheet position
 The unarchived properties whose primary address carries the same recorded address text after the same lowercased, accent-folded normalisation inventory search uses. Membership states that a decision is needed; it never means the records are the same property, because separate units in one house are an ordinary case.
 _Avoid_: Duplicate property, automatic duplicate
 
+**Address already recorded**:
+The warning shown before a property is created when the address the save is about to store is already recorded, naming the unarchived properties that sit there with a link to open each. It informs and never blocks: a second property at the same building is an ordinary case, so the confirmation that creates anyway is one deliberate step, and an address nobody records creates with no added step at all. A match is decided by the same normalised address comparison the duplicate address group uses, on the address text the save will actually store.
+_Avoid_: Address blocked, duplicate prevention, uniqueness check
+
 **Property merge**:
 The deliberate manager/admin decision that folds every other record in a duplicate address group into the group's most complete record, moving their photos, documents, history and contact links onto it and archiving the folded records.
 _Avoid_: Automatic deduplication, import merge rule

@@ -39,6 +39,7 @@ import { employeeProfileContract } from './employee-profile-contract.mjs';
 import { applyEmbeddedSchema } from './embedded-schema.mjs';
 import { provinceActivityContract } from './province-activity-contract.mjs';
 import { addressDuplicateMergeContract } from './address-duplicate-merge-contract.mjs';
+import { addressDuplicateWarningContract } from './address-duplicate-warning-contract.mjs';
 import { statusTrailContract } from './status-trail-contract.mjs';
 import { contactNumberContract } from './contact-number-contract.mjs';
 import { propertyDimensionContract } from './property-dimension-contract.mjs';
@@ -832,6 +833,8 @@ await auditRetentionContract({db,asUser,check,fails,employees});
 await contactDirectoryContract({db,asUser,check,fails,employees});
 // Issue #147: the shared-address group, and the deliberate merge of duplicate records.
 await addressDuplicateMergeContract({db,asUser,check,fails,employees,validationKey});
+// Issue #279: the warning before a record exists, decided by that same address rule.
+await addressDuplicateWarningContract({db,asUser,check,fails,employees});
 // Ticket #173: the property status trail and direct non-final status changes.
 await statusTrailContract({db,asUser,check,fails,employees});
 // Ticket #174: sold and rented as a reviewer decision recorded on the same trail.
