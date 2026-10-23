@@ -218,12 +218,20 @@ export function Inventory({
   // navigation, so the choice just made is held beside the address until the answer states it, or
   // the next click would be computed from the answer the previous one brought and would silently
   // drop it. That hold is not a second record of the choice: it names the address it was asked at
-  // and is dropped the moment that address is replaced.
+  // and is dropped the moment that address is replaced, so coming back to that address later reads
+  // it again.
   const [asked, setAsked] = useState<{
     at: string;
     hidden: ReadonlySet<SummaryColumn>;
     ordered: string | null;
   } | null>(null);
+  // The hold lasts only while the address it was asked at is the address: once an answer replaces
+  // it, it is dropped rather than kept to be applied again if that address is visited again.
+  useEffect(() => {
+    if (asked === null || asked.at === resultLocation) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the address replaced the hold, so the hold no longer describes this list
+    setAsked(null);
+  }, [asked, resultLocation]);
   const pending = asked !== null && asked.at === resultLocation ? asked : null;
   // What the table draws and what every address carrying the choice states: the columns and the
   // ordering the person last asked for, until the answer lands.
