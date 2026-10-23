@@ -29,8 +29,10 @@ the unit picker's — arrows and Home/End move the highlight, Escape closes the 
 typed text — except that Enter with nothing highlighted is the form's own submit instead of a
 swallowed keypress, so an unlisted street still saves in one press; the list is announced as expanded
 only while it is shown, and the field's hint states in both languages that a street outside the list is
-saved as typed. The list itself is source data: 1006 names, in the captain's order and verbatim
-(`src/features/property-maintenance/streets.ts`), never translated, folded or corrected.
+saved as typed. The list itself is source data: the captain supplied 1006 names in his own order, and
+after his decision that same day to clean the near-duplicates the file holds 993 of them in that order,
+each spelled as supplied (`src/features/property-maintenance/streets.ts`); nothing translates, folds or
+corrects a name at runtime.
 
 _Why it matters:_ most addresses sit on a street the supplied list already names, so choosing it
 instead of retyping its diacritics removes a class of near-duplicate street spellings without taking
@@ -40,28 +42,30 @@ _Known gap:_ the suggestion list, its matching and its keyboard contract have un
 (`src/features/property-maintenance/combobox.test.ts`); no browser has typed into the field, picked a
 suggestion by pointer or by keyboard, or saved an unlisted street, so those stay staging gates in
 [testing.md](testing.md#property-contact-and-address-maintenance-acceptance-not-yet-executed). The
-list is kept exactly as supplied, so it carries its own defects: 14 groups of names that fold to the
-same searched name ("Trần Xuân Hoà"/"Trần Xuân Hòa", "Nguyễn Văn Luông"/"Nguyễn Văn Lượng") are
-offered as the distinct names they are, and two names carry a doubled space. The captain decided that
-same day to clean them up; see *The supplied street list's near-duplicates are cleaned* below.
+list came with its own defects: 14 groups of names folded to the same searched name ("Trần Xuân
+Hoà"/"Trần Xuân Hòa", "Nguyễn Văn Luông"/"Nguyễn Văn Lượng") and were offered as the distinct names
+they were, and two names carried a doubled space. The captain decided that same day to clean them up;
+see *The supplied street list's near-duplicates are cleaned* below.
 
 ### The supplied street list's near-duplicates are cleaned (captain request)
 
-The street suggestion list holds 992 names instead of 1006. Each of the 14 names that folded to
-another entry's searched name is gone, keeping the variant with the correct Vietnamese diacritics —
-the accented or correctly accented spelling where the other was mis-accented, unaccented, lowercased
-or carried a doubled space — and the two doubled internal spaces are single spaces. Nothing else
-changed: the surviving names keep the supplied order and their own spelling, no other character is
-translated or reordered, and no runtime normalisation was added to hide a duplicate. The field, its
-matching and what a typed street stores are untouched.
+The street suggestion list holds 993 names instead of 1006. Thirteen names that were the same street
+name differently written are gone — a missing or misplaced tone mark, an unaccented or lowercased
+spelling, or a doubled internal space — and the properly spelled variant stays, so the two doubled
+internal spaces are single spaces. The fourteenth near-identical pair is kept in full: "Nguyễn Văn
+Luông" (Quận 6) and "Nguyễn Văn Lượng" (Gò Vấp) are two different real streets, so both names stay in
+the list rather than steering a person picking one to the other. Nothing else changed: the surviving
+names keep the supplied order and their own spelling, no other character is translated or reordered,
+and no runtime normalisation was added to hide a duplicate. The field, its matching and what a typed
+street stores are untouched.
 
 _Why it matters:_ a search such as "tran xuan hoa" used to offer the same street twice, which is
 noise for the person picking; it now offers it once.
 
-_Known gap:_ the surviving entry of a pair keeps the spelling supplied, and where both variants are
-correctly accented names of two different real streets ("Nguyễn Văn Luông" of Quận 6 and "Nguyễn Văn
-Lượng" of Gò Vấp), collapsing them to one suggestion drops the other name from the list and is stated
-in the pull request for the captain to confirm.
+_Known gap:_ "Nguyễn Văn Luông" (Quận 6) and "Nguyễn Văn Lượng" (Gò Vấp) fold to the same searched
+name, so typing "nguyen van luong" still offers both suggestions. That is deliberate, because they are
+two real streets and the captain's decision left both in the list. The change is data only and has
+unit coverage (`src/features/property-maintenance/combobox.test.ts`); no browser has exercised it.
 
 ## 23 October 2026 — the properties table orders and hides by column
 

@@ -151,15 +151,39 @@ test('a listed street is offered as a suggestion, also when typed without diacri
   );
 });
 
-test('a street the supplied list spelled twice under one searched name is offered once', () => {
+// The captain's decision: the same street name written differently is one entry, but two real streets
+// whose names only coincide once accents are folded both stay.
+test('the list keeps one entry per street name and both real streets behind one folded name', () => {
+  assert.ok(STREET_NAMES.includes('Nguyễn Văn Luông'));
+  assert.ok(STREET_NAMES.includes('Nguyễn Văn Lượng'));
   assert.deepEqual(streetSuggestions(STREET_NAMES, 'tran xuan hoa'), [
     'Trần Xuân Hòa',
   ]);
-  const searched = STREET_NAMES.map((name) =>
-    foldUnitName(name).replace(/\s+/g, ' ').trim(),
+  for (const name of STREET_NAMES) {
+    assert.equal(name, name.trim(), name);
+    assert.doesNotMatch(name, /\s{2,}/, name);
+  }
+  // Folding every diacritic away collides only for the deliberately kept pair.
+  const folded = STREET_NAMES.map(foldUnitName);
+  const foldedCounts = new Map<string, number>();
+  for (const name of folded)
+    foldedCounts.set(name, (foldedCounts.get(name) ?? 0) + 1);
+  assert.deepEqual(
+    STREET_NAMES.filter(
+      (_, index) => foldedCounts.get(folded[index])! > 1,
+    ).sort(),
+    ['Nguyễn Văn Luông', 'Nguyễn Văn Lượng'].sort(),
   );
-  assert.equal(new Set(searched).size, searched.length);
-  for (const name of STREET_NAMES) assert.doesNotMatch(name, /\s{2,}/, name);
+  // A name written with a tone mark missing or misplaced would still collide once only the tone marks
+  // are stripped, while letter modifiers stay: Luông keeps its ô and Lượng its ư, so nothing collides.
+  const toneless = STREET_NAMES.map((name) =>
+    name
+      .normalize('NFD')
+      .replace(/[\u0300\u0301\u0303\u0309\u0323]/g, '')
+      .normalize('NFC')
+      .toLowerCase(),
+  );
+  assert.equal(new Set(toneless).size, toneless.length);
 });
 
 test('a street typed by hand that the list does not carry still saves as typed', () => {

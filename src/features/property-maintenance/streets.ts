@@ -1,6 +1,8 @@
-// The street names the address form suggests, in the order the source list states them and
-// verbatim: a street name is source data, so nothing here translates, folds or rewrites it. The
-// list is a suggestion layer only - a street it does not name is still typed and saved as before.
+// The street names the address form suggests, in the order the captain supplied them. The thirteen
+// entries that were the same street name differently written were removed on the captain's decision;
+// 'Nguyễn Văn Luông' and 'Nguyễn Văn Lượng' both stay because they are two different real streets.
+// Nothing here translates, folds or rewrites a name at runtime, and the list is a suggestion layer
+// only - a street it does not name is still typed and saved as before.
 export const STREET_NAMES: readonly string[] = [
   'Lý Thường Kiệt',
   'Lê Đại Hành',
@@ -115,6 +117,7 @@ export const STREET_NAMES: readonly string[] = [
   'Chấn Hưng',
   'Nguyễn Thị Nhỏ',
   'Trần Quốc Hoàn',
+  'Nguyễn Văn Luông',
   'Bình Thới',
   'Cống Quỳnh',
   'Tân Tiến',
