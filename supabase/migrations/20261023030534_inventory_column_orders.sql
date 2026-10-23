@@ -174,7 +174,9 @@ begin
     -- first by the record's own modification time then identity, the eligible chronology orders by
     -- recorded entry date
     -- then identity in the requested direction with unknown dates placed last. A window is a slice
-    -- of exactly that order, so consecutive fetches neither repeat nor skip a record.
+    -- of exactly that order, so consecutive fetches neither repeat nor skip a record: the slice is
+    -- cut by that same numbering, so which rows an offset returns is stated here rather than left to
+    -- the order the planner happens to feed the numbering in.
     select r.*, row_number() over (
       order by
         -- The entry chronology places its unknown dates last whichever way it runs.
@@ -215,6 +217,7 @@ begin
         case when p_order like '%-desc' then r.id end desc
     ) as position
     from filtered r
+    order by position
     limit row_limit offset p_offset
   )
   -- The window's rows ride beside the single counting row, so every read states the matching

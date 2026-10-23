@@ -173,11 +173,10 @@ export function Inventory({
   const text = messages[initialLocale];
   const locale = initialLocale;
   const router = useRouter();
-  // The columns the table draws, and the address value that states them. A hidden column is
+  // The columns the address states, and the address value that states them. A hidden column is
   // neither a heading nor a cell, so the two stay in step whatever is hidden.
-  const hidden = useMemo(() => hiddenColumns(hide), [hide]);
-  const hideValue = hideParam(hidden);
-  const visibleColumns = useMemo(() => shownColumns(hidden), [hidden]);
+  const statedHidden = useMemo(() => hiddenColumns(hide), [hide]);
+  const statedHide = hideParam(statedHidden);
   const parsedView = parseInventoryView(view);
   const requestedView = parsedView.ok
     ? parsedView.view
@@ -200,7 +199,7 @@ export function Inventory({
     query: initialQuery,
     sort,
     view: requestedView,
-    hide: hideValue,
+    hide: statedHide,
     filters,
   });
   // The result set this list is showing: the search, the ordering, the view and the filters, and
@@ -214,31 +213,44 @@ export function Inventory({
     hide: null,
     filters,
   });
-  // A header click cycles the columns ordering; the address is the one place it is kept, so a
-  // reload or a shared link reads the order the header was left in. Hiding a column is stated in
-  // the address the same way, but it is not a read: the result set leaves it out, so the stream
-  // keeps its rows and the person keeps their place in them.
-  function sortBy(field: InventorySortField) {
+  // A header click cycles the columns ordering and a toggle hides one column; the address is the
+  // one place either is kept, so a reload or a shared link reads the choice back. Both are a server
+  // navigation, so the choice just made is held beside the address until the answer states it, or
+  // the next click would be computed from the answer the previous one brought and would silently
+  // drop it. That hold is not a second record of the choice: it names the address it was asked at
+  // and is dropped the moment that address is replaced.
+  const [asked, setAsked] = useState<{
+    at: string;
+    hidden: ReadonlySet<SummaryColumn>;
+    ordered: string | null;
+  } | null>(null);
+  const pending = asked !== null && asked.at === resultLocation ? asked : null;
+  // What the table draws and what every address carrying the choice states: the columns and the
+  // ordering the person last asked for, until the answer lands.
+  const hidden = pending !== null ? pending.hidden : statedHidden;
+  const hideValue = hideParam(hidden);
+  const ordered = pending !== null ? pending.ordered : sort;
+  const visibleColumns = useMemo(() => shownColumns(hidden), [hidden]);
+  function applyChoice(next: {
+    hidden: ReadonlySet<SummaryColumn>;
+    ordered: string | null;
+  }) {
+    setAsked({ at: resultLocation, ...next });
     router.push(
       inventoryHref({
         query: initialQuery,
-        sort: nextColumnOrder(sort, field),
+        sort: next.ordered,
         view: requestedView,
-        hide: hideValue,
+        hide: hideParam(next.hidden),
         filters,
       }),
     );
   }
+  function sortBy(field: InventorySortField) {
+    applyChoice({ hidden, ordered: nextColumnOrder(ordered, field) });
+  }
   function toggleShown(column: SummaryColumn) {
-    router.push(
-      inventoryHref({
-        query: initialQuery,
-        sort,
-        view: requestedView,
-        hide: hideParam(toggleColumn(hidden, column)),
-        filters,
-      }),
-    );
+    applyChoice({ hidden: toggleColumn(hidden, column), ordered });
   }
   const endpoint = searchEndpoint({ query: initialQuery, sort, filters });
   // The session is this surface's own protection: the shell reads it, and the stream below reads
@@ -940,7 +952,9 @@ export function Inventory({
                   </svg>
                 </button>
               </div>
-              {sort ? <input type="hidden" name="sort" value={sort} /> : null}
+              {ordered ? (
+                <input type="hidden" name="sort" value={ordered} />
+              ) : null}
               {hideValue ? (
                 <input type="hidden" name={HIDE_PARAM} value={hideValue} />
               ) : null}
@@ -994,7 +1008,7 @@ export function Inventory({
                   className="seg-btn"
                   href={inventoryHref({
                     query: initialQuery,
-                    sort,
+                    sort: ordered,
                     view: 'cards',
                     hide: hideValue,
                     filters,
@@ -1023,7 +1037,7 @@ export function Inventory({
                   className="seg-btn"
                   href={inventoryHref({
                     query: initialQuery,
-                    sort,
+                    sort: ordered,
                     view: 'table',
                     hide: hideValue,
                     filters,
@@ -1052,7 +1066,7 @@ export function Inventory({
           <SearchIsland
             locale={locale}
             query={initialQuery}
-            sort={sort}
+            sort={ordered}
             view={requestedView}
             hide={hideValue}
             filters={filters}
@@ -1168,7 +1182,7 @@ export function Inventory({
                 className="btn btn-secondary btn-sm"
                 href={inventoryHref({
                   query: initialQuery,
-                  sort,
+                  sort: ordered,
                   view: DEFAULT_INVENTORY_VIEW,
                   hide: hideValue,
                   filters,
@@ -1258,7 +1272,7 @@ export function Inventory({
                       className="btn btn-secondary btn-sm"
                       href={inventoryHref({
                         query: localQuery,
-                        sort,
+                        sort: ordered,
                         view: requestedView,
                         hide: hideValue,
                         filters,
@@ -1301,7 +1315,7 @@ export function Inventory({
                     <TableHead
                       locale={locale}
                       shown={visibleColumns}
-                      sort={sort}
+                      sort={ordered}
                       onSort={sortBy}
                     />
                     {band.top > 0 ? (
