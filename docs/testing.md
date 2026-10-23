@@ -316,13 +316,42 @@ the role recorded at send time and the outcome.
 
 File-attestation key: one key is in use for both stages today, because the production database had
 no `private.file_validation_keys` row and file completion failed closed there. The production row
-holds the value the production deployment already signs with and the development row is untouched,
-so a key held for development produces attestations production accepts. Independent per-stage keys
-are the intended end state; separating them needs a fresh key, its matching database row and a
-production redeploy, which stays a deliberate later decision and has not been executed.
+was installed from the private key file on 2026-10-19 on the assumption that the production
+deployment already signed with that file; it did not. The production deployment carried its own,
+separately created `SGN_FILE_VALIDATION_KEY` entry, so the two halves did not agree, and
+production file completion was refused: on 2026-10-23 a real pending upload was answered
+`403 {"error":"operation-refused"}` by `POST /api/properties/{id}/files/{fileId}/complete` and the
+row stayed `pending`, while presigned reads kept working throughout. The browser's presign status
+and its upload `PUT` status and body were not captured, so an R2 403, a 503 and a CORS preflight
+failure were excluded indirectly rather than observed: the 403 body is this application's own JSON
+rather than an R2 XML error, and the recovery list reported `objectState: present`, so the `PUT`
+had stored the bytes. The signed `PUT` covers the registered byte count and requires a conditional
+create, so presence means a body of exactly that size; content type is not signed there, and
+completion is what re-reads the object and accepts its length, sha256 and detected type against the
+registration before it calls the RPC. The refusal was that RPC's own `42501` attestation check,
+not the route's 64-hex check — whose failure would have been the missing-configuration 503 — and
+that uploader's own pending registration on an unarchived property rules out the RPC's identity
+guards and the row reads' dataset denials, so the size, sha256 and content-type agreements follow
+from the refusal; the recovery list itself reports presence alone. That earlier disagreement is
+inference from that refusal, not a measured comparison of two values.
+Setting the production deployment's value to the value its database row holds, and redeploying
+production, repaired it on 2026-10-23: the production-only Vercel entry was replaced, production was
+redeployed as `dpl_FQcEgJ78T6XMMxevudsMJkj8k2vV` and aliased to `sgnewhouse.online`, and the same
+registration then completed through the deployed route — `200 {"status":"ready"}`, a signed read
+returned 202 315 bytes whose sha256 equals the registration, and the audit trail recorded the
+`ready` transition. Agreement after the repair rests on that completion too: the Vercel API treats
+that environment value as write-only, so the deployed value was never read back or compared against
+the database row, and no person has opened the document panel since the change. A registration
+whose object survived completes on retry however old it is: the 15-minute window only keeps a stale
+pending row from reserving its class slot, and expiry by itself removes no bytes — the recovery list
+discards an expired registration's object, after which that registration needs a fresh upload,
+which is its documented behaviour.
+Independent per-stage keys are the intended end state; separating them needs a fresh key, its
+matching database row and a production redeploy, which stays a deliberate later decision and has
+not been executed.
 
-Not executed: no schema migration, no RLS or policy change, no merge of any duplicate-address
-group, no property approved or verified, no deployment.
+Not executed by this import: no schema migration, no RLS or policy change, no merge of any
+duplicate-address group, no property approved or verified, no deployment.
 
 ## Required staging gates
 
@@ -670,7 +699,7 @@ Prepare sanitized fixtures through authorized administration:
 
 ### R2 storage cutover (not yet executed)
 
-Property file bytes now live in a private Cloudflare R2 bucket reached only through short-lived presigned URLs. None of the following has been run: the embedded schema harness proves the database caps and the cleanup state transitions, and the unit tests prove the class/limit, read-path ordering, the signed upload headers, the bounded cleanup pass and the delete-before-record ordering, but no live bucket, presigned URL, browser upload, maintenance call or hosted copy has been exercised.
+Property file bytes now live in a private Cloudflare R2 bucket reached only through short-lived presigned URLs. Apart from the single production upload and read-back recorded in [the production import section](#executed-legacy-import-into-the-production-project-19-october-2026), none of the following has been run: the embedded schema harness proves the database caps and the cleanup state transitions, and the unit tests prove the class/limit, read-path ordering, the signed upload headers, the bounded cleanup pass and the delete-before-record ordering, but nothing else has exercised a live bucket, presigned URL, browser upload, maintenance call or hosted copy.
 
 | Scenario | Required observation |
 | --- | --- |
