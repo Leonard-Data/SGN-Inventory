@@ -249,6 +249,19 @@ export const targetFields: Record<Target, readonly string[]> = {
   link: ['contact_id', 'relation', 'is_primary', 'remove'],
 };
 const LOCATION_FIELDS = ['latitude', 'longitude'];
+// Creating a property leaves out the status the database assigns, the point set later on the map,
+// and the four source-only fields: the maintenance form still edits and shows all of them.
+export const createPropertyFieldNames = targetFields.property.filter(
+  (name) =>
+    ![
+      ...LOCATION_FIELDS,
+      'status',
+      'parcel_number',
+      'map_sheet_number',
+      'construction_text',
+      'area_raw',
+    ].includes(name),
+);
 // The fields an address form renders: the caller's own selection, except that the district label
 // follows the legacy district picker that is its only writer, so it is rendered wherever that
 // picker is offered rather than only where a caller names it, and a current address renders none.
