@@ -9,20 +9,24 @@
 --
 -- What changes, and what deliberately does not:
 --   1. private.composed_address_text composes one row's text. The official name of the unit an
---      address records is the name its text carries, so a repointed or corrected unit can never
---      leave the text naming the unit it replaced; a recorded source label names only a level the
---      address records no unit for, which is how an imported address keeps its own wording. A
---      missing part is skipped, never an empty segment, a doubled separator or a placeholder word,
---      and a row with no part at all composes null.
+--      address records is the name its text carries, so a unit an address save corrects or re-picks
+--      can never leave the text naming the unit it replaced; a recorded source label names only a
+--      level the address records no unit for, which is how an imported address keeps its own
+--      wording. A missing part is skipped, never an empty segment, a doubled separator or a
+--      placeholder word, and a row with no part at all composes null.
 --   2. private.maintain_property composes it for a save, in the one place an address write already
---      happens, so both creation and editing reach it - an ordinary address edit and a `mapping`
---      edit that repoints the units that address recorded alike. Every address write composes; a
---      row that records no part at all keeps the text it already holds, because that text is its
---      only evidence, and a new address with no part to compose is refused as a known address is
---      required. A new address must also record a house number, a street or a commune picked from
---      the catalog: the province the app states is not an address, so a creation that names only a
---      province is refused rather than stored as a line that reads as that province. An edit is
---      unaffected, because it may leave the parts the row already records exactly as they are.
+--      happens, so both creation and editing reach it. Every address save composes; a row that
+--      records no part at all keeps the text it already holds, because that text is its only
+--      evidence, and a new address with no part to compose is refused as a known address is
+--      required. The composed line keeps the column's own envelope: a text shorter than 1 or longer
+--      than 2000 characters is refused rather than stored. A new address must also record a house
+--      number, a street or a commune picked from the catalog: the province the app states is not an
+--      address, so a creation that names only a province is refused rather than stored as a line
+--      that reads as that province. An edit is unaffected, because it may leave the parts the row
+--      already records exactly as they are.
+--      Deliberate exception: a `mapping` change moves the units a reviewer believes the address
+--      belongs to and leaves its recorded text byte for byte, because that text is the evidence the
+--      source document carries. The text is composed by an address save, never by a mapping edit.
 --   3. private.validate_maintenance refuses `address_text` in an `address` change set (forward
 --      migration `20261023054500_address_text_composition_boundary.sql`), so no writer - the
 --      browser, a direct RPC call, a correction proposal, an amendment or a decision - can state a
@@ -56,7 +60,7 @@ revoke all on function private.composed_address_text(public.property_addresses) 
 
 create or replace function private.maintain_property(p_property_id uuid,p_target text,p_target_id uuid,p_expected_revision uuid,p_changes jsonb,p_property_revision uuid) returns uuid
 language plpgsql security definer set search_path='' as $$
-declare prop public.properties; addr public.property_addresses; recorded public.property_addresses; person public.contacts; link public.property_contacts; cols text; result uuid; next_contact uuid;
+declare prop public.properties; addr public.property_addresses; person public.contacts; link public.property_contacts; cols text; result uuid; next_contact uuid;
 begin
   if private.employee_id() is null then raise exception 'active employee required' using errcode='42501'; end if;
   if p_target='contact' then
@@ -102,7 +106,6 @@ begin
       -- A verified mapping is a reviewer's record: moving it to another state, or repointing its
       -- units, is refused for every other role instead of silently un-verifying it.
       if addr.mapping_status='verified' and not private.is_reviewer() then raise exception 'reviewer required for mapping' using errcode='42501'; end if;
-      recorded:=addr;
       addr:=jsonb_populate_record(addr,p_changes);
       if addr.mapping_status not in ('verified','candidate','unresolved') or addr.mapping_status is null then raise exception 'invalid mapping' using errcode='23514'; end if;
       -- Recording a candidate from the official crosswalk is an ordinary property edit (D5).
@@ -116,11 +119,8 @@ begin
       elsif addr.mapping_status<>'verified' then
         addr.verified_by:=null; addr.verified_at:=null; addr.verification_method:=null; addr.source_url:=null; addr.effective_on:=null; addr.mapping_evidence:=null;
       end if;
-      if (addr.province_unit_id,addr.commune_unit_id) is distinct from (recorded.province_unit_id,recorded.commune_unit_id) then
-        addr.address_text:=coalesce(private.composed_address_text(addr),addr.address_text); end if;
       update public.property_addresses set province_unit_id=addr.province_unit_id,commune_unit_id=addr.commune_unit_id,
-        address_text=addr.address_text,mapping_status=addr.mapping_status,
-        verification_method=addr.verification_method,source_url=addr.source_url,
+        mapping_status=addr.mapping_status,verification_method=addr.verification_method,source_url=addr.source_url,
         effective_on=addr.effective_on,mapping_evidence=addr.mapping_evidence,verified_by=addr.verified_by,verified_at=addr.verified_at where id=p_target_id;
       return p_target_id;
     end if;
@@ -135,7 +135,7 @@ begin
       and nullif(btrim(coalesce(addr.street,'')),'') is null
       and addr.commune_unit_id is null
       then raise exception 'house number, street or commune required' using errcode='23514'; end if;
-    if addr.format is null or addr.format not in ('legacy','current','alternate') or (p_target_id is null and addr.format='alternate') or addr.address_text is null then raise exception 'known address required' using errcode='23514'; end if;
+    if addr.format is null or addr.format not in ('legacy','current','alternate') or (p_target_id is null and addr.format='alternate') or length(btrim(coalesce(addr.address_text,''))) not between 1 and 2000 then raise exception 'known address required' using errcode='23514'; end if;
     if p_target_id is not null and addr.format<>(select format from public.property_addresses where id=p_target_id) then raise exception 'address format immutable' using errcode='23514'; end if;
     if p_target_id is not null and p_changes-array['is_primary']='{}'::jsonb then
       if addr.is_primary then update public.property_addresses set is_primary=false where property_id=p_property_id and format=addr.format and is_primary and id<>p_target_id; end if;

@@ -15,6 +15,7 @@ import {
   addressFields,
   fields,
   formChanges,
+  recordsAddressPart,
   type Target,
   type Changes,
 } from './fields';
@@ -87,6 +88,14 @@ export function MutationForm({
     setError(null);
     try {
       const changes = formChanges(target, form, values);
+      // A new address names something a person supplied, and the server refuses the same save, so
+      // the refusal is stated here rather than after a round trip. An edit may keep the parts the
+      // row already records exactly as they are.
+      if (target === 'address' && !values.id && !recordsAddressPart(changes)) {
+        requestAnimationFrame(() => errorRef.current?.focus());
+        setError('address-parts-required');
+        return;
+      }
       if (Object.keys(changes).length === 0) {
         requestAnimationFrame(() => errorRef.current?.focus());
         setError('noChange');

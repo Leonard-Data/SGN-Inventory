@@ -361,7 +361,8 @@ export async function maintenanceContract({
         await addressText(current, 'current'),
         '12, ' + unit.commune + ', ' + unit.province_name,
       );
-      // A mapping edit that repoints the units recomposes the text beside them.
+      // A mapping change moves the units and leaves the recorded text exactly as it was: the text
+      // is the evidence the source document carried, so only an address save composes it.
       const repointed = (
         await db.query(
           `select id,name_vi from public.admin_unit_versions
@@ -390,7 +391,16 @@ export async function maintenanceContract({
       ]);
       assert.equal(
         await addressText(picked, 'current'),
-        '9, ' + repointed.name_vi + ', ' + unit.province_name,
+        '9, ' + unit.commune + ', ' + unit.province_name,
+      );
+      assert.deepEqual(
+        (
+          await db.query(
+            'select commune_unit_id from public.property_addresses where id=$1',
+            [pickedRow],
+          )
+        ).rows[0].commune_unit_id,
+        repointed.id,
       );
       // A created address must name something a person supplied: a lone province, the app's own
       // default included, is refused rather than stored as a line that reads as that province.
@@ -1625,7 +1635,7 @@ export async function maintenanceContract({
             [addr.id],
           )
         ).rows[0].address_text,
-        '12, Đường đã đính chính, Fixture Commune, Fixture Province A',
+        '12, Đường đã đính chính, Xã chưa có, Tỉnh chưa có',
       );
     },
   );

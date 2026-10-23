@@ -28,12 +28,12 @@ const copy = {
     'Original addresses are retained; corrections create a successor.',
   ],
   rawCurrent: [
-    'Địa chỉ hiện tại không có quận/huyện. Nếu chưa có đơn vị chính thức, lưu nội dung theo nguồn chưa xác minh.',
-    'Current addresses have no district. Missing official units do not prevent saving unverified source information.',
+    'Địa chỉ hiện tại không có quận/huyện. Nếu chưa có đơn vị chính thức, hãy ghi số nhà hoặc tên đường; nội dung địa chỉ được ghép từ các phần đã ghi khi lưu.',
+    'Current addresses have no district. If the official unit is unknown, record a house number or a street; the address text is composed from the parts you record when you save.',
   ],
   legacyHint: [
-    'Địa chỉ cũ dùng danh mục trước 2025: chọn quận/huyện, rồi xã/phường cũ. Nội dung địa chỉ đã ghi vẫn được giữ nguyên.',
-    'Legacy addresses use the pre-2025 catalog: choose the old district, then ward. Recorded address text is kept as it was.',
+    'Địa chỉ cũ dùng danh mục trước 2025: chọn quận/huyện, rồi xã/phường cũ. Nội dung địa chỉ được ghép từ số nhà, tên đường, xã/phường, quận/huyện và tỉnh/thành phố khi lưu.',
+    'Legacy addresses use the pre-2025 catalog: choose the old district, then ward. The address text is composed from the house number, street, commune, district and province when you save.',
   ],
   // The province is stated, not chosen: the app records one. A record that already stores a province
   // row keeps exactly what it stored, and the form says so rather than silently replacing it: the row
