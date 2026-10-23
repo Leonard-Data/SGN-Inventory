@@ -35,6 +35,7 @@ import {
 import {
   assertWriteTarget,
   convertedSkipped,
+  currentAddressText,
   declaredStage,
   invitationOrigin,
   invitationRecipients,
@@ -51,6 +52,23 @@ import {
 } from './legacy-import-write.mjs';
 
 const BILLION = 1000000000;
+
+test('an imported current address reads house number, street, commune and province', () => {
+  assert.equal(
+    currentAddressText(
+      { house_number: '12', street: 'Lý Thường Kiệt' },
+      { name: 'Phường Bến Nghé', provinceName: 'Thành phố Hồ Chí Minh' },
+    ),
+    '12, Lý Thường Kiệt, Phường Bến Nghé, Thành phố Hồ Chí Minh',
+  );
+  assert.equal(
+    currentAddressText(
+      { house_number: null, street: 'Lý Thường Kiệt' },
+      { name: 'Phường Bến Nghé', provinceName: 'Thành phố Hồ Chí Minh' },
+    ),
+    'Lý Thường Kiệt, Phường Bến Nghé, Thành phố Hồ Chí Minh',
+  );
+});
 
 test('billions and millions of dong become whole VND without floating point', () => {
   assert.equal(parseMoneyVnd('23,00', BILLION).value, '23000000000');

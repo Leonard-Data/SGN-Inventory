@@ -152,9 +152,9 @@ await check('manager self approval forbidden',()=>fails('select public.decide_pr
 const maintainSql='select public.maintain_property($1,$2,$3,$4,$5,(select revision from public.properties where id=$1)) as id';
 async function maintainFacts(id,changes){const rev=(await db.query('select revision from public.properties where id=$1',[id])).rows[0].revision;return db.query(maintainSql,[id,'property',id,rev,changes]);}
 async function addAddress(id,changes){const rev=(await db.query('select revision from public.properties where id=$1',[id])).rows[0].revision;return (await db.query(maintainSql,[id,'address',null,rev,changes])).rows[0].id;}
-await check('new address cannot contain district',()=>addAddress(other,{format:'current',address_text:'Test',district_text:'Quận 1'}).then(()=>assert.fail('must reject'),error=>assert.equal(error.code,'23514')));
+await check('new address cannot contain district',()=>addAddress(other,{format:'current',house_number:'Test',district_text:'Quận 1'}).then(()=>assert.fail('must reject'),error=>assert.equal(error.code,'23514')));
 await check('unverified address stays in separate analytic bucket',async()=>assert.equal((await db.query('select * from public.v_admin_inventory_by_area')).rows[0].current_commune_label,'Chưa xác minh địa chỉ mới'));
-const verifiedId=await addAddress(other,{format:'current',address_text:'Fixture current address',commune_text:'Untrusted label'});
+const verifiedId=await addAddress(other,{format:'current',house_number:'Fixture current address',commune_text:'Untrusted label'});
 const verifiedRev=(await db.query('select revision from public.property_addresses where id=$1',[verifiedId])).rows[0].revision;
 const verifiedChanges={province_unit_id:provinceA,commune_unit_id:commune,mapping_status:'verified',verification_method:'manual',source_url:'https://example.test/evidence',effective_on:'2026-10-10',mapping_evidence:'Property boundary checked against official evidence'};
 await check('wrong current province/commune hierarchy rejected',()=>fails(maintainSql,[other,'mapping',verifiedId,verifiedRev,{...verifiedChanges,province_unit_id:provinceB}],'23514'));

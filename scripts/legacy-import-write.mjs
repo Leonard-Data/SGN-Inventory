@@ -658,10 +658,14 @@ async function unitIds(db, cache) {
 }
 
 export function currentAddressText(address, target) {
-  const local = [address.house_number, address.street]
+  return [
+    address.house_number,
+    address.street,
+    target.name,
+    target.provinceName,
+  ]
     .filter(Boolean)
-    .join(' ');
-  return [local, target.name, target.provinceName].filter(Boolean).join(', ');
+    .join(', ');
 }
 
 /**

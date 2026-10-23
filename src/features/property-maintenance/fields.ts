@@ -118,7 +118,6 @@ export const fields: Record<string, Field> = {
     options: ['legacy', 'current'],
     required: true,
   },
-  address_text: { vi: 'Địa chỉ đã biết', en: 'Known address', required: true },
   house_number: { vi: 'Số nhà', en: 'House number' },
   street: { vi: 'Đường', en: 'Street' },
   province_text: {
@@ -219,7 +218,6 @@ export const targetFields: Record<Target, readonly string[]> = {
   ],
   address: [
     'format',
-    'address_text',
     'house_number',
     'street',
     'province_text',
@@ -272,7 +270,6 @@ export function addressFields(
   const selected = names ? new Set(names) : null,
     picker = legacy && (selected === null || selected.has('district_unit_id'));
   return [
-    'address_text',
     'house_number',
     'street',
     ...(picker ? ['district_text'] : []),
@@ -313,6 +310,17 @@ export class InputError extends Error {
   constructor() {
     super('invalid-input');
   }
+}
+// A created address names something a person supplied: a house number, a street, or a commune picked
+// from the catalog. The province is stated by the app on every form, so it is never the address.
+export function recordsAddressPart(address: Record<string, unknown>) {
+  const filled = (value: unknown) =>
+    typeof value === 'string' && value.trim() !== '';
+  return (
+    filled(address.house_number) ||
+    filled(address.street) ||
+    filled(address.commune_unit_id)
+  );
 }
 export const isUuid = (value: unknown): value is string =>
   typeof value === 'string' &&

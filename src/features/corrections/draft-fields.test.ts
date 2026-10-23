@@ -29,7 +29,8 @@ test('address corrections keep their existing field boundaries', () => {
     staff: true,
     propertyStatus: 'available',
   });
-  assert.ok(names.includes('address_text'));
+  // The known address is composed by the server, so a correction never proposes one.
+  assert.equal(names.includes('address_text'), false);
   assert.equal(names.includes('district_text'), false);
   // The legacy district is a picker now, so a staff correction can name it; the source labels stay
   // provenance and are never edited.

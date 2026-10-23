@@ -112,6 +112,10 @@ _Avoid_: Merged catalog, current hierarchy
 The official old-to-new unit mapping, stating for each legacy unit whether it became one whole unit, a rename, or part of one or more successors. Its source table is ingested in full by migration — 10,023 of the 10,051 legacy wards covered, 28 with no accepted successor row — and it is migration-only: no client writes it, and a row is candidate evidence for a property's address, never a verification of one, so nothing is mapped automatically and a partial transition still needs property-level evidence.
 _Avoid_: Verification, property-level mapping
 
+**Composed address text**:
+The one line an address is displayed and searched by, written by the server from the parts that address records — house number, street, commune, district and province for a legacy address, and the same line without the district for a current one, joined by ", " with a missing part skipped. The official name of the unit an address records wins over a recorded source label, which only names a level that records no unit. It is composed when an address is created or edited, while a mapping change moves only the units and leaves the recorded text as it is, and it is never typed beside those parts: a save or a correction that states one is refused. A created address must name a house number, a street or a commune picked from the catalog; a province alone, including the app's own, is not an address. A row imported with its own recorded wording keeps that wording.
+_Avoid_: Typed known address, address label
+
 **Address search**:
 A match of a literal, accent-insensitive contiguous fragment against recorded addresses; `%` and `_` are ordinary characters.
 _Avoid_: Fuzzy search, automatic ward mapping
