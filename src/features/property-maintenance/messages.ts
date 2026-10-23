@@ -71,7 +71,12 @@ const copy = {
   ],
   noChange: ['Chưa có thay đổi.', 'No changes to save.'],
   // The pre-create warning: it names what already sits at the address and still lets the person
-  // make a second property, because separate units in one building are ordinary.
+  // make a second property, because separate units in one building are ordinary. It is a dialog,
+  // so its title is the sentence the person reads first.
+  duplicateAddressTitle: [
+    'Địa chỉ đã có hồ sơ khác',
+    'This address is already recorded',
+  ],
   duplicateAddressBefore: [
     'Hồ sơ khác cùng địa chỉ: {n}. Mở để xem trước khi tạo thêm.',
     'Other properties at this address: {n}. Open them before creating another.',

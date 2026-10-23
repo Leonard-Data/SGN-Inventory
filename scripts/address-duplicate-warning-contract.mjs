@@ -27,8 +27,8 @@ export async function addressDuplicateWarningContract({
     commune_unit_id: commune,
     is_primary: true,
   };
-  const composed = '12, Lê Lợi, Fixture Commune, Fixture Province';
-  const elsewhere = '99, Hai Bà Trưng, Fixture Commune, Fixture Province';
+  const composed = '12 Lê Lợi, Fixture Commune, Fixture Province';
+  const elsewhere = '99 Hai Bà Trưng, Fixture Commune, Fixture Province';
   const existing = 'b7000000-0000-4000-8000-000000000001';
   const retired = 'b7000000-0000-4000-8000-000000000002';
   const other = 'b7000000-0000-4000-8000-000000000003';
@@ -42,7 +42,7 @@ export async function addressDuplicateWarningContract({
     is_primary: true,
   };
   // The wording a record of that address was written with, which its parts would not compose.
-  const recordedText = '8, NGUYEN HUE, FIXTURE COMMUNE, FIXTURE PROVINCE';
+  const recordedText = '8 NGUYEN HUE, FIXTURE COMMUNE, FIXTURE PROVINCE';
   // `plain` already records the address; each `saved` is the record a creation of it becomes,
   // inserted first so its group can be read, while the read itself is given only the parts a
   // creation states.
@@ -83,6 +83,15 @@ export async function addressDuplicateWarningContract({
         JSON.stringify(address),
       ])
     ).rows[0].found;
+  // One row's composed text, exactly as a save stores it.
+  const compose = async (address) =>
+    (
+      await db.query(
+        `select private.composed_address_text(
+           jsonb_populate_record(null::public.property_addresses,$1::jsonb)) as text`,
+        [JSON.stringify(address)],
+      )
+    ).rows[0].text;
   // A save stores the composition of the parts it was given, so a record built from stated parts
   // is inserted with exactly the text the creation read compares against.
   const savedAddress = async (propertyId, address) =>
@@ -184,14 +193,35 @@ export async function addressDuplicateWarningContract({
   await check(
     'the save’s own composition is the text the address row holds',
     async () => {
-      const text = (
-        await db.query(
-          `select private.composed_address_text(
-             jsonb_populate_record(null::public.property_addresses,$1::jsonb)) as text`,
-          [JSON.stringify(parts)],
-        )
-      ).rows[0].text;
-      assert.equal(text, composed);
+      assert.equal(await compose(parts), composed);
+    },
+  );
+  // The captain's correction: the house number and the street name one line, and the levels above
+  // them keep the `, ` they always had.
+  await check(
+    'the house number and the street are joined by a space, the levels above by a comma',
+    async () => {
+      const text = await compose(parityParts);
+      assert.equal(text, '8 Nguyễn Huệ, Fixture Commune, Fixture Province');
+      assert.doesNotMatch(text, /8, /);
+      assert.equal((text.match(/, /g) ?? []).length, 2);
+    },
+  );
+  // A part the address does not record leaves no separator of its own and no doubled space.
+  await check(
+    'a missing house number leaves the street alone, with no stray separator',
+    async () => {
+      const text = await compose({ ...parityParts, house_number: null });
+      assert.equal(text, 'Nguyễn Huệ, Fixture Commune, Fixture Province');
+      assert.doesNotMatch(text, /^[, ]|  /);
+    },
+  );
+  await check(
+    'a missing street leaves the house number alone, with no stray separator',
+    async () => {
+      const text = await compose({ ...parityParts, street: null });
+      assert.equal(text, '8, Fixture Commune, Fixture Province');
+      assert.doesNotMatch(text, /^[, ]|  /);
     },
   );
   await check(
@@ -216,6 +246,36 @@ export async function addressDuplicateWarningContract({
     { ...parityParts, house_number: ' 8 ', street: 'nguyen hue' },
     savedTyped,
     ['SGN279-PLAIN', 'SGN279-RECORDED', 'SGN279-SAVED', 'SGN279-TYPED'],
+  );
+  // The captain's requirement: the warning compares addresses without case. It does not do that
+  // itself - `private.address_match_key` lowercases and accent-folds both sides - so this pins the
+  // shared rule: an address typed in upper case, and one typed in mixed case, name exactly the
+  // records an address typed in lower case names.
+  await check(
+    'an address typed in upper or mixed case warns about the same records as one in lower case',
+    async () => {
+      const lower = codes(await duplicates(parityParts));
+      assert.deepEqual(
+        codes(await duplicates({ ...parityParts, street: 'NGUYỄN HUỆ' })),
+        lower,
+      );
+      assert.deepEqual(
+        codes(
+          await duplicates({
+            ...parityParts,
+            house_number: '8',
+            street: 'nGuYễN hUệ',
+          }),
+        ),
+        lower,
+      );
+      assert.deepEqual(lower, [
+        'SGN279-PLAIN',
+        'SGN279-RECORDED',
+        'SGN279-SAVED',
+        'SGN279-TYPED',
+      ]);
+    },
   );
   // A run of spaces inside a part is not folded: both sides treat the two texts as different
   // addresses, so neither names the record written the other way, in either direction.

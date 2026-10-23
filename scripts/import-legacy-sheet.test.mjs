@@ -59,7 +59,7 @@ test('an imported current address reads house number, street, commune and provin
       { house_number: '12', street: 'Lý Thường Kiệt' },
       { name: 'Phường Bến Nghé', provinceName: 'Thành phố Hồ Chí Minh' },
     ),
-    '12, Lý Thường Kiệt, Phường Bến Nghé, Thành phố Hồ Chí Minh',
+    '12 Lý Thường Kiệt, Phường Bến Nghé, Thành phố Hồ Chí Minh',
   );
   assert.equal(
     currentAddressText(

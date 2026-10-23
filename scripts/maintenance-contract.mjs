@@ -46,7 +46,7 @@ export async function maintenanceContract({
             [created],
           )
         ).rows[0].address_text,
-        'Nhà nguồn 50%_, Lý Thường Kiệt, Phường 14, Quận 10, Thành phố Hồ Chí Minh',
+        'Nhà nguồn 50%_ Lý Thường Kiệt, Phường 14, Quận 10, Thành phố Hồ Chí Minh',
       );
       // An address-only creation carries no asking-price change, so it records no history.
       assert.deepEqual(
@@ -269,7 +269,7 @@ export async function maintenanceContract({
       });
       assert.equal(
         await addressText(legacy, 'legacy'),
-        '12, Lý Thường Kiệt, Phường 14, Quận 10, Thành phố Hồ Chí Minh',
+        '12 Lý Thường Kiệt, Phường 14, Quận 10, Thành phố Hồ Chí Minh',
       );
       // A current address reads the same line without a district, and a part the source did not
       // record leaves no empty segment or placeholder behind.
@@ -319,7 +319,7 @@ export async function maintenanceContract({
       ]);
       assert.equal(
         await addressText(legacy, 'legacy'),
-        '12, Lý Thường Kiệt nối dài, Phường 14, Quận 10, Thành phố Hồ Chí Minh',
+        '12 Lý Thường Kiệt nối dài, Phường 14, Quận 10, Thành phố Hồ Chí Minh',
       );
       // A save that states its own text is refused and writes nothing, on creation and on edit.
       const currentRow = (
@@ -1635,7 +1635,7 @@ export async function maintenanceContract({
             [addr.id],
           )
         ).rows[0].address_text,
-        '12, Đường đã đính chính, Xã chưa có, Tỉnh chưa có',
+        '12 Đường đã đính chính, Xã chưa có, Tỉnh chưa có',
       );
     },
   );
@@ -1783,7 +1783,7 @@ export async function maintenanceContract({
           format: 'alternate',
           supersedes_address_id: alternate.id,
           address_text:
-            'Địa chỉ khác chưa phân loại, Địa chỉ khác đã đính chính',
+            'Địa chỉ khác chưa phân loại Địa chỉ khác đã đính chính',
         },
       );
       assert.deepEqual(
