@@ -6,9 +6,12 @@ import {
   filterUnitOptions,
   foldUnitName,
   openCombobox,
+  streetSuggestions,
   typeInCombobox,
   type ComboboxOption,
 } from './combobox.ts';
+import { formChanges, recordsAddressPart } from './fields.ts';
+import { STREET_NAMES } from './streets.ts';
 
 const units: ComboboxOption[] = [
   { value: '', label: 'Any' },
@@ -134,4 +137,25 @@ test('Escape closes without a commit and Enter closed is the form’s own submit
 test('keys that are not the picker’s own are left to the field', () => {
   for (const key of ['a', 'Backspace', 'Tab', 'PageDown'])
     assert.equal(comboboxKey(openCombobox(0), key, 2).handled, false, key);
+});
+
+// The street field is a suggestion layer: the committed list only decides what is offered, never what
+// a street may be.
+test('a listed street is offered as a suggestion, also when typed without diacritics', () => {
+  assert.ok(
+    streetSuggestions(STREET_NAMES, 'ly thuong').includes('Lý Thường Kiệt'),
+  );
+  assert.ok(
+    streetSuggestions(STREET_NAMES, 'LÝ THƯỜNG').includes('Lý Thường Kiệt'),
+  );
+});
+
+test('a street typed by hand that the list does not carry still saves as typed', () => {
+  const typed = 'Hẻm 42 Đường Chưa Có Tên';
+  // Nothing is offered for it, and that is not a refusal: the field submits the text as it stands.
+  assert.deepEqual(streetSuggestions(STREET_NAMES, typed), []);
+  const form = new FormData();
+  form.set('street', typed);
+  assert.deepEqual(formChanges('address', form), { street: typed });
+  assert.equal(recordsAddressPart({ street: typed, format: 'legacy' }), true);
 });

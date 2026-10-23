@@ -43,6 +43,19 @@ export function filterUnitOptions(
   );
 }
 
+// The street field's suggestions: the same folding and substring rule the unit pickers use, over the
+// names one list states. A street the list does not name is simply not offered - what a person typed
+// is still the value the field keeps, so nothing here decides what may be saved.
+export function streetSuggestions(
+  streets: readonly string[],
+  query: string | null,
+): string[] {
+  return filterUnitOptions(
+    streets.map((street) => ({ value: street, label: street })),
+    query,
+  ).map((option) => option.value);
+}
+
 // Opening shows the whole list with the committed selection highlighted, so a reopened picker
 // still says what is recorded.
 export function openCombobox(selected: number): ComboboxState {

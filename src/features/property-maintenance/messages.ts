@@ -178,6 +178,11 @@ const copy = {
     'Không có đơn vị chính thức nào khớp với nội dung đã gõ.',
     'No official unit matches what you typed.',
   ],
+  // The street list only suggests: a name it does not carry is still a street the person may type.
+  streetHint: [
+    'Chọn tên đường trong danh sách gợi ý hoặc gõ tên đường khác; tên đường không có trong danh sách vẫn được lưu như nội dung đã gõ.',
+    'Pick a street from the suggestions or type another name; a street that is not on the list is saved exactly as typed.',
+  ],
   contacts: [
     'Bảo trì người liên hệ và liên kết',
     'Maintain contacts and links',

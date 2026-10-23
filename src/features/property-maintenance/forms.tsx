@@ -22,6 +22,7 @@ import {
 import { maintenanceError, maintenanceText, optionLabel } from './messages';
 import { failureRoute } from './refusal-rules';
 import { UnitCombobox, type UnitChoice } from './unit-combobox';
+import { StreetCombobox } from './street-combobox';
 import {
   FIXED_PROVINCE,
   LEGACY_CATALOG_DAY,
@@ -260,6 +261,16 @@ export function RecordFields({
             locale={locale}
             unit={field.price?.unit ?? 'ty'}
             kind={field.price?.kind ?? 'sale'}
+          />
+        ) : name === 'street' ? (
+          // The known street names are offered, and a street outside that list stays what the field
+          // submits: the suggestion list never decides what a save accepts.
+          <StreetCombobox
+            id={id}
+            name={name}
+            label={text}
+            initial={initial}
+            hint={copy.streetHint}
           />
         ) : wide ? (
           // A multi-line field is as wide as the grid it stands in: source text is read, not
