@@ -151,6 +151,17 @@ test('a listed street is offered as a suggestion, also when typed without diacri
   );
 });
 
+test('a street the supplied list spelled twice under one searched name is offered once', () => {
+  assert.deepEqual(streetSuggestions(STREET_NAMES, 'tran xuan hoa'), [
+    'Trần Xuân Hòa',
+  ]);
+  const searched = STREET_NAMES.map((name) =>
+    foldUnitName(name).replace(/\s+/g, ' ').trim(),
+  );
+  assert.equal(new Set(searched).size, searched.length);
+  for (const name of STREET_NAMES) assert.doesNotMatch(name, /\s{2,}/, name);
+});
+
 test('a street typed by hand that the list does not carry still saves as typed', () => {
   const typed = 'Hẻm 42 Đường Chưa Có Tên';
   // Nothing is offered for it, and that is not a refusal: the field submits the text as it stands.

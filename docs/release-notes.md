@@ -42,8 +42,26 @@ suggestion by pointer or by keyboard, or saved an unlisted street, so those stay
 [testing.md](testing.md#property-contact-and-address-maintenance-acceptance-not-yet-executed). The
 list is kept exactly as supplied, so it carries its own defects: 14 groups of names that fold to the
 same searched name ("Trần Xuân Hoà"/"Trần Xuân Hòa", "Nguyễn Văn Luông"/"Nguyễn Văn Lượng") are
-offered as the distinct names they are, and two names carry a doubled space. Cleaning the list is the
-captain's decision and is noted in the pull request rather than done here.
+offered as the distinct names they are, and two names carry a doubled space. The captain decided that
+same day to clean them up; see *The supplied street list's near-duplicates are cleaned* below.
+
+### The supplied street list's near-duplicates are cleaned (captain request)
+
+The street suggestion list holds 992 names instead of 1006. Each of the 14 names that folded to
+another entry's searched name is gone, keeping the variant with the correct Vietnamese diacritics —
+the accented or correctly accented spelling where the other was mis-accented, unaccented, lowercased
+or carried a doubled space — and the two doubled internal spaces are single spaces. Nothing else
+changed: the surviving names keep the supplied order and their own spelling, no other character is
+translated or reordered, and no runtime normalisation was added to hide a duplicate. The field, its
+matching and what a typed street stores are untouched.
+
+_Why it matters:_ a search such as "tran xuan hoa" used to offer the same street twice, which is
+noise for the person picking; it now offers it once.
+
+_Known gap:_ the surviving entry of a pair keeps the spelling supplied, and where both variants are
+correctly accented names of two different real streets ("Nguyễn Văn Luông" of Quận 6 and "Nguyễn Văn
+Lượng" of Gò Vấp), collapsing them to one suggestion drops the other name from the list and is stated
+in the pull request for the captain to confirm.
 
 ## 23 October 2026 — the properties table orders and hides by column
 
