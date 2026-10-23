@@ -1,0 +1,39 @@
+# Per-repository no-mistakes configuration.
+#
+# Validation runs this project's own checks instead of improvising a throwaway
+# database and browser harness on every run. Each entry below names a package
+# script the repository already defines; `.github/workflows/ci.yml` (`npm run
+# check`) stays the full CI-parity owner.
+#
+# Every command prepends the Node toolchain `.nvmrc` and `engines` pin, the way
+# CI provides it, because the gate host's own `node`/`npm` do not satisfy them.
+# The prefix is harmless on a machine without that directory: the command then
+# uses whatever toolchain is on PATH and fails loudly if none is.
+#
+# no-mistakes reads `commands.*` and `test.instructions` only from the
+# default-branch copy of this file, so these pins take effect once this file is
+# on `main`.
+
+commands:
+  # A run worktree starts with tracked files only, so the ignored dependency tree
+  # the pinned commands need is materialized the way CI does it. CI installs the
+  # npm from `packageManager` before `npm ci`, because Node 24.14.0 bundles npm
+  # 11.9.0 and `.npmrc` sets `engine-strict=true`.
+  prepare: 'PATH="${NVM_DIR:-$HOME/.nvm}/versions/node/v24.14.0/bin:$PATH" npx --yes npm@11.13.0 ci --prefer-offline'
+  # `test:unit` (node --test) plus `test:schema` (embedded migration assertions).
+  test: 'PATH="${NVM_DIR:-$HOME/.nvm}/versions/node/v24.14.0/bin:$PATH" npm test'
+  lint: 'PATH="${NVM_DIR:-$HOME/.nvm}/versions/node/v24.14.0/bin:$PATH" npm run lint'
+
+test:
+  instructions: |
+    Use the pinned `npm test` command and the suites this repository already
+    ships: the `test:unit` files colocated with their features, and the
+    `test:schema` assertions that read the migration SQL through
+    `scripts/validate-schema.mjs`. Add a case to those suites when a change needs
+    one.
+    Do not build a disposable database, a Postgres shim, a browser driver, or any
+    other improvised harness, and do not install one to validate a change.
+    `npm run test:acceptance` needs a live environment (`.env.acceptance.local`),
+    and the staging gates in `docs/testing.md` need one too; run either only when
+    the change genuinely requires a live environment, and record in the evidence
+    what was not exercised without one.
