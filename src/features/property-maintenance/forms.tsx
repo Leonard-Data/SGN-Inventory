@@ -256,7 +256,8 @@ export function RecordFields({
           />
         ) : wide ? (
           // A multi-line field is as wide as the grid it stands in: source text is read, not
-          // scanned in a column beside the other facts.
+          // scanned in a column beside the other facts. A note stays source text in the editor
+          // too, so what reads back is exactly what was typed.
           <textarea
             id={id}
             className="textarea"
@@ -265,6 +266,7 @@ export function RecordFields({
             defaultValue={initial}
             maxLength={field.kind === 'phones' ? 2020 : 2000}
             required={field.required}
+            translate={name === 'notes' ? 'no' : undefined}
           />
         ) : (
           <input

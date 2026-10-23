@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { messages } from '../../i18n/messages.ts';
+import { formChanges } from '../property-maintenance/fields.ts';
 
 const source = (path: string) =>
   readFileSync(new URL(path, import.meta.url), 'utf8');
@@ -211,29 +212,102 @@ test('the drawer box does not scroll, so the panel holds the only scrollbar', ()
 });
 
 // The property's note is read in the panel itself: the record's own `notes`, labelled, as source
-// text with its line breaks kept and wrapping inside the panel. A record with no note renders no
-// row at all, so the panel never shows an empty heading.
-test('the panel states the recorded note, and nothing when there is none', () => {
+// text with its line breaks kept and wrapping inside the panel. It is edited in place from the same
+// row, so a record with no note still offers the pencil and a cleared field removes the note.
+test('the panel states the recorded note and edits it in place', () => {
   assert.match(
     drawer,
     /const note = record\?\.notes\?\.trim\(\) \? record\.notes : null;/,
   );
-  assert.match(drawer, /\{note \? \(/);
+  // The row is drawn whenever the record holds a note or the session may add one, so a record with
+  // no note is not a row that simply disappears.
+  assert.match(drawer, /\{note !== null \|\| canEdit \? \(/);
   assert.match(drawer, /<dt>\{text\.notes\}<\/dt>/);
-  // Source text: shown as recorded, never translated.
+  // Source text: shown as recorded, never translated, and a missing note reads as the marker the
+  // rest of the panel states rather than as a blank.
   assert.match(
     drawer,
-    /className="quick-view-note" translate="no">\s*\{note\}/,
+    /<span\s+className=\{\s*'quick-view-note-text' \+ \(note \? '' : ' is-unknown'\)\s*\}\s+translate="no"\s*>\s*\{note \?\? text\.unknown\}/,
   );
-  // A long note takes the full row and keeps its own line breaks inside it.
+  // A long note takes the full row and keeps its own line breaks inside it, with the pencil beside
+  // it rather than pushed to the bottom of the value.
   assert.match(drawer, /<div className="fact span-all">\s*<dt>\{text\.notes\}/);
-  assert.match(rule('.quick-view-note {'), /white-space: pre-wrap/);
-  assert.match(rule('.quick-view-note {'), /overflow-wrap: anywhere/);
-  // The label exists in both languages.
+  assert.match(rule('.quick-view-note-text {'), /white-space: pre-wrap/);
+  assert.match(rule('.quick-view-note-text {'), /overflow-wrap: anywhere/);
+  assert.match(rule('.quick-view-note {'), /display: flex/);
+  // The label exists in both languages, and so do the two names of the pencil.
   assert.notEqual(messages.vi.notes, messages.en.notes);
-  for (const locale of ['vi', 'en'] as const)
-    assert.ok(
-      messages[locale].notes.trim().length,
-      `${locale}.notes is missing`,
-    );
+  for (const key of ['notes', 'editNote', 'addNote'] as const) {
+    for (const locale of ['vi', 'en'] as const)
+      assert.ok(
+        messages[locale][key].trim().length,
+        `${locale}.${key} is missing`,
+      );
+    assert.notEqual(messages.vi[key], messages.en[key]);
+  }
+});
+
+// The pencil is the price row's own in-place edit: it opens an editor in the value's place, names
+// its state, and hands the focus back to itself when the editor closes. It is offered only where
+// the full record would be editable, from the same permission answer the price edit reads.
+test('the note pencil edits in place, for a session that may edit the record', () => {
+  assert.match(
+    drawer,
+    /const \[editingNote, setEditingNote\] = useState\(false\);/,
+  );
+  assert.match(
+    drawer,
+    /const noteButton = useRef<HTMLButtonElement \| null>\(null\);/,
+  );
+  // One gate for the whole surface, never a second rule for this control.
+  assert.match(
+    drawer,
+    /\{canEdit \? \(\s*<button\s*className="quick-view-reveal"\s*ref=\{noteButton\}/,
+  );
+  assert.match(drawer, /aria-expanded=\{editingNote\}/);
+  assert.match(drawer, /aria-label=\{note \? text\.editNote : text\.addNote\}/);
+  // Escape cancels the open edit instead of taking the whole panel - and the note being typed -
+  // with it, and the focus that the close restores is the pencil that opened it.
+  assert.match(
+    drawer,
+    /onKeyDown=\{\(event\) => \{\s*if \(event\.key !== 'Escape'\) return;\s*event\.preventDefault\(\);\s*closeNoteEdit\(\);\s*\}\}/,
+  );
+  assert.match(
+    drawer,
+    /function closeNoteEdit\(\) \{\s*setEditingNote\(false\);\s*requestAnimationFrame\(\(\) => noteButton\.current\?\.focus\(\)\);/,
+  );
+  assert.match(drawer, /onCancel=\{closeNoteEdit\}/);
+});
+
+// The note edit is the record editor's own form and write path, not a second writer: the same field
+// record, the same target, the same route the full record posts to, so validation and refusals are
+// identical. No explanation travels with it, so the database's price-only history records nothing.
+test('the note edit reuses the record editor path and records no history', () => {
+  assert.match(drawer, /const NOTE_FIELDS = \['notes'\] as const;/);
+  const editor = drawer.slice(drawer.indexOf('function QuickFieldEditor('));
+  assert.match(editor, /<MutationForm[\s\S]{0,400}target="property"/);
+  assert.match(editor, /`\/api\/properties\/\$\{propertyId\}\/maintenance`/);
+  assert.match(
+    editor,
+    /target: 'property',\s*targetId: propertyId,\s*revision: record\.revision,\s*propertyRevision: record\.revision,/,
+  );
+  assert.match(
+    editor,
+    /<RecordFields locale=\{locale\} values=\{record\} names=\{names\} \/>/,
+  );
+  assert.doesNotMatch(editor, /explanation/);
+  // A cleared field is the record's own null: the note is removed, not replaced by a blank note.
+  const form = new FormData();
+  form.set('notes', '');
+  assert.deepEqual(formChanges('property', form, { notes: 'Recorded note' }), {
+    notes: null,
+  });
+  // A note that is left as it was is no change at all, which the editor refuses rather than
+  // writing an identical value back.
+  const unchanged = new FormData();
+  unchanged.set('notes', 'Recorded note');
+  assert.deepEqual(
+    formChanges('property', unchanged, { notes: 'Recorded note' }),
+    {},
+  );
 });

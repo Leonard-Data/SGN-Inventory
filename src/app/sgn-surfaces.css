@@ -540,9 +540,27 @@ dialog.sgn-dialog[data-size='drawer']::backdrop {
 }
 /* The record's note is source text: its own line breaks are kept, and a long unbroken run wraps
    inside the panel instead of widening it. */
+/* The note keeps the full width for long source text while the pencil that edits it sits beside
+   it, aligned with the first line rather than pushed to the bottom of a long note. */
 .quick-view-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+.quick-view-note-text,
+.quick-view-note-editor {
+  flex: 1;
+  min-width: 0;
+}
+.quick-view-note-text {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+/* A record with no note states the same muted marker the other facts do, while the pencil beside it
+   stays the control it is. */
+.quick-view-note-text.is-unknown {
+  color: var(--muted);
+  font-weight: 400;
 }
 .quick-view-summary dd {
   font-size: var(--text-lg);
@@ -600,7 +618,8 @@ dialog.sgn-dialog[data-size='drawer']::backdrop {
   border-color: var(--border);
   color: var(--fg);
 }
-.quick-view-reveal[aria-pressed='true'] {
+.quick-view-reveal[aria-pressed='true'],
+.quick-view-reveal[aria-expanded='true'] {
   color: var(--accent);
 }
 .quick-view-reveal svg {

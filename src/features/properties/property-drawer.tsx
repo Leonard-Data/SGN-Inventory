@@ -72,6 +72,9 @@ const RECENT_COMMENTS = 5;
 // The facts the quick view's own price edit states, named by the same field record the full
 // record's editor reads them through.
 const PRICE_FIELDS = ['sale_price_vnd', 'monthly_rent_vnd'] as const;
+// The one field the note's quick edit writes: the same field record the full editor writes, so a
+// cleared field is the record's own null rather than a blank that would read as a note.
+const NOTE_FIELDS = ['notes'] as const;
 
 type UploadRow = {
   id: string;
@@ -234,6 +237,9 @@ function QuickView({
   const [record, setRecord] = useState<PropertyDetail['property'] | null>(null);
   const [editingPrice, setEditingPrice] = useState(false);
   const priceButton = useRef<HTMLButtonElement | null>(null);
+  // The note is edited in place beside the pencil that opened it, like the price above.
+  const [editingNote, setEditingNote] = useState(false);
+  const noteButton = useRef<HTMLButtonElement | null>(null);
   // The owner phone is held only after a deliberate disclosure, and hiding it drops the value
   // again, so a hidden number is never in the page text.
   const [disclosure, setDisclosure] = useState<OwnerContactDisclosure | null>(
@@ -492,22 +498,34 @@ function QuickView({
       createdBy: record.created_by,
       archived: !!record.archived_at,
     });
-  // A committed price moves the property's revision, so the panel reads the record again rather
+  // A committed edit moves the property's revision, so the panel reads the record again rather
   // than editing against the snapshot it opened on.
-  function closePriceEdit() {
-    setEditingPrice(false);
-    // The control that opened the editor is still on the page: focus returns to it, as it does
-    // when the panel itself closes.
-    requestAnimationFrame(() => priceButton.current?.focus());
-  }
-  function priceSaved() {
-    closePriceEdit();
+  function reloadRecord() {
     void loadPropertyDetail(propertyId, new AbortController().signal)
       .then((detail) => setRecord(detail.property))
       .catch(() => {
         // The edit is committed: a panel that cannot read the record back keeps the values it
         // holds, and the next open reads them again.
       });
+  }
+  // The control that opened an editor is still on the page: focus returns to it, as it does when
+  // the panel itself closes.
+  function closePriceEdit() {
+    setEditingPrice(false);
+    requestAnimationFrame(() => priceButton.current?.focus());
+  }
+  function priceSaved() {
+    closePriceEdit();
+    reloadRecord();
+  }
+  // The note's editor closes the same way: the pencil it was opened from takes the focus back.
+  function closeNoteEdit() {
+    setEditingNote(false);
+    requestAnimationFrame(() => noteButton.current?.focus());
+  }
+  function noteSaved() {
+    closeNoteEdit();
+    reloadRecord();
   }
   const entryDate = property.entryOn ? vietnamDate(property.entryOn) : null;
   const created = vietnamDate(property.createdAt);
@@ -632,10 +650,11 @@ function QuickView({
             </button>
           </div>
           {editingPrice && record ? (
-            <PriceEditor
+            <QuickFieldEditor
               propertyId={propertyId}
               record={record}
               locale={locale}
+              names={PRICE_FIELDS}
               onDenied={onDenied}
               onDone={priceSaved}
               onCancel={closePriceEdit}
@@ -680,12 +699,56 @@ function QuickView({
             </div>
           ))}
           {/* The note is source text: shown as recorded, never translated, with its own line
-              breaks kept and the full width of the panel for a long one. */}
-          {note ? (
+              breaks kept and the full width of the panel for a long one. A record with no note
+              still offers the edit, so a note can be added, and clearing the field removes it. */}
+          {note !== null || canEdit ? (
             <div className="fact span-all">
               <dt>{text.notes}</dt>
-              <dd className="quick-view-note" translate="no">
-                {note}
+              <dd className="quick-view-note">
+                {editingNote && record ? (
+                  // Escape cancels this edit, not the panel, so a note that is being typed is not
+                  // lost with the panel it was opened in; the panel's own Escape still closes the
+                  // panel once the editor is closed.
+                  <div
+                    className="quick-view-note-editor"
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Escape') return;
+                      event.preventDefault();
+                      closeNoteEdit();
+                    }}
+                  >
+                    <QuickFieldEditor
+                      propertyId={propertyId}
+                      record={record}
+                      locale={locale}
+                      names={NOTE_FIELDS}
+                      onDenied={onDenied}
+                      onDone={noteSaved}
+                      onCancel={closeNoteEdit}
+                    />
+                  </div>
+                ) : (
+                  <span
+                    className={
+                      'quick-view-note-text' + (note ? '' : ' is-unknown')
+                    }
+                    translate="no"
+                  >
+                    {note ?? text.unknown}
+                  </span>
+                )}
+                {canEdit ? (
+                  <button
+                    className="quick-view-reveal"
+                    ref={noteButton}
+                    type="button"
+                    aria-expanded={editingNote}
+                    aria-label={note ? text.editNote : text.addNote}
+                    onClick={() => setEditingNote((open) => !open)}
+                  >
+                    <PencilIcon />
+                  </button>
+                ) : null}
               </dd>
             </div>
           ) : null}
@@ -895,15 +958,34 @@ function denied(failure: unknown): failure is RequestError {
   );
 }
 
-// The quick view's price edit. It names the same target, the same field record and the same write
-// path the full record's editor uses, so a price saved here records what a price saved there
-// records - the same validation, the same refusal and the same history - and it reports the
-// server's own answer to the browser's catalogue exactly as that editor does, so the list row
-// behind the panel takes the new price without a reload.
-function PriceEditor({
+// The quick view's pencil: the same in-place edit the price row offers, drawn as the one control
+// beside the value it changes.
+function PencilIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      aria-hidden="true"
+    >
+      <path d="M4 20h4L18 10a2.8 2.8 0 0 0-4-4L4 16v4Z" />
+      <path d="M14 6l4 4" />
+    </svg>
+  );
+}
+
+// The quick view's price and note edits. An editor names the same target, the same field record and
+// the same write path the full record's editor uses, so a value saved here records what a value
+// saved there records - the same validation and the same refusal - and it reports the server's own
+// answer to the browser's catalogue exactly as that editor does, so the list row behind the panel
+// takes the new value without a reload. A note writes no history: the recorded history is the price
+// change this path already records and nothing else.
+function QuickFieldEditor({
   propertyId,
   record,
   locale,
+  names,
   onDenied,
   onDone,
   onCancel,
@@ -911,6 +993,7 @@ function PriceEditor({
   propertyId: string;
   record: PropertyDetail['property'];
   locale: Locale;
+  names: readonly string[];
   onDenied: (status: number) => void;
   onDone: () => void;
   onCancel: () => void;
@@ -945,7 +1028,7 @@ function PriceEditor({
       onDenied={onDenied}
       onCancel={onCancel}
     >
-      <RecordFields locale={locale} values={record} names={PRICE_FIELDS} />
+      <RecordFields locale={locale} values={record} names={names} />
     </MutationForm>
   );
 }
