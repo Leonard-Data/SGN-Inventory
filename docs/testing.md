@@ -318,25 +318,33 @@ File-attestation key: one key is in use for both stages today, because the produ
 no `private.file_validation_keys` row and file completion failed closed there. The production row
 was installed from the private key file on 2026-10-19 on the assumption that the production
 deployment already signed with that file; it does not. The production deployment carries its own,
-separately created `SGN_FILE_VALIDATION_KEY` entry, so the two halves disagree and production file
-completion is refused: on 2026-10-23 a real pending upload whose bytes were present in the bucket,
-with the registered size, hash and content type, was answered `403 {"error":"operation-refused"}`
-by `POST /api/properties/{id}/files/{fileId}/complete` after the recovery list reported
-`objectState: present`, and the row stayed `pending`; presigned reads kept working throughout.
+separately created `SGN_FILE_VALIDATION_KEY` entry, so the two halves are taken not to agree, and
+production file completion is refused: on 2026-10-23 a real pending upload was answered
+`403 {"error":"operation-refused"}` by `POST /api/properties/{id}/files/{fileId}/complete` and the
+row stayed `pending`, while presigned reads kept working throughout. The browser's presign status
+and its upload `PUT` status and body were not captured, so an R2 403, a 503 and a CORS preflight
+failure were excluded indirectly rather than observed: the 403 body is this application's own JSON
+rather than an R2 XML error, the refusal came from the completion RPC after its 64-hex key check
+had passed — the check that yields the missing-configuration 503 — and the recovery list reported
+`objectState: present` with the registered size, hash and content type, so the `PUT` had stored the
+bytes. The disagreement itself is inference from that refusal, not a measured comparison of two
+values.
 Setting the production deployment's value to the value its database row holds, and redeploying
-production, repaired it on 2026-10-23: the production-only Vercel entry was replaced with the
-database row's value (compared by fingerprint, never printed), production was redeployed as
-`dpl_FQcEgJ78T6XMMxevudsMJkj8k2vV` and aliased to `sgnewhouse.online`, and the same registration
-then completed through the deployed route — `200 {"status":"ready"}`, a signed read returned
-202 315 bytes whose sha256 equals the registration, and the audit trail recorded the `ready`
-transition. A registration whose object survived completes on retry; one whose bytes the
-15-minute pending rule already discarded needs a fresh upload, which is its documented behaviour.
+production, repaired it on 2026-10-23: the production-only Vercel entry was replaced, production was
+redeployed as `dpl_FQcEgJ78T6XMMxevudsMJkj8k2vV` and aliased to `sgnewhouse.online`, and the same
+registration then completed through the deployed route — `200 {"status":"ready"}`, a signed read
+returned 202 315 bytes whose sha256 equals the registration, and the audit trail recorded the
+`ready` transition. Agreement after the repair rests on that completion too: the Vercel API treats
+that environment value as write-only, so the deployed value was never read back or compared against
+the database row, and no person has opened the document panel since the change. A registration
+whose object survived completes on retry; one whose bytes the 15-minute pending rule already
+discarded needs a fresh upload, which is its documented behaviour.
 Independent per-stage keys are the intended end state; separating them needs a fresh key, its
 matching database row and a production redeploy, which stays a deliberate later decision and has
 not been executed.
 
-Not executed: no schema migration, no RLS or policy change, no merge of any duplicate-address
-group, no property approved or verified, no deployment.
+Not executed by this import: no schema migration, no RLS or policy change, no merge of any
+duplicate-address group, no property approved or verified, no deployment.
 
 ## Required staging gates
 
