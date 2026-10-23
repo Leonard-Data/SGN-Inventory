@@ -179,6 +179,32 @@ export function listedAddress(
   );
 }
 
+// The address a row and the quick view both state, from one place: the text the record stores,
+// exactly as it was recorded - an imported row keeps the wording it was imported with, so the parts
+// are never composed again here - and the format the search matched it through, named only when
+// that is not the format the search reads, so the label always describes the address shown beside
+// it.
+export function statedAddress(
+  address: AddressSummary | undefined,
+  {
+    locale,
+    addressFormat,
+    matchedFormat = null,
+  }: {
+    locale: Locale;
+    addressFormat: string | null;
+    matchedFormat?: string | null;
+  },
+): { text: string; format: string } {
+  return {
+    text: address?.addressText || messages[locale].unknown,
+    format:
+      matchedFormat && matchedFormat !== addressFormat
+        ? label(locale, matchedFormat)
+        : '',
+  };
+}
+
 // One row of the table: every column, in the table's own order, with the value it holds or the
 // missing-value marker. `now` is the browser's clock for the modified phrase, and null means the
 // page has not hydrated yet: the cell then states the recorded timestamp itself. `address` is the

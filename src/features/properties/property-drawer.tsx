@@ -63,6 +63,7 @@ import {
   MISSING_VALUE,
   listedAddress,
   recordFacts,
+  statedAddress,
   totalAreaM2,
 } from './table';
 import type { OwnerContactDisclosure, PropertySummary } from './types';
@@ -137,8 +138,12 @@ export function PropertyDrawer({
         property ? (
           <>
             <p className="quick-view-address" translate="no">
-              {listedAddress(property, addressFormat)?.addressText ||
-                text.unknown}
+              {
+                statedAddress(listedAddress(property, addressFormat), {
+                  locale,
+                  addressFormat,
+                }).text
+              }
             </p>
             <span className="badge" data-tone={statusTone(property.status)}>
               {label(locale, property.status)}

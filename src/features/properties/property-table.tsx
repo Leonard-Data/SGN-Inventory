@@ -9,6 +9,7 @@ import {
   propertyTableRow,
   recordFacts,
   rowPrice,
+  statedAddress,
 } from './table';
 import { compactVnd, formatVnd } from './format';
 import { statusTone } from './property-card';
@@ -76,6 +77,11 @@ export const TableChunk = memo(function TableChunk({
       {rows.map((record) => {
         const matchedFormat = matchedFormats.get(record.id) ?? null;
         const address = listedAddress(record, addressFormat, matchedFormat);
+        const stated = statedAddress(address, {
+          locale,
+          addressFormat,
+          matchedFormat,
+        });
         const row = propertyTableRow(record, locale, now, address);
         // The facts the row and the quick view both state come from one projection.
         const facts = recordFacts(record, locale);
@@ -102,25 +108,8 @@ export const TableChunk = memo(function TableChunk({
               </small>
             </th>
             <td className="inventory-cell" data-column="address" translate="no">
-              <span>
-                {[address?.houseNumber, address?.street]
-                  .filter(Boolean)
-                  .join(' ') ||
-                  address?.addressText ||
-                  text.unknown}
-              </span>
-              <small className="inventory-secondary">
-                {[
-                  [address?.commune, address?.district]
-                    .filter(Boolean)
-                    .join(' · '),
-                  matchedFormat && matchedFormat !== addressFormat
-                    ? label(locale, matchedFormat)
-                    : '',
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </small>
+              <span>{stated.text}</span>
+              <small className="inventory-secondary">{stated.format}</small>
             </td>
             <td className="inventory-cell" data-column="price">
               {price ? (
