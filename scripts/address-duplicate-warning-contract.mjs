@@ -5,6 +5,10 @@ import assert from 'node:assert/strict';
 // post-create group uses, names only unarchived properties the caller may already read, and
 // answers nothing for an address nobody records. Nothing here creates, blocks or changes a record;
 // the post-create group and its merge stay as issue #147 left them.
+//
+// Issue #280 pins the two together: for one fixture, the read a creation asks about its address and
+// the group of the record that creation becomes are driven against each other in both directions,
+// so a change to one side alone fails here instead of leaving both quietly wrong.
 export async function addressDuplicateWarningContract({
   db,
   asUser,
@@ -28,6 +32,46 @@ export async function addressDuplicateWarningContract({
   const existing = 'b7000000-0000-4000-8000-000000000001';
   const retired = 'b7000000-0000-4000-8000-000000000002';
   const other = 'b7000000-0000-4000-8000-000000000003';
+  // The parity fixture: one address, recorded twice, beside the records creations of it become.
+  const parityParts = {
+    format: 'current',
+    house_number: '8',
+    street: 'Nguyễn Huệ',
+    province_unit_id: province,
+    commune_unit_id: commune,
+    is_primary: true,
+  };
+  // The wording a record of that address was written with, which its parts would not compose.
+  const recordedText = '8, NGUYEN HUE, FIXTURE COMMUNE, FIXTURE PROVINCE';
+  // `plain` already records the address; each `saved` is the record a creation of it becomes,
+  // inserted first so its group can be read, while the read itself is given only the parts a
+  // creation states.
+  const plain = 'b7000000-0000-4000-8000-000000000011';
+  const recorded = 'b7000000-0000-4000-8000-000000000012';
+  const savedClean = 'b7000000-0000-4000-8000-000000000013';
+  const savedTyped = 'b7000000-0000-4000-8000-000000000014';
+  const savedElsewhere = 'b7000000-0000-4000-8000-000000000015';
+  const elsewhereParts = {
+    format: 'current',
+    house_number: '99',
+    street: 'Hai Bà Trưng',
+    province_unit_id: province,
+    commune_unit_id: commune,
+    is_primary: true,
+  };
+  // One address recorded with a run of spaces inside a street, beside the same address written
+  // with one space. Composition trims only the ends, so these are two different texts.
+  const spaced = 'b7000000-0000-4000-8000-000000000016';
+  const spacedTwin = 'b7000000-0000-4000-8000-000000000017';
+  const spacedParts = {
+    format: 'current',
+    house_number: '21',
+    street: 'Lý  Thường Kiệt',
+    province_unit_id: province,
+    commune_unit_id: commune,
+    is_primary: true,
+  };
+  const spacedTwinParts = { ...spacedParts, street: 'Lý Thường Kiệt' };
 
   const asOwner = async () => {
     await db.exec('reset role');
@@ -39,6 +83,40 @@ export async function addressDuplicateWarningContract({
         JSON.stringify(address),
       ])
     ).rows[0].found;
+  // A save stores the composition of the parts it was given, so a record built from stated parts
+  // is inserted with exactly the text the creation read compares against.
+  const savedAddress = async (propertyId, address) =>
+    db.query(
+      `insert into public.property_addresses(property_id,format,address_text,house_number,street,
+         province_unit_id,commune_unit_id)
+       values ($1,'current',
+         private.composed_address_text(jsonb_populate_record(null::public.property_addresses,$2::jsonb)),
+         $3,$4,$5,$6)`,
+      [
+        propertyId,
+        JSON.stringify(address),
+        address.house_number,
+        address.street,
+        address.province_unit_id,
+        address.commune_unit_id,
+      ],
+    );
+  const codes = (rows) => rows.map((row) => row.propertyCode).sort();
+  // Both callers on one fixture: what the read names for the parts a creation states must be
+  // exactly the group of the record the same creation becomes, and both must name the expected
+  // records.
+  const pair = async (label, address, saved, expected) => {
+    await check(label, async () => {
+      const warned = codes(await duplicates(address));
+      const group = (
+        await db.query('select public.property_address_group($1) as grp', [
+          saved,
+        ])
+      ).rows[0].grp;
+      assert.deepEqual(warned, codes(group.members));
+      assert.deepEqual(warned, expected);
+    });
+  };
 
   await asOwner();
   await db.query(
@@ -66,6 +144,38 @@ export async function addressDuplicateWarningContract({
             ($3,'current',$5,'99','Hai Bà Trưng',$6,$7)`,
     [existing, retired, other, composed, elsewhere, province, commune],
   );
+  await db.query(
+    `insert into public.properties(id,property_code,listing_mode,property_type,status,created_by)
+     values ($1,'SGN279-PLAIN','sale','house','available',$5),
+            ($2,'SGN279-RECORDED','sale','house','available',$5),
+            ($3,'SGN279-SAVED','sale','house','available',$5),
+            ($4,'SGN279-TYPED','sale','house','available',$5),
+            ($6,'SGN279-ELSEWHERE','sale','house','available',$5)`,
+    [plain, recorded, savedClean, savedTyped, employees[0], savedElsewhere],
+  );
+  await db.query(
+    `insert into public.properties(id,property_code,listing_mode,property_type,status,created_by)
+     values ($1,'SGN279-SPACED','sale','house','available',$3),
+            ($2,'SGN279-TWIN','sale','house','available',$3)`,
+    [spaced, spacedTwin, employees[0]],
+  );
+  await savedAddress(plain, parityParts);
+  // The one record whose text is the wording it was written with rather than a composition.
+  await db.query(
+    `insert into public.property_addresses(property_id,format,address_text,house_number,street,
+       province_unit_id,commune_unit_id)
+     values ($1,'current',$2,'8','Nguyễn Huệ',$3,$4)`,
+    [recorded, recordedText, province, commune],
+  );
+  await savedAddress(savedClean, parityParts);
+  await savedAddress(savedTyped, {
+    ...parityParts,
+    house_number: ' 8 ',
+    street: 'nguyen hue',
+  });
+  await savedAddress(savedElsewhere, elsewhereParts);
+  await savedAddress(spaced, spacedParts);
+  await savedAddress(spacedTwin, spacedTwinParts);
   await db.query('update public.properties set archived_at=now() where id=$1', [
     retired,
   ]);
@@ -92,35 +202,42 @@ export async function addressDuplicateWarningContract({
       assert.deepEqual(found, [{ id: existing, propertyCode: 'SGN279-A' }]);
     },
   );
-  await check(
-    'a match is decided by the one rule, not by the typing',
-    async () => {
-      // The same address written in another case and without accents is the same address.
-      const found = await duplicates({
-        ...parts,
-        street: 'le loi',
-        house_number: ' 12 ',
-      });
-      assert.deepEqual(
-        found.map((row) => row.id),
-        [existing],
-      );
-    },
+  // A recorded text that differs from the composition of its own parts is still the same address,
+  // and both sides say so: the read names it, and the group of the record creation produces holds
+  // it. The set is pinned so a change to the rule fails here rather than keeping both sides wrong.
+  await pair(
+    'a recorded address text that differs from its composition is the same address to both',
+    parityParts,
+    savedClean,
+    ['SGN279-PLAIN', 'SGN279-RECORDED', 'SGN279-SAVED', 'SGN279-TYPED'],
   );
-  await check(
-    'the warning and the post-create group name the same records',
-    async () => {
-      const found = await duplicates(parts);
-      const group = (
-        await db.query('select public.property_address_group($1) as grp', [
-          existing,
-        ])
-      ).rows[0].grp;
-      assert.deepEqual(
-        found.map((row) => row.id),
-        group.members.map((member) => member.id),
-      );
-    },
+  await pair(
+    'case, accents and spacing around a part are ignored by both sides alike',
+    { ...parityParts, house_number: ' 8 ', street: 'nguyen hue' },
+    savedTyped,
+    ['SGN279-PLAIN', 'SGN279-RECORDED', 'SGN279-SAVED', 'SGN279-TYPED'],
+  );
+  // A run of spaces inside a part is not folded: both sides treat the two texts as different
+  // addresses, so neither names the record written the other way, in either direction.
+  await pair(
+    'a run of spaces inside a part is not folded, so neither side names the other record',
+    spacedParts,
+    spaced,
+    ['SGN279-SPACED'],
+  );
+  await pair(
+    'a run of spaces inside a part is not folded when the creation states the tighter part',
+    spacedTwinParts,
+    spacedTwin,
+    ['SGN279-TWIN'],
+  );
+  // A third address on the fixture: the existing record holds it and the record this creation
+  // becomes is inserted for it too, so both sides name both and neither names the parity records.
+  await pair(
+    'an address an existing record holds is named by both sides, with the creation’s own record',
+    elsewhereParts,
+    savedElsewhere,
+    ['SGN279-ELSEWHERE', 'SGN279-OTHER'],
   );
   await check('an archived record is not named', async () => {
     const found = await duplicates(parts);
