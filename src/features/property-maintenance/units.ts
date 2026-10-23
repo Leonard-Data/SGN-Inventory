@@ -113,9 +113,13 @@ export function unitOfferedOn(
 // submits the unit it holds.
 export function offeredUnits<
   T extends { id: string; valid_from: string; valid_to: string | null },
->(listed: readonly T[], day: string | null, recorded?: string | null): T[] {
+>(
+  listed: readonly T[],
+  day: string | null,
+  recorded: readonly string[] = [],
+): T[] {
   return listed.filter(
-    (unit) => unit.id === recorded || unitOfferedOn(unit, day),
+    (unit) => recorded.includes(unit.id) || unitOfferedOn(unit, day),
   );
 }
 

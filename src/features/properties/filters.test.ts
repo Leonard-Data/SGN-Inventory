@@ -10,6 +10,7 @@ import {
   INVENTORY_ACCESS_TYPES,
   INVENTORY_ADDRESS_FORMAT_ANY,
   INVENTORY_ADDRESS_FORMATS,
+  appliedUnitLookups,
   noInventoryFilters,
   offeredAddressLevels,
   parseInventoryFilters,
@@ -544,6 +545,28 @@ test('the commune filter carries a set, and one selection reads as it always did
   assert.deepEqual(filterParams(withoutCommune(single.filters, first)), {
     addressFormat: 'legacy',
   });
+});
+
+// The summary names the applied units from the catalog: a set of communes is named by one read, so
+// three chosen communes cost one commune read rather than three.
+test('an applied commune set is named by one catalog read', () => {
+  const ids = [
+    '22222222-2222-4222-8222-222222222222',
+    '88888888-8888-4888-8888-888888888888',
+    '99999999-9999-4999-8999-999999999999',
+  ];
+  assert.deepEqual(appliedUnitLookups(null, ids.join(',')), [
+    { level: 'commune', include: ids.join(',') },
+  ]);
+  assert.deepEqual(appliedUnitLookups(null, ids[0]), [
+    { level: 'commune', include: ids[0] },
+  ]);
+  const district = '11111111-1111-4111-8111-111111111111';
+  assert.deepEqual(appliedUnitLookups(district, ids.join(',')), [
+    { level: 'district', include: district },
+    { level: 'commune', include: ids.join(',') },
+  ]);
+  assert.deepEqual(appliedUnitLookups(null, null), []);
 });
 
 test('a malformed, empty or duplicated commune is refused rather than dropped', () => {

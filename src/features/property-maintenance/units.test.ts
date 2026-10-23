@@ -236,16 +236,16 @@ test('a picker offers the unit an address recorded before this entry still holds
     offeredUnits(
       [legacyProvince, recordedProvince],
       LEGACY_CATALOG_DAY,
-      recordedProvince.id,
+      [recordedProvince.id],
     ),
     [legacyProvince, recordedProvince],
   );
   assert.deepEqual(
-    offeredUnits([recordedWard], LEGACY_CATALOG_DAY, recordedWard.id),
+    offeredUnits([recordedWard], LEGACY_CATALOG_DAY, [recordedWard.id]),
     [recordedWard],
   );
   assert.deepEqual(
-    offeredUnits([legacyProvince, recordedProvince], LEGACY_CATALOG_DAY, ''),
+    offeredUnits([legacyProvince, recordedProvince], LEGACY_CATALOG_DAY, []),
     [legacyProvince],
   );
 });

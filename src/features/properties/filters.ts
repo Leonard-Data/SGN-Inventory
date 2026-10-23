@@ -144,6 +144,21 @@ export function withoutCommune(
   };
 }
 
+// The catalog reads that name an applied filter: one read per level, a commune set travelling as
+// the one set the address states.
+export function appliedUnitLookups(
+  district: string | null,
+  ward: string | null,
+): { level: 'district' | 'commune'; include: string }[] {
+  const communes = communeIds(ward);
+  return [
+    ...(district ? [{ level: 'district' as const, include: district }] : []),
+    ...(communes.length
+      ? [{ level: 'commune' as const, include: communes.join(',') }]
+      : []),
+  ];
+}
+
 // The one measured-value rule: a positive number with at most two decimals and inside the numeric
 // ceiling. An area and a frontage or depth bound are both stated by it, as the database read states
 // them.

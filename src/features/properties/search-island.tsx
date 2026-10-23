@@ -23,6 +23,7 @@ import {
   INVENTORY_LISTING_MODES,
   INVENTORY_PROPERTY_TYPES,
   INVENTORY_STATUSES,
+  appliedUnitLookups,
   communeIds,
   communeValue,
   noInventoryFilters,
@@ -266,40 +267,33 @@ export function SearchIsland({
     return () => abort.abort();
   }, [legacyUnits, wardParent, onDenied]);
   // An applied unit is named from its own recorded row, so a chip and a field state the unit
-  // without offering it as a choice. The read is keyed by the applied ids alone: an id the catalog
-  // cannot answer stays named by itself rather than being asked for again on every render.
+  // without offering it as a choice. The read is keyed by the applied ids alone and names the whole
+  // commune set in one call: an id the catalog cannot answer stays named by itself rather than
+  // being asked for again on every render.
   useEffect(() => {
-    const applied: [string, string][] = [];
-    if (appliedDistrict) applied.push(['district', appliedDistrict]);
-    for (const id of communeIds(appliedWard)) applied.push(['commune', id]);
-    if (!applied.length) return;
+    const lookups = appliedUnitLookups(appliedDistrict, appliedWard);
+    if (!lookups.length) return;
     const abort = new AbortController();
     void Promise.all(
-      applied.map(([level, id]) =>
+      lookups.map(({ level, include }) =>
         api<{ units: AdminUnit[] }>(
-          '/api/admin-units?' + new URLSearchParams({ level, include: id }),
+          '/api/admin-units?' + new URLSearchParams({ level, include }),
           undefined,
           abort.signal,
-        )
-          .then(
-            (result) => result.units.find((unit) => unit.id === id)?.name_vi,
+        ).catch((failure) => {
+          if (
+            failure instanceof RequestError &&
+            (failure.status === 401 || failure.status === 403)
           )
-          .catch((failure) => {
-            if (
-              failure instanceof RequestError &&
-              (failure.status === 401 || failure.status === 403)
-            )
-              onDenied(failure.status);
-            return undefined;
-          }),
+            onDenied(failure.status);
+          return { units: [] };
+        }),
       ),
-    ).then((names) => {
+    ).then((results) => {
       if (abort.signal.aborted) return;
       const found: Record<string, string> = {};
-      applied.forEach(([, id], index) => {
-        const name = names[index];
-        if (name) found[id] = name;
-      });
+      for (const result of results)
+        for (const unit of result.units) found[unit.id] = unit.name_vi;
       if (!Object.keys(found).length) return;
       setAppliedNames((current) => ({ ...current, ...found }));
     });
