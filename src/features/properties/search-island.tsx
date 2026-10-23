@@ -429,7 +429,7 @@ export function SearchIsland({
   for (const id of appliedCommunes)
     applied.push({
       key: 'ward',
-      id: 'ward:' + id,
+      id,
       label: `${text.ward}${
         appliedCommunes.length > 1 ? ` (${appliedCommunes.length})` : ''
       }: ${unitName(wards, id)}`,
@@ -625,7 +625,7 @@ export function SearchIsland({
         />
         {applied.map((condition) => (
           <Chip
-            key={condition.id ?? condition.key}
+            key={`${condition.key}:${condition.id ?? ''}`}
             label={condition.label}
             removeLabel={`${text.filtersRemove}: ${condition.label}`}
             onRemove={() => remove(condition.key, condition.id)}
