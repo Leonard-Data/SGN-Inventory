@@ -119,6 +119,7 @@ export const TableChunk = memo(function TableChunk({
                 {label(locale, record.propertyType)}
               </small>
             </th>
+          ),
           address: (
             <td
               className="inventory-cell"
