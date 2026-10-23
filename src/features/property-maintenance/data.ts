@@ -118,9 +118,11 @@ export async function createProperty(
   };
 }
 // Which unarchived properties already record the address this creation is about to save. The
-// database composes the text from the same parts the save stores and compares it with the one
-// definition of "the same address" the post-create group uses, so the warning and the group can
-// never disagree. It is the caller's own read under ordinary row-level security, so a match is
+// database composes the text from the same parts the save stores and compares it with
+// `private.address_match_key`, the one definition of "the same address", over every address a
+// record holds. That is deliberately wider than the post-create group, which reads primary
+// addresses only because the merge it serves operates there, so a match here can be a record the
+// group will not name. It is the caller's own read under ordinary row-level security, so a match is
 // never a property the person may not open.
 export async function addressDuplicates(
   context: RouteContext,
