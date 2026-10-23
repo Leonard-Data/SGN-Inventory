@@ -343,7 +343,7 @@ returned 202 315 bytes whose sha256 equals the registration, and the audit trail
 that environment value as write-only, so the deployed value was never read back or compared against
 the database row, and no person has opened the document panel since the change. A registration
 whose object survived completes on retry however old it is: the 15-minute window only keeps a stale
-pending row from reserving its class slot, and bytes are removed only when the recovery list
+pending row from reserving its class slot, and expiry by itself removes no bytes — the recovery list
 discards an expired registration's object, after which that registration needs a fresh upload,
 which is its documented behaviour.
 Independent per-stage keys are the intended end state; separating them needs a fresh key, its
@@ -699,7 +699,7 @@ Prepare sanitized fixtures through authorized administration:
 
 ### R2 storage cutover (not yet executed)
 
-Property file bytes now live in a private Cloudflare R2 bucket reached only through short-lived presigned URLs. None of the following has been run: the embedded schema harness proves the database caps and the cleanup state transitions, and the unit tests prove the class/limit, read-path ordering, the signed upload headers, the bounded cleanup pass and the delete-before-record ordering, but no live bucket, presigned URL, browser upload, maintenance call or hosted copy has been exercised.
+Property file bytes now live in a private Cloudflare R2 bucket reached only through short-lived presigned URLs. Apart from the single production upload and read-back recorded in [the production import section](#executed-legacy-import-into-the-production-project-19-october-2026), none of the following has been run: the embedded schema harness proves the database caps and the cleanup state transitions, and the unit tests prove the class/limit, read-path ordering, the signed upload headers, the bounded cleanup pass and the delete-before-record ordering, but nothing else has exercised a live bucket, presigned URL, browser upload, maintenance call or hosted copy.
 
 | Scenario | Required observation |
 | --- | --- |
