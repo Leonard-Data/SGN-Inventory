@@ -6,8 +6,8 @@ import assert from 'node:assert/strict';
 // answers nothing for an address nobody records. Nothing here creates, blocks or changes a record;
 // the post-create group and its merge stay as issue #147 left them.
 //
-// Issue #280 pins the two together: for the same fixture, the read before the record exists and
-// the group of the record the creation becomes are driven against each other in both directions,
+// Issue #280 pins the two together: for one fixture, the read a creation asks about its address and
+// the group of the record that creation becomes are driven against each other in both directions,
 // so a change to one side alone fails here instead of leaving both quietly wrong.
 export async function addressDuplicateWarningContract({
   db,
@@ -43,8 +43,9 @@ export async function addressDuplicateWarningContract({
   };
   // The wording a record of that address was written with, which its parts would not compose.
   const recordedText = '8, NGUYEN HUE, FIXTURE COMMUNE, FIXTURE PROVINCE';
-  // `plain` already records the address; each `saved` is the record a creation of it would become,
-  // so its group is read afterwards while the read above answers about what is there before.
+  // `plain` already records the address; each `saved` is the record a creation of it becomes,
+  // inserted first so its group can be read, while the read itself is given only the parts a
+  // creation states.
   const plain = 'b7000000-0000-4000-8000-000000000011';
   const recorded = 'b7000000-0000-4000-8000-000000000012';
   const savedClean = 'b7000000-0000-4000-8000-000000000013';
@@ -101,8 +102,9 @@ export async function addressDuplicateWarningContract({
       ],
     );
   const codes = (rows) => rows.map((row) => row.propertyCode).sort();
-  // Both callers on one fixture: what the read names before the record exists must be exactly the
-  // group of the record the same creation becomes, and both must name the expected records.
+  // Both callers on one fixture: what the read names for the parts a creation states must be
+  // exactly the group of the record the same creation becomes, and both must name the expected
+  // records.
   const pair = async (label, address, saved, expected) => {
     await check(label, async () => {
       const warned = codes(await duplicates(address));
@@ -218,7 +220,7 @@ export async function addressDuplicateWarningContract({
   // A run of spaces inside a part is not folded: both sides treat the two texts as different
   // addresses, so neither names the record written the other way, in either direction.
   await pair(
-    'a run of spaces inside a part is not folded, so neither side names the other',
+    'a run of spaces inside a part is not folded, so neither side names the other record',
     spacedParts,
     spaced,
     ['SGN279-SPACED'],
@@ -229,10 +231,10 @@ export async function addressDuplicateWarningContract({
     spacedTwin,
     ['SGN279-TWIN'],
   );
-  // The other direction: an address these records do not hold is named by neither side, and the
-  // group of the record created at it holds only what that address already recorded.
+  // A third address on the fixture: the existing record holds it and the record this creation
+  // becomes is inserted for it too, so both sides name both and neither names the parity records.
   await pair(
-    'an address the records do not hold is absent from both sides',
+    'an address an existing record holds is named by both sides, with the creation’s own record',
     elsewhereParts,
     savedElsewhere,
     ['SGN279-ELSEWHERE', 'SGN279-OTHER'],
