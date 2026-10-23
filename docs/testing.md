@@ -316,10 +316,18 @@ the role recorded at send time and the outcome.
 
 File-attestation key: one key is in use for both stages today, because the production database had
 no `private.file_validation_keys` row and file completion failed closed there. The production row
-holds the value the production deployment already signs with and the development row is untouched,
-so a key held for development produces attestations production accepts. Independent per-stage keys
-are the intended end state; separating them needs a fresh key, its matching database row and a
-production redeploy, which stays a deliberate later decision and has not been executed.
+was installed from the private key file on 2026-10-19 on the assumption that the production
+deployment already signed with that file; it does not. The production deployment carries its own,
+separately created `SGN_FILE_VALIDATION_KEY` entry, so the two halves disagree and production file
+completion is refused: on 2026-10-23 a real pending upload whose bytes were present in the bucket,
+with the registered size, hash and content type, was answered `403 {"error":"operation-refused"}`
+by `POST /api/properties/{id}/files/{fileId}/complete` after the recovery list reported
+`objectState: present`, and the row stayed `pending`; presigned reads kept working throughout.
+Setting the production deployment's value to the value its database row holds, and redeploying
+production, is the repair — a production credential change that remains unauthorized and
+unexecuted. Independent per-stage keys are the intended end state; separating them needs a fresh
+key, its matching database row and a production redeploy, which stays a deliberate later decision
+and has not been executed.
 
 Not executed: no schema migration, no RLS or policy change, no merge of any duplicate-address
 group, no property approved or verified, no deployment.
