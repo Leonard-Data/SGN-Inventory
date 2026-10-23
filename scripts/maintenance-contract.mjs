@@ -392,6 +392,13 @@ export async function maintenanceContract({
         await addressText(picked, 'current'),
         '9, ' + repointed.name_vi + ', ' + unit.province_name,
       );
+      // A created address must name something a person supplied: a lone province, the app's own
+      // default included, is refused rather than stored as a line that reads as that province.
+      await fails(
+        'select public.create_property($1,$2,$3)',
+        ['sale', {}, { format: 'legacy', province_unit_id: unit.province }],
+        '23514',
+      );
       // A correction proposal passes the same boundary, so it cannot state a text either.
       const correctionAddress = (
         await db.query(
@@ -508,6 +515,7 @@ export async function maintenanceContract({
           await revision('properties', created),
           {
             format: 'current',
+            house_number: '12',
             province_text: 'Tỉnh chưa có',
             commune_text: 'Xã chưa có',
           },
@@ -1617,7 +1625,7 @@ export async function maintenanceContract({
             [addr.id],
           )
         ).rows[0].address_text,
-        'Đường đã đính chính, Fixture Commune, Fixture Province A',
+        '12, Đường đã đính chính, Fixture Commune, Fixture Province A',
       );
     },
   );

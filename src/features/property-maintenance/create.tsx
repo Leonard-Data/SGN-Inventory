@@ -8,11 +8,15 @@ import { useCatalogueChange } from '@/features/properties/catalogue-provider';
 import type { PropertySummary } from '@/features/properties/types';
 import type { Locale } from '@/i18n/messages';
 import { messages } from '@/i18n/messages';
-import { createPropertyFieldNames, formChanges } from './fields';
+import {
+  createPropertyFieldNames,
+  formChanges,
+  recordsAddressPart,
+} from './fields';
 import { AddressFields, RecordFields } from './forms';
 import { CrosswalkOffer } from './crosswalk-offer';
 import type { AddressCrosswalk } from './crosswalk';
-import { maintenanceText, optionLabel } from './messages';
+import { maintenanceError, maintenanceText, optionLabel } from './messages';
 import { useToast } from '@/features/toasts/toast-host';
 import type { ContactRecord } from './create-contact';
 export function CreateProperty({
@@ -56,6 +60,13 @@ export function CreateProperty({
     try {
       const facts = formChanges('property', form),
         address = formChanges('address', form);
+      // The known address text is composed from the parts, so what a person supplies is the parts:
+      // saying so here shows the refusal in the panel instead of after a round trip.
+      if (!recordsAddressPart(address)) {
+        setError('address-parts-required');
+        setBusy(false);
+        return;
+      }
       const mode = facts.listing_mode;
       delete facts.listing_mode;
       const result = await api<{
@@ -221,7 +232,7 @@ export function CreateProperty({
           </fieldset>
           {error ? (
             <p role="alert" className="field-error">
-              {error === 'invalid-input' ? text.invalid : text.unavailable}
+              {maintenanceError(locale, error)}
             </p>
           ) : null}
           <div className="form-foot">

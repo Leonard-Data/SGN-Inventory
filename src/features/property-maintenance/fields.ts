@@ -311,6 +311,17 @@ export class InputError extends Error {
     super('invalid-input');
   }
 }
+// A created address names something a person supplied: a house number, a street, or a commune picked
+// from the catalog. The province is stated by the app on every form, so it is never the address.
+export function recordsAddressPart(address: Record<string, unknown>) {
+  const filled = (value: unknown) =>
+    typeof value === 'string' && value.trim() !== '';
+  return (
+    filled(address.house_number) ||
+    filled(address.street) ||
+    filled(address.commune_unit_id)
+  );
+}
 export const isUuid = (value: unknown): value is string =>
   typeof value === 'string' &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);

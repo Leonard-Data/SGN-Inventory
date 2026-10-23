@@ -113,7 +113,7 @@ The official old-to-new unit mapping, stating for each legacy unit whether it be
 _Avoid_: Verification, property-level mapping
 
 **Composed address text**:
-The one line an address is displayed and searched by, written by the server from the parts that address records — house number, street, commune, district and province for a legacy address, and the same line without the district for a current one, joined by ", " with a missing part skipped. The official name of the unit an address records wins over a recorded source label, which only names a level that records no unit. It is composed when an address is created or edited - a mapping edit that repoints its units included - and never typed beside those parts: a save or a correction that states one is refused. A row imported with its own recorded wording keeps that wording.
+The one line an address is displayed and searched by, written by the server from the parts that address records — house number, street, commune, district and province for a legacy address, and the same line without the district for a current one, joined by ", " with a missing part skipped. The official name of the unit an address records wins over a recorded source label, which only names a level that records no unit. It is composed when an address is created or edited - a mapping edit that repoints its units included - and never typed beside those parts: a save or a correction that states one is refused. A created address must name a house number, a street or a commune picked from the catalog; a province alone, including the app's own, is not an address. A row imported with its own recorded wording keeps that wording.
 _Avoid_: Typed known address, address label
 
 **Address search**:

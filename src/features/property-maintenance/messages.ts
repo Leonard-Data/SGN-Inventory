@@ -70,6 +70,10 @@ const copy = {
     'Request recorded; inventory has not been changed.',
   ],
   noChange: ['Chưa có thay đổi.', 'No changes to save.'],
+  addressPartsRequired: [
+    'Nhập số nhà, tên đường hoặc chọn xã/phường. Chỉ riêng tỉnh/thành phố chưa phải là địa chỉ; chưa có dữ liệu nào được lưu.',
+    'Enter a house number, a street, or pick the commune / ward. The province alone is not an address; nothing was saved.',
+  ],
   invalid: [
     'Kiểm tra trường bắt buộc, số tiền, số đo và bằng chứng. Không có dữ liệu nào được lưu.',
     'Check required fields, the amounts, dimensions and evidence. Nothing was saved.',
@@ -329,27 +333,29 @@ export function maintenanceError(locale: Locale, code: string | null) {
     ? text.noChange
     : code === 'stale-edit'
       ? text.stale
-      : code === 'conflict'
-        ? text.conflict
-        : code === 'explanation-without-price'
-          ? text.correctionExplanationNeedsPrice
-          : code === 'invalid-input'
-            ? text.invalid
-            : code === 'contact-refusal'
-              ? text.contactRefusal
-              : code === 'crosswalk-units-missing'
-                ? text.convertUnitsMissing
-                : code === 'crosswalk-ambiguous'
-                  ? text.convertAmbiguous
-                  : code === 'crosswalk-missing'
-                    ? text.convertNoCrosswalk
-                    : code === 'address-superseded'
-                      ? text.convertSuperseded
-                      : code === 'crosswalk-level-change'
-                        ? text.convertLevelChange
-                        : code === 'address-format-duplicate'
-                          ? text.convertDuplicate
-                          : text.unavailable;
+      : code === 'address-parts-required'
+        ? text.addressPartsRequired
+        : code === 'conflict'
+          ? text.conflict
+          : code === 'explanation-without-price'
+            ? text.correctionExplanationNeedsPrice
+            : code === 'invalid-input'
+              ? text.invalid
+              : code === 'contact-refusal'
+                ? text.contactRefusal
+                : code === 'crosswalk-units-missing'
+                  ? text.convertUnitsMissing
+                  : code === 'crosswalk-ambiguous'
+                    ? text.convertAmbiguous
+                    : code === 'crosswalk-missing'
+                      ? text.convertNoCrosswalk
+                      : code === 'address-superseded'
+                        ? text.convertSuperseded
+                        : code === 'crosswalk-level-change'
+                          ? text.convertLevelChange
+                          : code === 'address-format-duplicate'
+                            ? text.convertDuplicate
+                            : text.unavailable;
 }
 const values: Record<string, readonly [string, string]> = {
   property: ['Thông tin bất động sản', 'Property facts'],

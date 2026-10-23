@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { label } from '../../i18n/messages.ts';
 import {
   addressFields,
+  recordsAddressPart,
   validateChanges,
   formChanges,
   correctionFieldNames,
@@ -91,6 +92,22 @@ test('a legacy address recorded with current-generation units keeps them and sav
   assert.deepEqual(formChanges('address', form, recorded), {
     commune_unit_id: OTHER_WARD,
   });
+});
+
+test('a created address must name a house number, a street or a picked commune', () => {
+  const provinceOnly = { format: 'legacy', province_unit_id: LEGACY_PROVINCE };
+  assert.equal(recordsAddressPart(provinceOnly), false);
+  assert.equal(
+    recordsAddressPart({ ...provinceOnly, house_number: '  ' }),
+    false,
+    'a blank house number is not a supplied part',
+  );
+  for (const supplied of [
+    { house_number: '12' },
+    { street: 'Lý Thường Kiệt' },
+    { commune_unit_id: LEGACY_WARD },
+  ])
+    assert.equal(recordsAddressPart({ ...provinceOnly, ...supplied }), true);
 });
 
 test('a current address still refuses a district id as well as district text', () => {

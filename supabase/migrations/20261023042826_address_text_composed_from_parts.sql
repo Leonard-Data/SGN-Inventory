@@ -19,7 +19,10 @@
 --      edit that repoints the units that address recorded alike. Every address write composes; a
 --      row that records no part at all keeps the text it already holds, because that text is its
 --      only evidence, and a new address with no part to compose is refused as a known address is
---      required.
+--      required. A new address must also record a house number, a street or a commune picked from
+--      the catalog: the province the app states is not an address, so a creation that names only a
+--      province is refused rather than stored as a line that reads as that province. An edit is
+--      unaffected, because it may leave the parts the row already records exactly as they are.
 --   3. private.validate_maintenance refuses `address_text` in an `address` change set (forward
 --      migration `20261023054500_address_text_composition_boundary.sql`), so no writer - the
 --      browser, a direct RPC call, a correction proposal, an amendment or a decision - can state a
@@ -125,6 +128,13 @@ begin
     -- The server is the only author of a recorded address text: a save states the parts and this
     -- composes the text from them, so no save can store a text that disagrees with its own parts.
     addr.address_text:=coalesce(private.composed_address_text(addr),addr.address_text);
+    -- A new address names something a person supplied: a lone province is not an address, and the
+    -- app states its own province on every form.
+    if p_target_id is null
+      and nullif(btrim(coalesce(addr.house_number,'')),'') is null
+      and nullif(btrim(coalesce(addr.street,'')),'') is null
+      and addr.commune_unit_id is null
+      then raise exception 'house number, street or commune required' using errcode='23514'; end if;
     if addr.format is null or addr.format not in ('legacy','current','alternate') or (p_target_id is null and addr.format='alternate') or addr.address_text is null then raise exception 'known address required' using errcode='23514'; end if;
     if p_target_id is not null and addr.format<>(select format from public.property_addresses where id=p_target_id) then raise exception 'address format immutable' using errcode='23514'; end if;
     if p_target_id is not null and p_changes-array['is_primary']='{}'::jsonb then
