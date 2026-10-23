@@ -558,7 +558,7 @@ test('an applied commune set is named by one catalog read', () => {
   assert.deepEqual(appliedUnitLookups(null, ids.join(',')), [
     { level: 'commune', include: ids.join(',') },
   ]);
-  assert.deepEqual(appliedUnitLookups(null, ids[0]), [
+  assert.deepEqual(appliedUnitLookups(null, ids[0]!), [
     { level: 'commune', include: ids[0] },
   ]);
   const district = '11111111-1111-4111-8111-111111111111';
