@@ -141,11 +141,11 @@ The unarchived properties whose primary address carries the same recorded addres
 _Avoid_: Duplicate property, automatic duplicate
 
 **Address already recorded**:
-The warning shown before a property is created when the address the save is about to store is already recorded, naming the unarchived properties that sit there with a link to open each. It appears in the application's modal warning dialog, so it cannot be missed or answered by accident. It informs and never blocks: a second property at the same building is an ordinary case, so the confirmation that creates anyway is one deliberate step, and an address nobody records creates with no added step at all. A match is decided by the same normalised address comparison the duplicate address group uses, on the address text the save will actually store, and on the same primary-address basis the group reads: an address created as non-primary joins no group and is not warned about.
+The warning shown before a property is created when the address the save is about to store is already recorded, naming the unarchived properties that sit there with a link to open each. It appears in the application's modal warning dialog, so it cannot be missed or answered by accident. It informs and never blocks: a second property at the same building is an ordinary case, so the confirmation that creates anyway is one deliberate step, and an address nobody records creates with no added step at all. A match is decided by the same normalised address comparison the duplicate address group uses, on the address text the save will actually store, and against every address a record holds rather than only the one it marks primary, so an address created as non-primary is warned about like any other. Deliberately wider than the group: the group and the merge it serves stay on primary addresses, because a group whose merge was then refused would be a broken affordance.
 _Avoid_: Address blocked, duplicate prevention, uniqueness check
 
 **Property merge**:
-The deliberate manager/admin decision that folds every other record in a duplicate address group into the group's most complete record, moving their photos, documents, history and contact links onto it and archiving the folded records.
+The deliberate manager/admin decision that folds every other record in a duplicate address group into the group's most complete record, moving their photos, documents, history and contact links onto it and archiving the folded records. The group and the merge keep one basis — the records' primary addresses — so the merge's own connected-set proof always covers exactly the set the group published.
 _Avoid_: Automatic deduplication, import merge rule
 
 **Folded property**:

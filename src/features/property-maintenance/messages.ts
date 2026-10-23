@@ -82,8 +82,8 @@ const copy = {
     'Other properties at this address: {n}. Open them before creating another.',
   ],
   duplicateAddressHint: [
-    'Xem xong vẫn tạo được hồ sơ mới — cả hai sẽ cùng địa chỉ và có thể so sánh sau khi tạo.',
-    'You can still create it — both records will share the address and can be compared once created.',
+    'Địa chỉ này đã có hồ sơ. Xem xong vẫn tạo thêm được hồ sơ mới tại đây.',
+    'The address is recorded. You can still create another record here.',
   ],
   createAnyway: ['Vẫn tạo hồ sơ', 'Create anyway'],
   createBack: ['Quay lại chỉnh sửa', 'Back to editing'],

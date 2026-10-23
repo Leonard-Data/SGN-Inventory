@@ -81,7 +81,8 @@ export function CreateProperty({
       }
       // Before the record exists: the address this save stores may already be recorded. The
       // database composes the text from these parts and compares it with the one rule the
-      // post-create group uses, so a match names exactly the properties that will share it.
+      // post-create group uses, over every address a record holds - wider than that group, which
+      // stays on primary addresses because the merge it serves operates there.
       const outcome = await createAfterWarning(
         (parts) =>
           api<AddressMatch[]>('/api/properties/address-duplicates', {
