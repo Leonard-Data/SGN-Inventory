@@ -145,7 +145,7 @@ The warning shown before a property is created when the address the save is abou
 _Avoid_: Address blocked, duplicate prevention, uniqueness check
 
 **Property merge**:
-The deliberate manager/admin decision that folds every other record in a duplicate address group into the group's most complete record, moving their photos, documents, history and contact links onto it and archiving the folded records.
+The deliberate manager/admin decision that folds every other record in a duplicate address group into the group's most complete record, moving their photos, documents, history and contact links onto it and archiving the folded records. The merge proves its own connected set over the records' primary addresses, so a group the duplicate reads publish only through a non-primary address is refused rather than folded.
 _Avoid_: Automatic deduplication, import merge rule
 
 **Folded property**:
