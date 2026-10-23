@@ -326,8 +326,11 @@ and its upload `PUT` status and body were not captured, so an R2 403, a 503 and 
 failure were excluded indirectly rather than observed: the 403 body is this application's own JSON
 rather than an R2 XML error, the refusal came from the completion RPC after its 64-hex key check
 had passed — the check that yields the missing-configuration 503 — and the recovery list reported
-`objectState: present` with the registered size, hash and content type, so the `PUT` had stored the
-bytes. That earlier disagreement is inference from that refusal, not a measured comparison of two
+`objectState: present`, so the `PUT` had stored the bytes. The registered byte count and content
+type are bound by the presigned `PUT` itself, and a `403 operation-refused` is only reachable once
+completion has re-read the object and accepted its size, sha256 and content type against the
+registration, so those agreements follow from that refusal; the recovery list reports presence
+alone. That earlier disagreement is inference from that refusal, not a measured comparison of two
 values.
 Setting the production deployment's value to the value its database row holds, and redeploying
 production, repaired it on 2026-10-23: the production-only Vercel entry was replaced, production was
