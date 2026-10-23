@@ -324,14 +324,16 @@ production file completion was refused: on 2026-10-23 a real pending upload was 
 row stayed `pending`, while presigned reads kept working throughout. The browser's presign status
 and its upload `PUT` status and body were not captured, so an R2 403, a 503 and a CORS preflight
 failure were excluded indirectly rather than observed: the 403 body is this application's own JSON
-rather than an R2 XML error, the refusal came from the completion RPC after its 64-hex key check
-had passed — the check that yields the missing-configuration 503 — and the recovery list reported
-`objectState: present`, so the `PUT` had stored the bytes. The registered byte count and content
-type are bound by the presigned `PUT` itself, and a `403 operation-refused` is only reachable once
-completion has re-read the object and accepted its size, sha256 and content type against the
-registration, so those agreements follow from that refusal; the recovery list reports presence
-alone. That earlier disagreement is inference from that refusal, not a measured comparison of two
-values.
+rather than an R2 XML error, and the recovery list reported `objectState: present`, so the `PUT`
+had stored the bytes. The signed `PUT` covers the registered byte count and requires a conditional
+create, so presence means a body of exactly that size; content type is not signed there, and
+completion is what re-reads the object and accepts its length, sha256 and detected type against the
+registration before it calls the RPC. The refusal was that RPC's own `42501` attestation check,
+not the route's 64-hex check — whose failure would have been the missing-configuration 503 — and
+that uploader's own pending registration on an unarchived property rules out the RPC's identity
+guards and the row reads' dataset denials, so the size, sha256 and content-type agreements follow
+from the refusal; the recovery list itself reports presence alone. That earlier disagreement is
+inference from that refusal, not a measured comparison of two values.
 Setting the production deployment's value to the value its database row holds, and redeploying
 production, repaired it on 2026-10-23: the production-only Vercel entry was replaced, production was
 redeployed as `dpl_FQcEgJ78T6XMMxevudsMJkj8k2vV` and aliased to `sgnewhouse.online`, and the same
@@ -340,8 +342,10 @@ returned 202 315 bytes whose sha256 equals the registration, and the audit trail
 `ready` transition. Agreement after the repair rests on that completion too: the Vercel API treats
 that environment value as write-only, so the deployed value was never read back or compared against
 the database row, and no person has opened the document panel since the change. A registration
-whose object survived completes on retry; one whose bytes the 15-minute pending rule already
-discarded needs a fresh upload, which is its documented behaviour.
+whose object survived completes on retry however old it is: the 15-minute window only keeps a stale
+pending row from reserving its class slot, and bytes are removed only when the recovery list
+discards an expired registration's object, after which that registration needs a fresh upload,
+which is its documented behaviour.
 Independent per-stage keys are the intended end state; separating them needs a fresh key, its
 matching database row and a production redeploy, which stays a deliberate later decision and has
 not been executed.
