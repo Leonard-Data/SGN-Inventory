@@ -13,6 +13,38 @@ shipped is implemented in the code on `main`; where a real-browser or hosted acc
 executed, that is stated in the entry rather than left implied. Correspondence between a feature and
 what was *verified* is in [testing.md](testing.md).
 
+## 23 October 2026 — the street field suggests the names the captain supplied
+
+### A street is picked from a suggestion list or typed by hand (captain request)
+
+The address form's street field now suggests the street names the captain supplied with his request of
+23 October 2026 while a person types, matching what is typed the way the unit pickers match theirs —
+case, Vietnamese diacritics and `đ` folded, the typed text matched anywhere inside a name — and a
+picked suggestion fills
+the field with that name's own spelling. It is a suggestion layer and nothing more: the field is the
+same text field on the same `street` part, with the same validation and the same save path, so a
+street the list does not carry is typed, submitted and stored exactly as before, which is the
+captain's own requirement that a new value from user input stay possible. The keyboard contract is
+the unit picker's — arrows and Home/End move the highlight, Escape closes the list and leaves the
+typed text — except that Enter with nothing highlighted is the form's own submit instead of a
+swallowed keypress, so an unlisted street still saves in one press; the list is announced as expanded
+only while it is shown, and the field's hint states in both languages that a street outside the list is
+saved as typed. The list itself is source data: 1006 names, in the captain's order and verbatim
+(`src/features/property-maintenance/streets.ts`), never translated, folded or corrected.
+
+_Why it matters:_ most addresses sit on a street the supplied list already names, so choosing it
+instead of retyping its diacritics removes a class of near-duplicate street spellings without taking
+the hand-typed street away from anyone.
+
+_Known gap:_ the suggestion list, its matching and its keyboard contract have unit coverage only
+(`src/features/property-maintenance/combobox.test.ts`); no browser has typed into the field, picked a
+suggestion by pointer or by keyboard, or saved an unlisted street, so those stay staging gates in
+[testing.md](testing.md#property-contact-and-address-maintenance-acceptance-not-yet-executed). The
+list is kept exactly as supplied, so it carries its own defects: 14 groups of names that fold to the
+same searched name ("Trần Xuân Hoà"/"Trần Xuân Hòa", "Nguyễn Văn Luông"/"Nguyễn Văn Lượng") are
+offered as the distinct names they are, and two names carry a doubled space. Cleaning the list is the
+captain's decision and is noted in the pull request rather than done here.
+
 ## 23 October 2026 — the properties table orders and hides by column
 
 ### A table header orders the whole list, and a column can be hidden
