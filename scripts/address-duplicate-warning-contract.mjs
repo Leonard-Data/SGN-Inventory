@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 
 // Issue #279 embedded regressions: the pre-create address read. It composes the text from the
-// parts a creation states, decides a match with the one rule and the primary-address basis the
-// post-create group uses, names only unarchived properties the caller may already read, and
-// answers nothing for an address nobody records. Nothing here creates, blocks or changes a record;
-// the post-create group and its merge stay as issue #147 left them.
+// parts a creation states, decides a match with the one rule the post-create group uses, names only
+// unarchived properties the caller may already read, and answers nothing for an address nobody
+// records. Nothing here creates, blocks or changes a record.
+//
+// The captain's decision (23 October 2026): "2 all is duplicate warning". Both sides compare the
+// composed text against every address a record holds, not only the one it marks primary, and the
+// non-primary cases below pin that basis in both directions.
 //
 // Issue #280 pins the two together: for one fixture, the read a creation asks about its address and
 // the group of the record that creation becomes are driven against each other in both directions,
@@ -72,6 +75,18 @@ export async function addressDuplicateWarningContract({
     is_primary: true,
   };
   const spacedTwinParts = { ...spacedParts, street: 'Lý Thường Kiệt' };
+  // Two records whose coordinate is their own address and nothing else: one at an address other
+  // records hold, one at an address no other record holds, both marked non-primary.
+  const savedNonPrimary = 'b7000000-0000-4000-8000-000000000018';
+  const soloNonPrimary = 'b7000000-0000-4000-8000-000000000019';
+  const soloParts = {
+    format: 'current',
+    house_number: '41',
+    street: 'Đồng Khởi',
+    province_unit_id: province,
+    commune_unit_id: commune,
+    is_primary: false,
+  };
 
   const asOwner = async () => {
     await db.exec('reset role');
@@ -93,14 +108,15 @@ export async function addressDuplicateWarningContract({
       )
     ).rows[0].text;
   // A save stores the composition of the parts it was given, so a record built from stated parts
-  // is inserted with exactly the text the creation read compares against.
-  const savedAddress = async (propertyId, address) =>
+  // is inserted with exactly the text the creation read compares against. `isPrimary` is the mark
+  // the record puts on it, which the two reads must no longer care about.
+  const savedAddress = async (propertyId, address, isPrimary = true) =>
     db.query(
       `insert into public.property_addresses(property_id,format,address_text,house_number,street,
-         province_unit_id,commune_unit_id)
+         province_unit_id,commune_unit_id,is_primary)
        values ($1,'current',
          private.composed_address_text(jsonb_populate_record(null::public.property_addresses,$2::jsonb)),
-         $3,$4,$5,$6)`,
+         $3,$4,$5,$6,$7)`,
       [
         propertyId,
         JSON.stringify(address),
@@ -108,6 +124,7 @@ export async function addressDuplicateWarningContract({
         address.street,
         address.province_unit_id,
         address.commune_unit_id,
+        isPrimary,
       ],
     );
   const codes = (rows) => rows.map((row) => row.propertyCode).sort();
@@ -299,6 +316,48 @@ export async function addressDuplicateWarningContract({
     savedElsewhere,
     ['SGN279-ELSEWHERE', 'SGN279-OTHER'],
   );
+  // The captain's decision (23 October 2026): "2 all is duplicate warning". Which address a record
+  // marks primary does not decide whether it is a duplicate, so both sides widen to every address a
+  // record holds: a creation stating its address as non-primary is warned about and grouped exactly
+  // as a primary one is, and a non-primary address no other record holds is named by neither side
+  // beyond the record itself.
+  await asOwner();
+  await db.query(
+    `insert into public.properties(id,property_code,listing_mode,property_type,status,created_by)
+     values ($1,'SGN279-NONPRIMARY','sale','house','available',$3),
+            ($2,'SGN279-SOLO','sale','house','available',$3)`,
+    [savedNonPrimary, soloNonPrimary, employees[0]],
+  );
+  await savedAddress(savedNonPrimary, parityParts, false);
+  await savedAddress(soloNonPrimary, soloParts, false);
+  await asUser(0);
+  await pair(
+    'an address created as non-primary is warned about and grouped like a primary one',
+    { ...parityParts, is_primary: false },
+    savedNonPrimary,
+    [
+      'SGN279-NONPRIMARY',
+      'SGN279-PLAIN',
+      'SGN279-RECORDED',
+      'SGN279-SAVED',
+      'SGN279-TYPED',
+    ],
+  );
+  await check(
+    'a non-primary submission is warned about the same records a primary one is',
+    async () => {
+      assert.deepEqual(
+        codes(await duplicates({ ...parityParts, is_primary: false })),
+        codes(await duplicates(parityParts)),
+      );
+    },
+  );
+  await pair(
+    'a non-primary address no other record holds is named by neither side beyond its own record',
+    soloParts,
+    soloNonPrimary,
+    ['SGN279-SOLO'],
+  );
   await check('an archived record is not named', async () => {
     const found = await duplicates(parts);
     assert.equal(
@@ -320,15 +379,6 @@ export async function addressDuplicateWarningContract({
       [],
     );
   });
-  await check(
-    'an address created as non-primary joins no group, so it is not warned about',
-    async () => {
-      assert.deepEqual(await duplicates({ ...parts, is_primary: false }), []);
-      const unstated = { ...parts };
-      delete unstated.is_primary;
-      assert.deepEqual(await duplicates(unstated), []);
-    },
-  );
   await check('an address stating no part matches nothing', async () => {
     assert.deepEqual(
       await duplicates({ format: 'current', is_primary: true }),
