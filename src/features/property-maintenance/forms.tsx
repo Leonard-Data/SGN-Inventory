@@ -22,11 +22,13 @@ import { maintenanceError, maintenanceText, optionLabel } from './messages';
 import { failureRoute } from './refusal-rules';
 import { UnitCombobox, type UnitChoice } from './unit-combobox';
 import {
+  FIXED_PROVINCE,
   LEGACY_CATALOG_DAY,
   clearedUnits,
   filledDistrictText,
   pickedDistrict,
-  pickedProvince,
+  pickedProvinceRow,
+  statedProvince,
   unitParent,
   type AddressUnits,
 } from './units';
@@ -377,10 +379,19 @@ export function AddressFields({
     // A new address starts in the legacy format; a recorded one opens on the format it holds.
     [format, setFormat] = useState(String(values.format ?? 'legacy')),
     [units, setUnits] = useState<AddressUnits>({
-      province: String(values.province_unit_id ?? ''),
+      // The pickers narrow beneath the stated province whatever the record holds; the value the
+      // province field itself submits is the one `statedProvince` settles below.
+      ...clearedUnits(),
       district: String(values.district_unit_id ?? ''),
       commune: String(values.commune_unit_id ?? ''),
     }),
+    // The province this address records: the stated province, or the row of the address's own catalog
+    // generation once a level beneath it is picked, because the database guard requires a district
+    // and a commune to be parented by the province and district the address records. A record that
+    // already stores a province keeps exactly what it stored.
+    [provinceUnitId, setProvinceUnitId] = useState(
+      statedProvince(values.province_unit_id),
+    ),
     districtText = useRef<HTMLInputElement>(null),
     // The text the picker has written, which is what a save submits and what reads back beside it.
     [districtTextValue, setDistrictTextValue] = useState(
@@ -428,9 +439,10 @@ export function AddressFields({
                     setFormat(event.target.value);
                     // The two formats read different catalog generations, so no recorded unit is
                     // carried into a list that may not hold it, nor the label the picker wrote for
-                    // the district that unit named.
+                    // the district that unit named, nor the province row a pick settled on.
                     setUnits(clearedUnits());
                     setDistrictText('');
+                    setProvinceUnitId(statedProvince(values.province_unit_id));
                   }}
                   disabled={!!values.id}
                 >
@@ -476,20 +488,25 @@ export function AddressFields({
         </>
       )}
       {variant === 'mapping' || includes('province_unit_id') ? (
-        <UnitPicker
-          name="province_unit_id"
-          level="province"
-          day={day}
-          value={units.province}
-          onChange={(value) => {
-            // A district id from the previous province is cleared with it, so the text the picker
-            // wrote for that district has nothing left to describe.
-            if (value !== units.province) setDistrictText('');
-            setUnits(pickedProvince(units, value));
-          }}
-          locale={locale}
-          onDenied={onDenied}
-        />
+        // The province is stated rather than chosen: the app records one. Only the levels beneath
+        // it are picked.
+        <div className="field">
+          <span className="field-label">
+            {fields.province_unit_id![locale]}
+          </span>
+          <p translate="no">{FIXED_PROVINCE.name}</p>
+          {/* Controlled rather than defaulted: the value follows the row a pick settles on, which
+              is the province of this address's own catalog generation. */}
+          <input
+            type="hidden"
+            name="province_unit_id"
+            value={provinceUnitId}
+            readOnly
+          />
+          {values.province_unit_id && provinceUnitId !== FIXED_PROVINCE.id ? (
+            <p className="field-hint">{text.provinceKept}</p>
+          ) : null}
+        </div>
       ) : null}
       {legacy && includes('district_unit_id') ? (
         <UnitPicker
@@ -502,6 +519,8 @@ export function AddressFields({
           onChange={(value, unit) => {
             setUnits(pickedDistrict(units, value));
             if (unit) setDistrictText(unit.name_vi);
+            // The district's parent is the province row of this address's generation.
+            setProvinceUnitId(pickedProvinceRow(provinceUnitId, unit));
           }}
           locale={locale}
           onDenied={onDenied}
@@ -515,7 +534,13 @@ export function AddressFields({
           parent={unitParent(generation, 'commune', units)}
           day={day}
           value={units.commune}
-          onChange={(value) => setUnits({ ...units, commune: value })}
+          onChange={(value, unit) => {
+            setUnits({ ...units, commune: value });
+            // A current commune hangs directly off the province, so picking one states that row;
+            // a legacy ward's parent is its district, which already stated it.
+            if (!legacy)
+              setProvinceUnitId(pickedProvinceRow(provinceUnitId, unit));
+          }}
           locale={locale}
           onDenied={onDenied}
         />

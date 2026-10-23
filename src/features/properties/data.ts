@@ -12,6 +12,7 @@ import {
   searchedAddressFormat,
   type InventoryFilters,
 } from './filters';
+import { FIXED_PROVINCE } from '@/features/property-maintenance/units';
 import {
   isInventoryOrder,
   parseStreamOffset,
@@ -187,39 +188,56 @@ function accessError(code: string | undefined): ApiError {
     : new ApiError(503, 'unavailable');
 }
 
-// The province must be a province-level catalog unit, the district a district-level unit inside
-// that province and the ward a commune-level unit inside the stated district or province, so an
-// address that mixes levels or parents is refused rather than applied to a different unit. Units
-// are matched whatever their validity window, because a property recorded in the closed pre-2025
-// generation is filtered by its own legacy province, district and ward.
+// The district must be a district-level unit inside the one province the business records and the
+// ward a commune-level unit inside the stated district or that province, so an address that mixes
+// levels or parents is refused rather than applied to a different unit. Units are matched whatever
+// their validity window, because a property recorded in the closed pre-2025 generation is filtered
+// by its own legacy district and ward, and the province is matched by its official code because one
+// official unit has a row per catalog generation.
 async function assertAreaUnits(
   context: RouteContext,
   filters: InventoryFilters,
 ): Promise<void> {
-  const { province, district, ward } = filters;
-  if (province === null && district === null && ward === null) return;
+  const { district, ward } = filters;
+  if (district === null && ward === null) return;
+  const province = await context.client
+    .from('admin_unit_versions')
+    .select('official_code')
+    .eq('id', FIXED_PROVINCE.id)
+    .maybeSingle();
+  if (province.error) throw new ApiError(503, 'unavailable');
+  if (!province.data) throw new ApiError(400, 'invalid-input');
   const { data, error } = await context.client
     .from('admin_unit_versions')
-    .select('id,unit_level,parent_id')
+    .select('id,unit_level,parent_id,official_code')
     .in(
       'id',
-      [province, district, ward].filter((id): id is string => id !== null),
+      [district, ward].filter((id): id is string => id !== null),
     );
   if (error) throw new ApiError(503, 'unavailable');
-  const units = [...(data ?? [])];
-  // A legacy ward's parent is its legacy district, so the level above the stated one is read only
-  // when it is not already in hand; a current ward's parent is the province itself.
-  const hop = units.find((unit) => unit.id === ward)?.parent_id;
-  if (province !== null && hop && !units.some((unit) => unit.id === hop)) {
-    const district = await context.client
+  const units = new Map((data ?? []).map((unit) => [unit.id, unit]));
+  // Each stated unit's own parent chain is read up to its province - a legacy ward's district, then
+  // that district's pre-2025 province - so the lineage is complete whatever generation it belongs
+  // to. Three reads at most, because the catalog has three levels.
+  for (let depth = 0; depth < 3; depth++) {
+    const missing = [...units.values()]
+      .map((unit) => unit.parent_id)
+      .filter((id): id is string => id !== null && !units.has(id));
+    if (!missing.length) break;
+    const { data: ancestors, error: parentError } = await context.client
       .from('admin_unit_versions')
-      .select('id,unit_level,parent_id')
-      .eq('id', hop)
-      .maybeSingle();
-    if (district.error) throw new ApiError(503, 'unavailable');
-    if (district.data) units.push(district.data);
+      .select('id,unit_level,parent_id,official_code')
+      .in('id', missing);
+    if (parentError) throw new ApiError(503, 'unavailable');
+    for (const unit of ancestors ?? []) units.set(unit.id, unit);
   }
-  if (!catalogUnitsMatch(units, filters))
+  if (
+    !catalogUnitsMatch(
+      [...units.values()],
+      filters,
+      province.data.official_code,
+    )
+  )
     throw new ApiError(400, 'invalid-input');
 }
 

@@ -12,6 +12,7 @@ import {
   searchEndpoint,
 } from './catalogue-results.ts';
 import { noInventoryFilters, type InventoryFilters } from './filters.ts';
+import { FIXED_PROVINCE } from '../property-maintenance/units.ts';
 import {
   STREAM_PAGE_SIZE,
   localStreamWindows,
@@ -98,7 +99,13 @@ test('every filter the catalogue carries a field for is offered locally, and no 
       contact: CONTACT,
       status: 'available',
     }),
-    ['province', 'ward', 'contact'],
+    ['ward', 'contact'],
+  );
+  // The stated province is not a condition, so an address that still carries one asks the loaded
+  // catalogue for nothing it cannot answer.
+  assert.deepEqual(
+    advancedFilterKeys({ ...noInventoryFilters, province: FIXED_PROVINCE.id }),
+    [],
   );
 });
 

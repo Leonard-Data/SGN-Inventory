@@ -162,10 +162,10 @@ const vi = {
   district: 'Quận / huyện',
   ward: 'Xã / phường',
   areaAdminHint:
-    'Lọc theo các cấp địa chỉ mà định dạng đã chọn có: địa chỉ cũ gồm tỉnh/thành phố, quận/huyện và xã/phường — mỗi cấp thu hẹp cấp trên; địa chỉ mới gồm tỉnh/thành phố và xã/phường. Chọn tỉnh/thành phố sẽ gồm mọi đơn vị bên trong; chọn thêm cấp dưới sẽ thu hẹp theo cấp đó. Khi nhiều cấp được chọn, tất cả cùng có hiệu lực trên cùng một địa chỉ.',
+    'Công ty ghi địa chỉ trong một tỉnh/thành phố, nên quận/huyện và xã/phường đều thuộc tỉnh/thành phố đó. Địa chỉ cũ gồm quận/huyện và xã/phường — chọn quận/huyện để thu hẹp danh sách xã/phường; địa chỉ mới chỉ gồm xã/phường. Khi nhiều cấp được chọn, tất cả cùng có hiệu lực trên cùng một địa chỉ.',
   areaLevelHint: 'Chọn cấp địa chỉ phía trên trước để dùng bộ lọc này.',
   areaFilterUnavailable:
-    'Chưa tải được danh mục tỉnh/thành phố, quận/huyện và xã/phường. Bộ lọc giá và diện tích vẫn dùng được.',
+    'Chưa tải được danh mục quận/huyện và xã/phường. Bộ lọc giá và diện tích vẫn dùng được.',
   contactFilter: 'Người liên hệ',
   contactFilterHint:
     'Chỉ gồm người liên hệ bạn được phép đọc. Bộ lọc này kết hợp với các điều kiện khác.',
@@ -1081,10 +1081,10 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     district: 'District',
     ward: 'Commune / ward',
     areaAdminHint:
-      'Filter by the address levels the selected format has: a legacy address has a province/city, a district and a commune/ward, each narrowing the level above it; a current address has a province/city and a commune/ward. Choosing a province/city includes every unit inside it; choosing a level beneath it narrows to that unit. When several are set, all of them must hold on the same address.',
+      'The company records addresses in one province/city, so the district and the commune/ward both belong to it. A legacy address has a district and a commune/ward — choosing a district narrows the commune/ward list; a current address has a commune/ward only. When several are set, all of them must hold on the same address.',
     areaLevelHint: 'Choose the level above first to use this filter.',
     areaFilterUnavailable:
-      'The province, district and ward catalog could not be loaded. The price and area filters still work.',
+      'The district and ward catalog could not be loaded. The price and area filters still work.',
     contactFilter: 'Contact',
     contactFilterHint:
       'Only contacts you may read. This filter combines with the other conditions.',

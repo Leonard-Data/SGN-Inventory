@@ -1,16 +1,40 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  CURRENT_CATALOG_START,
+  FIXED_PROVINCE,
   LEGACY_CATALOG_DAY,
   clearedUnits,
   filledDistrictText,
+  generationRow,
   offeredUnits,
   pickedDistrict,
-  pickedProvince,
+  pickedProvinceRow,
+  statedProvince,
   unitOfferedOn,
   unitOptionLabels,
   unitParent,
 } from './units.ts';
+
+// The one province the app states: every address surface names this unit instead of offering a
+// choice, so the tests pin the identifier and its name.
+test('the app states one province', () => {
+  assert.equal(FIXED_PROVINCE.id, 'cc2ace6d-f3e8-424c-9105-a560983abae0');
+  assert.equal(FIXED_PROVINCE.name, 'Thành phố Hồ Chí Minh');
+});
+
+test('an address form submits the stated province and keeps a recorded one', () => {
+  // A new address, and a recorded one that holds the stated province, both submit it.
+  assert.equal(statedProvince(undefined), FIXED_PROVINCE.id);
+  assert.equal(statedProvince(null), FIXED_PROVINCE.id);
+  assert.equal(statedProvince('  '), FIXED_PROVINCE.id);
+  assert.equal(statedProvince(FIXED_PROVINCE.id), FIXED_PROVINCE.id);
+  // A record that already stores another province keeps exactly what it recorded.
+  assert.equal(
+    statedProvince('11111111-1111-4111-8111-111111111111'),
+    '11111111-1111-4111-8111-111111111111',
+  );
+});
 
 test('an official unit option shows the name alone', () => {
   assert.deepEqual(
@@ -75,51 +99,88 @@ test('no stated day keeps every current-generation row and never the legacy one'
   );
 });
 
-test('a legacy ward narrows by its district and never by the province', () => {
-  const chosen = { province: 'p', district: 'd', commune: '' };
+test("a pick beneath the province records that level's own province row", () => {
+  const legacyRow = '88888888-8888-4888-8888-888888888888';
+  // A legacy address's district hangs off the pre-2025 row of the same stated province, and the
+  // database guard requires the address to record exactly that parent, so the pick states it.
+  assert.equal(
+    pickedProvinceRow(FIXED_PROVINCE.id, { parent_id: legacyRow }),
+    legacyRow,
+  );
+  // A pick whose row carries no parent, and no pick at all, leave the province as it stands.
+  assert.equal(
+    pickedProvinceRow(FIXED_PROVINCE.id, { parent_id: null }),
+    FIXED_PROVINCE.id,
+  );
+  assert.equal(
+    pickedProvinceRow(FIXED_PROVINCE.id, undefined),
+    FIXED_PROVINCE.id,
+  );
+  assert.equal(pickedProvinceRow(legacyRow, undefined), legacyRow);
+});
+
+test('a read resolves one official unit to the row its generation reads', () => {
+  const legacy = {
+    id: 'legacy-row',
+    valid_from: LEGACY_CATALOG_DAY,
+    valid_to: CURRENT_CATALOG_START,
+  };
+  const current = {
+    id: 'current-row',
+    valid_from: CURRENT_CATALOG_START,
+    valid_to: null,
+  };
+  // A legacy day reads the pre-2025 row of the unit, a current day or no stated day the current one.
+  assert.equal(
+    generationRow([legacy, current], LEGACY_CATALOG_DAY)?.id,
+    legacy.id,
+  );
+  assert.equal(generationRow([legacy, current], null)?.id, current.id);
+  assert.equal(generationRow([legacy, current], '2026-10-23')?.id, current.id);
+  assert.equal(generationRow([current], LEGACY_CATALOG_DAY), undefined);
+});
+
+test('a legacy ward narrows by its district and a current commune by the stated province', () => {
+  const chosen = { province: FIXED_PROVINCE.id, district: 'd', commune: '' };
   assert.equal(unitParent('legacy', 'commune', chosen), 'd');
-  assert.equal(unitParent('legacy', 'district', chosen), 'p');
-  assert.equal(unitParent('legacy', 'province', chosen), undefined);
+  assert.equal(unitParent('legacy', 'district', chosen), FIXED_PROVINCE.id);
   // Without a district the ward list has no parent, so it cannot offer a ward from another
   // district and stays unloaded until one is chosen.
   assert.equal(
     unitParent('legacy', 'commune', {
-      province: 'p',
+      province: FIXED_PROVINCE.id,
       district: '',
       commune: '',
     }),
     undefined,
   );
-  // A current commune still narrows by its province; its district field carries nothing.
-  assert.equal(unitParent('current', 'commune', chosen), 'p');
-  assert.equal(unitParent('current', 'district', chosen), 'p');
+  // A current commune narrows by the stated province; its district field carries nothing.
+  assert.equal(unitParent('current', 'commune', chosen), FIXED_PROVINCE.id);
+  assert.equal(unitParent('current', 'district', chosen), FIXED_PROVINCE.id);
 });
 
-test('picking a level clears the levels beneath it and a format switch clears them all', () => {
-  assert.deepEqual(pickedProvince({ ...clearedUnits() }, 'p'), {
-    province: 'p',
+test('picking a level clears the levels beneath it and a format switch keeps the province', () => {
+  assert.deepEqual(
+    pickedDistrict(
+      { province: FIXED_PROVINCE.id, district: '', commune: 'w' },
+      'd',
+    ),
+    { province: FIXED_PROVINCE.id, district: 'd', commune: '' },
+  );
+  // A cleared form keeps the one stated province: only the levels picked beneath it are cleared.
+  assert.deepEqual(clearedUnits(), {
+    province: FIXED_PROVINCE.id,
     district: '',
     commune: '',
   });
-  assert.deepEqual(
-    pickedDistrict({ province: 'p', district: '', commune: 'w' }, 'd'),
-    { province: 'p', district: 'd', commune: '' },
-  );
-  assert.deepEqual(clearedUnits(), { province: '', district: '', commune: '' });
 });
 
 test('re-picking the unit a level already holds keeps the recorded levels beneath it', () => {
-  const recorded = { province: 'p', district: 'd', commune: 'w' };
-  assert.deepEqual(pickedProvince(recorded, 'p'), recorded);
+  const recorded = { province: FIXED_PROVINCE.id, district: 'd', commune: 'w' };
   assert.deepEqual(pickedDistrict(recorded, 'd'), recorded);
   // Only an actual change of value replaces the stored ones.
-  assert.deepEqual(pickedProvince(recorded, 'other'), {
-    province: 'other',
-    district: '',
-    commune: '',
-  });
   assert.deepEqual(pickedDistrict(recorded, 'other'), {
-    province: 'p',
+    province: FIXED_PROVINCE.id,
     district: 'other',
     commune: '',
   });
@@ -144,9 +205,9 @@ test('a district pick repairs an imported label and leaves the picked name alone
 });
 
 test('a format switch clears the district label with the units it described', () => {
-  // Switching legacy → current → legacy drops the picked levels and the label the picker wrote for
-  // the district they named, so no label is left without its unit.
-  assert.deepEqual(clearedUnits(), { province: '', district: '', commune: '' });
+  // Switching legacy → current → legacy drops the picked levels beneath the stated province and the
+  // label the picker wrote for the district they named, so no label is left without its unit.
+  assert.equal(clearedUnits().district, '');
   assert.equal(filledDistrictText('Bình Thạnh', ''), '');
 });
 
