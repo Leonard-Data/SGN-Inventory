@@ -9,6 +9,7 @@ import {
   propertyTableRow,
   recordFacts,
   rowPrice,
+  statedAddress,
   SUMMARY_TABLE_COLUMNS,
   TABLE_COLUMNS,
   totalAreaM2,
@@ -406,4 +407,65 @@ test('the modified cell reads as how long ago, and keeps the exact recorded time
   );
   assert.equal(cell(unknown, 'modifiedTime').text, MISSING_VALUE);
   assert.equal(cell(unknown, 'modifiedTime').title, undefined);
+});
+
+// The row and the quick view state the address the record stores, exactly as it was recorded: the
+// text wins over the parts it was composed from, so the 276 imported rows whose own wording differs
+// from what recomposing their parts would produce keep showing what they were imported with.
+test('the stated address is the recorded text, never a composition of its parts', () => {
+  const address = {
+    id: '22222222-2222-4222-8222-222222222222',
+    format: 'legacy',
+    // A recorded wording a composition would never produce: the parts are ordinary.
+    addressText: 'Hẻm 12 Lê Lợi (nhà phía sau), P. Bến Nghé, Q. 1',
+    mappingStatus: 'unresolved',
+    isPrimary: true,
+    houseNumber: '12',
+    street: 'Lê Lợi',
+    commune: 'Phường Bến Nghé',
+    district: 'Quận 1',
+  };
+  assert.deepEqual(
+    statedAddress(address, { locale: 'vi', addressFormat: 'legacy' }),
+    { text: address.addressText, format: '' },
+  );
+  // A property recorded in both formats states the current address's own text.
+  const current = {
+    ...address,
+    format: 'current',
+    addressText: '12 Lê Lợi, Phường Bến Nghé',
+    isPrimary: false,
+    district: null,
+  };
+  assert.equal(
+    statedAddress(current, { locale: 'en', addressFormat: 'current' }).text,
+    '12 Lê Lợi, Phường Bến Nghé',
+  );
+  // A record with no address states the missing value in the reader's own language.
+  assert.equal(
+    statedAddress(undefined, { locale: 'vi', addressFormat: null }).text,
+    messages.vi.unknown,
+  );
+  assert.equal(
+    statedAddress(undefined, { locale: 'en', addressFormat: null }).text,
+    messages.en.unknown,
+  );
+  // The format label rides beside the same address, and only when the search matched through a
+  // format other than the one it reads.
+  assert.equal(
+    statedAddress(current, {
+      locale: 'en',
+      addressFormat: 'any',
+      matchedFormat: 'current',
+    }).format,
+    messages.en.current,
+  );
+  assert.equal(
+    statedAddress(current, {
+      locale: 'vi',
+      addressFormat: 'current',
+      matchedFormat: 'current',
+    }).format,
+    '',
+  );
 });
