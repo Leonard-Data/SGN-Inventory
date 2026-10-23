@@ -16,20 +16,23 @@
 -- Nothing else about the read changes - the same columns, the same matching total, the archived
 -- boundary, the remaining filters, the employee guard for the chronology and no record becoming
 -- eligible or ineligible.
--- This migration follows `20261022095500_inventory_recent_change_order.sql`. The criterion is a new
--- signature, so the read the project already has is dropped with its grants before the replacement
--- is stated; it stays one function rather than two overloads. It is a function change with no
--- table, column, index or data change.
+-- The commune level is the set `20261023040925_inventory_commune_set.sql` states rather than one
+-- ward, so a column ordering and a commune set compose: this read is that set's predicate with the
+-- orderings and the creator criterion above.
+-- This migration follows `20261023040925_inventory_commune_set.sql`, whose signature it replaces, so
+-- the read the project already has is dropped with its grants before the replacement is stated; it
+-- stays one function rather than two overloads. It is a function change with no table, column,
+-- index or data change.
 begin;
 
 drop function public.stream_inventory(text,text,integer,integer,text,text,text,numeric,numeric,numeric,
-  numeric,uuid,uuid,uuid,uuid,text,text,numeric,numeric,numeric,numeric);
+  numeric,uuid,uuid,uuid[],uuid,text,text,numeric,numeric,numeric,numeric);
 
 create function public.stream_inventory(p_order text default null,p_query text default '',p_offset integer default 0,
   p_limit integer default 100,p_status text default null,p_mode text default null,p_type text default null,
   p_price_min numeric default null,p_price_max numeric default null,p_area_min numeric default null,
   p_area_max numeric default null,p_province_id uuid default null,p_district_id uuid default null,
-  p_commune_id uuid default null,p_contact_id uuid default null,
+  p_commune_ids uuid[] default null,p_contact_id uuid default null,
   p_address_format text default null,p_access_type text default null,p_frontage_min numeric default null,
   p_frontage_max numeric default null,
   p_depth_min numeric default null,p_depth_max numeric default null,p_created_by_me boolean default null)
@@ -42,13 +45,15 @@ declare row_limit integer; price_lo numeric:=coalesce(p_price_min,0); price_hi n
   area_lo numeric:=coalesce(p_area_min,0); area_hi numeric:=coalesce(p_area_max,9999999999.99);
   frontage_lo numeric:=coalesce(p_frontage_min,0); frontage_hi numeric:=coalesce(p_frontage_max,9999999999.99);
   depth_lo numeric:=coalesce(p_depth_min,0); depth_hi numeric:=coalesce(p_depth_max,9999999999.99);
-  province_name text; district_name text; commune_name text;
+  province_name text; district_name text; commune_names text[];
 begin
   -- The official name each stated level is also matched by, normalised once here rather than per
   -- address row.
   province_name:=private.normalize_unit_text((select u.name_vi from public.admin_unit_versions u where u.id = p_province_id));
   district_name:=private.normalize_unit_text((select u.name_vi from public.admin_unit_versions u where u.id = p_district_id));
-  commune_name:=private.normalize_unit_text((select u.name_vi from public.admin_unit_versions u where u.id = p_commune_id));
+  -- Every stated commune name, in one array: a text-recorded address matches any one of them.
+  commune_names:=coalesce((select array_remove(array_agg(private.normalize_unit_text(u.name_vi)),'')
+    from public.admin_unit_versions u where u.id = any(p_commune_ids)),array[]::text[]);
   -- Every ordering this read answers, and no other: an unknown or re-spelled value is refused
   -- rather than served as a different order. The entry chronology is the eligible-status,
   -- employee-only view; a column ordering and an absent `p_order` are the ordinary unarchived
@@ -93,6 +98,14 @@ begin
   -- rather than read as a filter that matches nothing.
   if p_access_type is not null and p_access_type not in ('unknown','street_front','car_alley','motorbike_alley','three_wheeler_alley') then
     raise exception 'invalid inventory access type' using errcode='22023';
+  end if;
+  -- The commune set is one identity per entry: an empty set, an absent entry or a commune stated
+  -- twice is refused rather than read as the set minus what did not parse.
+  if p_commune_ids is not null and (cardinality(p_commune_ids) = 0
+    or array_position(p_commune_ids, null) is not null
+    or cardinality(p_commune_ids) <> (select count(distinct entry)
+      from unnest(p_commune_ids) as entries(entry))) then
+    raise exception 'invalid inventory commune set' using errcode='22023';
   end if;
   if p_price_min is not null and (p_price_min < 0 or p_price_min > 999999999999999999 or p_price_min <> trunc(p_price_min)) then
     raise exception 'invalid inventory price bound' using errcode='22023';
@@ -152,19 +165,21 @@ begin
       and (p_address_format is null or exists (select 1 from public.property_addresses a
         where a.property_id = p.id and a.format = p_address_format))
       -- The stated administrative levels, composed on one address of the searched format: a
-      -- province, a district and a ward each narrow the level stated above them, so a set naming
+      -- province, a district and a commune each narrow the level stated above them, so a set naming
       -- all three matches only the address recording all three rather than one address for each.
       -- A level matches its recorded unit or, for an address recorded as text with no unit, that
-      -- level's own text when it states the selected unit's official name.
-      and (coalesce(p_province_id,p_district_id,p_commune_id) is null or exists (
+      -- level's own text when it states the selected unit's official name. The commune level
+      -- carries a set: an address matches it once it records any one of the stated communes, so the
+      -- read answers the union of what each commune would answer alone.
+      and ((coalesce(p_province_id,p_district_id) is null and p_commune_ids is null) or exists (
         select 1 from public.property_addresses a where a.property_id = p.id
           and (p_address_format is null or a.format = p_address_format)
           and (p_province_id is null or a.province_unit_id = p_province_id
             or (province_name <> '' and private.normalize_unit_text(a.province_text) = province_name))
           and (p_district_id is null or a.district_unit_id = p_district_id
             or (district_name <> '' and private.normalize_unit_text(a.district_text) = district_name))
-          and (p_commune_id is null or a.commune_unit_id = p_commune_id
-            or (commune_name <> '' and private.normalize_unit_text(a.commune_text) = commune_name))))
+          and (p_commune_ids is null or a.commune_unit_id = any(p_commune_ids)
+            or (private.normalize_unit_text(a.commune_text) = any(commune_names)))))
       and (p_contact_id is null or exists (select 1 from public.property_contacts pc where pc.property_id = p.id
         and pc.contact_id = p_contact_id))
       and ((p_price_min is null and p_price_max is null)
@@ -250,7 +265,7 @@ begin
   order by w.position;
 end;
 $$;
-revoke all on function public.stream_inventory(text,text,integer,integer,text,text,text,numeric,numeric,numeric,numeric,uuid,uuid,uuid,uuid,text,text,numeric,numeric,numeric,numeric,boolean) from public,anon;
-grant execute on function public.stream_inventory(text,text,integer,integer,text,text,text,numeric,numeric,numeric,numeric,uuid,uuid,uuid,uuid,text,text,numeric,numeric,numeric,numeric,boolean) to authenticated;
+revoke all on function public.stream_inventory(text,text,integer,integer,text,text,text,numeric,numeric,numeric,numeric,uuid,uuid,uuid[],uuid,text,text,numeric,numeric,numeric,numeric,boolean) from public,anon;
+grant execute on function public.stream_inventory(text,text,integer,integer,text,text,text,numeric,numeric,numeric,numeric,uuid,uuid,uuid[],uuid,text,text,numeric,numeric,numeric,numeric,boolean) to authenticated;
 
 commit;

@@ -505,6 +505,7 @@ export function SearchIsland({
           query,
           sort,
           view,
+          hide,
           filters: withoutCommune(filters, communeId),
         }),
       );
