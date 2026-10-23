@@ -1,49 +1,25 @@
-# Per-repository no-mistakes configuration.
-#
-# Validation runs this project's own checks instead of improvising a throwaway
-# database and browser harness on every run. `test`, `lint` and `format` name a
-# package script the repository already defines; `prepare` runs the `npm ci` that
-# materializes them. `.github/workflows/ci.yml` (`npm run check`) stays the full
-# CI-parity owner.
-#
-# The Node pin lives in `.nvmrc` with `engines`, the npm pin in `packageManager`,
-# and every command reads both from those files at run time rather than repeating
-# them, the way CI provides them: the gate host's own `node`/`npm` do not satisfy
-# the pin, and a toolchain that is not installed fails the command instead of
-# falling back to them.
-#
-# no-mistakes reads `commands.*` and `test.instructions` only from the
-# default-branch copy of this file, so these pins take effect once this file is
-# on `main`.
+# Per-repository no-mistakes configuration: the project's own commands, instead
+# of an improvised harness. `test`, `lint` and `format` name a package script and
+# `prepare` materializes the dependency tree they need; `.github/workflows/ci.yml`
+# (`npm run check`) stays the full CI-parity owner, and `docs/development.md` and
+# `docs/testing.md` own how the suites and the private acceptance environment
+# work. These take effect once this file is on the default branch.
 
 commands:
-  # A run worktree starts with tracked files only, so the ignored dependency tree
-  # the pinned commands need is materialized the way CI does it: `packageManager`
-  # names the npm to install first, because the npm bundled with the `.nvmrc`
-  # Node is older and `.npmrc` sets `engine-strict=true`. CI also sets `HUSKY=0`
-  # so `npm ci` does not run the root `prepare` script and install git hooks.
+  # A run worktree has tracked files only, so this materializes the dependency tree.
   prepare: 'N=$(cat .nvmrc); B="${NVM_DIR:-$HOME/.nvm}/versions/node/v$N/bin"; [ -x "$B/node" ] || { echo "no Node $N from .nvmrc at $B" >&2; exit 1; }; export PATH="$B:$PATH"; S=$(node -p "require(\"./package.json\").packageManager"); HUSKY=0 npx --yes "$S" ci --prefer-offline'
-  # `test:unit` (node --test) plus `test:schema` (embedded migration assertions).
+  # The unit and schema suites.
   test: 'N=$(cat .nvmrc); B="${NVM_DIR:-$HOME/.nvm}/versions/node/v$N/bin"; [ -x "$B/node" ] || { echo "no Node $N from .nvmrc at $B" >&2; exit 1; }; export PATH="$B:$PATH"; npm test'
+  # ESLint plus the type check the pipeline has no other slot for.
   lint: 'N=$(cat .nvmrc); B="${NVM_DIR:-$HOME/.nvm}/versions/node/v$N/bin"; [ -x "$B/node" ] || { echo "no Node $N from .nvmrc at $B" >&2; exit 1; }; export PATH="$B:$PATH"; npm run lint && npm run typecheck'
+  # Formatting drift, caught before the push step commits.
   format: 'N=$(cat .nvmrc); B="${NVM_DIR:-$HOME/.nvm}/versions/node/v$N/bin"; [ -x "$B/node" ] || { echo "no Node $N from .nvmrc at $B" >&2; exit 1; }; export PATH="$B:$PATH"; npm run format:check'
 
 test:
   instructions: |
-    Use the pinned `npm test` command and the suites this repository already
-    ships: the `test:unit` files colocated with their features, and the
-    `test:schema` assertions that read the migration SQL through
-    `scripts/validate-schema.mjs`. Add a case to those suites when a change needs
-    one.
-    When a change genuinely needs end-user verification, use the repository's own
-    live paths. `docs/testing.md` owns the staging gates and scenarios;
-    `docs/development.md` owns the private acceptance environment they and
-    `npm run test:acceptance` need, which a run worktree normally does not have.
-    The runner refuses to start without the dev project environment (`SGN_ENV=dev`
-    and `EXPECTED_SUPABASE_PROJECT_REF` for the authorized development project),
-    `--allow-deactivation`, `SGN_ACCEPTANCE_FIXTURES`, `SGN_ACCEPTANCE_OPERATOR`
-    with an owner database connection, and the documented `chrome-devtools-axi`
-    installation. When that environment is unavailable, record in the evidence
-    what was not exercised.
-    In place of those paths, do not write a database shim, a browser driver, or
-    any other improvised harness, and do not install anything to build one.
+    Run the pinned `npm test` command, and add a case to the suites it covers
+    when a change needs one.
+    `npm run test:acceptance` is the only live end-user path; `docs/testing.md`
+    and `docs/development.md` own how it works.
+    Do not write a new database shim, a browser driver, or any other improvised
+    harness, and do not install anything to build one.
