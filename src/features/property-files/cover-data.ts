@@ -15,7 +15,7 @@ export async function setCover(
     p_file_id: fileId ?? undefined,
   });
   if (error) {
-    if (error.code === '42501') throw new ApiError(403, 'access-denied');
+    if (error.code === '42501') throw new ApiError(403, 'operation-refused');
     if (error.code === '23514') throw new ApiError(400, 'invalid-cover');
     throw new ApiError(503, 'unavailable');
   }

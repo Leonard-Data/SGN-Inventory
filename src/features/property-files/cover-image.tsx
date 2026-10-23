@@ -5,6 +5,7 @@ import { messages } from '@/i18n/messages';
 import { api, RequestError } from '@/features/employees/api';
 import { LoadingSkeleton, Skeleton } from '@/features/skeleton';
 import { fileMessages } from './messages';
+import { sessionLost } from './refusals';
 import type { SignedFileResponse } from './types';
 
 export function CoverImage({
@@ -44,7 +45,7 @@ export function CoverImage({
       .catch((failure) => {
         if (generation.current !== version) return;
         if (failure instanceof RequestError) {
-          if (failure.status === 401 || failure.status === 403) {
+          if (sessionLost(failure)) {
             timer = window.setTimeout(() => onDenied(failure.status), 0);
             return;
           }
@@ -52,6 +53,9 @@ export function CoverImage({
             setResource({ key, error: 'missing' });
             return;
           }
+          // A refusal names its own reason; the cover keeps its frame and the person keeps the page.
+          setResource({ key, error: failure.code });
+          return;
         }
         setResource({ key, error: 'unavailable' });
       });
@@ -97,7 +101,7 @@ export function CoverImage({
         />
       ) : current?.error ? (
         <p role="alert">
-          {text.coverImageFailed}{' '}
+          {text.errors[current.error] ?? text.coverImageFailed}{' '}
           <button
             type="button"
             className="btn btn-ghost btn-sm"

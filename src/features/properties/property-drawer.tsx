@@ -38,6 +38,7 @@ import {
   type CommentPage,
 } from '@/features/property-comments/types';
 import { fileMessages } from '@/features/property-files/messages';
+import { sessionLost } from '@/features/property-files/refusals';
 import {
   quickUpload,
   type QuickUploadProgress,
@@ -451,8 +452,9 @@ function QuickView({
     });
     setUploading(false);
     if (!outcome.ok) {
-      if (outcome.status === 401 || outcome.status === 403) {
-        onDenied(outcome.status);
+      // A refusal about this file or this record is stated here; only a lost session leaves.
+      if (sessionLost({ status: outcome.status ?? 0, code: outcome.code })) {
+        onDenied(outcome.status ?? 403);
         return;
       }
       setUploads((rows) =>

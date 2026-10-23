@@ -6,6 +6,7 @@ import { fileClass, sizeRefusal } from './limits';
 import { IconAction } from '@/features/icon-action';
 import { api, RequestError } from '@/features/employees/api';
 import { LoadingSkeleton } from '@/features/skeleton';
+import { sessionLost } from './refusals';
 import { applyServerSummary } from '@/features/properties/catalogue-changes';
 import { useCatalogueChange } from '@/features/properties/catalogue-provider';
 import type { PropertySummary } from '@/features/properties/types';
@@ -125,10 +126,7 @@ export function Workspace({
         setFiles([]);
         setRecoverable([]);
         setCategories([]);
-        if (
-          failure instanceof RequestError &&
-          (failure.status === 401 || failure.status === 403)
-        )
+        if (failure instanceof RequestError && sessionLost(failure))
           onDenied(failure.status);
         else
           setError(
@@ -143,10 +141,7 @@ export function Workspace({
   }, [propertyId, employeeId, archived, onDenied, revision]);
 
   function denied(failure: unknown) {
-    if (
-      failure instanceof RequestError &&
-      (failure.status === 401 || failure.status === 403)
-    ) {
+    if (failure instanceof RequestError && sessionLost(failure)) {
       onDenied(failure.status);
       return true;
     }
