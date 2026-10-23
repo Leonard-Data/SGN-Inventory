@@ -317,9 +317,9 @@ the role recorded at send time and the outcome.
 File-attestation key: one key is in use for both stages today, because the production database had
 no `private.file_validation_keys` row and file completion failed closed there. The production row
 was installed from the private key file on 2026-10-19 on the assumption that the production
-deployment already signed with that file; it does not. The production deployment carries its own,
-separately created `SGN_FILE_VALIDATION_KEY` entry, so the two halves are taken not to agree, and
-production file completion is refused: on 2026-10-23 a real pending upload was answered
+deployment already signed with that file; it did not. The production deployment carried its own,
+separately created `SGN_FILE_VALIDATION_KEY` entry, so the two halves did not agree, and
+production file completion was refused: on 2026-10-23 a real pending upload was answered
 `403 {"error":"operation-refused"}` by `POST /api/properties/{id}/files/{fileId}/complete` and the
 row stayed `pending`, while presigned reads kept working throughout. The browser's presign status
 and its upload `PUT` status and body were not captured, so an R2 403, a 503 and a CORS preflight
@@ -327,7 +327,7 @@ failure were excluded indirectly rather than observed: the 403 body is this appl
 rather than an R2 XML error, the refusal came from the completion RPC after its 64-hex key check
 had passed — the check that yields the missing-configuration 503 — and the recovery list reported
 `objectState: present` with the registered size, hash and content type, so the `PUT` had stored the
-bytes. The disagreement itself is inference from that refusal, not a measured comparison of two
+bytes. That earlier disagreement is inference from that refusal, not a measured comparison of two
 values.
 Setting the production deployment's value to the value its database row holds, and redeploying
 production, repaired it on 2026-10-23: the production-only Vercel entry was replaced, production was
