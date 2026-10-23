@@ -87,7 +87,7 @@ const NO_FORMATS: ReadonlyMap<string, string> = new Map();
 // A typed search the loaded catalogue cannot answer yet: no rows to filter, not a failed read.
 const NO_MATCHES: CatalogueMatch[] = [];
 
-// The viewport query behind the switch: below this width the ten-column table is not offered at
+// The viewport query behind the switch: below this width the summary table is not offered at
 // all, so nobody lands on a table that cannot work there.
 const WIDE_QUERY = `(min-width: ${PHONE_MAX_WIDTH_PX + 1}px)`;
 function subscribeWide(onChange: () => void) {

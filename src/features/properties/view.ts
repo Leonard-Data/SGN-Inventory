@@ -56,7 +56,7 @@ export function parseInventoryView(value: string | null): InventoryViewParse {
 }
 
 // The view a visitor actually sees: a phone is answered with cards whatever the address asks for,
-// because the ten-column table cannot be operated there and is not offered at all.
+// because the table cannot be operated there and is not offered at all.
 export function shownInventoryView(
   requested: InventoryView,
   wide: boolean,

@@ -1,4 +1,4 @@
-// The table's ten columns and the cell each property puts in them. Both views read the same
+// The table's columns and the cell each property puts in them. Both views read the same
 // records, so this projection is the one place the table's columns, their order, the formatted
 // values and the missing-value marker are decided — the component only draws what this returns.
 import {
