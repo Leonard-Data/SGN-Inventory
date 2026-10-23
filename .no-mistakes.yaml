@@ -18,11 +18,13 @@ commands:
   # A run worktree starts with tracked files only, so the ignored dependency tree
   # the pinned commands need is materialized the way CI does it. CI installs the
   # npm from `packageManager` before `npm ci`, because Node 24.14.0 bundles npm
-  # 11.9.0 and `.npmrc` sets `engine-strict=true`.
-  prepare: 'PATH="${NVM_DIR:-$HOME/.nvm}/versions/node/v24.14.0/bin:$PATH" npx --yes npm@11.13.0 ci --prefer-offline'
+  # 11.9.0 and `.npmrc` sets `engine-strict=true`. CI also sets `HUSKY=0` so
+  # `npm ci` does not run the root `prepare` script and install git hooks.
+  prepare: 'HUSKY=0 PATH="${NVM_DIR:-$HOME/.nvm}/versions/node/v24.14.0/bin:$PATH" npx --yes npm@11.13.0 ci --prefer-offline'
   # `test:unit` (node --test) plus `test:schema` (embedded migration assertions).
   test: 'PATH="${NVM_DIR:-$HOME/.nvm}/versions/node/v24.14.0/bin:$PATH" npm test'
-  lint: 'PATH="${NVM_DIR:-$HOME/.nvm}/versions/node/v24.14.0/bin:$PATH" npm run lint'
+  lint: 'PATH="${NVM_DIR:-$HOME/.nvm}/versions/node/v24.14.0/bin:$PATH" npm run lint && npm run typecheck'
+  format: 'PATH="${NVM_DIR:-$HOME/.nvm}/versions/node/v24.14.0/bin:$PATH" npm run format:check'
 
 test:
   instructions: |
@@ -31,9 +33,11 @@ test:
     `test:schema` assertions that read the migration SQL through
     `scripts/validate-schema.mjs`. Add a case to those suites when a change needs
     one.
-    Do not build a disposable database, a Postgres shim, a browser driver, or any
-    other improvised harness, and do not install one to validate a change.
-    `npm run test:acceptance` needs a live environment (`.env.acceptance.local`),
-    and the staging gates in `docs/testing.md` need one too; run either only when
-    the change genuinely requires a live environment, and record in the evidence
-    what was not exercised without one.
+    When a change genuinely needs end-user verification, use the repository's own
+    paths: `npm run test:acceptance` (it needs `.env.acceptance.local`) and the
+    staging gates in `docs/testing.md` (they need a live environment), driven
+    with the project's existing tooling - the `next dev` server, `supabase
+    start`, and `chrome-devtools-axi`. Record in the evidence what was not
+    exercised without a live environment.
+    In place of those paths, do not write a database shim, a browser driver, or
+    any other improvised harness, and do not install anything to build one.
