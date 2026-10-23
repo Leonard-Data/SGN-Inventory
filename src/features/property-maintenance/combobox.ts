@@ -133,3 +133,17 @@ export function comboboxKey(
   }
   return passThrough;
 }
+
+// The street field's keyboard contract: the unit picker's, except that Enter with nothing
+// highlighted is the form's own submit, because a hand-typed street the list does not name is a
+// value the field keeps.
+export function streetComboboxKey(
+  state: ComboboxState,
+  key: string,
+  count: number,
+): ComboboxKeyResult {
+  const result = comboboxKey(state, key, count);
+  if (key === 'Enter' && result.commit === null)
+    return { state, commit: null, handled: false };
+  return result;
+}

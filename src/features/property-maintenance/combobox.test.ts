@@ -6,6 +6,7 @@ import {
   filterUnitOptions,
   foldUnitName,
   openCombobox,
+  streetComboboxKey,
   streetSuggestions,
   typeInCombobox,
   type ComboboxOption,
@@ -158,4 +159,54 @@ test('a street typed by hand that the list does not carry still saves as typed',
   form.set('street', typed);
   assert.deepEqual(formChanges('address', form), { street: typed });
   assert.equal(recordsAddressPart({ street: typed, format: 'legacy' }), true);
+});
+
+// The street field keeps the unit picker's keyboard contract, except that Enter is the form's own
+// submit when no suggestion is highlighted, so typing an unlisted street still saves in one press.
+test('Enter submits a typed street nothing highlights, and picks a highlighted one', () => {
+  const typed = 'Hẻm 42 Đường Chưa Có Tên';
+  const none = typeInCombobox(
+    typed,
+    streetSuggestions(STREET_NAMES, typed).length,
+  );
+  assert.deepEqual(streetComboboxKey(none, 'Enter', 0), {
+    state: none,
+    commit: null,
+    handled: false,
+  });
+});
+
+test('Enter picks the highlighted street and closes the list', () => {
+  const matches = streetSuggestions(STREET_NAMES, 'ly thuong');
+  const state = typeInCombobox('ly thuong', matches.length);
+  const result = streetComboboxKey(state, 'Enter', matches.length);
+  assert.equal(result.handled, true);
+  assert.deepEqual(result.state, closedCombobox);
+  assert.equal(matches[result.commit!], 'Lý Thường Kiệt');
+});
+
+test('the arrows and the ends move the highlight the field applies', () => {
+  const typed = typeInCombobox('', 3);
+  assert.equal(streetComboboxKey(typed, 'ArrowDown', 3).state.active, 1);
+  assert.equal(streetComboboxKey(typed, 'ArrowUp', 3).state.active, 2);
+  assert.equal(streetComboboxKey(typed, 'End', 3).state.active, 2);
+  assert.equal(streetComboboxKey(typed, 'Home', 3).state.active, 0);
+  // Focused with nothing highlighted, the first arrow lands on the first suggestion.
+  assert.equal(
+    streetComboboxKey(openCombobox(-1), 'ArrowDown', 3).state.active,
+    0,
+  );
+  const moved = streetComboboxKey(typed, 'ArrowDown', 3);
+  assert.equal(moved.handled, true);
+  assert.equal(moved.commit, null);
+  assert.equal(moved.state.open, true);
+});
+
+test('Escape closes the street list and leaves the typed street to the field', () => {
+  const typed = 'Hẻm 42 Đường Chưa Có Tên';
+  const escaped = streetComboboxKey(typeInCombobox(typed, 0), 'Escape', 0);
+  assert.equal(escaped.handled, true);
+  assert.deepEqual(escaped.state, closedCombobox);
+  // Closed, the field shows the value onChange kept, not the query the list was filtered by.
+  assert.equal(escaped.state.query, null);
 });

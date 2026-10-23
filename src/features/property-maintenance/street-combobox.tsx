@@ -3,8 +3,8 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { STREET_NAMES } from './streets';
 import {
   closedCombobox,
-  comboboxKey,
   openCombobox,
+  streetComboboxKey,
   streetSuggestions,
 } from './combobox';
 
@@ -34,8 +34,9 @@ export function StreetCombobox({
   const matches = streetSuggestions(STREET_NAMES, state.query);
   // Closed, the field states the street it holds; typed text is what it shows while the list is open.
   const shown = state.query ?? value;
+  const showsList = state.open && matches.length > 0;
   const activeId =
-    state.open && state.active >= 0 && matches[state.active]
+    showsList && state.active >= 0 && matches[state.active]
       ? `${id}-option-${state.active}`
       : undefined;
   // The highlighted name may be below the fold of the list's own scrollport, so arrowing keeps it in
@@ -64,11 +65,11 @@ export function StreetCombobox({
       open();
       return;
     }
-    const result = comboboxKey(state, event.key, matches.length);
+    const result = streetComboboxKey(state, event.key, matches.length);
     if (!result.handled) return;
     event.preventDefault();
     const chosen = result.commit === null ? undefined : matches[result.commit];
-    if (chosen === undefined) setState(closedCombobox);
+    if (chosen === undefined) setState(result.state);
     else commit(chosen);
   }
   return (
@@ -83,8 +84,8 @@ export function StreetCombobox({
           role="combobox"
           autoComplete="off"
           spellCheck={false}
-          aria-expanded={state.open}
-          aria-controls={state.open ? listId : undefined}
+          aria-expanded={showsList}
+          aria-controls={showsList ? listId : undefined}
           aria-autocomplete="list"
           aria-activedescendant={activeId}
           aria-describedby={hintId}
@@ -102,7 +103,7 @@ export function StreetCombobox({
           onKeyDown={keyDown}
           onBlur={() => setState(closedCombobox)}
         />
-        {state.open && matches.length ? (
+        {showsList ? (
           <div className="combobox-pop">
             <ul
               className="combobox-list"
