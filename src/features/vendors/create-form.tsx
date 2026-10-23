@@ -2,6 +2,7 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, RequestError } from '@/features/employees/api';
+import { useToast } from '@/features/toasts/toast-host';
 import type { Locale } from '@/i18n/messages';
 import { messages } from '@/i18n/messages';
 import {
@@ -25,6 +26,7 @@ export function VendorCreateForm({
 }) {
   const router = useRouter();
   const text = messages[locale];
+  const notify = useToast();
   const submissionKey = useRef<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,6 +48,8 @@ export function VendorCreateForm({
         sourceAddress: value('sourceAddress'),
         notes: value('notes'),
       });
+      // The record is committed, so the new page opens with its confirmation.
+      notify({ saved: true, message: text.vendorCreated });
       router.push('/people/vendors/' + result.vendor.id);
     } catch (failure) {
       if (

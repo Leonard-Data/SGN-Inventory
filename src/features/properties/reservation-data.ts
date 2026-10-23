@@ -1,6 +1,7 @@
 import 'server-only';
 import { ApiError, uuid, type RouteContext } from '@/lib/supabase/route';
 import type { Employee } from '@/features/employees/types';
+import { catalogueSummaryOf } from './catalogue-data';
 import { decisionDays, reservationReason } from './reservation-rules';
 import type {
   EffectiveReservation,
@@ -97,10 +98,9 @@ export async function reservationState(
   ];
   const names = new Map<string, string>();
   if (ids.length) {
-    const { data, error } = await context.client
-      .from('employees')
-      .select('id,display_name')
-      .in('id', ids);
+    const { data, error } = await context.client.rpc('list_employee_names', {
+      p_ids: ids,
+    });
     if (error) throw databaseError(error);
     for (const row of data ?? []) names.set(row.id, row.display_name);
   }
@@ -123,6 +123,11 @@ export async function reservationState(
     effective: reservation,
     pending: rows.map((row) => request(row, names)),
     canDecide,
+    // The property's current catalogued summary, from the server's own read. A lock decision is
+    // committed by the database and this is what the record now says, so the browser's catalogue
+    // is refreshed from server state - including when a competing lock won and this answer is the
+    // only authoritative state the loser gets.
+    summary: await catalogueSummaryOf(context, id),
   };
 }
 

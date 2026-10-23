@@ -20,15 +20,32 @@ export async function provinceActivityContract({
     await db.query("select set_config('request.jwt.claim.sub','',false)");
   };
 
-  const [pA1, pA2, pB1, legacyOnly, candidate, archivedProperty] = [
+  const [
+    pA1,
+    pA2,
+    pB1,
+    legacyOnly,
+    candidate,
+    archivedProperty,
+    legacyLocated,
+  ] = [
     '72000000-0000-4000-8000-0000000000a1',
     '72000000-0000-4000-8000-0000000000a2',
     '72000000-0000-4000-8000-0000000000b1',
     '72000000-0000-4000-8000-0000000000c1',
     '72000000-0000-4000-8000-0000000000c2',
     '72000000-0000-4000-8000-0000000000d1',
+    '72000000-0000-4000-8000-0000000000e1',
   ];
-  const properties = [pA1, pA2, pB1, legacyOnly, candidate, archivedProperty];
+  const properties = [
+    pA1,
+    pA2,
+    pB1,
+    legacyOnly,
+    candidate,
+    archivedProperty,
+    legacyLocated,
+  ];
   // Two catalog versions of one official province code (the canonical-identity case), one
   // second province, and the commune versions their addresses are verified against.
   const [
@@ -46,17 +63,32 @@ export async function provinceActivityContract({
     '71000000-0000-4000-8000-0000000000c2',
     '71000000-0000-4000-8000-0000000000c3',
   ];
+  // The pre-2025 three-tier generation of the same official province code: province → district →
+  // commune, closed on 2025-07-01. Legacy addresses reference these rows, never the current ones.
+  const [legacyProvince, legacyDistrict, legacyCommune] = [
+    '71000000-0000-4000-8000-0000000000e1',
+    '71000000-0000-4000-8000-0000000000e2',
+    '71000000-0000-4000-8000-0000000000e3',
+  ];
   const provinceACode = 'TST-PA';
   const provinceAFirstName = 'Tỉnh Fixture A';
   const provinceARevisedName = 'Tỉnh Fixture A (hiệu chỉnh)';
   const provinceBName = 'Tỉnh Fixture B';
   const legacyRawProvince = 'Thành phố Hồ Chí Minh';
+  const legacyProvinceName = 'Tỉnh Fixture A (cũ)';
+  const legacyDistrictName = 'Quận Fixture Legacy (cũ)';
+  const legacyCommuneName = 'Phường Fixture Legacy (cũ)';
+  // Preserved legacy source text, kept apart from every current and legacy catalog label.
+  const legacyProvinceText = 'Tỉnh Fixture Legacy';
+  const legacyDistrictText = 'Quận Fixture Legacy';
+  const legacyCommuneText = 'Phường Fixture Legacy';
   const [sameDay, laterDay] = ['2026-10-05', '2026-10-06'];
   const quietDay = '2026-10-07';
+  const legacyDay = '2026-10-08';
 
   await asOwner();
   await db.query(
-    "insert into public.properties(id,property_code,listing_mode,status,created_by) values($1,'SGN-PROV-1','sale','available',$7),($2,'SGN-PROV-2','sale','available',$7),($3,'SGN-PROV-3','sale','available',$7),($4,'SGN-PROV-4','sale','available',$7),($5,'SGN-PROV-5','sale','available',$7),($6,'SGN-PROV-6','sale','available',$7)",
+    "insert into public.properties(id,property_code,listing_mode,status,created_by) values($1,'SGN-PROV-1','sale','available',$8),($2,'SGN-PROV-2','sale','available',$8),($3,'SGN-PROV-3','sale','available',$8),($4,'SGN-PROV-4','sale','available',$8),($5,'SGN-PROV-5','sale','available',$8),($6,'SGN-PROV-6','sale','available',$8),($7,'SGN-PROV-7','sale','available',$8)",
     [...properties, employees[0]],
   );
   await db.query(
@@ -104,6 +136,48 @@ export async function provinceActivityContract({
     "insert into public.property_addresses(property_id,format,address_text,province_unit_id,commune_unit_id,mapping_status,is_primary) values($1,'current','5 Fixture Street, Phường Fixture A2, Tỉnh Fixture A',$2,$3,'candidate',true)",
     [candidate, provinceASecond, communeA2],
   );
+  await db.query(
+    "insert into public.admin_unit_versions(id,official_code,name_vi,unit_level,valid_from,valid_to,source_url) values($1,$2,$3,'province','2025-01-04','2025-07-01','https://example.test/legacy-catalog')",
+    [legacyProvince, provinceACode, legacyProvinceName],
+  );
+  await db.query(
+    "insert into public.admin_unit_versions(id,official_code,name_vi,unit_level,parent_id,valid_from,valid_to,source_url) values($1,'TST-LD',$2,'district',$3,'2025-01-04','2025-07-01','https://example.test/legacy-catalog'),($4,'TST-LC',$5,'commune',$1,'2025-01-04','2025-07-01','https://example.test/legacy-catalog')",
+    [
+      legacyDistrict,
+      legacyDistrictName,
+      legacyProvince,
+      legacyCommune,
+      legacyCommuneName,
+    ],
+  );
+  // The dangerous legacy state: the three-tier unit ids are recorded on the legacy row, with no
+  // current address at all. The row also carries a verification designation, which the current
+  // address guard refuses, so it is written with that guard suspended: it stands for a row an
+  // import, a data fix or a pre-guard write path could leave behind. Only the reporting join's
+  // format='current' term keeps such a legacy province out of the verified report, which is what
+  // gives this regression teeth.
+  await db.query(
+    'alter table public.property_addresses disable trigger address_guard',
+  );
+  try {
+    await db.query(
+      "insert into public.property_addresses(property_id,format,address_text,province_text,district_text,commune_text,province_unit_id,district_unit_id,commune_unit_id,mapping_status,verification_method,verified_by,verified_at,source_url,effective_on,mapping_evidence,is_primary) values($1,'legacy','14 Lý Thường Kiệt, Phường Fixture Legacy, Quận Fixture Legacy, Tỉnh Fixture Legacy',$2,$3,$8,$4,$5,$6,'verified','document',$7,now(),'https://example.test/legacy-evidence','2025-03-01','Legacy source row kept as written by the historical sheet',true)",
+      [
+        legacyLocated,
+        legacyProvinceText,
+        legacyDistrictText,
+        legacyProvince,
+        legacyDistrict,
+        legacyCommune,
+        employees[0],
+        legacyCommuneText,
+      ],
+    );
+  } finally {
+    await db.query(
+      'alter table public.property_addresses enable trigger address_guard',
+    );
+  }
 
   const addressRevision = async (id) =>
     (
@@ -173,6 +247,9 @@ export async function provinceActivityContract({
   await record(employees[0], pB1, sameDay);
   await record(employees[0], legacyOnly, sameDay);
   await record(employees[1], candidate, sameDay);
+  // Two owner-contact units on the property whose only address is legacy geography.
+  await record(employees[0], legacyLocated, legacyDay);
+  await record(employees[1], legacyLocated, legacyDay);
   // A later Vietnam day: one repeated property counts again, one second property of the same
   // province and one property that is archived later.
   await record(employees[0], pA1, laterDay);
@@ -289,6 +366,38 @@ export async function provinceActivityContract({
         !rows.some((row) => row.name === legacyRawProvince),
         'raw legacy province text must never become a group',
       );
+    },
+  );
+  await check(
+    'legacy unit ids on a verified legacy address stay in the Unverified group and keep the company total',
+    async () => {
+      assert.deepEqual(shape(await read(legacyDay, legacyDay)), [
+        { id: null, code: null, name: null, count: 2 },
+      ]);
+      assert.equal(await companyTotal(legacyDay, legacyDay), 2);
+    },
+  );
+  await check(
+    'area analytics reports the legacy province text and district beside the unverified current commune',
+    async () => {
+      const rows = (
+        await db.query(
+          'select province_label,current_commune_id,current_commune_label,legacy_district_label,inventory_count from public.v_admin_inventory_by_area where province_label=$1',
+          [legacyProvinceText],
+        )
+      ).rows.map((row) => ({
+        ...row,
+        inventory_count: Number(row.inventory_count),
+      }));
+      assert.deepEqual(rows, [
+        {
+          province_label: legacyProvinceText,
+          current_commune_id: null,
+          current_commune_label: 'Chưa xác minh địa chỉ mới',
+          legacy_district_label: legacyDistrictText,
+          inventory_count: 1,
+        },
+      ]);
     },
   );
   await check(

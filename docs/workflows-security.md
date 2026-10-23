@@ -4,7 +4,7 @@
 
 | Capability | Sales | Staff | Manager | Admin |
 | --- | --- | --- | --- | --- |
-| Read internal inventory, addresses, contacts/files and employee directory | Yes | Yes | Yes | Yes |
+| Read internal inventory, addresses, contacts/files | Yes | Yes | Yes | Yes |
 | Read the vendor directory | Yes | Yes | Yes | Yes |
 | Create vendor directory records | No | Yes | Yes | Yes |
 | Link or unlink a property's vendor | Yes | Yes | Yes | Yes |
@@ -19,6 +19,7 @@
 | Read daily activity | Own | Own | All | All |
 | Approve/reject lock | No | No | Another employee only | Another employee only |
 | Set legal/review state | No | No | Yes | Yes |
+| Merge properties that share an address (archives the folded records) | No | No | Yes | Yes |
 | Confirm a completed sale (another employee's credit) | No | No | Yes | Yes |
 | Read the completed-sale ranking | No | No | Yes | Yes |
 | Manage employee activation/roles and catalogs | No | No | No | Yes |
@@ -28,7 +29,7 @@
 | Read area/employee analytics | No | No | Yes | Yes |
 | Read staging/audit directly through API | No | No | No | No |
 
-These roles are company-wide. Every active employee, Sales included, may read the vendor directory and link or unlink a recorded vendor on a property they can read. Staff, manager and admin create vendor directory records; vendor editing is ticket #75's work. No team isolation is assumed. The directory includes work emails and employee phones; treat these as internal data.
+These roles are company-wide. Every active employee, Sales included, may read the vendor directory and link or unlink a recorded vendor on a property they can read. Staff, manager and admin create vendor directory records; vendor editing is ticket #75's work. No team isolation is assumed. An ordinary employee's own employee row is the only employee record they read; the admin employee directory is admin-only and includes work emails and employee phones, so treat those as internal data.
 
 ## Reservation lifecycle
 
@@ -61,7 +62,7 @@ Deactivation disables internal membership first and confirms the exact Auth sign
 | Distinct properties viewed | Unique property UUIDs per employee/Vietnam day | Better inventory activity measure |
 | Owner-contact properties | Distinct properties whose recorded owner phone was deliberately disclosed per employee/Vietnam day | Disclosure count; not calls, owners or physical visits |
 
-Legacy `clicks` is imported as `page_view`/`legacy_click`. It never becomes `site_visit` merely because the sheet contains “Ngày xem”. New events use the server time of submission, with an employee-scoped UUID retry key. Physical-visit submission and confirmation are retired; retained `site_visit` rows keep their original attribution, day and status, and the MVP still supports no backdated visits.
+Legacy `clicks` is excluded from the import by captain decision, so no legacy view row is written ([legacy import](legacy-import.md#the-settled-rules)); a view never becomes `site_visit` merely because the sheet contains “Ngày xem”. New events use the server time of submission, with an employee-scoped UUID retry key. Physical-visit submission and confirmation are retired; retained `site_visit` rows keep their original attribution, day and status, and the MVP still supports no backdated visits.
 
 The daily view has rows only for days with recorded events. Reporting over a selected range crosses a Vietnam date calendar — the caller's own personal report and company admin reporting for every currently active employee — so requested days with no events appear as explicit zeros; a deactivated employee's historical events are not listed there, while the delivered rankings keep a deactivated contributor's recorded total (`docs/database-contract.md`). “Active employee” on a day means at least one tracked view or owner-contact access according to the displayed metric; it is not proof of attendance, employment hours or GPS presence.
 
@@ -83,4 +84,4 @@ The required languages are VI/EN, with Vietnamese regional conventions in either
 
 Validate every form and server input. Require POST/Server Action mutations with origin/CSRF protections appropriate to the route. Limit high-volume search/event submissions in application middleware or an equivalent rate limiter. Prevent shared caching of signed-in data. Keep logs limited to request IDs, error classes and safe identifiers. Alert on repeated reservation conflicts or failed file completions without logging deal/contact content.
 
-Admin user invitations must link the correct Auth account to an employee email and confirm the requested role. The last active admin is protected by a database trigger that refuses a deactivation, demotion, unlink or removal that would leave the company without an active admin, serialized with an advisory lock so concurrent removals cannot both pass; deactivation runs through the guarded `begin_employee_deactivation` RPC and a direct lifecycle, link or role write cannot bypass the guard. An invitation runs through the guarded `begin_employee_invitation` RPC: it records one normalized address and one existing company role under the live admin, creates the invited employee unlinked and inactive, and records the provider request state without activating or linking anyone; the requested role is never written into editable Auth metadata. Only the invitee's own session accepts it: the public invoker `accept_employee_invitation` requires the caller's `auth.uid()` to be the invitation's recorded provider identity, so an email match alone, a different identity, an arbitrary redirect, password recovery or edited Auth metadata never links, activates or promotes anyone, and the recorded role is the one that applies. A valid, current, correctly matched invitation completed by that invitee links and activates the retained employee immediately — the invitee activates themselves, with no manager approval step — while a deactivated, deleted or differently-linked employee is refused and never restored. Admin row actions that activate or change a role remain unshipped. Bootstrap the first admin through a controlled administrative database action after creating the Auth account.
+Admin user invitations must link the correct Auth account to an employee email and confirm the requested role. The last active admin is protected by a database trigger that refuses a deactivation, demotion, unlink or removal that would leave the company without an active admin, serialized with an advisory lock so concurrent removals cannot both pass; deactivation runs through the guarded `begin_employee_deactivation` RPC and a direct lifecycle, link or role write cannot bypass the guard. An invitation runs through the guarded `begin_employee_invitation` RPC: it records one normalized address and one existing company role under the live admin, creates the invited employee unlinked and inactive, and records the provider request state without activating or linking anyone; the requested role is never written into editable Auth metadata. Only the invitee's own session accepts it: the public invoker `accept_employee_invitation` requires the caller's `auth.uid()` to be the invitation's recorded provider identity, so an email match alone, a different identity, an arbitrary redirect, password recovery or edited Auth metadata never links, activates or promotes anyone, and the recorded role is the one that applies. A valid, current, correctly matched invitation completed by that invitee links and activates the retained employee immediately — the invitee activates themselves, with no manager approval step — while a deactivated, deleted or differently-linked employee is refused and never restored. Admin row actions that activate an employee remain unshipped, while a role change ships through the guarded profile edit that records the acting admin. Bootstrap the first admin through a controlled administrative database action after creating the Auth account.

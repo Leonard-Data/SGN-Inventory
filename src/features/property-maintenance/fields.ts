@@ -1,20 +1,16 @@
 import type { Json } from '@/types/database';
+import type { PriceUnit } from '@/features/properties/format';
 export type Target = 'property' | 'address' | 'mapping' | 'contact' | 'link';
 export type Changes = Record<string, Json>;
 type Field = {
   vi: string;
   en: string;
-  kind?:
-    | 'money'
-    | 'decimal'
-    | 'count'
-    | 'boolean'
-    | 'phones'
-    | 'uuid'
-    | 'date'
-    | 'coordinate';
+  kind?: 'money' | 'decimal' | 'count' | 'boolean' | 'phones' | 'uuid' | 'date';
   options?: readonly string[];
   required?: boolean;
+  // A money field's own entry rule: the unit it opens on, and whether the implausible-magnitude
+  // check reads it as an asking sale price. The stored value stays whole VND.
+  price?: { unit: PriceUnit; kind: 'sale' | 'rent' };
 };
 export const fields: Record<string, Field> = {
   listing_mode: {
@@ -62,14 +58,16 @@ export const fields: Record<string, Field> = {
     required: true,
   },
   sale_price_vnd: {
-    vi: 'Giá bán (VND nguyên)',
-    en: 'Asking sale price (whole VND)',
+    vi: 'Giá bán',
+    en: 'Asking sale price',
     kind: 'money',
+    price: { unit: 'ty', kind: 'sale' },
   },
   monthly_rent_vnd: {
-    vi: 'Giá thuê tháng (VND nguyên)',
-    en: 'Monthly asking rent (whole VND)',
+    vi: 'Giá thuê tháng',
+    en: 'Monthly asking rent',
     kind: 'money',
+    price: { unit: 'trieu', kind: 'rent' },
   },
   land_area_m2: {
     vi: 'Diện tích đất (m²)',
@@ -104,15 +102,12 @@ export const fields: Record<string, Field> = {
   },
   area_raw: { vi: 'Diện tích theo nguồn', en: 'Source area text' },
   notes: { vi: 'Ghi chú', en: 'Notes' },
-  latitude: { vi: 'Vĩ độ', en: 'Latitude', kind: 'coordinate' },
-  longitude: { vi: 'Kinh độ', en: 'Longitude', kind: 'coordinate' },
   format: {
     vi: 'Dạng địa chỉ',
     en: 'Address format',
     options: ['legacy', 'current'],
     required: true,
   },
-  address_text: { vi: 'Địa chỉ đã biết', en: 'Known address', required: true },
   house_number: { vi: 'Số nhà', en: 'House number' },
   street: { vi: 'Đường', en: 'Street' },
   province_text: {
@@ -163,7 +158,7 @@ export const fields: Record<string, Field> = {
     en: 'Phones (one source string per line)',
     kind: 'phones',
   },
-  raw_phone_text: { vi: 'Điện thoại theo nguồn', en: 'Original phone text' },
+  raw_phone_text: { vi: 'Số điện thoại ban đầu', en: 'Original phone number' },
   contact_type: {
     vi: 'Loại người liên hệ',
     en: 'Contact classification',
@@ -208,12 +203,9 @@ export const targetFields: Record<Target, readonly string[]> = {
     'construction_text',
     'area_raw',
     'notes',
-    'latitude',
-    'longitude',
   ],
   address: [
     'format',
-    'address_text',
     'house_number',
     'street',
     'province_text',
@@ -242,7 +234,37 @@ export const targetFields: Record<Target, readonly string[]> = {
   ],
   link: ['contact_id', 'relation', 'is_primary', 'remove'],
 };
-const LOCATION_FIELDS = ['latitude', 'longitude'];
+// Creating a property leaves out the status the database assigns and the four source-only fields:
+// the maintenance form still edits and shows all of them.
+export const createPropertyFieldNames = targetFields.property.filter(
+  (name) =>
+    ![
+      'status',
+      'parcel_number',
+      'map_sheet_number',
+      'construction_text',
+      'area_raw',
+    ].includes(name),
+);
+// The fields an address form renders: the caller's own selection, except that the district label
+// follows the legacy district picker that is its only writer, so it is rendered wherever that
+// picker is offered rather than only where a caller names it, and a current address renders none.
+export function addressFields(
+  names: readonly string[] | undefined,
+  legacy: boolean,
+): string[] {
+  const selected = names ? new Set(names) : null,
+    picker = legacy && (selected === null || selected.has('district_unit_id'));
+  return [
+    'house_number',
+    'street',
+    ...(picker ? ['district_text'] : []),
+    'is_primary',
+  ].filter(
+    (name) =>
+      name === 'district_text' || selected === null || selected.has(name),
+  );
+}
 export function correctionFieldNames({
   target,
   staff,
@@ -256,12 +278,11 @@ export function correctionFieldNames({
 }): string[] {
   return targetFields[target].filter(
     (name) =>
-      !LOCATION_FIELDS.includes(name) &&
       (staff || !['contact_id', 'remove'].includes(name)) &&
       !(name === 'status' && ['sold', 'rented'].includes(propertyStatus)) &&
       !(
         target === 'address' &&
-        ['province_text', 'commune_text', 'district_unit_id'].includes(name)
+        ['province_text', 'district_text', 'commune_text'].includes(name)
       ) &&
       !(
         target === 'address' &&
@@ -275,6 +296,17 @@ export class InputError extends Error {
     super('invalid-input');
   }
 }
+// A created address names something a person supplied: a house number, a street, or a commune picked
+// from the catalog. The province is stated by the app on every form, so it is never the address.
+export function recordsAddressPart(address: Record<string, unknown>) {
+  const filled = (value: unknown) =>
+    typeof value === 'string' && value.trim() !== '';
+  return (
+    filled(address.house_number) ||
+    filled(address.street) ||
+    filled(address.commune_unit_id)
+  );
+}
 export const isUuid = (value: unknown): value is string =>
   typeof value === 'string' &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
@@ -285,8 +317,6 @@ export function validateChanges(target: Target, input: unknown): Changes {
     Array.isArray(input) ||
     !targetFields[target]
   )
-    throw new InputError();
-  if (target === 'property' && 'latitude' in input !== 'longitude' in input)
     throw new InputError();
   for (const [key, value] of Object.entries(input)) {
     if (!targetFields[target].includes(key)) throw new InputError();
@@ -345,12 +375,6 @@ export function validateChanges(target: Target, input: unknown): Changes {
             BigInt(value.split('.')[0]!) >= 1000000n))
       )
         throw new InputError();
-      if (
-        field.kind === 'coordinate' &&
-        (!/^-?[0-9]{1,3}(\.[0-9]{1,7})?$/.test(value) ||
-          Math.abs(Number(value)) > (key === 'latitude' ? 90 : 180))
-      )
-        throw new InputError();
     }
   }
   const result = input as Changes;
@@ -396,14 +420,6 @@ export function formChanges(
         ? String(before[key])
         : (before[key] ?? null);
     if (JSON.stringify(parsed) !== JSON.stringify(prior)) changes[key] = parsed;
-  }
-  if (
-    target === 'property' &&
-    'latitude' in changes !== 'longitude' in changes
-  ) {
-    const other = 'latitude' in changes ? 'longitude' : 'latitude';
-    const prior = before[other];
-    if (prior != null) changes[other] = prior as Json;
   }
   return validateChanges(target, changes);
 }

@@ -95,7 +95,7 @@ test('an archived property hidden from a non-reviewer mints no URL at all', asyn
   assert.deepEqual(presigned, []);
 });
 
-test('an unreadable file record mints no URL and a denied read stays access-denied', async () => {
+test('an unreadable file record mints no URL and a denied read stays a record refusal', async () => {
   const missing = signing({ readFile: async () => ({ refused: 404 }) });
   assert.deepEqual(
     await signAuthorizedFile(missing.dependencies, {
@@ -114,7 +114,9 @@ test('an unreadable file record mints no URL and a denied read stays access-deni
       fileId,
       download: false,
     }),
-    { status: 403, code: 'access-denied' },
+    // A permission error on this record is not the caller's own access being gone: the client
+    // keeps the person on the page and states the refusal there.
+    { status: 403, code: 'operation-refused' },
   );
   assert.deepEqual(denied.presigned, []);
 

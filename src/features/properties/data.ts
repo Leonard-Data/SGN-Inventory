@@ -1,39 +1,66 @@
 import 'server-only';
-import { ApiError, uuid, type RouteContext } from '@/lib/supabase/route';
-import type { AddressSummary, PropertyPage, PropertySummary } from './types';
+import { ApiError, type RouteContext } from '@/lib/supabase/route';
+import type { Database } from '@/types/database';
+import type { AddressSummary, PropertyStream } from './types';
+import { propertyCreators, propertyModifiers } from './creator';
 import {
   catalogUnitsMatch,
+  communeIds,
   filterRpcArgs,
+  INVENTORY_ADDRESS_FORMAT_ANY,
   INVENTORY_FILTER_KEYS,
   parseInventoryFilters,
+  searchedAddressFormat,
   type InventoryFilters,
 } from './filters';
+import { FIXED_PROVINCE } from '@/features/property-maintenance/units';
 import {
-  ageCursorArgs,
-  decodeAgeCursor,
-  encodeAgeCursor,
-  inventoryPage,
-  INVENTORY_PAGE_SIZE,
   isInventoryOrder,
+  parseStreamOffset,
+  STREAM_PAGE_SIZE,
   type InventoryOrder,
-} from './age-cursor';
+} from './stream';
+
+// One row of the stream read. The counting row a past-the-end or empty window answers with carries
+// null window columns, so a row names a property exactly when it has an id; when it does, the four
+// fields the summary requires are present because they are NOT NULL on the table the window was
+// sliced from, and the left join cannot null a row it did not join.
+type StreamRow =
+  Database['public']['Functions']['stream_inventory']['Returns'][number];
+type StreamRecord = StreamRow & {
+  id: string;
+  property_code: string;
+  listing_mode: string;
+  status: string;
+  property_type: string;
+};
 
 export async function browseProperties(
   context: RouteContext,
   params: URLSearchParams,
-): Promise<PropertyPage> {
+): Promise<PropertyStream> {
   const query = params.get('query') ?? '';
-  const after = params.get('after');
   const sort = params.get('sort');
   if ([...query].length > 120) throw new ApiError(400, 'query-too-long');
   if (sort !== null && !isInventoryOrder(sort))
     throw new ApiError(400, 'invalid-input');
+  // This read takes its criteria as optional parameters, so a caller that states no format asks for
+  // no format condition rather than for the page's default legacy search.
   // A filter the address states must be applied or refused; it is never dropped into a
   // different inventory than the one the address describes.
-  const filters = parseInventoryFilters(params);
+  const filters = parseInventoryFilters(params, INVENTORY_ADDRESS_FORMAT_ANY);
   if (!filters.ok) throw new ApiError(400, 'invalid-input');
+  // The creator selection reaches the read as its own criterion, which compares each record's
+  // creator with the employee reading the list, so it is never approximated or widened here.
+  const window = parseStreamOffset(params);
+  if (!window.ok) throw new ApiError(400, 'invalid-input');
+  // The retired page number and page size are not parameters of the stream: a caller that still
+  // sends them is refused instead of being answered with a different window of inventory, and the
+  // window offset is the stream's own parameter.
   const allowed = [
-    ...(sort === null ? ['query', 'after'] : ['query', 'after', 'sort']),
+    'query',
+    'offset',
+    ...(sort === null ? [] : ['sort']),
     ...INVENTORY_FILTER_KEYS,
   ];
   if ([...params.keys()].some((key) => !allowed.includes(key)))
@@ -45,34 +72,54 @@ export async function browseProperties(
   // The contact parameter names a recorded Contact the caller may read; an unknown or unreadable
   // identifier is refused rather than applied as a contact with no linked property.
   await assertContact(context, filters.filters);
-  // The chronological views are a distinct bounded read over eligible inventory; the ordinary
-  // UUID-ordered browse keeps serving the full unarchived inventory.
-  if (sort)
-    return listInventoryByAge(context, sort, query, after, filters.filters);
-  if (after !== null && !uuid(after)) throw new ApiError(400, 'invalid-input');
+  const order: InventoryOrder | null = sort;
+  // One filtered read returns the matching total beside this window of rows, at the window's own
+  // offset in the stream's total order. The ordering is the argument, so the ordinary browse and
+  // the eligible chronology share one predicate: a count that could include a row this window
+  // would not show is not expressible here.
   const { data: rows, error } = await context.client
-    .rpc('search_properties', {
+    .rpc('stream_inventory', {
+      p_order: order,
       p_query: query,
-      p_limit: 30,
+      p_offset: window.offset,
+      p_limit: STREAM_PAGE_SIZE,
       ...filterRpcArgs(filters.filters),
-      ...(after ? { p_after: after } : {}),
     })
     .select(
-      'id,property_code,listing_mode,status,cover_file_id,frontage_m::text,depth_m::text,land_area_m2::text,floor_area_m2::text,floors,direction,access_type',
+      'total_count,id,property_code,listing_mode,status,property_type,cover_file_id,frontage_m,depth_m,land_area_m2,floor_area_m2,floors,direction,access_type,entry_on,entry_source,age_days,created_at,updated_at,sale_price_vnd,monthly_rent_vnd',
     );
   if (error) throw accessError(error.code);
-  if (!rows?.length) return { properties: [], nextCursor: null };
-  const addresses = await addressSummaries(
-    context,
-    rows.map((row) => row.id),
-    query,
+  // Every read states the total: a window past the end answers with the counting row alone, so
+  // the header count stays true even when the window it asked for has no rows.
+  const total = rows?.length ? rows[0]!.total_count : 0;
+  const summary = { total, offset: window.offset, order };
+  // The counting row a past-the-end or empty window answers with carries no record: the rest of
+  // this read only makes sense for rows that name a property.
+  const records = (rows ?? []).filter(
+    (row): row is StreamRecord => row.id !== null,
   );
+  if (!records.length) return { ...summary, properties: [] };
+  const ids = records.map((row) => row.id);
+  // The format the search read through, which decides the address each row states.
+  const addressFormat = searchedAddressFormat(filters.filters);
+  // Both reads depend only on the window of rows, so they run together: the addresses the rows
+  // draw, and the display name of each record's creator and modifier.
+  const [addresses, attribution] = await Promise.all([
+    addressSummaries(context, ids, query, addressFormat),
+    attributionNames(context, ids),
+  ]);
   return {
-    properties: rows.map((row) => ({
+    ...summary,
+    properties: records.map((row) => ({
       id: row.id,
       propertyCode: row.property_code,
       listingMode: row.listing_mode,
       status: row.status,
+      propertyType: row.property_type,
+      salePriceVnd: row.sale_price_vnd ?? null,
+      monthlyRentVnd: row.monthly_rent_vnd ?? null,
+      createdAt: row.created_at ?? null,
+      updatedAt: row.updated_at ?? null,
       coverFileId: row.cover_file_id ?? null,
       // Kept as the database returned them; the plate coerces for the drawing.
       frontageM: row.frontage_m ?? null,
@@ -82,70 +129,52 @@ export async function browseProperties(
       floors: row.floors ?? null,
       direction: row.direction ?? null,
       accessType: row.access_type ?? null,
+      entryOn: row.entry_on ?? null,
+      entrySource: row.entry_source,
+      ageDays: row.age_days ?? null,
       addresses: addresses.get(row.id) ?? [],
+      createdBy: attribution.creators.get(row.id) ?? null,
+      updatedBy: attribution.modifiers.get(row.id) ?? null,
     })),
-    nextCursor: rows.length === 30 ? rows[rows.length - 1]!.id : null,
   };
 }
 
-// The eligible oldest-first/newest-first inventory read. The database orders and ages the rows
-// in Vietnam time and returns the date+identity key; the browser only carries that key.
-async function listInventoryByAge(
+// The creator's and the modifier's display names ride on the same page of records rather than on a
+// second source: the page ids address properties the caller may already read, and an employee's
+// display name is the attribution every active employee can read. Nothing here widens who can see
+// what, and a reference that does not resolve simply contributes no entry.
+async function attributionNames(
   context: RouteContext,
-  order: InventoryOrder,
-  query: string,
-  after: string | null,
-  filters: InventoryFilters,
-): Promise<PropertyPage> {
-  const decoded = decodeAgeCursor(after);
-  if (!decoded.ok) throw new ApiError(400, 'invalid-input');
-  const { data: rows, error } = await context.client.rpc(
-    'list_inventory_by_age',
-    {
-      p_direction: order,
-      p_query: query,
-      // One lookahead row beyond the exposed page decides whether a next page exists.
-      p_limit: INVENTORY_PAGE_SIZE + 1,
-      ...filterRpcArgs(filters),
-      ...ageCursorArgs(decoded.cursor),
-    },
-  );
+  ids: string[],
+): Promise<{
+  creators: Map<string, string>;
+  modifiers: Map<string, string>;
+}> {
+  const { data: records, error } = await context.client
+    .from('properties')
+    .select('id,created_by,updated_by')
+    .in('id', ids);
   if (error) throw accessError(error.code);
-  const { page, hasMore } = inventoryPage(rows ?? []);
-  if (!page.length) return { order, properties: [], nextCursor: null };
-  const addresses = await addressSummaries(
-    context,
-    page.map((row) => row.id),
-    query,
+  // One pass over the page: the referenced ids, de-duplicated, without a second traversal.
+  const referenced = [
+    ...new Set(
+      (records ?? []).flatMap((record) =>
+        [record.created_by, record.updated_by].flatMap((id) =>
+          id ? [id] : [],
+        ),
+      ),
+    ),
+  ];
+  const empty = { creators: new Map(), modifiers: new Map() };
+  if (!referenced.length) return empty;
+  const { data: employees, error: employeeError } = await context.client.rpc(
+    'list_employee_names',
+    { p_ids: referenced },
   );
-  const properties: PropertySummary[] = page.map((row) => ({
-    id: row.id,
-    propertyCode: row.property_code,
-    listingMode: row.listing_mode,
-    status: row.status,
-    coverFileId: row.cover_file_id ?? null,
-    frontageM: row.frontage_m ?? null,
-    depthM: row.depth_m ?? null,
-    landAreaM2: row.land_area_m2 ?? null,
-    floorAreaM2: row.floor_area_m2 ?? null,
-    floors: row.floors ?? null,
-    direction: row.direction ?? null,
-    accessType: row.access_type ?? null,
-    entryOn: row.entry_on ?? null,
-    entrySource: row.entry_source,
-    ageDays: row.age_days ?? null,
-    addresses: addresses.get(row.id) ?? [],
-  }));
-  const last = properties[properties.length - 1]!;
+  if (employeeError) throw accessError(employeeError.code);
   return {
-    order,
-    properties,
-    // A lookahead row beyond this page means a following page exists; the cursor is opaque to
-    // the browser and carries the ordering section, so an unknown-date page continues from its
-    // own identity.
-    nextCursor: hasMore
-      ? encodeAgeCursor({ entryOn: last.entryOn ?? null, id: last.id })
-      : null,
+    creators: propertyCreators(records ?? [], employees ?? []),
+    modifiers: propertyModifiers(records ?? [], employees ?? []),
   };
 }
 
@@ -155,24 +184,57 @@ function accessError(code: string | undefined): ApiError {
     : new ApiError(503, 'unavailable');
 }
 
-// The province must be a province-level catalog unit and the ward a commune-level unit inside
-// that province, so an address that swaps or mismatches them is refused rather than applied to a
-// different unit.
+// The district must be a district-level unit inside the one province the business records and each
+// stated commune a commune-level unit inside the stated district or that province, so an address
+// that mixes levels or parents is refused rather than applied to a different unit. Units are matched
+// whatever their validity window, because a property recorded in the closed pre-2025 generation is
+// filtered by its own legacy district and ward, and the province is matched by its official code
+// because one official unit has a row per catalog generation.
 async function assertAreaUnits(
   context: RouteContext,
   filters: InventoryFilters,
 ): Promise<void> {
-  const { province, ward } = filters;
-  if (province === null && ward === null) return;
+  const { district, ward } = filters;
+  const communes = communeIds(ward);
+  if (district === null && !communes.length) return;
+  const province = await context.client
+    .from('admin_unit_versions')
+    .select('official_code')
+    .eq('id', FIXED_PROVINCE.id)
+    .maybeSingle();
+  if (province.error) throw new ApiError(503, 'unavailable');
+  if (!province.data) throw new ApiError(400, 'invalid-input');
   const { data, error } = await context.client
     .from('admin_unit_versions')
-    .select('id,unit_level,parent_id')
+    .select('id,unit_level,parent_id,official_code')
     .in(
       'id',
-      [province, ward].filter((id): id is string => id !== null),
+      [district, ...communes].filter((id): id is string => id !== null),
     );
   if (error) throw new ApiError(503, 'unavailable');
-  if (!catalogUnitsMatch(data ?? [], filters))
+  const units = new Map((data ?? []).map((unit) => [unit.id, unit]));
+  // Each stated unit's own parent chain is read up to its province - a legacy ward's district, then
+  // that district's pre-2025 province - so the lineage is complete whatever generation it belongs
+  // to. Three reads at most, because the catalog has three levels.
+  for (let depth = 0; depth < 3; depth++) {
+    const missing = [...units.values()]
+      .map((unit) => unit.parent_id)
+      .filter((id): id is string => id !== null && !units.has(id));
+    if (!missing.length) break;
+    const { data: ancestors, error: parentError } = await context.client
+      .from('admin_unit_versions')
+      .select('id,unit_level,parent_id,official_code')
+      .in('id', missing);
+    if (parentError) throw new ApiError(503, 'unavailable');
+    for (const unit of ancestors ?? []) units.set(unit.id, unit);
+  }
+  if (
+    !catalogUnitsMatch(
+      [...units.values()],
+      filters,
+      province.data.official_code,
+    )
+  )
     throw new ApiError(400, 'invalid-input');
 }
 
@@ -198,13 +260,14 @@ async function addressSummaries(
   context: RouteContext,
   ids: string[],
   query: string,
+  addressFormat: string,
 ): Promise<Map<string, AddressSummary[]>> {
   const result = new Map<string, AddressSummary[]>();
   if (!ids.length) return result;
   const { data: addresses, error } = await context.client
     .from('property_addresses')
     .select(
-      'id,property_id,format,address_text,mapping_status,is_primary,search_text',
+      'id,property_id,format,address_text,mapping_status,is_primary,house_number,street,commune_text,district_text,search_text',
     )
     .in('property_id', ids)
     .order('is_primary', { ascending: false })
@@ -218,12 +281,26 @@ async function addressSummaries(
     .replace(/[\u0300-\u036f]/g, '')
     .replaceAll('đ', 'd');
   for (const address of addresses ?? []) {
+    // The row states the address the search read through: the selected format's own address, which
+    // the read's own predicate guarantees for every row, or either recorded address when no format
+    // is stated.
+    if (
+      addressFormat !== INVENTORY_ADDRESS_FORMAT_ANY &&
+      address.format !== addressFormat
+    )
+      continue;
     const summary: AddressSummary = {
       id: address.id,
       format: address.format,
       addressText: address.address_text,
       mappingStatus: address.mapping_status,
       isPrimary: address.is_primary,
+      // The recorded address text is preserved as entered; these parts are what the table's own
+      // columns state, and an absent part stays absent instead of being parsed out of the text.
+      houseNumber: address.house_number,
+      street: address.street,
+      commune: address.commune_text,
+      district: address.district_text,
     };
     const group = byProperty.get(address.property_id) ?? [];
     group.push(summary);

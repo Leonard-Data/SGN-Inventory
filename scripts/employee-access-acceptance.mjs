@@ -265,19 +265,19 @@ async function activity(client) {
 }
 const active = await userClient('active');
 const operator = await userClient('operator');
-const target = await operator
-  .from('employees')
-  .select('display_name,auth_user_id,is_active')
-  .eq('id', fixtures.active.employeeId)
-  .single();
-assert.equal(target.error, null, 'Declared employee fixture not readable');
+// The fixture guard reads the recorded row with owner authority: an ordinary employee's row
+// read carries only their own record.
+const [target] = ownerSql(
+  `select display_name,auth_user_id,is_active from public.employees where id=${sqlText(fixtures.active.employeeId)}`,
+);
+assert.ok(target, 'Declared employee fixture not readable');
 assert.equal(
-  target.data.display_name,
+  target.display_name,
   'Test active',
   'Refusing to mutate a nonsynthetic employee',
 );
-assert.equal(target.data.auth_user_id, fixtures.active.userId);
-assert.equal(target.data.is_active, true, 'Fixture must start active');
+assert.equal(target.auth_user_id, fixtures.active.userId);
+assert.equal(target.is_active, true, 'Fixture must start active');
 assert.equal(fixtures.archivedProperty?.code, 'SGN-TEST-ARCHIVED');
 let deactivated = false;
 let networkOffline = false;
@@ -299,21 +299,21 @@ try {
   const first = await session.request('/api/properties');
   assert.equal(first.status, 200);
   assert.match(first.cache, /no-store/);
+  assert.equal(first.body.total, fixtures.properties.length);
   assert.deepEqual(
     first.body.properties.map((property) => property.id),
     fixtures.properties.slice(0, 30).map((property) => property.id),
   );
-  const second = await session.request(
-    '/api/properties?' + new URLSearchParams({ after: first.body.nextCursor }),
-  );
+  const second = await session.request('/api/properties?page=2');
+  assert.equal(second.body.total, fixtures.properties.length);
   assert.deepEqual(
     second.body.properties.map((property) => property.id),
     fixtures.properties.slice(30).map((property) => property.id),
   );
-  observed('real authenticated keyset pages and anonymous denial', {
+  observed('real authenticated offset pages and anonymous denial', {
     appStatus: 200,
     anonymousStatus: 401,
-    pageSizes: [30, 6],
+    pageRows: [30, 6],
   });
   for (const [query, expected] of [
     ['nguyen hue', [0, 1]],
@@ -340,10 +340,7 @@ try {
     ).status,
     400,
   );
-  assert.equal(
-    (await session.request('/api/properties?after=invalid')).status,
-    400,
-  );
+  assert.equal((await session.request('/api/properties?page=0')).status, 400);
   observed(
     'literal accent-insensitive contiguous search, controls and validation',
   );

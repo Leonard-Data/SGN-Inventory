@@ -105,6 +105,13 @@ export async function companyActivityContract({
     };
   };
 
+  // The recorded address is read with owner authority: a manager's own row read no longer
+  // carries a colleague's email, and this assertion compares the report with the record.
+  const recordedEmails = new Map(
+    (await db.query('select id,email from public.employees')).rows.map(
+      (row) => [row.id, row.email],
+    ),
+  );
   await asUser(2);
   const rows = await read(first, empty);
   await check(
@@ -137,14 +144,7 @@ export async function companyActivityContract({
     'every report row carries the employee email the group label uses',
     async () => {
       for (const row of rows)
-        assert.equal(
-          row.employee_email,
-          (
-            await db.query('select email from public.employees where id = $1', [
-              row.employee_id,
-            ])
-          ).rows[0].email,
-        );
+        assert.equal(row.employee_email, recordedEmails.get(row.employee_id));
       // The email is the same recorded identity in every day row of one employee.
       const emails = new Set(
         rows

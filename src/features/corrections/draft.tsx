@@ -5,7 +5,9 @@ import type { Json } from '@/types/database';
 import type { Employee } from '@/features/employees/types';
 import { ContactPicker } from '@/features/property-maintenance/contact-picker';
 import { api, RequestError } from '@/features/employees/api';
+import { useToast } from '@/features/toasts/toast-host';
 import type { PropertyDetail } from '@/features/properties/detail-data';
+import { confirmsPrice } from '@/features/properties/price-input';
 import {
   AddressFields,
   RecordFields,
@@ -89,8 +91,8 @@ export function CorrectionDraft({
         : '',
     ),
     [busy, setBusy] = useState(false),
-    [error, setError] = useState<string | null>(null),
-    [success, setSuccess] = useState(false);
+    [error, setError] = useState<string | null>(null);
+  const notify = useToast();
   const [kind, rawId = 'new'] = token.split(':'),
     target = kind as Target,
     targetId = rawId === 'new' ? null : rawId,
@@ -115,7 +117,8 @@ export function CorrectionDraft({
   );
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy || !observed) return;
+    if (busy || !observed || !confirmsPrice(event.currentTarget, locale))
+      return;
     const form = new FormData(event.currentTarget);
     setBusy(true);
     setError(null);
@@ -141,7 +144,7 @@ export function CorrectionDraft({
           revision: observed.revision,
           propertyRevision: property.revision,
         });
-      setSuccess(true);
+      notify({ saved: true, message: text.requestSaved });
       await onSaved();
     } catch (failure) {
       if (
@@ -158,7 +161,6 @@ export function CorrectionDraft({
       setBusy(false);
     }
   }
-  if (success) return <p role="status">{text.saved}</p>;
   return (
     <div>
       {target === 'link' && selected.includes('contact_id') && staff ? (

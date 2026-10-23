@@ -45,6 +45,13 @@ export type EmployeeInvitation = {
   providerAttemptedAt: string | null;
   requestedAt: string;
   recordedAt: string | null;
+  // The further sends of this recorded invitation: how many are recorded, and the last one's
+  // outcome, time and evidence. The recorded acceptance of the first send is separate and is
+  // never rewritten by a resent link.
+  resendCount: number;
+  resendOutcome: InvitationOutcome | null;
+  resendDetail: string | null;
+  resendAttemptedAt: string | null;
 };
 
 export type InvitedEmployee = {
@@ -52,7 +59,15 @@ export type InvitedEmployee = {
   displayName: string;
   email: string;
   role: string;
+  // The live access state of the invited person's row. A linked, active or deleted account is
+  // not an invitation that may be sent again.
+  access: InviteeAccess;
 };
+
+// The access states the employee row projects, derived only from the recorded sign-in link,
+// activation flag and retained account-deleted state.
+export type InviteeAccess =
+  'active' | 'inactive' | 'unlinked' | 'account_deleted';
 
 // The recorded invitation for one intended person, or an employee with no invitation yet.
 export type InvitationRecord = {
@@ -114,6 +129,28 @@ export function invitationBody(
   return { email, role: body.role, key: body.key };
 }
 
+// Exactly `{email}` for a further send: the recorded invitation decides the role, the intended
+// person and the acting admin, so nothing else is accepted from the browser.
+export function resendBody(
+  body: Record<string, unknown>,
+): InvitationResendRequest | null {
+  const keys = Object.keys(body);
+  if (keys.length !== 1 || !keys.includes('email')) return null;
+  const email = normalizeEmail(body.email);
+  return email ? { email } : null;
+}
+
+// Where a further send is legal: one recorded invitation for a person whose sign-in identity is
+// still unlinked and whose account is neither active nor deleted. An accepted invitation, a
+// linked or active account, a deleted account and a person with no invitation are all refused,
+// and there is no role input to change.
+export function resendableInvitation(
+  invitation: { state: InvitationState } | null,
+  access: InviteeAccess,
+): boolean {
+  return access === 'unlinked' && invitation?.state === 'recorded';
+}
+
 // The reconciliation read accepts one normalized address and nothing else, so a lost response
 // is reconciled against the same intended identity as the original submission.
 export function invitationQuery(params: URLSearchParams): string {
@@ -152,7 +189,31 @@ export function parseInvitation(value: unknown): EmployeeInvitation | null {
     return null;
   const requestedAt = instantOrNull(row.requestedAt);
   if (!requestedAt) return null;
+  const resendCount = row.resendCount;
+  if (
+    typeof resendCount !== 'number' ||
+    !Number.isInteger(resendCount) ||
+    resendCount < 0
+  )
+    return null;
+  const resendAttemptedAt = instantOrNull(row.resendAttemptedAt);
+  const resendOutcome =
+    row.resendOutcome === null
+      ? null
+      : ['accepted', 'failed', 'ambiguous'].includes(
+            row.resendOutcome as string,
+          )
+        ? (row.resendOutcome as InvitationOutcome)
+        : undefined;
+  if (resendOutcome === undefined) return null;
+  // A recorded further send carries all three, and no row may carry one without the other.
+  if (
+    resendCount > 0 !== (resendAttemptedAt !== null) ||
+    (resendAttemptedAt !== null) !== (resendOutcome !== null)
+  )
+    return null;
   const state = row.state as InvitationState;
+  if (resendCount > 0 && state !== 'recorded') return null;
   const outcome = (row.providerOutcome as InvitationOutcome | null) ?? null;
   const recordedAt = instantOrNull(row.recordedAt);
   if ((state === 'recorded') !== (recordedAt !== null)) return null;
@@ -177,6 +238,10 @@ export function parseInvitation(value: unknown): EmployeeInvitation | null {
     providerAttemptedAt: instantOrNull(row.providerAttemptedAt),
     requestedAt,
     recordedAt,
+    resendCount,
+    resendOutcome,
+    resendDetail: textOrNull(row.resendDetail),
+    resendAttemptedAt,
   };
 }
 
@@ -198,6 +263,10 @@ export function invitationFromRow(
     providerAttemptedAt: row.provider_attempted_at,
     requestedAt: row.requested_at,
     recordedAt: row.recorded_at,
+    resendCount: row.resend_count,
+    resendOutcome: row.resend_outcome,
+    resendDetail: row.resend_detail,
+    resendAttemptedAt: row.resend_attempted_at,
   });
 }
 
@@ -321,6 +390,10 @@ export function invitationDestination(appUrl: string): string {
 
 export type InvitationSendRequest = { email: string };
 
+// A further send names only the recorded address; the invitation supplies the recorded role and
+// the provider identity, and the acting admin comes from the live session.
+export type InvitationResendRequest = { email: string };
+
 // What the server adapter can prove about one address the provider refused. `unknown` is kept
 // apart from `absent`: only a lookup that read every page may claim there is no identity.
 export type ProviderIdentity =
@@ -354,7 +427,6 @@ export interface InvitationGateway {
   ): Promise<EmployeeInvitation>;
   record(request: InvitationRecordRequest): Promise<EmployeeInvitation>;
 }
-
 // Begin, one provider attempt, then the recorded outcome — all against the recorded intended
 // address, never a retyped one. A recorded invitation is returned as it is: nothing is
 // re-sent, nothing is activated and no provider identity is deleted as compensation.
@@ -416,6 +488,48 @@ export async function settleInvitationSend(
   if (identity.outcome === 'absent') return result;
   return { outcome: 'ambiguous', detail: identity.detail };
 }
+
+// One further send of a recorded invitation. The recorded address, role and provider identity
+// are the only inputs — the recorded role is not even a parameter — so no choice in the
+// interface can change it. The provider call is the same invite request as the first send,
+// which for an existing unconfirmed identity answers with that same identity and sends a fresh
+// link; a refusal is recorded as a refusal, because the first send's identity lookup would read
+// any refusal of this address as an accepted send (the address always holds an identity now).
+export async function resendInvitation(
+  gateway: InvitationResendGateway,
+  sender: InvitationSender,
+  invitation: EmployeeInvitation,
+): Promise<{
+  invitation: EmployeeInvitation;
+  result: InvitationProviderResult;
+}> {
+  const result = await attemptInvitationSend(sender, {
+    email: invitation.email,
+  });
+  const recorded = await gateway.recordResend({
+    invitationId: invitation.id,
+    resendCount: invitation.resendCount,
+    result,
+  });
+  return { invitation: recorded, result };
+}
+
+export type InvitationResendRecord = {
+  invitationId: string;
+  resendCount: number;
+  result: InvitationProviderResult;
+};
+
+// The database gateway for a further send: one call records the attempt and its outcome under
+// the live admin's authority and returns the fresh recorded state.
+export interface InvitationResendGateway {
+  recordResend(request: InvitationResendRecord): Promise<EmployeeInvitation>;
+}
+
+export type InvitationResendResult = {
+  invitation: EmployeeInvitation;
+  result: InvitationProviderResult;
+};
 
 export type InvitationFailure = { code: string; ambiguous: boolean };
 

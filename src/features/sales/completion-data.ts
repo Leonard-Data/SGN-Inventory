@@ -3,10 +3,12 @@ import { ApiError, uuid, type RouteContext } from '@/lib/supabase/route';
 import type { Employee } from '@/features/employees/types';
 import { accessState } from '@/features/employees/directory';
 import { vietnamToday } from '@/features/employees/report-range';
+import { catalogueSummaryOf } from '@/features/properties/catalogue-data';
 import { completionDate, completionReference } from './rules';
 import type {
   CompletedSale,
   SaleCompletionBlock,
+  SaleCompletionResult,
   SaleCompletionState,
 } from './types';
 
@@ -61,11 +63,7 @@ export async function saleCompletionState(
       .select('id,status,archived_at')
       .eq('id', id)
       .maybeSingle(),
-    context.client
-      .from('employees')
-      .select('id,display_name,auth_user_id,is_active,account_deleted_at')
-      .order('display_name')
-      .order('id'),
+    context.client.rpc('list_employee_credit_options'),
     context.client
       .from('sale_completions')
       .select(completionColumns)
@@ -171,7 +169,7 @@ export async function completeSale(
   employee: Employee,
   id: string,
   body: Record<string, unknown>,
-): Promise<SaleCompletionState> {
+): Promise<SaleCompletionResult> {
   reviewer(employee);
   const completedOn = completionDate(body.completedOn);
   const reference = completionReference(body.reference);
@@ -197,5 +195,10 @@ export async function completeSale(
     p_key: body.key,
   });
   if (error) throw workflowError(error);
-  return saleCompletionState(context, employee, id);
+  // The completion recorded a status, so the property's summary is read back from the server for
+  // the browser's catalogue alongside the fresh state.
+  return {
+    ...(await saleCompletionState(context, employee, id)),
+    summary: await catalogueSummaryOf(context, id),
+  };
 }

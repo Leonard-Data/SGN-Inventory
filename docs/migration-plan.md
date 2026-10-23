@@ -2,7 +2,7 @@
 
 ## Delivery boundary
 
-The schema migrations and preparation tool are executable. Rental/localization extension is in migration 4; existing data has no reliable tenancy terms or payment history, so these require new user input. Destination promotion ETL, HCMC legacy/current address crosswalks, source attachment retrieval, real Auth onboarding, UI and production cutover remain implementation work. The national two-tier province/commune catalog is already seeded (Phase 3). GitHub addition was approved on 10 October 2026 and is blocked only by missing repository write access. No live Supabase or Vercel resource has been changed.
+The schema migrations and preparation tool are executable. Rental/localization extension is in migration 4; existing data has no reliable tenancy terms or payment history, so these require new user input. Destination promotion ETL, HCMC legacy/current address crosswalks, real Auth onboarding, UI and production cutover remain implementation work. The national two-tier province/commune catalog is already seeded (Phase 3). GitHub addition was approved on 10 October 2026, and the remote now holds `main`. The authorized development project already holds the executed legacy import ([legacy import](legacy-import.md)); staging provisioning, production cutover and Vercel delivery are unchanged.
 
 ## Phase 1 — Review and environment setup
 
@@ -18,7 +18,7 @@ Acceptance: schema and RLS verified on real staging Supabase; no staging preview
 1. Keep the workbook in a private source location and record its SHA-256. The delivered profile identifies the inspected version.
 2. Run `prepare_workbook.py` without `--stage` to reproduce counts and issues. It does not modify the workbook.
 3. Create a private staging run with `--stage`. Exclude Login and password fields. Record operator, preparation timestamp and the timezone assumption.
-4. Retrieve original AppSheet file storage and a reliable old-property-key export. The workbook alone is insufficient for all contacts/files.
+4. Retrieve the original file storage. The `Attachments_Images` Drive folder supplies the bytes; the workbook alone is insufficient. No old-property-key export is needed, because child rows join on an exact `PropertyID` and `Contracts` is dropped.
 5. Assign every staging row a disposition: pending, promoted, quarantined or explicitly ignored with a reason. Do not equate “quarantined” with “deleted”.
 
 Acceptance: every nonempty source row accounted for; credentials absent; raw files and records excluded from Git.
@@ -28,13 +28,13 @@ Acceptance: every nonempty source row accounted for; credentials absent; raw fil
 1. Resolve the 23 missing property IDs and the one duplicated nonblank ID before affected rows are promoted. Give each confirmed real property a canonical UUID and a human-readable unique SGN code.
 2. Populate `private.property_source_map` for every reviewed source key and alias. Do not reuse a duplicated source key for two properties; use batch/sheet/row-specific reviewed keys until ambiguity is resolved.
 3. Review the 17 employee rows, normalize emails, verify unique identity, propose roles from the source labels, and leave them inactive until invitations are accepted and Auth account IDs are linked.
-4. The national two-tier province/commune catalog is seeded by `20261014075435_vietnamese_admin_units_reference.sql` from the pinned upstream releases (34 provinces/cities, 3321 wards/communes/special regions, official codes and parent links): the 2025-07-01 baseline window carries pre-rename names, and the dated 2026-04-30 Đồng Nai, 2026-09-01 Quảng Ninh and 2026-09-20 Bắc Ninh windows carry the renamed city and promoted ward names, each with one half-open validity window. Remaining here: build and review the HCMC legacy/current crosswalks with source dates and links (no district catalog or blanket mapping is seeded); validate code strings, parents, overlapping validity and subsequent policy updates, and identify whole vs partial transitions.
+4. The national two-tier province/commune catalog is seeded by `20261014075435_vietnamese_admin_units_reference.sql` from the pinned upstream releases (34 provinces/cities, 3321 wards/communes/special regions, official codes and parent links): the 2025-07-01 baseline window carries pre-rename names, and the dated 2026-04-30 Đồng Nai, 2026-09-01 Quảng Ninh and 2026-09-20 Bắc Ninh windows carry the renamed city and promoted ward names, each with one half-open validity window. The pre-2025 three-tier catalog is seeded by `20261021060602_legacy_admin_units_reference.sql` and the official old→new crosswalk in full by `20261021080934_admin_unit_crosswalks_official_ingest.sql`, with its own `source_attested` marker, relation derivation and 28 legacy wards left without a row; remaining here: apply the collected crosswalk to individual properties as reviewed candidates; validate code strings, parents, overlapping validity and subsequent policy updates.
 
 Acceptance: unresolved mappings remain isolated; no row-number-based aliases; employee authority is explicitly reviewed.
 
 ## Phase 4 — Transform and promote into staging database
 
-Promotion order: employees → catalogs/crosswalks → properties → addresses → contacts/links → files → legacy page-view events. Legacy history remains in private staging/archive. Start with a representative sample including a duplicated-ID case, old district addresses, multi-phone owners, rent and sold records.
+Promotion order: employees → catalogs/crosswalks → properties → addresses → contacts/links → files. No source view records are promoted: the `clicks` tab is excluded by captain decision, and the settled source dispositions are in [legacy import](legacy-import.md#the-settled-rules). Legacy history remains in private staging/archive. Start with a representative sample including a duplicated-ID case, old district addresses, multi-phone owners, rent and sold records.
 
 For each accepted record:
 
@@ -43,23 +43,24 @@ For each accepted record:
 3. Save untouched legacy address and raw labels. Add current address only as a documented candidate; verify it through the reviewer workflow.
 4. Create separate contacts or links using approved identity evidence. Never merge masked phone IDs or generic owner names globally.
 5. Register and transfer attachment bytes under immutable private paths. Confirm binary hash/size and correct property; ready status follows successful upload.
-6. Import resolvable clicks as `page_view` with legacy source and correct Vietnam timestamp. Never infer physical visits. Keep unresolved employee/property events quarantined.
-7. Commit destination writes and `private.import_entity_map` updates atomically. Roll back the whole unit on failure and retain a safe error code and row reference.
+6. Commit destination writes and `private.import_entity_map` updates atomically. Roll back the whole unit on failure and retain a safe error code and row reference.
 
-The staging JSONL is an interchange format. A loader must store the raw sanitized source plus `normalized_candidate` inside `staging_rows.payload`, map `issues` and `source_row`, and insert the deterministic `batch_id` into `import_batches` first. Do not attempt an unfiltered JSONL COPY into the table; its shape intentionally includes preparation-only fields. Implement the loader with parameterized SQL or `COPY` via a documented adapter, using an administrative import connection outside the app.
+The executed import of this migration is `scripts/import-legacy-sheet.mjs`, which reads the live Google Sheet and writes through the documented RPCs ([legacy import](legacy-import.md)). The staging JSONL below is the interchange format of the workbook-preparation route: a loader must store the raw sanitized source plus `normalized_candidate` inside `staging_rows.payload`, map `issues` and `source_row`, and insert the deterministic `batch_id` into `import_batches` first. Do not attempt an unfiltered JSONL COPY into the table; its shape intentionally includes preparation-only fields. Implement the loader with parameterized SQL or `COPY` via a documented adapter, using an administrative import connection outside the app.
 
 Acceptance: representative sample reconciles, contacts/files match confirmed properties, and no fabricated reservations/visits exist.
 
 ## Phase 5 — Reconciliation and user acceptance
 
+Counts below are the workbook profile in [workbook mapping](workbook-mapping.md); the executed run against the live sheet records its own counts in [testing](testing.md).
+
 | Gate | Required comparison |
 | --- | --- |
 | Rows | Per sheet: source = promoted + quarantined + ignored; pending must be zero for cutover disposition |
 | Properties | 19,233 source rows explained; canonical count is determined by reviewed identity, not assumed equal |
-| Contacts | All 20,480 Contracts rows have reviewed linkage or explicit quarantine; embedded owner contacts separately reconciled |
+| Contacts | Embedded owner contacts reconciled to promoted properties; `Contracts` is dropped by captain decision, so none of its rows is promoted or quarantined |
 | Files | 2,544 attachment metadata rows accounted for; downloaded/uploaded/missing/hash-conflict counts separate |
 | History | 19,151 legacy records retained or explicitly excluded by approved retention decision |
-| Activity | 56,932 click rows accounted for; none counted as site visits |
+| Activity | No source view records imported (`clicks` excluded by captain decision); none counted as site visits |
 | Prices | Canonical VND equals reviewed source decimal × proper multiplier; spot-check blanks, zero, comma decimals and malformed strings |
 | Addresses | Legacy strings retained; every verified current address has dated catalog IDs and property-level verification |
 | Authorization | Anonymous/inactive denied; self approval denied; direct lock/activity writes denied; manager/admin analytics restricted |

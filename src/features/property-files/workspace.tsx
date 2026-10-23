@@ -5,6 +5,11 @@ import { fileMessages } from './messages';
 import { fileClass, sizeRefusal } from './limits';
 import { IconAction } from '@/features/icon-action';
 import { api, RequestError } from '@/features/employees/api';
+import { LoadingSkeleton } from '@/features/skeleton';
+import { sessionLost } from './refusals';
+import { applyServerSummary } from '@/features/properties/catalogue-changes';
+import { useCatalogueChange } from '@/features/properties/catalogue-provider';
+import type { PropertySummary } from '@/features/properties/types';
 import { CoverImage } from './cover-image';
 import type {
   PropertyFileList,
@@ -48,6 +53,9 @@ export function Workspace({
   onCoverChanged: () => void;
 }) {
   const [files, setFiles] = useState<PropertyFileList['files']>([]);
+  // The chosen cover is part of the list's summary, so the confirmed cover refreshes the browser's
+  // catalogue row from the server's own answer.
+  const applyChange = useCatalogueChange();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(true);
   const [revision, setRevision] = useState(0);
@@ -118,10 +126,7 @@ export function Workspace({
         setFiles([]);
         setRecoverable([]);
         setCategories([]);
-        if (
-          failure instanceof RequestError &&
-          (failure.status === 401 || failure.status === 403)
-        )
+        if (failure instanceof RequestError && sessionLost(failure))
           onDenied(failure.status);
         else
           setError(
@@ -136,10 +141,7 @@ export function Workspace({
   }, [propertyId, employeeId, archived, onDenied, revision]);
 
   function denied(failure: unknown) {
-    if (
-      failure instanceof RequestError &&
-      (failure.status === 401 || failure.status === 403)
-    ) {
+    if (failure instanceof RequestError && sessionLost(failure)) {
       onDenied(failure.status);
       return true;
     }
@@ -152,7 +154,12 @@ export function Workspace({
     setCoverBusy(true);
     setCoverError(null);
     try {
-      await api(`/api/properties/${propertyId}/cover`, { fileId }, signal);
+      const result = await api<{ summary?: PropertySummary | null }>(
+        `/api/properties/${propertyId}/cover`,
+        { fileId },
+        signal,
+      );
+      applyServerSummary(applyChange, result, propertyId);
       if (generation.current === version && !signal?.aborted) onCoverChanged();
     } catch (failure) {
       if (
@@ -712,7 +719,9 @@ export function Workspace({
             </p>
           ) : null}
         </section>
-        {busy ? <p role="status">{text.loading}</p> : null}
+        {busy ? (
+          <LoadingSkeleton label={text.loading} shape="rows" rows={3} />
+        ) : null}
         {error ? (
           <p role="alert">
             {fileText.errors[error] ?? text.unavailable}{' '}

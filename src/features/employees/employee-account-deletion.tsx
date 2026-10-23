@@ -9,6 +9,8 @@ import {
 import { messages, label, type Locale } from '@/i18n/messages';
 import { vietnamTimestamp } from '@/features/properties/format';
 import { api, RequestError } from './api';
+import { useToast } from '@/features/toasts/toast-host';
+import { LoadingSkeleton } from '@/features/skeleton';
 import {
   deactivationFailure,
   deactivationProblemAfterLoad,
@@ -50,6 +52,7 @@ export function EmployeeAccountDeletionPanel({
   onClose: () => void;
 }) {
   const text = messages[locale];
+  const notify = useToast();
   const [snapshot, setSnapshot] = useState<DeletionConfirmation | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadProblem, setLoadProblem] = useState<string | null>(null);
@@ -177,7 +180,7 @@ export function EmployeeAccountDeletionPanel({
       setSnapshot(next);
       const recorded = deletionStatus(next.operation);
       if (recorded === 'confirmed') {
-        setNotice(text.employeeDeleteSuccess);
+        notify({ saved: true, message: text.employeeDeleteSuccess });
         onChanged();
       } else if (recorded === 'storage-blocked') {
         setNotice(text.employeeDeleteStorageBlocked);
@@ -259,9 +262,7 @@ export function EmployeeAccountDeletionPanel({
 
       <h3>{text.employeeDeactivateOutstanding}</h3>
       {loading ? (
-        <p className="panel-note" role="status">
-          {text.loading}
-        </p>
+        <LoadingSkeleton label={text.loading} shape="rows" rows={2} />
       ) : snapshot ? (
         snapshot.reservations.length ? (
           <ul className="deactivation-reservations">

@@ -6,10 +6,11 @@ import {
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
-  type ReactNode,
 } from 'react';
+import Link from 'next/link';
 import { label, messages, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
+import { LoadingSkeleton, Skeleton } from '@/features/skeleton';
 import { RequestError } from '@/features/employees/api';
 import { Workspace } from '@/features/property-files/workspace';
 import { CoverImage } from '@/features/property-files/cover-image';
@@ -23,8 +24,11 @@ import type { PropertyDetail } from './detail-data';
 import type { OwnerContactDisclosure } from './types';
 import { Maintenance } from '@/features/property-maintenance/workspace';
 import { maintenanceText } from '@/features/property-maintenance/messages';
+import { crosswalkMessage } from '@/features/property-maintenance/crosswalk';
 import { History } from '@/features/property-maintenance/history';
 import { PriceHistory } from '@/features/property-maintenance/price-history';
+import { StatusControl, StatusTrail } from '@/features/property-status/status';
+import { statusText } from '@/features/property-status/messages';
 import {
   CorrectionQueue,
   CorrectionReport,
@@ -39,70 +43,19 @@ import { Discussion } from '@/features/property-comments/discussion';
 import { Reservation } from './reservation';
 import { SaleCompletion } from '@/features/sales/completion';
 import { detailMessages } from './messages';
-import { PropertyLocation } from './location';
+import { DetailActionDialog } from './detail-dialog';
+import { SharedAddress } from './duplicates';
 import { contactRows } from './contact-rows';
+import { AddContactNumber } from './add-contact-number';
 import { mayLinkPropertyVendors } from '@/features/vendors/directory';
+import { mayEditProperty } from './edit-permission';
 import { PropertyVendors } from '@/features/vendors/property-vendors';
 // The record screen groups its content the way the design package does: the record's own
 // facts, its documents and its discussion.
 const RECORD_TABS = ['overview', 'docs', 'comments'] as const;
 type RecordTab = (typeof RECORD_TABS)[number];
-// The dialog owns the only heading and the only border on the surface: the embedded
-// section is flattened by `.sgn-dialog-body > .panel` in sgn-app.css, so every action
-// dialog opens with one visible title in the right place instead of an empty band.
-function DetailActionDialog({
-  title,
-  closeLabel,
-  children,
-  open,
-  onClose,
-  size = 'wide',
-}: {
-  title: string;
-  closeLabel: string;
-  children: ReactNode;
-  open: boolean;
-  onClose: () => void;
-  size?: 'default' | 'wide';
-}) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
-
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
-    if (!open && dialog.open) dialog.close();
-  }, [open]);
-
-  return (
-    <dialog
-      ref={dialogRef}
-      className="sgn-dialog"
-      data-size={size}
-      onClose={onClose}
-      onCancel={onClose}
-      aria-label={title}
-    >
-      <div className="sgn-dialog-panel">
-        <div className="sgn-dialog-head">
-          <h2>{title}</h2>
-          <button
-            className="sgn-dialog-close"
-            type="button"
-            onClick={onClose}
-            aria-label={closeLabel}
-          >
-            ×
-          </button>
-        </div>
-        <div className="sgn-dialog-body">{open ? children : null}</div>
-      </div>
-    </dialog>
-  );
-}
-
 type RecordAction = {
-  id: 'sale' | 'reservation' | 'edit' | 'correction' | 'requests';
+  id: 'sale' | 'reservation' | 'edit' | 'correction' | 'requests' | 'status';
   label: string;
 };
 
@@ -292,7 +245,13 @@ export function Detail({
   const text = messages[locale];
   const [tab, setTab] = useState<RecordTab>('overview');
   const [actionDialog, setActionDialog] = useState<
-    'sale' | 'reservation' | 'edit' | 'correction' | 'requests' | null
+    | 'sale'
+    | 'reservation'
+    | 'edit'
+    | 'correction'
+    | 'requests'
+    | 'status'
+    | null
   >(null);
   // Roving tabindex: the arrow keys move both focus and selection across the three tabs.
   function onTabKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>) {
@@ -317,6 +276,12 @@ export function Detail({
   async function changed() {
     await reload();
     setRefreshTick((value) => value + 1);
+  }
+  // A committed save closes the dialog it was recorded from, so the confirmation follows the
+  // person onto the record instead of staying inside the surface they are leaving.
+  async function savedAndClosed() {
+    setActionDialog(null);
+    await changed();
   }
   const [activity, setActivity] = useState<{
     detail: PropertyDetail;
@@ -434,12 +399,16 @@ export function Detail({
     [clear],
   );
   const property = data?.property;
-  const canEdit =
-    !!employee &&
-    !!property &&
-    !property.archived_at &&
-    (employee.id === property.created_by ||
-      ['staff', 'manager', 'admin'].includes(employee.role));
+  const canEdit = mayEditProperty(employee, {
+    createdBy: property?.created_by ?? null,
+    archived: !!property?.archived_at,
+  });
+  useEffect(() => {
+    if (canEdit && window.location.hash === '#edit-property') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- an authorized quick-view edit link opens the existing editor
+      setActionDialog('edit');
+    }
+  }, [canEdit]);
   const coverFileId = property?.cover_file_id ?? null;
   const canLinkVendor =
     !!employee &&
@@ -464,12 +433,13 @@ export function Detail({
   );
   const dt = detailMessages[locale];
   const mt = maintenanceText(locale);
+  const st = statusText(locale);
   return (
     <div lang={locale}>
       <p>
-        <a className="link-quiet" href={returnTo}>
+        <Link className="link-quiet" href={returnTo} prefetch={false}>
           {dt.back}
-        </a>
+        </Link>
       </p>
 
       <div className="detail-head">
@@ -500,6 +470,7 @@ export function Detail({
                     },
                   ]
                 : []),
+              { id: 'status' as const, label: st.changeStatus },
               { id: 'reservation' as const, label: text.reservations },
               { id: 'edit' as const, label: mt.editFacts },
               { id: 'correction' as const, label: text.navCorrections },
@@ -510,10 +481,18 @@ export function Detail({
       </div>
 
       {busy && !property ? (
-        <p className="busy-line" role="status">
-          <span className="spinner"></span>
-          {text.loading}
-        </p>
+        <LoadingSkeleton label={text.loading}>
+          <div className="detail-body">
+            <div className="skeleton-stack">
+              <Skeleton className="sk-plate" />
+              <Skeleton h={240} />
+            </div>
+            <div className="skeleton-stack">
+              <Skeleton h={150} />
+              <Skeleton h={120} />
+            </div>
+          </div>
+        </LoadingSkeleton>
       ) : null}
       {error ? (
         <div className="state-panel" data-tone="danger" role="alert">
@@ -825,6 +804,12 @@ export function Detail({
                             {vietnamDate(property.updated_at)}
                           </dd>
                         </div>
+                        {data.creatorName ? (
+                          <div className="fact">
+                            <dt>{text.createdBy}</dt>
+                            <dd translate="no">{data.creatorName}</dd>
+                          </div>
+                        ) : null}
                       </dl>
                       <p className="field-hint">{text.legalNote}</p>
                     </div>
@@ -834,6 +819,15 @@ export function Detail({
                   <PriceHistory
                     key={
                       'prices' + property.id + property.revision + refreshTick
+                    }
+                    propertyId={property.id}
+                    locale={locale}
+                  />
+
+                  {/* recorded status changes, separate from the price series */}
+                  <StatusTrail
+                    key={
+                      'status' + property.id + property.revision + refreshTick
                     }
                     propertyId={property.id}
                     locale={locale}
@@ -862,6 +856,18 @@ export function Detail({
                             <p className="record-body" translate="no">
                               {address.address_text}
                             </p>
+                            {/* The hierarchy the address was recorded in, in the catalog's own
+                                names, beside the untouched source text. */}
+                            {address.hierarchy ? (
+                              <p className="record-meta" translate="no">
+                                {address.hierarchy}
+                              </p>
+                            ) : null}
+                            {address.crosswalk ? (
+                              <p className="field-hint">
+                                {crosswalkMessage(locale, address.crosswalk)}
+                              </p>
+                            ) : null}
                             <p className="record-meta">
                               {vietnamDate(address.effective_on) ??
                                 text.unknown}{' '}
@@ -878,25 +884,23 @@ export function Detail({
                         <p className="field-hint">{text.noCurrent}</p>
                       ) : null}
                       <p className="field-hint">{dt.addrNote}</p>
-                    </div>
-                  </div>
-
-                  {/* location */}
-                  <div className="panel" data-od-id="panel-location">
-                    <div className="panel-head">
-                      <h2>{dt.location}</h2>
-                    </div>
-                    <div className="panel-body">
-                      <PropertyLocation
+                      {/* A shared address is stated here; the comparison and the deliberate
+                          merge live behind it. */}
+                      <SharedAddress
                         key={
-                          'location' +
+                          'shared' +
                           property.id +
                           property.revision +
                           refreshTick
                         }
-                        latitude={property.latitude}
-                        longitude={property.longitude}
+                        propertyId={property.id}
                         locale={locale}
+                        canMerge={
+                          employee?.role === 'manager' ||
+                          employee?.role === 'admin'
+                        }
+                        onDenied={denyFiles}
+                        onMerged={changed}
                       />
                     </div>
                   </div>
@@ -955,6 +959,17 @@ export function Detail({
                       ) : (
                         <p>{dt.noContacts}</p>
                       )}
+
+                      {/* Recording a number is not a property-fact edit: any active employee
+                          may add one to an unarchived record, and the newest shows first. */}
+                      {employee && !property.archived_at ? (
+                        <AddContactNumber
+                          propertyId={property.id}
+                          locale={locale}
+                          onAdded={changed}
+                          onDenied={denyFiles}
+                        />
+                      ) : null}
 
                       {/* owner-contact disclosure (#56) */}
                       <div className="owner-disclosure">
@@ -1190,7 +1205,12 @@ export function Detail({
                         </div>
                       </dl>
                     ) : (
-                      <p role="status">{text.loading}</p>
+                      <LoadingSkeleton
+                        label={text.loading}
+                        shape="table"
+                        rows={4}
+                        columns={2}
+                      />
                     )}
                   </div>
                 </section>
@@ -1212,10 +1232,25 @@ export function Detail({
                       locale={locale}
                       employeeId={employee.id}
                       onDenied={denyFiles}
-                      onSaved={changed}
+                      onSaved={savedAndClosed}
                     />
                   </DetailActionDialog>
                 ) : null}
+                <DetailActionDialog
+                  open={actionDialog === 'status'}
+                  onClose={() => setActionDialog(null)}
+                  title={st.changeStatus}
+                  closeLabel={text.close}
+                >
+                  <StatusControl
+                    key={'status' + property.id}
+                    propertyId={property.id}
+                    status={property.status}
+                    locale={locale}
+                    onDenied={denyFiles}
+                    onChanged={() => void savedAndClosed()}
+                  />
+                </DetailActionDialog>
                 <DetailActionDialog
                   open={actionDialog === 'reservation'}
                   onClose={() => setActionDialog(null)}
@@ -1231,6 +1266,7 @@ export function Detail({
                     archived={!!property.archived_at}
                     employeeId={employee.id}
                     onDenied={denyFiles}
+                    onCommitted={() => void savedAndClosed()}
                   />
                 </DetailActionDialog>
                 <DetailActionDialog
@@ -1244,7 +1280,8 @@ export function Detail({
                     detail={data}
                     employee={employee}
                     locale={locale}
-                    onSaved={changed}
+                    onSaved={savedAndClosed}
+                    onRefresh={changed}
                     onDenied={denyFiles}
                   />
                 </DetailActionDialog>
@@ -1260,7 +1297,7 @@ export function Detail({
                     locale={locale}
                     role={employee.role}
                     onDenied={denyFiles}
-                    onSaved={changed}
+                    onSaved={savedAndClosed}
                   />
                 </DetailActionDialog>
                 <DetailActionDialog
@@ -1274,7 +1311,7 @@ export function Detail({
                     propertyId={property.id}
                     locale={locale}
                     onDenied={denyFiles}
-                    onChanged={() => void changed()}
+                    onChanged={() => void savedAndClosed()}
                   />
                 </DetailActionDialog>
               </>

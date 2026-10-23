@@ -17,7 +17,7 @@ export async function setFileCategory(
   });
 
   if (error) {
-    if (error.code === '42501') throw new ApiError(403, 'access-denied');
+    if (error.code === '42501') throw new ApiError(403, 'operation-refused');
     if (error.code === '23514') throw new ApiError(400, 'invalid-category');
     throw new ApiError(503, 'unavailable');
   }

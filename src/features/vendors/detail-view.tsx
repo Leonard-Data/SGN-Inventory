@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { messages, label, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
+import { LoadingSkeleton } from '@/features/skeleton';
 import { vietnamTimestamp } from '@/features/properties/format';
 import type { Vendor, VendorLinkedProperty } from './types';
 
@@ -98,9 +99,12 @@ export function VendorDetailView({
       ) : null}
 
       {busy ? (
-        <p className="panel-note" role="status">
-          {text.loading}
-        </p>
+        <LoadingSkeleton
+          label={text.loading}
+          className="panel page-section"
+          shape="rows"
+          rows={4}
+        />
       ) : null}
 
       <div ref={surface} hidden={!data || busy}>

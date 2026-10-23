@@ -1,6 +1,186 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateChanges, formChanges } from './fields.ts';
+import { label } from '../../i18n/messages.ts';
+import {
+  addressFields,
+  recordsAddressPart,
+  validateChanges,
+  formChanges,
+  correctionFieldNames,
+  createPropertyFieldNames,
+  targetFields,
+} from './fields.ts';
+
+const LEGACY_PROVINCE = '11111111-1111-4111-8111-111111111111',
+  LEGACY_DISTRICT = '22222222-2222-4222-8222-222222222222',
+  LEGACY_WARD = '33333333-3333-4333-8333-333333333333',
+  CURRENT_PROVINCE = '44444444-4444-4444-8444-444444444444',
+  CURRENT_WARD = '55555555-5555-4555-8555-555555555555',
+  OTHER_WARD = '66666666-6666-4666-8666-666666666666';
+
+function legacyForm() {
+  const form = new FormData();
+  form.set('format', 'legacy');
+  form.set('district_text', 'Quận 1');
+  form.set('province_unit_id', LEGACY_PROVINCE);
+  form.set('district_unit_id', LEGACY_DISTRICT);
+  form.set('commune_unit_id', LEGACY_WARD);
+  return form;
+}
+
+test('the two address formats read in both languages and keep a recorded district', () => {
+  assert.equal(label('vi', 'legacy'), 'Địa chỉ cũ');
+  assert.equal(label('en', 'legacy'), 'Legacy Address');
+  assert.equal(label('vi', 'current'), 'Địa chỉ mới');
+  assert.equal(label('en', 'current'), 'Current Address');
+  // The district text travels with the form the picker writes it into, so a save that changes
+  // something else leaves the recorded text out of the changes rather than clearing it.
+  const form = legacyForm();
+  form.set('house_number', '14');
+  assert.deepEqual(
+    formChanges('address', form, {
+      format: 'legacy',
+      house_number: '12',
+      district_text: 'Quận 1',
+      province_unit_id: LEGACY_PROVINCE,
+      district_unit_id: LEGACY_DISTRICT,
+      commune_unit_id: LEGACY_WARD,
+    }),
+    { house_number: '14' },
+  );
+});
+
+test('a legacy address saves all three unit ids and its district text', () => {
+  assert.deepEqual(formChanges('address', legacyForm()), {
+    format: 'legacy',
+    district_text: 'Quận 1',
+    province_unit_id: LEGACY_PROVINCE,
+    district_unit_id: LEGACY_DISTRICT,
+    commune_unit_id: LEGACY_WARD,
+  });
+  // mapping_status is not an address field: the column default records an unresolved mapping, so
+  // a legacy address can never be saved as verified through the form.
+  assert.equal(targetFields.address.includes('mapping_status'), false);
+});
+
+test('an edited address whose recorded units are unchanged submits nothing', () => {
+  assert.deepEqual(
+    formChanges('address', legacyForm(), {
+      format: 'legacy',
+      district_text: 'Quận 1',
+      province_unit_id: LEGACY_PROVINCE,
+      district_unit_id: LEGACY_DISTRICT,
+      commune_unit_id: LEGACY_WARD,
+    }),
+    {},
+  );
+});
+
+test('a legacy address recorded with current-generation units keeps them and saves a change', () => {
+  const recorded = {
+    format: 'legacy',
+    district_text: 'Quận 1',
+    province_unit_id: CURRENT_PROVINCE,
+    commune_unit_id: CURRENT_WARD,
+  };
+  const form = new FormData();
+  for (const [key, value] of Object.entries(recorded)) form.set(key, value);
+  // Saving without edits submits neither the out-of-generation province nor the recorded ward, so
+  // the row keeps exactly the units it holds.
+  assert.deepEqual(formChanges('address', form, recorded), {});
+  form.set('commune_unit_id', OTHER_WARD);
+  assert.deepEqual(formChanges('address', form, recorded), {
+    commune_unit_id: OTHER_WARD,
+  });
+});
+
+test('a created address must name a house number, a street or a picked commune', () => {
+  const provinceOnly = { format: 'legacy', province_unit_id: LEGACY_PROVINCE };
+  assert.equal(recordsAddressPart(provinceOnly), false);
+  assert.equal(
+    recordsAddressPart({ ...provinceOnly, house_number: '  ' }),
+    false,
+    'a blank house number is not a supplied part',
+  );
+  for (const supplied of [
+    { house_number: '12' },
+    { street: 'Lý Thường Kiệt' },
+    { commune_unit_id: LEGACY_WARD },
+  ])
+    assert.equal(recordsAddressPart({ ...provinceOnly, ...supplied }), true);
+});
+
+test('a current address still refuses a district id as well as district text', () => {
+  for (const changes of [
+    { format: 'current', district_unit_id: LEGACY_DISTRICT },
+    { format: 'current', district_text: 'Quận 1' },
+  ])
+    assert.throws(() => validateChanges('address', changes));
+  // A legacy address with a district is valid.
+  assert.deepEqual(
+    validateChanges('address', {
+      format: 'legacy',
+      house_number: '12 Nguyễn Du',
+      district_unit_id: LEGACY_DISTRICT,
+    }),
+    {
+      format: 'legacy',
+      house_number: '12 Nguyễn Du',
+      district_unit_id: LEGACY_DISTRICT,
+    },
+  );
+});
+
+test('an address form renders its district label wherever it offers the district picker', () => {
+  // The correction draft names the correctable fields and not the label, while the picker that
+  // writes the label is still offered, so the label rides along with the picker.
+  const names = addressFields(['house_number', 'district_unit_id'], true);
+  assert.ok(names.includes('district_text'));
+  // A label the picker wrote through those rendered fields reaches the save.
+  const form = new FormData();
+  for (const name of names)
+    form.set(name, name === 'district_text' ? 'Bình Thạnh' : 'x');
+  assert.equal(
+    formChanges('address', form, { district_text: 'Quận 1' }).district_text,
+    'Bình Thạnh',
+  );
+  // A selection that offers no district picker renders no label, and neither does a current
+  // address even when a caller names one.
+  assert.equal(
+    addressFields(['house_number'], true).includes('district_text'),
+    false,
+  );
+  const current = addressFields(['house_number', 'district_text'], false);
+  assert.equal(current.includes('district_text'), false);
+  assert.ok(current.includes('house_number'));
+  // The known address is the server's composition of the parts, so no address form offers it.
+  assert.equal(addressFields(undefined, false).includes('address_text'), false);
+  // A caller naming no fields gets every one of them.
+  assert.ok(addressFields(undefined, true).includes('district_text'));
+});
+
+test('a staff address correction can name the legacy district unit', () => {
+  const names = correctionFieldNames({
+    target: 'address',
+    staff: true,
+    propertyStatus: 'available',
+  });
+  assert.ok(names.includes('district_unit_id'));
+  // The known address is composed from the parts a correction names, never typed beside them.
+  assert.equal(names.includes('address_text'), false);
+  // The district label is written by the picker, so a correction never offers it, and the source
+  // labels stay provenance.
+  for (const name of ['province_text', 'district_text', 'commune_text'])
+    assert.equal(names.includes(name), false);
+  // A current address has no district level at all, so it offers no district field.
+  const current = correctionFieldNames({
+    target: 'address',
+    staff: true,
+    propertyStatus: 'available',
+    observedFormat: 'current',
+  });
+  for (const name of current) assert.equal(name.startsWith('district_'), false);
+});
 
 test('maintenance boundary preserves exact money, decimals and source phone/text', () => {
   assert.deepEqual(
@@ -36,10 +216,13 @@ test('maintenance boundary rejects invented authority, unknown fields and rounde
   ])
     assert.throws(() => validateChanges('property', changes));
   assert.throws(() =>
+    validateChanges('address', { format: 'current', district_text: 'Quận 1' }),
+  );
+  // A known address stated by a save is refused rather than stored beside the parts.
+  assert.throws(() =>
     validateChanges('address', {
-      format: 'current',
-      address_text: 'Known',
-      district_text: 'Quận 1',
+      format: 'legacy',
+      address_text: 'Known address',
     }),
   );
   assert.throws(() => validateChanges('contact', { phones: [123] }));
@@ -78,85 +261,64 @@ test('form changes omit unchanged values, preserve unknowns and do not translate
     { sale_price_vnd: null },
   );
 });
-test('location coordinates accept exact decimal strings within range and reject bad values', () => {
+test('the create form omits the four source-only fields the maintenance form keeps', () => {
+  // The four stay out of creation only: the edit-facts form still offers them for a record that
+  // holds provenance in them.
+  for (const name of [
+    'parcel_number',
+    'map_sheet_number',
+    'construction_text',
+    'area_raw',
+  ]) {
+    assert.equal(createPropertyFieldNames.includes(name), false, name);
+    assert.ok(targetFields.property.includes(name), name);
+    assert.ok(
+      correctionFieldNames({
+        target: 'property',
+        staff: true,
+        propertyStatus: 'available',
+      }).includes(name),
+      name,
+    );
+  }
+  // Pinned so a later change cannot quietly drop a field the create form shows today.
   assert.deepEqual(
-    validateChanges('property', {
-      latitude: '10.7626220',
-      longitude: '106.6601720',
-    }),
-    { latitude: '10.7626220', longitude: '106.6601720' },
+    [...createPropertyFieldNames],
+    [
+      'listing_mode',
+      'property_type',
+      'access_type',
+      'sale_price_vnd',
+      'monthly_rent_vnd',
+      'land_area_m2',
+      'floor_area_m2',
+      'frontage_m',
+      'depth_m',
+      'floors',
+      'bedrooms',
+      'bathrooms',
+      'direction',
+      'ownership_type',
+      'notes',
+    ],
   );
-  // Clearing is valid: both null.
-  assert.deepEqual(
-    validateChanges('property', { latitude: null, longitude: null }),
-    {
-      latitude: null,
-      longitude: null,
-    },
-  );
-  // A change must name both axes, even when the recorded pair stays complete.
-  for (const changes of [
-    { latitude: '10.5' },
-    { longitude: '106.5' },
-    { latitude: null },
-    { longitude: null },
-  ])
-    assert.throws(() => validateChanges('property', changes));
-  for (const changes of [
-    { latitude: '91', longitude: '106.6601720' },
-    { latitude: '-90.0000001', longitude: '106.6601720' },
-    { latitude: '10.7626220', longitude: '181' },
-    { latitude: '10.7626220', longitude: '-180.0000001' },
-    { latitude: '10.76262200', longitude: '106.6601720' }, // eight decimals exceed numeric(10,7)
-    { latitude: '10.7626220', longitude: '106.66017200' },
-    { latitude: 'abc', longitude: '106.6601720' },
-    { latitude: '10.7626220', longitude: 'abc' },
-    { latitude: '10.', longitude: '106.6601720' },
-    { latitude: '10.7626220', longitude: '106.' },
-  ])
-    assert.throws(() => validateChanges('property', changes));
 });
-test('location form changes omit an untouched point and emit a cleared point', () => {
-  const untouched = new FormData();
-  untouched.set('latitude', '10.7626220');
-  untouched.set('longitude', '106.6601720');
-  assert.deepEqual(
-    formChanges('property', untouched, {
-      latitude: '10.7626220',
-      longitude: '106.6601720',
-    }),
-    {},
-  );
-  const cleared = new FormData();
-  cleared.set('latitude', '');
-  cleared.set('longitude', '');
-  assert.deepEqual(
-    formChanges('property', cleared, {
-      latitude: '10.7626220',
-      longitude: '106.6601720',
-    }),
-    { latitude: null, longitude: null },
-  );
-  const movedOnly = new FormData();
-  movedOnly.set('longitude', '106.7000000');
-  assert.deepEqual(
-    formChanges('property', movedOnly, {
-      latitude: '10.7626220',
-      longitude: '106.6601720',
-    }),
-    { longitude: '106.7000000', latitude: '10.7626220' },
-  );
-  const retypedOne = new FormData();
-  retypedOne.set('latitude', '10.7626220');
-  retypedOne.set('longitude', '106.7000000');
-  assert.deepEqual(
-    formChanges('property', retypedOne, {
-      latitude: '10.7626220',
-      longitude: '106.6601720',
-    }),
-    { longitude: '106.7000000', latitude: '10.7626220' },
-  );
-  const unrecorded = new FormData();
-  unrecorded.set('latitude', '10.8000000');
-  assert.throws(() => formChanges('property', unrecorded, {}));
+
+test('a legacy-format address creates a property with no source-only fields submitted', () => {
+  const form = legacyForm();
+  form.set('listing_mode', 'sale');
+  form.set('property_type', 'unclassified');
+  form.set('access_type', 'unknown');
+  const facts = formChanges('property', form),
+    address = formChanges('address', form);
+  // Nothing in creation starts requiring them: the submission validates without any of the four.
+  for (const name of [
+    'parcel_number',
+    'map_sheet_number',
+    'construction_text',
+    'area_raw',
+  ])
+    assert.equal(name in facts, false, name);
+  assert.equal(address.format, 'legacy');
+  assert.equal(address.district_text, 'Quận 1');
 });

@@ -1,6 +1,6 @@
 # Instructions for coding agents
 
-Read `CONTEXT.md` and `docs/database-contract.md` before changing the project. The migration SQL is the physical schema authority. This is a foundation package; do not claim a working app exists yet.
+Read `CONTEXT.md` and `docs/database-contract.md` before changing the project. The migration SQL is the physical schema authority. The package holds the database foundation and the Next.js application, not a completed inventory application or production release.
 
 ## Authorization and tools
 

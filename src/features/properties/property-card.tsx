@@ -1,12 +1,16 @@
 import type { Locale } from '@/i18n/messages';
 import { label } from '@/i18n/messages';
+import { memo } from 'react';
+import Link from 'next/link';
 import type { PropertySummary } from './types';
 import { CoverImage } from '@/features/property-files/cover-image';
 import { Plate } from './plate';
 import { formatInteger, vietnamDate } from './format';
+import { listedAddress } from './table';
 
-/* Tone helper: maps an inventory status to a badge tone. */
-function statusTone(status: string): string {
+/* Tone helper: maps an inventory status to a badge tone. Shared with the quick view, so a status
+   reads the same everywhere it appears. */
+export function statusTone(status: string): string {
   if (status === 'available' || status === 'verified') return 'success';
   if (
     status === 'sold' ||
@@ -19,19 +23,40 @@ function statusTone(status: string): string {
   return 'neutral';
 }
 
-export function PropertyCard({
+// One card draws a site plate, so the grid is the one place where a parent re-render for an
+// unrelated reason (opening the filter island, changing sort) would redraw every plate.
+// The props are the record, two strings, a boolean and the caller's stable callback, so the
+// shallow comparison skips exactly those re-renders and nothing else.
+export const PropertyCard = memo(function PropertyCard({
   record,
   locale,
   resultLocation,
   onDenied,
+  onQuickView,
+  quickViewReady = false,
   showEntry = false,
+  addressFormat = null,
+  matchedFormat,
 }: {
   record: PropertySummary;
   locale: Locale;
   resultLocation: string;
   onDenied: (status: number) => void;
+  // Opening the record's quick view in place. The control that was pressed travels with the
+  // call, so closing the quick view returns focus to that same control.
+  onQuickView?: (record: PropertySummary, opener: HTMLElement | null) => void;
+  // Whether the quick view can open yet: it states the caller's own permissions from this surface's
+  // session, so a card painted before that read answers states the control unavailable instead of
+  // taking a click that opens nothing.
+  quickViewReady?: boolean;
   showEntry?: boolean;
+  // The format the search reads through, which decides the address the card states.
+  addressFormat?: string | null;
+  // The stored format a local search matched this property through. It decides the address the card
+  // states, and is named beside it when the search states no format.
+  matchedFormat?: string;
 }) {
+  const address = listedAddress(record, addressFormat, matchedFormat ?? null);
   // The chronological views carry the recorded original entry date and the database's Vietnam
   // age. A property the database reports with no date is an explicit unknown, not a missing row.
   const entryDate = record.entryOn ? vietnamDate(record.entryOn) : null;
@@ -69,8 +94,9 @@ export function PropertyCard({
           {record.propertyCode} · {label(locale, record.listingMode)}
         </p>
         <h2 className="card-address">
-          <a
+          <Link
             translate="no"
+            prefetch={false}
             href={
               '/properties/' +
               record.id +
@@ -78,11 +104,16 @@ export function PropertyCard({
               new URLSearchParams({ returnTo: resultLocation })
             }
           >
-            {record.addresses.length && record.addresses[0]?.addressText
-              ? record.addresses[0].addressText
-              : label(locale, null)}
-          </a>
+            {address?.addressText || label(locale, null)}
+          </Link>
         </h2>
+        {matchedFormat && matchedFormat !== addressFormat ? (
+          <p className="card-entry">
+            <span className="badge" data-tone="muted">
+              {label(locale, matchedFormat)}
+            </span>
+          </p>
+        ) : null}
         {showEntry ? (
           <p className="card-entry">
             {label(locale, 'entryDate')}:{' '}
@@ -110,13 +141,30 @@ export function PropertyCard({
             )}
           </p>
         ) : null}
+        {record.createdBy ? (
+          <p className="card-entry">
+            {label(locale, 'createdBy')}:{' '}
+            <span translate="no">{record.createdBy}</span>
+          </p>
+        ) : null}
         <div className="card-foot">
           <span className="badge" data-tone={statusTone(record.status)}>
             {label(locale, record.status)}
           </span>
-          <div className="card-actions" />
+          <div className="card-actions">
+            {onQuickView ? (
+              <button
+                className="btn btn-secondary btn-sm"
+                type="button"
+                disabled={!quickViewReady}
+                onClick={(event) => onQuickView(record, event.currentTarget)}
+              >
+                {label(locale, 'quickView')}
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
     </article>
   );
-}
+});

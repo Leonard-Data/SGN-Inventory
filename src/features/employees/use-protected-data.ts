@@ -8,15 +8,23 @@ import {
   refocusAction,
   renderedSession,
   sessionDiffers,
+  type ProtectedSource,
 } from './protected-load';
 
 export function useProtectedData<T>(
-  source: string | ((signal: AbortSignal) => Promise<T>),
+  source: ProtectedSource<T>,
+  onClear?: () => void,
 ) {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(true);
+  // Whether this surface's own read has answered since it mounted - published, failed, or had its
+  // authority discarded or refused. Rows the browser holds from a scope this surface did not read may
+  // be painted only until then: from the first answer on, what a surface shows is what its own read
+  // says, so a change or a failure a later read observes stays concealed instead of being undone by
+  // painting held rows again.
+  const [answered, setAnswered] = useState(false);
   const generation = useRef(0);
   const controller = useRef<AbortController | null>(null);
   const surfaceElement = useRef<HTMLDivElement | null>(null);
@@ -39,11 +47,13 @@ export function useProtectedData<T>(
   }, [invalidate]);
   const clear = useCallback(() => {
     conceal();
+    onClear?.();
     renderedFor.current = null;
     renderedAccessRevision.current = null;
+    setAnswered(true);
     setData(null);
     setEmployee(null);
-  }, [conceal]);
+  }, [conceal, onClear]);
   const load = useCallback(async () => {
     invalidate();
     setBusy(true);
@@ -63,9 +73,17 @@ export function useProtectedData<T>(
         renderedFor: renderedFor.current,
         renderedAccessRevision: renderedAccessRevision.current,
         onIdentityChange: () => {
-          if (surfaceElement.current) surfaceElement.current.hidden = true;
+          // A surface that has rendered nothing has nothing to conceal. Hiding it here anyway is
+          // what put a blank results area over rows a returning list had already painted from the
+          // catalogue the browser holds (#265); the first answer of a read is not a change of
+          // identity. An identity that really moved is a surface with something rendered, and it is
+          // still hidden at once - and from then on it paints only what its own read publishes.
+          const changed = renderedFor.current !== null;
+          if (changed && surfaceElement.current)
+            surfaceElement.current.hidden = true;
           renderedFor.current = null;
           renderedAccessRevision.current = null;
+          if (changed) setAnswered(true);
           setData(null);
           setEmployee(null);
         },
@@ -73,6 +91,7 @@ export function useProtectedData<T>(
       if (version !== generation.current) return;
       setEmployee(sessionEmployee);
       setData(result);
+      setAnswered(true);
       renderedFor.current = renderedSession(sessionEmployee);
       renderedAccessRevision.current = sessionAccessRevision;
       setError(null);
@@ -81,17 +100,20 @@ export function useProtectedData<T>(
       if (version !== generation.current || abort.signal.aborted) return;
       renderedFor.current = null;
       renderedAccessRevision.current = null;
+      setAnswered(true);
       setData(null);
       setEmployee(null);
       if (
         failure instanceof RequestError &&
         (failure.status === 401 || failure.status === 403)
       ) {
+        onClear?.();
         window.location.replace(
           failure.status === 403 ? '/access-denied' : '/login',
         );
         return;
       }
+      if (failure instanceof AccessChangedError) onClear?.();
       setError(
         failure instanceof AccessChangedError
           ? 'access-changed'
@@ -105,7 +127,7 @@ export function useProtectedData<T>(
         setBusy(false);
       }
     }
-  }, [source, invalidate]);
+  }, [source, invalidate, onClear]);
   const reload = useCallback(() => {
     setBusy(true);
     setError(null);
@@ -196,6 +218,7 @@ export function useProtectedData<T>(
     data,
     error,
     busy,
+    answered,
     surface: bindSurface,
     clear,
     reload,

@@ -2,16 +2,38 @@
 import {
   useEffect,
   useId,
+  useRef,
   useState,
   type FormEvent,
   type ReactNode,
+  type Ref,
 } from 'react';
 import { api, RequestError } from '@/features/employees/api';
 import type { Locale } from '@/i18n/messages';
-import { fields, formChanges, type Target, type Changes } from './fields';
+import { confirmsPrice, PriceInput } from '@/features/properties/price-input';
+import {
+  addressFields,
+  fields,
+  formChanges,
+  recordsAddressPart,
+  type Target,
+  type Changes,
+} from './fields';
 import { maintenanceError, maintenanceText, optionLabel } from './messages';
 import { failureRoute } from './refusal-rules';
-import { unitOptionLabels } from './units';
+import { UnitCombobox, type UnitChoice } from './unit-combobox';
+import { StreetCombobox } from './street-combobox';
+import {
+  FIXED_PROVINCE,
+  LEGACY_CATALOG_DAY,
+  clearedUnits,
+  filledDistrictText,
+  pickedDistrict,
+  pickedProvinceRow,
+  statedProvince,
+  unitParent,
+  type AddressUnits,
+} from './units';
 import type { Unit } from './data';
 
 export function MutationForm({
@@ -22,6 +44,9 @@ export function MutationForm({
   onSaved,
   onDenied,
   explanation = false,
+  onCancel,
+  onStateChange,
+  saveContext,
   children,
 }: {
   locale: Locale;
@@ -32,20 +57,48 @@ export function MutationForm({
   onDenied: (status: number) => void;
   // The optional correction note only reaches the API when the form offers it.
   explanation?: boolean;
+  onCancel?: () => void;
+  onStateChange?: (state: { dirty: boolean; busy: boolean }) => void;
+  saveContext?: ReactNode;
   children: ReactNode;
 }) {
   const text = maintenanceText(locale);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState<string | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    onStateChange?.({ dirty, busy });
+  }, [dirty, busy, onStateChange]);
+  function draftChanged(event: FormEvent<HTMLFormElement>) {
+    try {
+      setDirty(
+        Object.keys(
+          formChanges(target, new FormData(event.currentTarget), values),
+        ).length > 0,
+      );
+    } catch {
+      setDirty(true);
+    }
+  }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy) return;
+    if (busy || !confirmsPrice(event.currentTarget, locale)) return;
     const form = new FormData(event.currentTarget);
     setBusy(true);
     setError(null);
     try {
       const changes = formChanges(target, form, values);
+      // A new address names something a person supplied, and the server refuses the same save, so
+      // the refusal is stated here rather than after a round trip. An edit may keep the parts the
+      // row already records exactly as they are.
+      if (target === 'address' && !values.id && !recordsAddressPart(changes)) {
+        requestAnimationFrame(() => errorRef.current?.focus());
+        setError('address-parts-required');
+        return;
+      }
       if (Object.keys(changes).length === 0) {
+        requestAnimationFrame(() => errorRef.current?.focus());
         setError('noChange');
         return;
       }
@@ -62,6 +115,7 @@ export function MutationForm({
         onDenied(failure.status);
         return;
       }
+      requestAnimationFrame(() => errorRef.current?.focus());
       setError(
         failure instanceof RequestError ? failure.code : 'invalid-input',
       );
@@ -71,12 +125,42 @@ export function MutationForm({
   }
   const message = maintenanceError(locale, error);
   return (
-    <form onSubmit={submit}>
-      <fieldset disabled={busy}>{children}</fieldset>
-      {error ? <p role="alert">{message}</p> : null}
-      <button className="btn btn-sm btn-primary" disabled={busy}>
-        {busy ? text.saving : text.save}
-      </button>
+    <form
+      className={onCancel ? 'editor-form' : undefined}
+      onSubmit={submit}
+      onChange={draftChanged}
+      // The unit picker commits its identifier by writing the field it submits, which raises no
+      // change event of its own, so the unsaved state also follows plain input events.
+      onInput={draftChanged}
+    >
+      <div className={onCancel ? 'editor-scroll' : undefined}>
+        <fieldset disabled={busy}>{children}</fieldset>
+        {error ? (
+          <p className="field-error" ref={errorRef} tabIndex={-1} role="alert">
+            {message}
+          </p>
+        ) : null}
+      </div>
+      <div className={onCancel ? 'sgn-dialog-foot' : undefined}>
+        {saveContext ? (
+          <fieldset className="editor-save-context" disabled={busy}>
+            {saveContext}
+          </fieldset>
+        ) : null}
+        <button className="btn btn-sm btn-primary" disabled={busy}>
+          {busy ? text.saving : text.save}
+        </button>
+        {onCancel ? (
+          <button
+            type="button"
+            className="btn btn-sm btn-ghost"
+            disabled={busy}
+            onClick={onCancel}
+          >
+            {text.cancel}
+          </button>
+        ) : null}
+      </div>
     </form>
   );
 }
@@ -84,10 +168,13 @@ export function RecordFields({
   names,
   values = {},
   locale,
+  refs,
 }: {
   names: readonly string[];
   values?: Record<string, unknown>;
   locale: Locale;
+  // A caller that needs to write into one of these fields while it stays uncontrolled.
+  refs?: Record<string, Ref<HTMLInputElement>>;
 }) {
   const prefix = useId(),
     copy = maintenanceText(locale);
@@ -101,8 +188,36 @@ export function RecordFields({
       : value == null
         ? ''
         : String(value);
+    // The district text is written by the legacy district picker and never typed here: a recorded
+    // value travels with the form on every other save and reads back as the text it holds.
+    if (name === 'district_text')
+      return initial ? (
+        <div className="field" key={name}>
+          <span className="field-label">{text}</span>
+          <p translate="no">{initial}</p>
+          <input
+            type="hidden"
+            name={name}
+            ref={refs?.[name]}
+            defaultValue={initial}
+          />
+        </div>
+      ) : (
+        <input
+          key={name}
+          type="hidden"
+          name={name}
+          ref={refs?.[name]}
+          defaultValue=""
+        />
+      );
+    const wide =
+      ['phones'].includes(field.kind ?? '') ||
+      ['notes', 'construction_text', 'area_raw', 'mapping_evidence'].includes(
+        name,
+      );
     return (
-      <div className="field" key={name}>
+      <div className={'field' + (wide ? ' span-all' : '')} key={name}>
         <label className="field-label" htmlFor={id}>
           {text}
         </label>
@@ -138,14 +253,29 @@ export function RecordFields({
                 </option>
               ))}
           </select>
-        ) : ['phones'].includes(field.kind ?? '') ||
-          [
-            'notes',
-            'address_text',
-            'construction_text',
-            'area_raw',
-            'mapping_evidence',
-          ].includes(name) ? (
+        ) : field.kind === 'money' ? (
+          <PriceInput
+            id={id}
+            name={name}
+            value={initial || null}
+            locale={locale}
+            unit={field.price?.unit ?? 'ty'}
+            kind={field.price?.kind ?? 'sale'}
+          />
+        ) : name === 'street' ? (
+          // The known street names are offered, and a street outside that list stays what the field
+          // submits: the suggestion list never decides what a save accepts.
+          <StreetCombobox
+            id={id}
+            name={name}
+            label={text}
+            initial={initial}
+            hint={copy.streetHint}
+          />
+        ) : wide ? (
+          // A multi-line field is as wide as the grid it stands in: source text is read, not
+          // scanned in a column beside the other facts. A note stays source text in the editor
+          // too, so what reads back is exactly what was typed.
           <textarea
             id={id}
             className="textarea"
@@ -154,15 +284,17 @@ export function RecordFields({
             defaultValue={initial}
             maxLength={field.kind === 'phones' ? 2020 : 2000}
             required={field.required}
+            translate={name === 'notes' ? 'no' : undefined}
           />
         ) : (
           <input
             id={id}
             className="input"
             name={name}
+            ref={refs?.[name]}
             type={field.kind === 'date' ? 'date' : 'text'}
             inputMode={
-              field.kind === 'money' || field.kind === 'count'
+              field.kind === 'count'
                 ? 'numeric'
                 : field.kind === 'decimal'
                   ? 'decimal'
@@ -181,6 +313,7 @@ function UnitPicker({
   name,
   level,
   parent,
+  day,
   value,
   onChange,
   locale,
@@ -189,8 +322,10 @@ function UnitPicker({
   name: string;
   level: string;
   parent?: string;
+  // The catalog day this level reads; no day reads the current generation.
+  day?: string;
   value: string;
-  onChange: (value: string) => void;
+  onChange: (value: string, unit?: UnitChoice) => void;
   locale: Locale;
   onDenied: (status: number) => void;
 }) {
@@ -198,16 +333,24 @@ function UnitPicker({
     [units, setUnits] = useState<Unit[]>([]),
     [error, setError] = useState(false);
   useEffect(() => {
-    if (level !== 'province' && !parent) return;
+    // A level whose parent is not chosen yet lists nothing, but the recorded unit's own row still
+    // resolves to its official name.
+    if (level !== 'province' && !parent && !value) return;
     const abort = new AbortController();
     void api<{ units: Unit[] }>(
       '/api/admin-units?' +
-        new URLSearchParams({ level, ...(parent ? { parent } : {}) }),
+        new URLSearchParams({
+          level,
+          ...(parent ? { parent } : {}),
+          ...(day ? { on: day } : {}),
+          ...(value ? { include: value } : {}),
+        }),
       undefined,
       abort.signal,
     )
       .then((result) => {
-        if (!abort.signal.aborted) setUnits(result.units);
+        if (abort.signal.aborted) return;
+        setUnits(result.units);
       })
       .catch((failure) => {
         if (abort.signal.aborted) return;
@@ -219,33 +362,20 @@ function UnitPicker({
         else setError(true);
       });
     return () => abort.abort();
-  }, [level, parent, onDenied]);
-  const text = maintenanceText(locale),
-    labels = unitOptionLabels(units);
+  }, [level, parent, day, value, onDenied]);
+  const text = maintenanceText(locale);
   return (
-    <div className="field">
-      <label className="field-label" htmlFor={id}>
-        {fields[name]![locale]}
-      </label>
-      <select
-        id={id}
-        className="select"
-        name={name}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      >
-        <option value="">{text.catalogEmpty}</option>
-        {value && !units.some((u) => u.id === value) ? (
-          <option value={value}>{value}</option>
-        ) : null}
-        {units.map((unit, index) => (
-          <option key={unit.id} value={unit.id}>
-            {labels[index]}
-          </option>
-        ))}
-      </select>
-      {error ? <span role="alert">{text.unavailable}</span> : null}
-    </div>
+    <UnitCombobox
+      id={id}
+      name={name}
+      label={fields[name]![locale]}
+      units={units}
+      value={value}
+      onChange={onChange}
+      anyLabel={text.catalogEmpty}
+      noMatch={text.comboboxNoMatch}
+      error={error ? text.unavailable : undefined}
+    />
   );
 }
 export function AddressFields({
@@ -264,22 +394,59 @@ export function AddressFields({
   const selected = names ? new Set(names) : null,
     includes = (name: string) => selected === null || selected.has(name),
     id = useId(),
-    [format, setFormat] = useState(String(values.format ?? '')),
-    [province, setProvince] = useState(String(values.province_unit_id ?? '')),
-    [commune, setCommune] = useState(String(values.commune_unit_id ?? ''));
+    // A new address starts in the legacy format; a recorded one opens on the format it holds.
+    [format, setFormat] = useState(String(values.format ?? 'legacy')),
+    [units, setUnits] = useState<AddressUnits>({
+      // The pickers narrow beneath the stated province whatever the record holds; the value the
+      // province field itself submits is the one `statedProvince` settles below.
+      ...clearedUnits(),
+      district: String(values.district_unit_id ?? ''),
+      commune: String(values.commune_unit_id ?? ''),
+    }),
+    // The province this address records: the stated province, or the row of the address's own catalog
+    // generation once a level beneath it is picked, because the database guard requires a district
+    // and a commune to be parented by the province and district the address records. A record that
+    // already stores a province keeps exactly what it stored.
+    [provinceUnitId, setProvinceUnitId] = useState(
+      statedProvince(values.province_unit_id),
+    ),
+    districtText = useRef<HTMLInputElement>(null),
+    // The text the picker has written, which is what a save submits and what reads back beside it.
+    [districtTextValue, setDistrictTextValue] = useState(
+      String(values.district_text ?? ''),
+    );
   const text = maintenanceText(locale),
-    current = variant === 'mapping' || format === 'current';
+    // A legacy address is the only one with a district level, and its pickers read the closed
+    // pre-2025 three-tier list, where a ward hangs off its district rather than the province.
+    legacy = variant === 'address' && format === 'legacy',
+    generation = legacy ? 'legacy' : 'current',
+    day = legacy ? LEGACY_CATALOG_DAY : undefined;
+  // The legacy district picker is the only writer of the district text, so every write lands in
+  // the field a save submits and in the text that reads back beside it.
+  function setDistrictText(next: string) {
+    const value = filledDistrictText(districtTextValue, next);
+    if (value === null) return;
+    setDistrictTextValue(value);
+    const field = districtText.current;
+    if (!field) return;
+    field.value = value;
+    // The surrounding form tracks its unsaved state from input events, which a value written this
+    // way raises none of.
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+  }
   return (
     <>
       {variant === 'address' ? (
         <>
           {includes('format') ? (
             <>
-              <p>{text.preserveSource}</p>
+              <p className="span-all">{text.preserveSource}</p>
               <div className="field">
                 <label className="field-label" htmlFor={id}>
                   {fields.format![locale]}
                 </label>
+                {/* Two formats are offered. A row an earlier import recorded as neither reads back
+                    as what it holds: its own format is stated here but never offered. */}
                 <select
                   id={id}
                   className="select"
@@ -288,11 +455,15 @@ export function AddressFields({
                   value={format}
                   onChange={(event) => {
                     setFormat(event.target.value);
-                    setCommune('');
+                    // The two formats read different catalog generations, so no recorded unit is
+                    // carried into a list that may not hold it, nor the label the picker wrote for
+                    // the district that unit named, nor the province row a pick settled on.
+                    setUnits(clearedUnits());
+                    setDistrictText('');
+                    setProvinceUnitId(statedProvince(values.province_unit_id));
                   }}
                   disabled={!!values.id}
                 >
-                  <option value="">{text.unknown}</option>
                   {values.format === 'alternate' ? (
                     <option value="alternate">
                       {optionLabel(locale, 'alternate')}
@@ -308,22 +479,19 @@ export function AddressFields({
               </div>
             </>
           ) : null}
-          <p>{text.rawCurrent}</p>
+          <p className="span-all">
+            {legacy ? text.legacyHint : text.rawCurrent}
+          </p>
           <RecordFields
             locale={locale}
-            values={values}
-            names={[
-              'address_text',
-              'house_number',
-              'street',
-              ...(!current ? ['district_text'] : []),
-              'is_primary',
-            ].filter(includes)}
+            values={{ ...values, district_text: districtTextValue }}
+            refs={{ district_text: districtText }}
+            names={addressFields(names, legacy)}
           />
         </>
       ) : (
         <>
-          <p>{text.mappingHint}</p>
+          <p className="span-all">{text.mappingHint}</p>
           <RecordFields
             locale={locale}
             values={{ ...values, mapping_status: 'verified' }}
@@ -338,13 +506,39 @@ export function AddressFields({
         </>
       )}
       {variant === 'mapping' || includes('province_unit_id') ? (
+        // The province is stated rather than chosen: the app records one. Only the levels beneath
+        // it are picked.
+        <div className="field">
+          <span className="field-label">
+            {fields.province_unit_id![locale]}
+          </span>
+          <p translate="no">{FIXED_PROVINCE.name}</p>
+          {/* Controlled rather than defaulted: the value follows the row a pick settles on, which
+              is the province of this address's own catalog generation. */}
+          <input
+            type="hidden"
+            name="province_unit_id"
+            value={provinceUnitId}
+            readOnly
+          />
+          {values.province_unit_id && provinceUnitId !== FIXED_PROVINCE.id ? (
+            <p className="field-hint">{text.provinceKept}</p>
+          ) : null}
+        </div>
+      ) : null}
+      {legacy && includes('district_unit_id') ? (
         <UnitPicker
-          name="province_unit_id"
-          level="province"
-          value={province}
-          onChange={(value) => {
-            setProvince(value);
-            setCommune('');
+          key={'district' + units.province}
+          name="district_unit_id"
+          level="district"
+          parent={unitParent('legacy', 'district', units)}
+          day={LEGACY_CATALOG_DAY}
+          value={units.district}
+          onChange={(value, unit) => {
+            setUnits(pickedDistrict(units, value));
+            if (unit) setDistrictText(unit.name_vi);
+            // The district's parent is the province row of this address's generation.
+            setProvinceUnitId(pickedProvinceRow(provinceUnitId, unit));
           }}
           locale={locale}
           onDenied={onDenied}
@@ -352,12 +546,19 @@ export function AddressFields({
       ) : null}
       {variant === 'mapping' || includes('commune_unit_id') ? (
         <UnitPicker
-          key={'commune' + province}
+          key={'commune' + units.province + units.district}
           name="commune_unit_id"
           level="commune"
-          parent={province}
-          value={commune}
-          onChange={setCommune}
+          parent={unitParent(generation, 'commune', units)}
+          day={day}
+          value={units.commune}
+          onChange={(value, unit) => {
+            setUnits({ ...units, commune: value });
+            // A current commune hangs directly off the province, so picking one states that row;
+            // a legacy ward's parent is its district, which already stated it.
+            if (!legacy)
+              setProvinceUnitId(pickedProvinceRow(provinceUnitId, unit));
+          }}
           locale={locale}
           onDenied={onDenied}
         />

@@ -65,34 +65,34 @@ export async function inventoryAgeContract({
     unknownOne,
   ];
 
-  async function ageRows(direction, query = '', cursor = {}) {
-    const rows = await db.query(
-      'select * from public.list_inventory_by_age($1::text,$2::text,$3::date,$4::uuid,$5::boolean,$6::integer)',
-      [
-        direction,
-        query,
-        cursor.on ?? null,
-        cursor.id ?? null,
-        cursor.unknown ?? false,
-        cursor.limit ?? 50,
-      ],
+  async function readPage(
+    direction,
+    query = '',
+    pageNumber = 1,
+    pageSize = 50,
+  ) {
+    const result = await db.query(
+      'select * from public.page_inventory($1::text,$2::text,$3::integer,$4::integer)',
+      [direction, query, pageNumber, pageSize],
     );
-    return rows.rows;
+    return {
+      rows: result.rows,
+      // The total travels with the rows it was counted over, so it is read from the same answer.
+      total: result.rows.length ? Number(result.rows[0].total_count) : 0,
+      page: result.rows.length ? Number(result.rows[0].page_number) : 1,
+    };
   }
-  // Walk the real keyset cursor the application uses and return every row once.
-  async function walk(direction, limit, query = 'agefix') {
-    const seen = [];
-    let cursor = { on: null, id: null, unknown: false };
-    for (let guard = 0; guard < 50; guard++) {
-      const rows = await ageRows(direction, query, { ...cursor, limit });
-      seen.push(...rows);
-      if (rows.length < limit) break;
-      const last = rows.at(-1);
-      cursor = last.entry_on
-        ? { on: last.entry_on, id: last.id, unknown: false }
-        : { on: null, id: last.id, unknown: true };
-    }
-    return seen;
+  async function ageRows(direction, query = '', pageNumber = 1, pageSize = 50) {
+    return (await readPage(direction, query, pageNumber, pageSize)).rows;
+  }
+  // Walk every page the read says exists and return each row once.
+  async function walk(direction, pageSize, query = 'agefix') {
+    const first = await readPage(direction, query, 1, pageSize);
+    const seen = [...first.rows];
+    const pages = Math.max(1, Math.ceil(first.total / pageSize));
+    for (let pageNumber = 2; pageNumber <= pages; pageNumber++)
+      seen.push(...(await ageRows(direction, query, pageNumber, pageSize)));
+    return { seen, total: first.total, pages };
   }
 
   await asOwner();
@@ -259,24 +259,29 @@ export async function inventoryAgeContract({
     },
   );
   await check(
-    'both directions page with the date+identity cursor across a date tie',
+    'both directions page across a date tie without repeats or gaps',
     async () => {
       for (const [direction, expected] of [
         ['oldest', oldestOrder],
         ['newest', newestOrder],
       ])
-        for (const limit of [1, 2, 3, 5]) {
-          const walked = await walk(direction, limit);
+        for (const pageSize of [1, 2, 3, 5]) {
+          const walked = await walk(direction, pageSize);
           assert.deepEqual(
-            walked.map((row) => row.id),
+            walked.seen.map((row) => row.id),
             expected,
-            `${direction} limit ${limit}`,
+            `${direction} page size ${pageSize}`,
           );
           assert.equal(
-            new Set(walked.map((row) => row.id)).size,
-            walked.length,
+            new Set(walked.seen.map((row) => row.id)).size,
+            walked.seen.length,
             'no repeats',
           );
+          // Every page of the walk states the same matching total.
+          assert.equal(walked.total, expected.length, `${direction} total`);
+          assert.equal(walked.pages, Math.ceil(expected.length / pageSize));
+          for (const row of walked.seen)
+            assert.equal(Number(row.total_count), expected.length);
         }
     },
   );
@@ -422,7 +427,7 @@ export async function inventoryAgeContract({
     await db.query('select public.create_property($1,$2,$3) as id', [
       'sale',
       {},
-      { format: 'legacy', address_text: 'AGEFIX newly created identity' },
+      { format: 'legacy', house_number: 'AGEFIX newly created identity' },
     ])
   ).rows[0].id;
   await check(
@@ -450,25 +455,24 @@ export async function inventoryAgeContract({
         [
           'sale',
           { entry_on: '2020-01-01' },
-          { format: 'legacy', address_text: 'AGEFIX forged' },
+          { format: 'legacy', house_number: 'AGEFIX forged' },
         ],
         '23514',
       ),
   );
 
   await check(
-    'invalid ordering and cursor shapes are rejected, not executed',
+    'an invalid ordering or page number is rejected, not executed',
     async () => {
       for (const params of [
-        ['random', '', null, null, false],
-        [null, '', null, null, false],
-        ['oldest', '', null, null, true],
-        ['oldest', '', '2025-06-01', null, true],
-        ['oldest', '', null, id('01'), false],
-        ['oldest', '', '2025-06-01', null, false],
+        ['random', 1, 30],
+        ['OLDEST', 1, 30],
+        [null, 0, 30],
+        [null, -1, 30],
+        [null, null, 30],
       ])
         await fails(
-          'select * from public.list_inventory_by_age($1::text,$2::text,$3::date,$4::uuid,$5::boolean,30)',
+          "select * from public.page_inventory($1::text,'',$2::integer,$3::integer)",
           params,
           '22023',
         );
@@ -483,8 +487,14 @@ export async function inventoryAgeContract({
         [negotiating],
       );
       await fails(
-        'select * from public.list_inventory_by_age($1::text,$2::text)',
+        'select * from public.page_inventory($1::text,$2::text)',
         ['oldest', 'x'.repeat(121)],
+        '22023',
+      );
+      // An overlong query is refused for the ordinary browse too, rather than read as empty.
+      await fails(
+        'select * from public.page_inventory(p_query => $1)',
+        ['x'.repeat(121)],
         '22023',
       );
     },
@@ -508,16 +518,12 @@ export async function inventoryAgeContract({
   );
   await asUser(null);
   await check('anonymous inventory age read denied', () =>
-    fails(
-      'select * from public.list_inventory_by_age($1::text)',
-      ['oldest'],
-      '42501',
-    ),
+    fails('select * from public.page_inventory($1::text)', ['oldest'], '42501'),
   );
   await asUser(4);
   await check('inactive identity inventory age read denied', () =>
     fails(
-      'select * from public.list_inventory_by_age($1::text,$2::text)',
+      'select * from public.page_inventory($1::text,$2::text)',
       ['oldest', 'agefix'],
       '42501',
     ),

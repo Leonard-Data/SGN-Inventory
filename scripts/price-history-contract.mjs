@@ -53,14 +53,14 @@ export async function priceHistoryContract({
     await db.query('select public.create_property($1,$2,$3) as id', [
       'sale',
       {},
-      { format: 'legacy', address_text: 'Nhà kiểm thử lịch sử giá chào' },
+      { format: 'legacy', house_number: 'Nhà kiểm thử lịch sử giá chào' },
     ])
   ).rows[0].id;
   const control = (
     await db.query('select public.create_property($1,$2,$3) as id', [
       'sale',
       {},
-      { format: 'legacy', address_text: 'Nhà đối chứng lịch sử giá' },
+      { format: 'legacy', house_number: 'Nhà đối chứng lịch sử giá' },
     ])
   ).rows[0].id;
 
@@ -457,7 +457,7 @@ export async function priceHistoryContract({
         await db.query('select public.create_property($1,$2,$3) as id', [
           'sale',
           { sale_price_vnd: '3100000' },
-          { format: 'legacy', address_text: 'Nhà lưu trữ lịch sử giá' },
+          { format: 'legacy', house_number: 'Nhà lưu trữ lịch sử giá' },
         ])
       ).rows[0].id;
       await asOwner();

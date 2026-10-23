@@ -57,7 +57,7 @@ export function ContactPicker({
     void search();
   }
   return (
-    <div>
+    <div className="field-group">
       <div className="field">
         <label className="field-label" htmlFor={id}>
           {text.contactSearch}
@@ -97,14 +97,13 @@ export function ContactPicker({
                 onClick={() => onSelected(contact.id)}
                 translate="no"
               >
-                {contact.displayName} ·{' '}
-                {optionLabel(locale, contact.contactType)}
+                {contact.displayName}
                 <small>
+                  {optionLabel(locale, contact.contactType)} ·{' '}
                   {contact.rawPhoneText ||
                     contact.phones.join(' / ') ||
                     text.unknown}
                 </small>
-                <small>{contact.id}</small>
               </button>
             </li>
           ))}

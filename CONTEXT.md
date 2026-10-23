@@ -10,6 +10,10 @@ One company's shared property inventory, employee access, contacts, reservations
 An offer to join the company's internal inventory, recorded against the intended employee and address. Acceptance by that intended invitee links and activates the retained employee immediately, with no separate approval.
 _Avoid_: Access approval
 
+**Resent invitation**:
+A further send of the same recorded invitation to the same recorded address, for a link that expired or was lost. It keeps the recorded role and the recorded acceptance, creates no second invitation, and is never available once the invitation was accepted or the account is linked or active.
+_Avoid_: Re-invite, new invitation
+
 **Linked employee**:
 An employee whose sign-in identity has been confirmed as belonging to that employee.
 _Avoid_: Email match
@@ -33,6 +37,18 @@ _Avoid_: Deleted employee row, anonymized person, re-invitable account
 **Employee interface language**:
 The employee's preferred Vietnamese or English interface language. It is independent of the language of addresses, source records and signed documents.
 _Avoid_: Record language
+
+**Employee bio**:
+One optional plain-text line about themselves, at most 280 characters, stored on the employee record without markup or a link. The person writes it on their own profile page and an admin may edit it with the rest of their details; it is shown on the employee's entry in the admin employee directory, which stays admin-only.
+_Avoid_: About text, rich profile, description field
+
+**My profile**:
+The signed-in employee's own display name and bio, reached from the account menu. It acts only on the person signed in and offers no phone, role, email or access change; phone and role stay admin-edited from the employee directory.
+_Avoid_: Account settings, employee edit page
+
+**Employee profile edit**:
+The admin edit of one recorded employee's display name, phone, role and bio on the employees page, saved as one deliberate action that reports what changed. The sign-in email is not an editable field, a deactivated or account-deleted employee is refused, and a role change is recorded with the admin who made it.
+_Avoid_: Employee update, direct table write
 
 **Employee deactivation**:
 The controlled disabling of a linked employee's company inventory access, completed only after the exact sign-in block is confirmed by the sign-in provider. Membership is disabled first and an unconfirmed provider result stays a reconciliation state, not a completed deactivation.
@@ -85,8 +101,20 @@ A separate address under the applicable province/city and commune/ward structure
 _Avoid_: Translated address, automatically converted address
 
 **Administrative-unit reference catalog**:
-The seeded official province/city and commune/ward list carrying official codes, parent links and one half-open validity window per official name from the pinned upstream dataset. It is a reference list for selection and hierarchy validation, not a property's verified address; a renamed unit reports the name in force on the address date.
+The seeded official province/city, district and commune/ward list carrying official codes, parent links and one half-open validity window per official name, from two pinned upstream datasets that never share a source URL: the current two-tier generation from thanglequoc/vietnamese-provinces-database and the half-open `[2025-01-04, 2025-07-01)` legacy generation from sunshine-tech/VietnamProvinces, whose declared GPL-3.0-or-later licence with no LICENSE file is an open legal item rather than a settled one. It is a reference list for selection and hierarchy validation, not a property's verified address; a renamed unit reports the name in force on the address date, and a legacy address older than the snapshot date names a ward the catalog cannot offer and keeps its recorded text instead. Thirteen legacy communes the captain requested on 2026-10-23 sit on that same legacy window as locally coded entries marked by a source URL that states they are captain-requested, not official National Statistics Office units.
 _Avoid_: Verified address, property-level mapping
+
+**Legacy administrative-unit catalog**:
+The pre-2025 three-tier province → district → ward generation, seeded on its half-open `[2025-01-04, 2025-07-01)` window so a legacy address can be looked up at all three levels. Separate from the current two-tier catalog because the two are different generations of the same official codes, and separate from the crosswalk below because it states what a unit was called, not what it became.
+_Avoid_: Merged catalog, current hierarchy
+
+**Administrative-unit crosswalk**:
+The official old-to-new unit mapping, stating for each legacy unit whether it became one whole unit, a rename, or part of one or more successors. Its source table is ingested in full by migration — 10,023 of the 10,051 legacy wards covered, 28 with no accepted successor row — and it is migration-only: no client writes it, and a row is candidate evidence for a property's address, never a verification of one, so nothing is mapped automatically and a partial transition still needs property-level evidence.
+_Avoid_: Verification, property-level mapping
+
+**Composed address text**:
+The one line an address is displayed and searched by, written by the server from the parts that address records — the house number and the street joined by a single space, then the commune, the legacy district and the province joined to that pair by ", " — with a missing part skipped, so `8 Lê Lợi, Phường Bến Nghé, Quận 1, Thành phố Hồ Chí Minh` and never `8, Lê Lợi, ...`. The official name of the unit an address records wins over a recorded source label, which only names a level that records no unit. It is composed when an address is created or edited, while a mapping change moves only the units and leaves the recorded text as it is, and it is never typed beside those parts: a save or a correction that states one is refused. A created address must name a house number, a street or a commune picked from the catalog; a province alone, including the app's own, is not an address. A forward migration recomposed the stored text of every address row that records parts, imported rows included, so the saved text is what a save produces today; a row that records no part keeps the wording it holds.
+_Avoid_: Typed known address, address label
 
 **Address search**:
 A match of a literal, accent-insensitive contiguous fragment against recorded addresses; `%` and `_` are ordinary characters.
@@ -96,12 +124,36 @@ _Avoid_: Fuzzy search, automatic ward mapping
 A legacy-to-current address relationship without sufficient reviewed evidence to identify the current administrative units.
 _Avoid_: Verified match
 
+**Recorded address candidate**:
+A current address recorded from the official old-to-new crosswalk as the unverified statement of where a legacy ward became, kept beside the preserved legacy address it came from rather than replacing it. Any property editor may record one from a single whole or rename target; it states the source and its effective date, carries no reviewer stamp and is not a verification.
+_Avoid_: Verified address, rewritten legacy address, automatic mapping
+
+**Address format conversion**:
+The one deliberate action that records an existing address in the other format beside it, as a candidate derived from the official crosswalk, while the converted address stays present and unmodified. An ordinary save never changes an address's format.
+_Avoid_: Format toggle, rewritten address, automatic conversion
+
 **Property contact link**:
 The recorded relationship between a property and a contact, such as owner or broker. Several contacts may belong to a property, with at most one marked primary.
 _Avoid_: Contact inferred from sheet position
 
+**Duplicate address group**:
+The unarchived properties whose primary address carries the same recorded address text after the same lowercased, accent-folded normalisation inventory search uses. Membership states that a decision is needed; it never means the records are the same property, because separate units in one house are an ordinary case.
+_Avoid_: Duplicate property, automatic duplicate
+
+**Address already recorded**:
+The warning shown before a property is created when the address the save is about to store is already recorded, naming the unarchived properties that sit there with a link to open each. It appears in the application's modal warning dialog, so it cannot be missed or answered by accident. It informs and never blocks: a second property at the same building is an ordinary case, so the confirmation that creates anyway is one deliberate step, and an address nobody records creates with no added step at all. A match is decided by the same normalised address comparison the duplicate address group uses, on the address text the save will actually store, and on the same primary-address basis the group reads: an address created as non-primary joins no group and is not warned about.
+_Avoid_: Address blocked, duplicate prevention, uniqueness check
+
+**Property merge**:
+The deliberate manager/admin decision that folds every other record in a duplicate address group into the group's most complete record, moving their photos, documents, history and contact links onto it and archiving the folded records.
+_Avoid_: Automatic deduplication, import merge rule
+
+**Folded property**:
+A record whose content and links were moved onto the surviving property by a merge. It is retained and archived, still readable by a reviewer, and no longer appears in a duplicate address group.
+_Avoid_: Deleted property, merged duplicate
+
 **Property location**:
-The recorded map point for a property, stored as a `latitude`/`longitude` pair that a staff editor sets or corrects by clicking a map during property-fact editing. It is saved through the same revision-checked maintenance path as the other facts, so it grants no separate editing authority and a change flags the record for review. Its absence is an unrecorded location, never a coordinate at the world origin.
+The recorded map point for a property, stored as a `latitude`/`longitude` pair. The interface offers no map and no coordinate entry, so no screen shows or sets the point; the recorded values stay as they were, and the database keeps its own range and both-or-neither rules over the pair. Its absence is an unrecorded location, never a coordinate at the world origin.
 _Avoid_: Address text as location, an empty world map pretending to be data
 
 **Contact**:
@@ -129,8 +181,20 @@ A separately attributed addition to an open Correction request's explanation, pr
 _Avoid_: Replacement request, edited original
 
 **Property change history**:
-The record of who changed a Property's asking price, when, and its before/after values. Only recorded asking-price changes add rows; creation, address, contact, link, note and status changes are not recorded here — they are attributed instead in the private audit trail with the actor, time and before/after values, subject to that trail's own 90-day retention window, deliberately not the permanent record this history would have been — and rows recorded before this rule was applied are retained and stay readable.
+The record of who changed a Property's asking price, when, and its before/after values. Only recorded asking-price changes add rows; creation, address, contact, link, note and status changes are not recorded here — every non-price change is attributed in the private audit trail with the actor, time and before/after values, subject to that trail's own 90-day retention window, deliberately not the permanent record this history would have been — and rows recorded before this rule was applied are retained and stay readable. A status change has its own retained trail beside this one.
 _Avoid_: Approval queue, page-view history
+
+**Status change trail**:
+A property's own retained record of every inventory-status change: who made it, the status it left and reached, the Vietnam time and the optional note that person typed. It is separate from the asking-price history and from the private audit trail, it names a decider for a request that needed one, and no status change creates a completed sale.
+_Avoid_: Price history, approval queue, sale completion
+
+**Direct status change**:
+An inventory-status change an active employee applies without a reviewer: draft, available, negotiating and withdrawn at any time, and sold or rented when a manager or admin makes it. The change and its trail row are written in one transaction.
+_Avoid_: Requested change, sale completion
+
+**Status change request**:
+A sold or rented change raised by an employee who is not a manager or admin. It changes no status while it waits, at most one waits on a property at a time, and a manager or admin other than the requester applies or rejects it with a reason. The decided request is retained in the same trail, naming the requester, the decider and the time.
+_Avoid_: Reservation, approval queue entry, pending sale
 
 **Asking-price history**:
 A property's recorded sale asking prices and monthly asking rents, presented as separate newest-first series with the actor, Vietnam time and before/after whole-VND values of each saved change. An unknown value is a gap and a recorded zero stays zero; an untouched amount never appears as a change. Achieved sale prices, contractual rent, monthly dues and receipts are not part of either series, and no earlier price is invented.
@@ -153,8 +217,31 @@ The number of Vietnam business days from a property's Inventory entry date to to
 _Avoid_: Listing age, update age
 
 **Inventory filter set**:
-The optional conditions used to narrow inventory by status, listing mode, property type, price, land or floor area in square metres, the administrative area of an address (province/city and its dependent commune/ward; the narrower ward governs when both are selected), or a recorded contact linked to a property. Without a selected listing mode, a price range uses each listing's own asking price; with a selected mode, it uses only that mode's asking price. A contact condition matches through the recorded property↔contact link and applies the same unarchived boundary as the contact directory's linked-property count, so the two never disagree.
+The optional conditions used to narrow inventory by status, listing mode, property type, how the property is reached (street front, car alley, motorbike alley, three-wheeler alley or unknown - the five states every record records, so the recorded unknown is a state to narrow to rather than an unstated filter), the address format a search is matched through (the legacy address, which is the default, or the current one), price, land or floor area in square metres, frontage and depth in metres, the administrative area of an address (the levels the stated address format has — province/city, district and commune/ward for a legacy address, province/city and commune/ward for a current one — each level narrowed by the one stated above it and every stated level applied to the same recorded address, the commune/ward level carrying one commune or a set of them so a search spans every record in any chosen commune, matched either by that level's recorded official unit or, for an address recorded only as text, by that level's own text once administrative type abbreviations are expanded to their full type and diacritics and spacing are folded, so a district is a legacy-address filter and a current-address search states none), a recorded contact linked to a property, or the records the signed-in employee created. The address format states one of its two formats, or no format condition once its chip is cleared: a property matches only when it records an address in the selected format, the typed query is compared with that format's own address, a property recording no address in that format does not match rather than being given one, and the cleared filter matches either recorded format. Status, listing mode, type, access type, address format, price, area, frontage, depth and the reader's own records are answered from the loaded catalogue in the browser; the administrative area, the linked contact and any stated ordering - the entry-date chronology or a column ordering - are a whole-inventory search, which applies every stated criterion beside the ordering and matches the reader's own records against the signed-in employee's own identity rather than a name the address carries, so an order never widens the set the filters narrowed. Without a selected listing mode, a price range uses each listing's own asking price; with a selected mode, it uses only that mode's asking price. A contact condition matches through the recorded property↔contact link and applies the same unarchived boundary as the contact directory's linked-property count, so the two never disagree.
 _Avoid_: Fixed sale-price basis; "area" for province/ward
+
+**Inventory stream**:
+The properties list as one result set, most recently changed first by default - ordered by the record's own modification time, then its identity, so a property somebody edited a minute ago leads the list however long ago it was created - or by the eligible entry-date chronology when that ordering is submitted. The ordinary browse and every filter the loaded catalogue holds the fields for are ordered, filtered and paged in the browser and issue no request, while a whole-inventory search is read from the server as consecutive windows of about a hundred rows. The browser reserves the whole stream's estimated height and keeps only the rows near the viewport in the page. It has no page numbers, no page size and no cursor trail, and the matching total and the rows always come from the same filtered set, so they cannot describe different inventories.
+_Avoid_: Numbered page, page-size setting, cursor, partial result set
+
+**Inventory column ordering**:
+A stated order of the whole result set by one table column - price, total area, frontage, depth, status or modification time - in an ascending or a descending direction, carried in the properties address as the column and its direction beside the search, the view and the filters. It is the ordinary unarchived browse reordered rather than the eligible entry-date chronology, so it never narrows which records are listed and an unknown column or direction is refused instead of served as another order. Price orders by the value the row itself states (a rent listing by its monthly rent, otherwise by its sale price), total area by the floor area where one is recorded and the land area otherwise, and status by the workflow its states progress through - draft, available, negotiating, sold, rented, withdrawn - never alphabetically. A record that states no value for the ordered column is last in both directions, and the property identity decides every tie, so consecutive windows neither repeat nor drop a row.
+_Avoid_: Alphabetical status order, latest-record order (the default browse)
+
+**Property catalogue**:
+The browser's own browsing snapshot of the authorized inventory: property summaries in one stable order - most recently changed first, then the property identity, the same order the list's ordinary browse uses - read through the authenticated catalogue endpoint and held in browser memory, with each property's recorded address variants folded once so typing in the address box narrows them without reading the database. It arrives progressively — every cursor is followed, rows are deduplicated by property identity and indexed as batches arrive — so the first page is searchable before the rest has loaded and an interrupted load keeps what it has and offers Retry. A deliberate refresh builds a replacement catalogue beside the one in use — the working catalogue stays searchable throughout and the replacement's own progress is stated separately — and only a replacement whose every cursor has been traversed and every received row indexed is swapped in, so records that were deleted or became inaccessible are gone; a refresh interrupted while access remains valid keeps its partial replacement for Retry and leaves the previous catalogue and its last successful synchronization time untouched. An authorization failure clears both catalogues until access is re-established, and a successful replacement also renews every catalogue-answered result, while a submitted whole-inventory search keeps its own windows until it is run again. A change the server commits — a save, a create, a merge, a status change, an approval or a lock decision — replaces the affected summary from the server's own answer and reindexes that property's addresses, and such a change is applied over any catalogue read that started before it, so an older answer never overwrites it; a change whose summary the server could not hand back reads the catalogue again instead of keeping a row nothing confirms. It is a browsing aid only — a lock, an approval or an edit always validates against current server state — and a list filtered from it states the loaded properties rather than the whole inventory, never an empty inventory while the load is incomplete._Avoid_: Search cache, offline inventory, authoritative list
+
+**Inventory result view**:
+The presentation choice for the inventory stream — cards or table — carried in the properties address beside the search, the ordering and the filters, so switching it or applying a filter keeps the narrowed result set and never changes the read. The summary table groups the recorded facts into property, address, price, area, frontage, depth, floors, creator, status, updated time and actions; the full record keeps every source field. The property code and the actions are never hidden; every other column can be hidden from the columns control above the table, and the hidden set travels in the address beside the view so a reload or a shared link keeps the table the person shaped - a hidden column loses both its heading and its cells. The table is not offered at phone width, where cards are the list.
+_Avoid_: Second result set, paged view
+
+**Inventory list state**:
+What the properties list holds beyond the result set the address names: the text the address box holds (typed, and not necessarily submitted), whether the box was edited at all, and where the stream was scrolled, measured from the stream's own top and left rather than the page's, together with the document's own offset above the stream. It is held in browser memory above the routes for the session as the one list the person left — only the result set they are at is held — so a visit to a property and back restores the list without reading the catalogue again, while a reload of the application starts over. The address still carries the result set itself — the search, the ordering, the filters and the view — and the hidden columns it carries beside them are not part of it: hiding a column changes no row, no order and no read, so the person's place in the same rows is kept.
+_Avoid_: Second result set, address-carried page number or window offset, persisted list state
+
+**Property quick view**:
+The right-hand panel a list row opens without leaving the list: the record's key metadata, the recorded asking prices with the one edit it carries, a comment composer, one attachment through the existing upload path and its limits, and a link into the full detail page for everything else. The asking-price edit is offered exactly where the full record editor is offered and goes through that editor's own write path, so it records the same price, refuses for the same reasons and keeps the same history; it grants no authority the full record does not have. The row is a real keyboard-reachable control; Escape closes the panel and focus returns to the row that opened it.
+_Avoid_: Detail page, inline edit, side form
 
 ### Vendors
 

@@ -1,9 +1,18 @@
-import { label, type Locale } from '@/i18n/messages';
+import { label, type Locale } from '../../i18n/messages.ts';
 const copy = {
   yes: ['Có', 'Yes'],
   no: ['Không', 'No'],
   unknown: ['Chưa biết', 'Unknown'],
   create: ['Thêm bất động sản', 'Create property'],
+  // The create form's own sections: the record, its address, and the owner the person is
+  // describing at that moment.
+  formRecord: ['Thông tin bất động sản', 'Property facts'],
+  formAddress: ['Địa chỉ', 'Address'],
+  formContact: ['Liên hệ chủ sở hữu', 'Owner contact'],
+  formContactHint: [
+    'Không bắt buộc. Tên và số liên hệ được ghi cùng hồ sơ vừa tạo; để trống cả hai nếu chưa biết.',
+    'Optional. The name and number are recorded with the record; leave both blank if unknown.',
+  ],
   editFacts: ['Sửa thông tin', 'Edit facts'],
   tabFacts: ['Thông tin bất động sản', 'Property facts'],
   tabAddresses: ['Đính chính địa chỉ', 'Address corrections'],
@@ -19,25 +28,72 @@ const copy = {
     'Original addresses are retained; corrections create a successor.',
   ],
   rawCurrent: [
-    'Địa chỉ hiện tại không có quận/huyện. Nếu chưa có đơn vị chính thức, lưu nội dung theo nguồn chưa xác minh.',
-    'Current addresses have no district. Missing official units do not prevent saving unverified source information.',
+    'Địa chỉ hiện tại không có quận/huyện. Nếu chưa có đơn vị chính thức, hãy ghi số nhà hoặc tên đường; nội dung địa chỉ được ghép từ các phần đã ghi khi lưu.',
+    'Current addresses have no district. If the official unit is unknown, record a house number or a street; the address text is composed from the parts you record when you save.',
+  ],
+  legacyHint: [
+    'Địa chỉ cũ dùng danh mục trước 2025: chọn quận/huyện, rồi xã/phường cũ. Nội dung địa chỉ được ghép từ số nhà, tên đường, xã/phường, quận/huyện và tỉnh/thành phố khi lưu.',
+    'Legacy addresses use the pre-2025 catalog: choose the old district, then ward. The address text is composed from the house number, street, commune, district and province when you save.',
+  ],
+  // The province is stated, not chosen: the app records one. A record that already stores a province
+  // row keeps exactly what it stored, and the form says so rather than silently replacing it: the row
+  // is the same official province in the catalog generation the address was recorded in.
+  provinceKept: [
+    'Địa chỉ này đã ghi tỉnh/thành phố theo danh mục của nó; giá trị đã ghi được giữ nguyên khi lưu.',
+    'This address already records the province/city from its own catalog generation; the recorded value is kept when you save.',
   ],
   optional: [
-    'Để trống thông tin chưa biết. VND nguyên; số đo dùng dấu chấm thập phân, không dấu phân cách hàng nghìn.',
-    'Leave unknown facts blank. Whole VND; dimensions use a decimal point without thousands separators.',
+    'Để trống thông tin chưa biết. Giá nhập theo đơn vị tỷ, triệu hoặc VND và được lưu bằng VND nguyên; số đo dùng dấu chấm thập phân, không dấu phân cách hàng nghìn.',
+    'Leave unknown facts blank. Prices take a tỷ, triệu or VND unit and are stored as whole VND; dimensions use a decimal point without thousands separators.',
   ],
   save: ['Lưu ngay', 'Save now'],
   saving: ['Đang lưu…', 'Saving…'],
   cancel: ['Hủy chỉnh sửa', 'Cancel editing'],
   saved: ['Đã lưu.', 'Saved.'],
+  // Save confirmations: the dialog closes, so the confirmation names what was recorded.
+  propertySaved: ['Đã lưu thông tin bất động sản.', 'Property saved.'],
+  propertyCreated: ['Đã tạo bất động sản.', 'Property created.'],
+  addressSaved: ['Đã lưu địa chỉ.', 'Address saved.'],
+  contactSaved: ['Đã lưu người liên hệ.', 'Contact saved.'],
+  linkSaved: ['Đã lưu liên kết người liên hệ.', 'Contact link saved.'],
+  correctionApplied: ['Đã áp dụng đính chính.', 'Correction applied.'],
+  correctionRejected: [
+    'Đã từ chối yêu cầu đính chính.',
+    'Correction request rejected.',
+  ],
+  correctionWithdrawn: [
+    'Đã rút yêu cầu đính chính.',
+    'Correction request withdrawn.',
+  ],
   requestSaved: [
     'Đã ghi nhận yêu cầu; dữ liệu kho chưa bị thay đổi.',
     'Request recorded; inventory has not been changed.',
   ],
   noChange: ['Chưa có thay đổi.', 'No changes to save.'],
+  // The pre-create warning: it names what already sits at the address and still lets the person
+  // make a second property, because separate units in one building are ordinary. It is a dialog,
+  // so its title is the sentence the person reads first.
+  duplicateAddressTitle: [
+    'Địa chỉ đã có hồ sơ khác',
+    'This address is already recorded',
+  ],
+  duplicateAddressBefore: [
+    'Hồ sơ khác cùng địa chỉ: {n}. Mở để xem trước khi tạo thêm.',
+    'Other properties at this address: {n}. Open them before creating another.',
+  ],
+  duplicateAddressHint: [
+    'Xem xong vẫn tạo được hồ sơ mới — cả hai sẽ cùng địa chỉ và có thể so sánh sau khi tạo.',
+    'You can still create it — both records will share the address and can be compared once created.',
+  ],
+  createAnyway: ['Vẫn tạo hồ sơ', 'Create anyway'],
+  createBack: ['Quay lại chỉnh sửa', 'Back to editing'],
+  addressPartsRequired: [
+    'Nhập số nhà, tên đường hoặc chọn xã/phường. Chỉ riêng tỉnh/thành phố chưa phải là địa chỉ; chưa có dữ liệu nào được lưu.',
+    'Enter a house number, a street, or pick the commune / ward. The province alone is not an address; nothing was saved.',
+  ],
   invalid: [
-    'Kiểm tra trường bắt buộc, giá VND nguyên, số đo và bằng chứng. Không có dữ liệu nào được lưu.',
-    'Check required fields, whole-VND prices, dimensions and evidence. Nothing was saved.',
+    'Kiểm tra trường bắt buộc, số tiền, số đo và bằng chứng. Không có dữ liệu nào được lưu.',
+    'Check required fields, the amounts, dimensions and evidence. Nothing was saved.',
   ],
   unavailable: [
     'Chưa xác nhận được kết quả. Đọc lại thông tin hiện tại trước khi thử lại; không gửi lại tự động.',
@@ -56,6 +112,59 @@ const copy = {
     'Open current information (new tab)',
   ],
   mapping: ['Chỉ định ánh xạ từ bằng chứng', 'Designate mapping from evidence'],
+  crosswalkCandidate: [
+    'Ghi địa chỉ mới (đề xuất)',
+    'Record the current address (candidate)',
+  ],
+  crosswalkCandidateHint: [
+    'Chưa xác minh: chỉ ghi sau khi bạn đã đối chiếu. Địa chỉ cũ được giữ nguyên và vẫn là địa chỉ chính.',
+    'Unverified: record only after you have checked. The legacy address is kept and stays primary.',
+  ],
+  crosswalkRecorded: [
+    'Đã ghi địa chỉ mới dưới dạng đề xuất, chưa xác minh.',
+    'Current address recorded as an unverified candidate.',
+  ],
+  // Switching an existing address between the two formats is this labelled action, never a change
+  // of the format field on an ordinary save.
+  convertToCurrent: [
+    'Chuyển sang địa chỉ hiện tại',
+    'Convert to current address',
+  ],
+  convertToLegacy: ['Chuyển sang địa chỉ cũ', 'Convert to legacy address'],
+  convertHint: [
+    'Thao tác riêng, không phải đổi trường loại địa chỉ. Hệ thống ghi thêm một địa chỉ ở dạng còn lại theo bảng chuyển đổi chính thức, dưới dạng đề xuất chưa xác minh. Địa chỉ đang có được giữ nguyên, kể cả nội dung nguồn và các đơn vị đã ghi.',
+    'A deliberate action, not a change of the address type field. It records a second address in the other format from the official crosswalk, as an unverified candidate. The address you see is kept exactly as it is, including its source text and recorded units.',
+  ],
+  convertConfirm: ['Xác nhận chuyển', 'Confirm conversion'],
+  converted: [
+    'Đã ghi địa chỉ ở dạng còn lại, chưa xác minh; địa chỉ đang có vẫn được giữ nguyên.',
+    'The other format address is recorded, unverified; the address you had is kept.',
+  ],
+  convertUnitsMissing: [
+    'Không chuyển được: địa chỉ này chưa ghi phường/xã chính thức nên không có gì để đối chiếu bảng chuyển đổi. Chưa có dữ liệu nào được ghi.',
+    'Cannot convert: this address records no official ward, so there is nothing to look up in the crosswalk. Nothing was written.',
+  ],
+  convertAmbiguous: [
+    'Không chuyển được: bảng chuyển đổi không nêu một đơn vị duy nhất cho địa chỉ này (chuyển một phần hoặc nhiều đơn vị). Hãy đối chiếu và đính chính địa chỉ; chưa có dữ liệu nào được ghi.',
+    'Cannot convert: the crosswalk names no single unit for this address (a partial transfer, or several units). Reconcile the address and correct it instead; nothing was written.',
+  ],
+  convertNoCrosswalk: [
+    'Không chuyển được: phường/xã đã ghi chưa có dòng nào trong bảng chuyển đổi chính thức, nên chưa có đơn vị ở dạng còn lại để ghi. Địa chỉ đã ghi không sai; chưa có dữ liệu nào được ghi.',
+    'Cannot convert: the recorded ward has no row in the official crosswalk yet, so there is no unit in the other format to record. The address you have is not wrong; nothing was written.',
+  ],
+  convertDuplicate: [
+    'Không chuyển được: bất động sản đã có địa chỉ ở dạng này cho cùng địa bàn, nên không ghi thêm bản trùng.',
+    'Cannot convert: the property already records an address in this format for the same territory, so no duplicate was written.',
+  ],
+  convertSuperseded: [
+    'Không chuyển được: địa chỉ này đã được đính chính bởi một bản mới hơn. Hãy chuyển đổi bản mới nhất; chưa có dữ liệu nào được ghi.',
+    'Cannot convert: a later correction replaced this address. Convert the newest row instead; nothing was written.',
+  ],
+  convertLevelChange: [
+    'Không chuyển được: bảng chuyển đổi ghi nhận đơn vị này ở cấp hành chính khác (ví dụ đặc khu hình thành từ cả một huyện cũ), nên địa chỉ này không diễn đạt được ở dạng còn lại. Địa chỉ đã ghi không sai; chưa có dữ liệu nào được ghi.',
+    'Cannot convert: the crosswalk records this unit at a different administrative level (an island special zone formed from a whole old district, for example), so this address cannot be stated in the other format. The address you have is not wrong; nothing was written.',
+  ],
+  openRecord: ['Mở hồ sơ', 'Open record'],
   mappingHint: [
     'Chỉ quản lý/quản trị viên; cần đơn vị, ngày hiệu lực và bằng chứng của bất động sản. Không cần người duyệt thứ hai.',
     'Manager/admin only; requires official units, effective date and property evidence. No second approver.',
@@ -63,6 +172,16 @@ const copy = {
   catalogEmpty: [
     'Chưa có đơn vị phù hợp trong danh mục; giữ nội dung theo nguồn chưa xác minh.',
     'No matching official units available; keep unverified source information.',
+  ],
+  // Typed text that names no official unit is never committed, so the picker says so.
+  comboboxNoMatch: [
+    'Không có đơn vị chính thức nào khớp với nội dung đã gõ.',
+    'No official unit matches what you typed.',
+  ],
+  // The street list only suggests: a name it does not carry is still a street the person may type.
+  streetHint: [
+    'Chọn tên đường trong danh sách gợi ý hoặc gõ tên đường khác; tên đường không có trong danh sách vẫn được lưu như nội dung đã gõ.',
+    'Pick a street from the suggestions or type another name; a street that is not on the list is saved exactly as typed.',
   ],
   contacts: [
     'Bảo trì người liên hệ và liên kết',
@@ -194,32 +313,6 @@ const copy = {
     'Maintenance saves immediately; only asking-price changes are recorded in the history. Reservations still require independent approval.',
   ],
   primary: ['Địa chỉ / liên kết chính', 'Primary address / link'],
-  location: ['Vị trí trên bản đồ', 'Location on map'],
-  locationHint: [
-    'Nhấn vào bản đồ để đặt hoặc di chuyển điểm, hoặc nhập toạ độ và nhấn "Áp dụng toạ độ"; điểm chỉ được lưu cùng các thông tin khác sau khi áp dụng.',
-    'Click the map to place or move the point, or type coordinates and press "Apply coordinates"; the point saves with the other facts only after you apply it.',
-  ],
-  locationMapLabel: [
-    'Bản đồ chọn vị trí: nhấn để đặt điểm',
-    'Location picker map: click to place the point',
-  ],
-  locationTyped: ['Hoặc nhập toạ độ', 'Or type coordinates'],
-  locationTypedHint: [
-    'Vĩ độ từ -90 đến 90, kinh độ từ -180 đến 180, tối đa 7 chữ số thập phân.',
-    'Latitude from -90 to 90, longitude from -180 to 180, up to 7 decimal places.',
-  ],
-  locationApply: ['Áp dụng toạ độ', 'Apply coordinates'],
-  locationInvalid: [
-    'Toạ độ không hợp lệ: vĩ độ từ -90 đến 90, kinh độ từ -180 đến 180, tối đa 7 chữ số thập phân.',
-    'Invalid coordinates: latitude from -90 to 90, longitude from -180 to 180, up to 7 decimal places.',
-  ],
-  locationClear: ['Xoá vị trí', 'Clear location'],
-  locationRecorded: ['Vị trí đã ghi', 'Recorded location'],
-  locationNoPoint: ['Chưa đặt vị trí.', 'No point placed.'],
-  locationTilesFailed: [
-    'Không tải được nền bản đồ. Vẫn có thể nhấn trên khung bản đồ hoặc nhập toạ độ bên dưới.',
-    'The map background could not load. You can still click the map area or type coordinates below.',
-  ],
 } as const;
 export type CopyKey = keyof typeof copy;
 export function maintenanceText(locale: Locale) {
@@ -236,15 +329,29 @@ export function maintenanceError(locale: Locale, code: string | null) {
     ? text.noChange
     : code === 'stale-edit'
       ? text.stale
-      : code === 'conflict'
-        ? text.conflict
-        : code === 'explanation-without-price'
-          ? text.correctionExplanationNeedsPrice
-          : code === 'invalid-input'
-            ? text.invalid
-            : code === 'contact-refusal'
-              ? text.contactRefusal
-              : text.unavailable;
+      : code === 'address-parts-required'
+        ? text.addressPartsRequired
+        : code === 'conflict'
+          ? text.conflict
+          : code === 'explanation-without-price'
+            ? text.correctionExplanationNeedsPrice
+            : code === 'invalid-input'
+              ? text.invalid
+              : code === 'contact-refusal'
+                ? text.contactRefusal
+                : code === 'crosswalk-units-missing'
+                  ? text.convertUnitsMissing
+                  : code === 'crosswalk-ambiguous'
+                    ? text.convertAmbiguous
+                    : code === 'crosswalk-missing'
+                      ? text.convertNoCrosswalk
+                      : code === 'address-superseded'
+                        ? text.convertSuperseded
+                        : code === 'crosswalk-level-change'
+                          ? text.convertLevelChange
+                          : code === 'address-format-duplicate'
+                            ? text.convertDuplicate
+                            : text.unavailable;
 }
 const values: Record<string, readonly [string, string]> = {
   property: ['Thông tin bất động sản', 'Property facts'],
