@@ -40,7 +40,6 @@ import {
   importableBucket,
   invitationOrigin,
   invitationRecipients,
-  legacyAddressText,
   openBatch,
   planAttachmentImport,
   planStaffAccounts,
@@ -2683,7 +2682,6 @@ export async function run(argv, dependencies = {}) {
           {
             format: 'legacy',
             ...record.mapped.address,
-            address_text: legacyAddressText(record.mapped.address),
             mapping_status: 'unresolved',
             is_primary: true,
           },

@@ -657,40 +657,15 @@ async function unitIds(db, cache) {
   };
 }
 
-// One address's text, composed the way the server composes it: every recorded part's own trimmed
-// text, joined by ", ", with nothing left for a level that records none.
-function composedAddressText(...parts) {
-  return (
-    parts
-      .map((part) => (typeof part === 'string' ? part.trim() : ''))
-      .filter(Boolean)
-      .join(', ') || null
-  );
-}
-
-// A legacy address reads as the parts the sheet recorded for it, and keeps the sheet's own wording
-// only where it records no part at all.
-export function legacyAddressText(address) {
-  return (
-    composedAddressText(
-      address.house_number,
-      address.street,
-      address.commune_text,
-      address.district_text,
-      address.province_text,
-    ) ?? address.address_text
-  );
-}
-
 export function currentAddressText(address, target) {
-  return (
-    composedAddressText(
-      address.house_number,
-      address.street,
-      target.name,
-      target.provinceName,
-    ) ?? address.address_text
-  );
+  return [
+    address.house_number,
+    address.street,
+    target.name,
+    target.provinceName,
+  ]
+    .filter(Boolean)
+    .join(', ');
 }
 
 /**
@@ -835,7 +810,7 @@ async function writePropertyBatch(
           row.legacyAddressId,
           row.propertyId,
           'legacy',
-          legacyAddressText(row.address),
+          row.address.address_text,
           row.address.house_number,
           row.address.street,
           row.address.province_text,

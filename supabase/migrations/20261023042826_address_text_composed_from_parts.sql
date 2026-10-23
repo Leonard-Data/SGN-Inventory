@@ -16,19 +16,22 @@
 --      and a row with no part at all composes null.
 --   2. private.maintain_property composes it for a save, in the one place an address write already
 --      happens, so both creation and editing reach it - an ordinary address edit and a `mapping`
---      edit that repoints the units that address recorded alike. A change set that states its own
---      text is the recorded-evidence case below and keeps it, and a row that records no part at all
---      keeps the text it already holds, because that text is its only evidence; a new address with
---      no part to compose is refused as a known address is required.
---   3. public.maintain_property and private.create_property refuse a change set that states a
---      known address at all ('23514'), so the browser, a direct RPC call and any other client
---      cannot store a text beside parts that disagree with it.
+--      edit that repoints the units that address recorded alike. Every address write composes; a
+--      row that records no part at all keeps the text it already holds, because that text is its
+--      only evidence, and a new address with no part to compose is refused as a known address is
+--      required.
+--   3. private.validate_maintenance refuses `address_text` in an `address` change set (forward
+--      migration `20261023054500_address_text_composition_boundary.sql`), so no writer - the
+--      browser, a direct RPC call, a correction proposal, an amendment or a decision - can state a
+--      text beside parts that disagree with it. public.maintain_property keeps the same refusal
+--      where a client calls it, and private.create_property refuses a creation that states one.
 --
 -- Existing rows are untouched: nothing is rewritten, backfilled or re-imported. The 18,548 imported
 -- addresses that already read as this composition produces keep that text, and the 276 that differ
--- keep their recorded wording. Recorded text stays evidence: the crosswalk candidate
--- (private.record_address_candidate) and the format conversion record the source text they carry,
--- exactly as before, and an applied correction keeps the proposal it was submitted with.
+-- keep their recorded wording. The two actions that record a current row from an old one - the
+-- crosswalk candidate (private.record_address_candidate) and the format conversion - compose the
+-- row they write too, from the parts they carry and the target units, while the legacy row they
+-- start from keeps the wording its source recorded.
 --
 -- The search projection is unchanged: it is recomputed by the existing trigger from the row it is
 -- given, so a composed text feeds the same `search_text` a recorded one feeds.
@@ -119,12 +122,9 @@ begin
       return p_target_id;
     end if;
     addr:=jsonb_populate_record(addr,p_changes);
-    -- The server is the only author of a recorded address text: an ordinary save states the parts
-    -- and this composes the text from them, so no save can store a text that disagrees with its own
-    -- parts. The two flows that record source text as evidence - the crosswalk candidate and the
-    -- format conversion - carry a text they preserve, and the public API refuses a supplied one, so
-    -- only those internal rows reach here holding a text of their own.
-    if not p_changes ? 'address_text' then addr.address_text:=coalesce(private.composed_address_text(addr),addr.address_text); end if;
+    -- The server is the only author of a recorded address text: a save states the parts and this
+    -- composes the text from them, so no save can store a text that disagrees with its own parts.
+    addr.address_text:=coalesce(private.composed_address_text(addr),addr.address_text);
     if addr.format is null or addr.format not in ('legacy','current','alternate') or (p_target_id is null and addr.format='alternate') or addr.address_text is null then raise exception 'known address required' using errcode='23514'; end if;
     if p_target_id is not null and addr.format<>(select format from public.property_addresses where id=p_target_id) then raise exception 'address format immutable' using errcode='23514'; end if;
     if p_target_id is not null and p_changes-array['is_primary']='{}'::jsonb then
@@ -201,8 +201,8 @@ $$;
 
 -- The one save the app and any other client reaches: a change set that states a known address is
 -- refused here rather than composed over, so the two can never drift again. An address change with
--- no text is composed by the writer below, and the recorded-evidence flows that call the private
--- writer directly (the crosswalk candidate, an applied correction's own proposal) are untouched.
+-- no text is composed by the writer below, and the shared field rule in private.validate_maintenance
+-- refuses a stated text on every other writer too (forward migration 20261023054500).
 create or replace function public.maintain_property(p_property_id uuid,p_target text,p_target_id uuid,p_expected_revision uuid,p_changes jsonb,p_property_revision uuid,p_explanation text default null) returns uuid
 language plpgsql security invoker set search_path='' as $$
 begin

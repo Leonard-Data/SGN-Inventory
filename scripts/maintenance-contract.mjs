@@ -392,6 +392,27 @@ export async function maintenanceContract({
         await addressText(picked, 'current'),
         '9, ' + repointed.name_vi + ', ' + unit.province_name,
       );
+      // A correction proposal passes the same boundary, so it cannot state a text either.
+      const correctionAddress = (
+        await db.query(
+          "select id,revision from public.property_addresses where property_id=$1 and format='current' and is_primary",
+          [current],
+        )
+      ).rows[0];
+      await fails(
+        'select public.submit_correction($1,$2,$3,$4,$5,$6,$7,$8)',
+        [
+          current,
+          'address',
+          correctionAddress.id,
+          'incorrect',
+          'The known address is composed from the parts',
+          { house_number: '99', address_text: 'Anything at all' },
+          correctionAddress.revision,
+          await revision('properties', current),
+        ],
+        '23514',
+      );
       // The composed text feeds the search projection the recorded text fed before.
       assert.deepEqual(
         (
@@ -1909,11 +1930,24 @@ export async function maintenanceContract({
           [candidateAddress],
         )
       ).rows[0];
-      // The recorded source text is carried over; the target province and commune come from the
-      // crosswalk row itself, its effective date and source URL travel with the candidate, and the
-      // row states no district because the current generation has none.
+      // The candidate composes its text from the recorded parts and the target units, the target
+      // province and commune come from the crosswalk row itself, its effective date and source URL
+      // travel with the candidate, and the row states no district because the current generation
+      // has none.
+      const targetNames = (
+        await db.query(
+          `select c.name_vi as commune,p.name_vi as province
+           from public.admin_unit_versions c join public.admin_unit_versions p on p.id=c.parent_id
+           where c.id=$1`,
+          [target.to_unit_id],
+        )
+      ).rows[0];
       assert.deepEqual(created2, {
-        address_text: offeredLegacy.address_text,
+        address_text: [
+          'Nhà cũ theo bảng chuyển đổi',
+          targetNames.commune,
+          targetNames.province,
+        ].join(', '),
         province_unit_id: (
           await db.query(
             'select parent_id from public.admin_unit_versions where id=$1',
@@ -2447,6 +2481,16 @@ export async function maintenanceContract({
         },
       ])
     ).rows[0].id;
+  // The official names a converted current row composes from, read from the catalog itself.
+  const currentUnitNames = async (unitId) =>
+    (
+      await db.query(
+        `select c.name_vi as commune,p.name_vi as province
+         from public.admin_unit_versions c join public.admin_unit_versions p on p.id=c.parent_id
+         where c.id=$1`,
+        [unitId],
+      )
+    ).rows[0];
   let convertedProperty, convertedLegacy, convertedCurrent;
   await asUser(0);
   await check(
@@ -2462,10 +2506,16 @@ export async function maintenanceContract({
       const before = await addressSnapshot(convertedLegacy);
       convertedCurrent = await convertAs(convertedProperty, convertedLegacy);
       const target = offered.crosswalk[0];
-      // The units, the effective date and the source come from the crosswalk row, and the new row
-      // is a candidate: it cites its evidence and states no verification stamp of its own.
+      const convertedNames = await currentUnitNames(target.to_unit_id);
+      // The units, the effective date and the source come from the crosswalk row, the text is
+      // composed from the source parts and those units, and the new row is a candidate: it cites
+      // its evidence and states no verification stamp of its own.
       assert.deepEqual(await addressRow(convertedCurrent), {
-        address_text: (await addressRow(convertedLegacy)).address_text,
+        address_text: [
+          'Nhà cũ theo bảng chuyển đổi',
+          convertedNames.commune,
+          convertedNames.province,
+        ].join(', '),
         format: 'current',
         province_unit_id: (
           await db.query(
@@ -2727,12 +2777,19 @@ export async function maintenanceContract({
         /superseded address/,
       );
       const converted = await convertAs(propertyId, corrected);
-      // The current row states the corrected text, not the text the property moved away from, and
-      // following the action on that row again is refused as a duplicate rather than writing a
-      // second current address for the same territory.
+      // The current row composes the corrected parts with the target's own units, not the text the
+      // property moved away from, and following the action on that row again is refused as a
+      // duplicate rather than writing a second current address for the same territory.
+      const correctedNames = await currentUnitNames(
+        offered.crosswalk[0].to_unit_id,
+      );
       assert.equal(
         (await addressRow(converted)).address_text,
-        (await addressRow(corrected)).address_text,
+        [
+          'Nhà cũ sau khi đính chính',
+          correctedNames.commune,
+          correctedNames.province,
+        ].join(', '),
       );
       assert.deepEqual(
         (await addressesOf(propertyId)).map((row) => row.format).sort(),
@@ -2800,10 +2857,25 @@ export async function maintenanceContract({
       await asUser(0);
       const before = await addressSnapshot(reverseCurrent);
       reverseLegacy = await convertAs(reverseProperty, reverseCurrent);
-      // The converted row is a candidate with the crosswalk's date and source, and it names the old
-      // ward, its district and that district's province rather than anything the caller stated.
+      // The converted row is a candidate with the crosswalk's date and source, it names the old
+      // ward, its district and that district's province rather than anything the caller stated, and
+      // its text is composed from the source parts and those units.
+      const legacyNames = (
+        await db.query(
+          `select w.name_vi as commune,d.name_vi as district,p.name_vi as province
+           from public.admin_unit_versions w join public.admin_unit_versions d on d.id=w.parent_id
+           join public.admin_unit_versions p on p.id=d.parent_id
+           where w.id=$1`,
+          [singleSource.ward],
+        )
+      ).rows[0];
       assert.deepEqual(await addressRow(reverseLegacy), {
-        address_text: (await addressRow(reverseCurrent)).address_text,
+        address_text: [
+          'Địa chỉ hiện tại cần chuyển',
+          legacyNames.commune,
+          legacyNames.district,
+          legacyNames.province,
+        ].join(', '),
         format: 'legacy',
         province_unit_id: (
           await db.query(
