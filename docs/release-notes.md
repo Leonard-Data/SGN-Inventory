@@ -50,7 +50,7 @@ see *The supplied street list's near-duplicates are cleaned* below.
 ### The supplied street list's near-duplicates are cleaned (captain request)
 
 The street suggestion list holds 993 names instead of 1006. Thirteen names that were the same street
-name differently written are gone — a missing or misplaced tone mark, an unaccented or lowercased
+name differently written are gone — a wrong, missing or extra tone mark, an unaccented or lowercased
 spelling, or a doubled internal space — and the properly spelled variant stays, so the two doubled
 internal spaces are single spaces. The fourteenth near-identical pair is kept in full: "Nguyễn Văn
 Luông" (Quận 6) and "Nguyễn Văn Lượng" (Gò Vấp) are two different real streets, so both names stay in
