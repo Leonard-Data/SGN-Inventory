@@ -348,6 +348,50 @@ export async function maintenanceContract({
         ['sale', {}, { format: 'legacy', address_text: 'Typed known address' }],
         '23514',
       );
+      // A recorded source label never outranks the unit an edit picks: the text names the unit the
+      // address records, so a corrected ward cannot keep reading as the one it replaced.
+      await db.query(mutate, [
+        current,
+        'address',
+        currentRow,
+        await revision('property_addresses', currentRow),
+        { province_unit_id: unit.province, commune_unit_id: unit.id },
+      ]);
+      assert.equal(
+        await addressText(current, 'current'),
+        '12, ' + unit.commune + ', ' + unit.province_name,
+      );
+      // A mapping edit that repoints the units recomposes the text beside them.
+      const repointed = (
+        await db.query(
+          `select id,name_vi from public.admin_unit_versions
+           where unit_level='commune' and parent_id=$1 and id<>$2 and valid_from>=date '2025-07-01'
+           order by official_code limit 1`,
+          [unit.province, unit.id],
+        )
+      ).rows[0];
+      const pickedRow = (
+        await db.query(
+          "select id from public.property_addresses where property_id=$1 and format='current' and is_primary",
+          [picked],
+        )
+      ).rows[0].id;
+      await db.query(mutate, [
+        picked,
+        'mapping',
+        pickedRow,
+        await revision('property_addresses', pickedRow),
+        {
+          mapping_status: 'candidate',
+          effective_on: '2025-07-01',
+          source_url: 'https://example.test/official-conversion-table',
+          commune_unit_id: repointed.id,
+        },
+      ]);
+      assert.equal(
+        await addressText(picked, 'current'),
+        '9, ' + repointed.name_vi + ', ' + unit.province_name,
+      );
       // The composed text feeds the search projection the recorded text fed before.
       assert.deepEqual(
         (
@@ -1552,7 +1596,7 @@ export async function maintenanceContract({
             [addr.id],
           )
         ).rows[0].address_text,
-        'Đường đã đính chính, Xã chưa có, Tỉnh chưa có',
+        'Đường đã đính chính, Fixture Commune, Fixture Province A',
       );
     },
   );

@@ -35,9 +35,11 @@ import {
 import {
   assertWriteTarget,
   convertedSkipped,
+  currentAddressText,
   declaredStage,
   invitationOrigin,
   invitationRecipients,
+  legacyAddressText,
   recordedInvitations,
   importableBucket,
   planAttachmentImport,
@@ -51,6 +53,37 @@ import {
 } from './legacy-import-write.mjs';
 
 const BILLION = 1000000000;
+
+test('an imported address text is the composition of the parts the sheet recorded', () => {
+  assert.equal(
+    legacyAddressText({
+      address_text: 'Wording the sheet recorded that differs from its parts',
+      house_number: '12',
+      street: 'Lý Thường Kiệt',
+      commune_text: 'Phường 14',
+      district_text: 'Quận 10',
+      province_text: 'Thành phố Hồ Chí Minh',
+    }),
+    '12, Lý Thường Kiệt, Phường 14, Quận 10, Thành phố Hồ Chí Minh',
+  );
+  // A level the sheet left empty leaves no segment, and a row that records no part keeps the
+  // wording the sheet gave it.
+  assert.equal(
+    legacyAddressText({ address_text: 'Sheet wording', house_number: '12' }),
+    '12',
+  );
+  assert.equal(
+    legacyAddressText({ address_text: 'Sheet wording', house_number: ' ' }),
+    'Sheet wording',
+  );
+  assert.equal(
+    currentAddressText(
+      { house_number: '12', street: 'Lý Thường Kiệt' },
+      { name: 'Phường Bến Nghé', provinceName: 'Thành phố Hồ Chí Minh' },
+    ),
+    '12, Lý Thường Kiệt, Phường Bến Nghé, Thành phố Hồ Chí Minh',
+  );
+});
 
 test('billions and millions of dong become whole VND without floating point', () => {
   assert.equal(parseMoneyVnd('23,00', BILLION).value, '23000000000');

@@ -8,16 +8,18 @@
 -- never records (the table already refuses district parts on a current row).
 --
 -- What changes, and what deliberately does not:
---   1. private.composed_address_text composes one row's text. A recorded source label wins over the
---      official name of the unit it names, because the label is that address's own evidence; the
---      official name only fills a level the source left unnamed, which is the app's own case - its
---      pickers record a unit and no label. A missing part is skipped, never an empty segment, a
---      doubled separator or a placeholder word, and a row with no part at all composes null.
+--   1. private.composed_address_text composes one row's text. The official name of the unit an
+--      address records is the name its text carries, so a repointed or corrected unit can never
+--      leave the text naming the unit it replaced; a recorded source label names only a level the
+--      address records no unit for, which is how an imported address keeps its own wording. A
+--      missing part is skipped, never an empty segment, a doubled separator or a placeholder word,
+--      and a row with no part at all composes null.
 --   2. private.maintain_property composes it for a save, in the one place an address write already
---      happens, so both creation and editing reach it. A change set that states its own text is the
---      recorded-evidence case below and keeps it, and a row that records no part at all keeps the
---      text it already holds, because that text is its only evidence; a new address with no part to
---      compose is refused as a known address is required.
+--      happens, so both creation and editing reach it - an ordinary address edit and a `mapping`
+--      edit that repoints the units that address recorded alike. A change set that states its own
+--      text is the recorded-evidence case below and keeps it, and a row that records no part at all
+--      keeps the text it already holds, because that text is its only evidence; a new address with
+--      no part to compose is refused as a known address is required.
 --   3. public.maintain_property and private.create_property refuse a change set that states a
 --      known address at all ('23514'), so the browser, a direct RPC call and any other client
 --      cannot store a text beside parts that disagree with it.
@@ -38,17 +40,17 @@ language sql stable security invoker set search_path='' as $$
   select nullif(array_to_string(array_remove(array[
     nullif(btrim(a.house_number),''),
     nullif(btrim(a.street),''),
-    coalesce(nullif(btrim(a.commune_text),''),(select name_vi from public.admin_unit_versions where id=a.commune_unit_id)),
+    coalesce((select name_vi from public.admin_unit_versions where id=a.commune_unit_id),nullif(btrim(a.commune_text),'')),
     case when a.format<>'current' then
-      coalesce(nullif(btrim(a.district_text),''),(select name_vi from public.admin_unit_versions where id=a.district_unit_id)) end,
-    coalesce(nullif(btrim(a.province_text),''),(select name_vi from public.admin_unit_versions where id=a.province_unit_id))
+      coalesce((select name_vi from public.admin_unit_versions where id=a.district_unit_id),nullif(btrim(a.district_text),'')) end,
+    coalesce((select name_vi from public.admin_unit_versions where id=a.province_unit_id),nullif(btrim(a.province_text),''))
   ],null),', '),'');
 $$;
 revoke all on function private.composed_address_text(public.property_addresses) from public,anon,authenticated;
 
 create or replace function private.maintain_property(p_property_id uuid,p_target text,p_target_id uuid,p_expected_revision uuid,p_changes jsonb,p_property_revision uuid) returns uuid
 language plpgsql security definer set search_path='' as $$
-declare prop public.properties; addr public.property_addresses; person public.contacts; link public.property_contacts; cols text; result uuid; next_contact uuid;
+declare prop public.properties; addr public.property_addresses; recorded public.property_addresses; person public.contacts; link public.property_contacts; cols text; result uuid; next_contact uuid;
 begin
   if private.employee_id() is null then raise exception 'active employee required' using errcode='42501'; end if;
   if p_target='contact' then
@@ -94,6 +96,7 @@ begin
       -- A verified mapping is a reviewer's record: moving it to another state, or repointing its
       -- units, is refused for every other role instead of silently un-verifying it.
       if addr.mapping_status='verified' and not private.is_reviewer() then raise exception 'reviewer required for mapping' using errcode='42501'; end if;
+      recorded:=addr;
       addr:=jsonb_populate_record(addr,p_changes);
       if addr.mapping_status not in ('verified','candidate','unresolved') or addr.mapping_status is null then raise exception 'invalid mapping' using errcode='23514'; end if;
       -- Recording a candidate from the official crosswalk is an ordinary property edit (D5).
@@ -107,8 +110,11 @@ begin
       elsif addr.mapping_status<>'verified' then
         addr.verified_by:=null; addr.verified_at:=null; addr.verification_method:=null; addr.source_url:=null; addr.effective_on:=null; addr.mapping_evidence:=null;
       end if;
+      if (addr.province_unit_id,addr.commune_unit_id) is distinct from (recorded.province_unit_id,recorded.commune_unit_id) then
+        addr.address_text:=coalesce(private.composed_address_text(addr),addr.address_text); end if;
       update public.property_addresses set province_unit_id=addr.province_unit_id,commune_unit_id=addr.commune_unit_id,
-        mapping_status=addr.mapping_status,verification_method=addr.verification_method,source_url=addr.source_url,
+        address_text=addr.address_text,mapping_status=addr.mapping_status,
+        verification_method=addr.verification_method,source_url=addr.source_url,
         effective_on=addr.effective_on,mapping_evidence=addr.mapping_evidence,verified_by=addr.verified_by,verified_at=addr.verified_at where id=p_target_id;
       return p_target_id;
     end if;
