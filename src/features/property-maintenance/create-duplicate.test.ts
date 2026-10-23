@@ -36,10 +36,15 @@ test('one confirmation after the warning creates exactly once', async () => {
 test('an address nobody records adds no step', async () => {
   let created = 0;
   assert.deepEqual(
-    await createAfterWarning(async () => [], address, null, async () => {
-      created += 1;
-      return { id: 'property-2' };
-    }),
+    await createAfterWarning(
+      async () => [],
+      address,
+      null,
+      async () => {
+        created += 1;
+        return { id: 'property-2' };
+      },
+    ),
     { created: { id: 'property-2' } },
   );
   assert.equal(created, 1);

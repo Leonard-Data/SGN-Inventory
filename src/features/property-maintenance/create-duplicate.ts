@@ -8,9 +8,7 @@ import type { Changes } from './fields';
 // failed is not a warning, because a duplicate was never allowed to block a creation; a session
 // that is gone is not a warning problem at all.
 export type CreateOutcome<T> =
-  | { matches: AddressMatch[] }
-  | { denied: number }
-  | { created: T };
+  { matches: AddressMatch[] } | { denied: number } | { created: T };
 
 export async function createAfterWarning<T>(
   find: (address: Changes) => Promise<AddressMatch[]>,
