@@ -85,11 +85,14 @@ test('the quick view price edit reuses the record editor path', () => {
     /const PRICE_FIELDS = \['sale_price_vnd', 'monthly_rent_vnd'\] as const;/,
   );
   assert.match(drawer, /<MutationForm[\s\S]{0,400}target="property"/);
+  // The price section names the same two price fields, and the one editor the quick view offers
+  // renders whichever field record its caller names.
+  assert.match(drawer, /<QuickFieldEditor[\s\S]{0,200}names=\{PRICE_FIELDS\}/);
   assert.match(
     drawer,
-    /<RecordFields locale=\{locale\} values=\{record\} names=\{PRICE_FIELDS\} \/>/,
+    /<RecordFields locale=\{locale\} values=\{record\} names=\{names\} \/>/,
   );
-  const saver = drawer.slice(drawer.indexOf('function PriceEditor('));
+  const saver = drawer.slice(drawer.indexOf('function QuickFieldEditor('));
   assert.match(
     saver,
     /`\/api\/properties\/\$\{propertyId\}\/maintenance`/,
