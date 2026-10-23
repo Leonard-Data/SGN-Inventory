@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 
 // Issue #279 embedded regressions: the pre-create address read. It composes the text from the
-// parts a creation states, decides a match with the one rule the post-create group uses, names
-// only unarchived properties the caller may already read, and answers nothing for an address
-// nobody records. Nothing here creates, blocks or changes a record; the post-create group and its
-// merge stay as issue #147 left them.
+// parts a creation states, decides a match with the one rule and the primary-address basis the
+// post-create group uses, names only unarchived properties the caller may already read, and
+// answers nothing for an address nobody records. Nothing here creates, blocks or changes a record;
+// the post-create group and its merge stay as issue #147 left them.
 export async function addressDuplicateWarningContract({
   db,
   asUser,
@@ -21,6 +21,7 @@ export async function addressDuplicateWarningContract({
     street: 'Lê Lợi',
     province_unit_id: province,
     commune_unit_id: commune,
+    is_primary: true,
   };
   const composed = '12, Lê Lợi, Fixture Commune, Fixture Province';
   const elsewhere = '99, Hai Bà Trưng, Fixture Commune, Fixture Province';
@@ -137,12 +138,25 @@ export async function addressDuplicateWarningContract({
         province_unit_id: province,
         district_text: 'Quận 1',
         commune_unit_id: commune,
+        is_primary: true,
       }),
       [],
     );
   });
+  await check(
+    'an address created as non-primary joins no group, so it is not warned about',
+    async () => {
+      assert.deepEqual(await duplicates({ ...parts, is_primary: false }), []);
+      const unstated = { ...parts };
+      delete unstated.is_primary;
+      assert.deepEqual(await duplicates(unstated), []);
+    },
+  );
   await check('an address stating no part matches nothing', async () => {
-    assert.deepEqual(await duplicates({ format: 'current' }), []);
+    assert.deepEqual(
+      await duplicates({ format: 'current', is_primary: true }),
+      [],
+    );
   });
   await check('anonymous pre-create read denied', async () => {
     await asUser(null);

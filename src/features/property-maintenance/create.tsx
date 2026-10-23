@@ -18,7 +18,7 @@ import {
   recordsAddressPart,
 } from './fields';
 import { AddressFields, RecordFields } from './forms';
-import { duplicateCheck } from './create-duplicate';
+import { createAfterWarning } from './create-duplicate';
 import { CrosswalkOffer } from './crosswalk-offer';
 import type { AddressCrosswalk } from './crosswalk';
 import { maintenanceError, maintenanceText, optionLabel } from './messages';
@@ -79,40 +79,43 @@ export function CreateProperty({
       // Before the record exists: the address this save stores may already be recorded. The
       // database composes the text from these parts and compares it with the one rule the
       // post-create group uses, so a match names exactly the properties that will share it.
-      const found = await duplicateCheck(
+      const outcome = await createAfterWarning(
         (parts) =>
           api<AddressMatch[]>('/api/properties/address-duplicates', {
             address: parts,
           }),
         address,
         duplicates,
+        () => {
+          const mode = facts.listing_mode;
+          delete facts.listing_mode;
+          return api<{
+            id: string;
+            summary?: PropertySummary | null;
+            contact?: ContactRecord;
+            address?: AddressCrosswalk;
+          }>('/api/properties', {
+            mode,
+            facts,
+            address,
+            // Sent as the same pair the record's own capture form asks for; the server records it
+            // through the one guarded contact operation.
+            ...(contactName && contactPhone
+              ? { contact: { display_name: contactName, phone: contactPhone } }
+              : {}),
+          });
+        },
       );
-      if ('denied' in found) {
-        onDenied(found.denied);
+      if ('denied' in outcome) {
+        onDenied(outcome.denied);
         return;
       }
-      if (found.matches.length) {
-        setDuplicates(found.matches);
+      if ('matches' in outcome) {
+        setDuplicates(outcome.matches);
         setBusy(false);
         return;
       }
-      const mode = facts.listing_mode;
-      delete facts.listing_mode;
-      const result = await api<{
-        id: string;
-        summary?: PropertySummary | null;
-        contact?: ContactRecord;
-        address?: AddressCrosswalk;
-      }>('/api/properties', {
-        mode,
-        facts,
-        address,
-        // Sent as the same pair the record's own capture form asks for; the server records it
-        // through the one guarded contact operation.
-        ...(contactName && contactPhone
-          ? { contact: { display_name: contactName, phone: contactPhone } }
-          : {}),
-      });
+      const result = outcome.created;
       // The new record enters the browser's catalogue from the server's own answer, so the list
       // already holds it when the person returns from the record they just created.
       applyServerSummary(applyChange, result, result.id);

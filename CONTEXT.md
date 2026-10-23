@@ -141,7 +141,7 @@ The unarchived properties whose primary address carries the same recorded addres
 _Avoid_: Duplicate property, automatic duplicate
 
 **Address already recorded**:
-The warning shown before a property is created when the address the save is about to store is already recorded, naming the unarchived properties that sit there with a link to open each. It informs and never blocks: a second property at the same building is an ordinary case, so the confirmation that creates anyway is one deliberate step, and an address nobody records creates with no added step at all. A match is decided by the same normalised address comparison the duplicate address group uses, on the address text the save will actually store.
+The warning shown before a property is created when the address the save is about to store is already recorded, naming the unarchived properties that sit there with a link to open each. It informs and never blocks: a second property at the same building is an ordinary case, so the confirmation that creates anyway is one deliberate step, and an address nobody records creates with no added step at all. A match is decided by the same normalised address comparison the duplicate address group uses, on the address text the save will actually store, and on the same primary-address basis the group reads: an address created as non-primary joins no group and is not warned about.
 _Avoid_: Address blocked, duplicate prevention, uniqueness check
 
 **Property merge**:

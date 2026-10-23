@@ -9,6 +9,9 @@
 -- the merge already use. Nothing here restates either rule, so the warning and the group can never
 -- disagree about what counts as a duplicate.
 --
+-- It is also the same primary-address basis: the group is made of each record's primary address, so
+-- a creation that states its address as non-primary joins no group and is answered nothing.
+--
 -- The read is a `public` invoker function, like the group read: ordinary row-level security decides
 -- which properties are visible, so a warning never names a record the person may not open. It
 -- answers only what naming and opening one needs - the identity and the recorded code - and never
@@ -30,6 +33,11 @@ declare
 begin
   if private.employee_id() is null then
     raise exception 'active employee required' using errcode = '42501';
+  end if;
+  -- The group compares primary addresses only, so this read names nothing for a creation that
+  -- states no primary address: it would join no group, and a warning it cannot act on is a step.
+  if p_address->>'is_primary' is distinct from 'true' then
+    return '[]'::jsonb;
   end if;
   key := private.address_match_key(private.composed_address_text(
     jsonb_populate_record(null::public.property_addresses, coalesce(p_address, '{}'::jsonb))));
