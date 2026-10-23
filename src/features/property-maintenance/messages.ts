@@ -32,8 +32,15 @@ const copy = {
     'Current addresses have no district. Missing official units do not prevent saving unverified source information.',
   ],
   legacyHint: [
-    'Địa chỉ cũ dùng danh mục trước 2025: chọn tỉnh/thành, quận/huyện, rồi xã/phường cũ. Nội dung địa chỉ đã ghi vẫn được giữ nguyên.',
-    'Legacy addresses use the pre-2025 catalog: choose the old province/city, district, then ward. Recorded address text is kept as it was.',
+    'Địa chỉ cũ dùng danh mục trước 2025: chọn quận/huyện, rồi xã/phường cũ. Nội dung địa chỉ đã ghi vẫn được giữ nguyên.',
+    'Legacy addresses use the pre-2025 catalog: choose the old district, then ward. Recorded address text is kept as it was.',
+  ],
+  // The province is stated, not chosen: the app records one. A record that already stores a province
+  // row keeps exactly what it stored, and the form says so rather than silently replacing it: the row
+  // is the same official province in the catalog generation the address was recorded in.
+  provinceKept: [
+    'Địa chỉ này đã ghi tỉnh/thành phố theo danh mục của nó; giá trị đã ghi được giữ nguyên khi lưu.',
+    'This address already records the province/city from its own catalog generation; the recorded value is kept when you save.',
   ],
   optional: [
     'Để trống thông tin chưa biết. Giá nhập theo đơn vị tỷ, triệu hoặc VND và được lưu bằng VND nguyên; số đo dùng dấu chấm thập phân, không dấu phân cách hàng nghìn.',

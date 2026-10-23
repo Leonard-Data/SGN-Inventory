@@ -1,3 +1,30 @@
+// The business records addresses in one province, so the app states it instead of asking: every
+// picker, dependent list and submitted address names this one official unit, and no surface offers a
+// province choice. One official unit has a row per catalog generation, so a read of the levels
+// beneath it resolves `id` to that unit's row for the generation it is reading, and an address
+// records the row of its own generation. Its name is source data, so it is never translated.
+export const FIXED_PROVINCE = {
+  id: 'cc2ace6d-f3e8-424c-9105-a560983abae0',
+  name: 'Thành phố Hồ Chí Minh',
+} as const;
+
+// The province an address form submits: the stated province, or the one the record already stores,
+// which keeps its recorded value instead of being overwritten by an edit.
+export function statedProvince(recorded: unknown): string {
+  const held = typeof recorded === 'string' ? recorded.trim() : '';
+  return held || FIXED_PROVINCE.id;
+}
+
+// Which of one official unit's rows a read is about: the row whose window covers the stated day, or
+// for no stated day the current generation's. That is how a read of the levels beneath a province or
+// district names one unit across the two catalog generations rather than the version row a caller
+// happened to hold.
+export function generationRow<
+  T extends { valid_from: string; valid_to: string | null },
+>(rows: readonly T[], day: string | null): T | undefined {
+  return rows.find((row) => unitOfferedOn(row, day));
+}
+
 // The two-tier catalog is in force from this date; earlier rows belong to the closed pre-2025
 // three-tier generation and are never offered as a current province or commune.
 export const CURRENT_CATALOG_START = '2025-07-01';
@@ -13,21 +40,27 @@ export type AddressUnits = {
   district: string;
   commune: string;
 };
+// An address form's cleared levels. The province stays the app's stated one: only the levels the
+// pickers had chosen beneath it are cleared, by a format switch or by picking another parent.
 export function clearedUnits(): AddressUnits {
-  return { province: '', district: '', commune: '' };
+  return { province: FIXED_PROVINCE.id, district: '', commune: '' };
 }
 
-// Picking a level clears the levels beneath it once the value actually changes: a ward or district
-// from the previous parent would name a unit that no longer hangs off the chosen one, while
-// re-picking the value already held leaves the recorded units where they are.
-export function pickedProvince(
-  prior: AddressUnits,
+// The province row an address records once a level beneath it is picked: that level's own parent,
+// which is the stated province's row for this address's catalog generation. The database guard
+// requires a district, and a commune, to be parented by the province and district the address
+// records, so the recorded row has to be the one the picked unit actually hangs off. No pick leaves
+// the province exactly as it stands.
+export function pickedProvinceRow(
   province: string,
-): AddressUnits {
-  return prior.province === province
-    ? prior
-    : { province, district: '', commune: '' };
+  picked: { parent_id?: string | null } | undefined,
+): string {
+  return picked?.parent_id ?? province;
 }
+
+// Picking a level clears the levels beneath it once the value actually changes: a ward from the
+// previous district would name a unit that no longer hangs off the chosen one, while re-picking the
+// value already held leaves the recorded units where they are.
 export function pickedDistrict(
   prior: AddressUnits,
   district: string,

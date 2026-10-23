@@ -12,6 +12,11 @@ import {
   offeredAddressLevels,
   parseInventoryFilters,
 } from './filters.ts';
+import { FIXED_PROVINCE } from '../property-maintenance/units.ts';
+
+// The official code of the one province the app records, the identity its catalog rows share across
+// generations.
+const PROVINCE_CODE = '79';
 
 function parse(values: Record<string, string | undefined>) {
   const params = new URLSearchParams();
@@ -35,7 +40,7 @@ test('a complete filter set is applied exactly as the address stated it', () => 
     frontageMax: '12',
     depthMin: '16',
     depthMax: '30.25',
-    province: '11111111-1111-4111-8111-111111111111',
+    province: FIXED_PROVINCE.id,
     ward: '22222222-2222-4222-8222-222222222222',
     contact: '33333333-3333-4333-8333-333333333333',
     createdBy: 'mine',
@@ -55,7 +60,8 @@ test('a complete filter set is applied exactly as the address stated it', () => 
     frontageMax: '12',
     depthMin: '16',
     depthMax: '30.25',
-    province: '11111111-1111-4111-8111-111111111111',
+    // The stated province is not a condition: the app records one province.
+    province: null,
     district: null,
     ward: '22222222-2222-4222-8222-222222222222',
     contact: '33333333-3333-4333-8333-333333333333',
@@ -101,17 +107,21 @@ test('the address format offers two formats and a cleared state the address carr
 });
 
 // The panel keeps every control of the chosen format in place from the moment it opens, so the
-// dependent ones are visible and only wait for the level above them to be chosen.
-test('the panel offers every level of the chosen address format at once', () => {
-  assert.deepEqual(
-    [...offeredAddressLevels('legacy')],
-    ['province', 'district', 'ward'],
-  );
-  assert.deepEqual([...offeredAddressLevels('current')], ['province', 'ward']);
+// dependent ones are visible and only wait for the level above them to be chosen. No level of the
+// panel is a province: the app states the one province it records and every list narrows inside it.
+test('the panel offers the levels beneath the stated province and never a province picker', () => {
+  assert.deepEqual([...offeredAddressLevels('legacy')], ['district', 'ward']);
+  assert.deepEqual([...offeredAddressLevels('current')], ['ward']);
   assert.deepEqual(
     [...offeredAddressLevels(INVENTORY_ADDRESS_FORMAT_ANY)],
-    ['province', 'district', 'ward'],
+    ['district', 'ward'],
   );
+  for (const format of ['legacy', 'current', INVENTORY_ADDRESS_FORMAT_ANY])
+    assert.equal(
+      (offeredAddressLevels(format) as readonly string[]).includes('province'),
+      false,
+      format,
+    );
 });
 
 // The whole-inventory read takes its criteria as optional parameters, so a caller that states no
@@ -294,30 +304,36 @@ test('a bound size is compared exactly, never as a rounded number', () => {
   );
 });
 
-test('a province or ward value is an official unit identity', () => {
-  const province = '11111111-1111-4111-8111-111111111111';
+test('a stated province is the one the app records, and a ward is an official unit identity', () => {
   const ward = '22222222-2222-4222-8222-222222222222';
-  const provinceOnly = parse({ province });
+  // A link that still carries the province keeps working: the stated province is accepted and adds
+  // no condition, because the app records that one province.
+  const provinceOnly = parse({ province: FIXED_PROVINCE.id });
   assert.ok(provinceOnly.ok);
-  assert.equal(provinceOnly.filters.province, province);
+  assert.equal(provinceOnly.filters.province, null);
   assert.equal(provinceOnly.filters.ward, null);
-  const both = parse({ province, ward });
+  const both = parse({ province: FIXED_PROVINCE.id, ward });
   assert.ok(both.ok);
-  assert.equal(both.filters.province, province);
+  assert.equal(both.filters.province, null);
   assert.equal(both.filters.ward, ward);
+  // A link naming another province is refused rather than silently read as this province's filter.
+  assert.equal(
+    parse({ province: '11111111-1111-4111-8111-111111111111' }).ok,
+    false,
+  );
 });
 
-test('a malformed unit and a ward without its province are refused', () => {
+test('a malformed unit is refused and a ward stands without a province', () => {
+  const ward = '22222222-2222-4222-8222-222222222222';
   for (const values of [
     { province: 'ho-chi-minh' },
     { province: '1111' },
-    { ward: '22222222-2222-4222-8222-222222222222' },
-    {
-      province: '11111111-1111-4111-8111-111111111111',
-      ward: 'ward-14',
-    },
+    { province: FIXED_PROVINCE.id, ward: 'ward-14' },
+    { district: 'quan-1' },
   ])
     assert.equal(parse(values).ok, false, JSON.stringify(values));
+  // The province is stated by the app, so a ward or district needs no province beside it.
+  assert.equal(parse({ ward }).ok, true);
 });
 
 test('a contact value is a recorded identity, independent of the area filters', () => {
@@ -446,235 +462,249 @@ test('only set filters become link and RPC parameters', () => {
   );
 });
 
-test('each stated administrative level is its own read parameter', () => {
-  const province = '11111111-1111-4111-8111-111111111111';
+test('each stated level beneath the province is its own read parameter', () => {
   const district = '55555555-5555-4555-8555-555555555555';
   const ward = '22222222-2222-4222-8222-222222222222';
-  assert.deepEqual(
-    filterParams({ ...noInventoryFilters, province, district, ward }),
-    { addressFormat: 'legacy', province, district, ward },
-  );
-  assert.equal(
-    activeFilterCount({ ...noInventoryFilters, province, district, ward }),
-    4,
-  );
-  // A legacy province offers all three levels beneath it, so a province alone is one level stated.
-  assert.deepEqual(filterRpcArgs({ ...noInventoryFilters, province }), {
+  assert.deepEqual(filterParams({ ...noInventoryFilters, district, ward }), {
+    addressFormat: 'legacy',
+    district,
+    ward,
+  });
+  assert.equal(activeFilterCount({ ...noInventoryFilters, district, ward }), 3);
+  // No province travels: the app records one province, so the district and the ward are the levels
+  // a person states.
+  assert.deepEqual(filterRpcArgs({ ...noInventoryFilters, district }), {
     p_address_format: 'legacy',
-    p_province_id: province,
+    p_district_id: district,
   });
   // The levels compose on one address rather than the narrower unit replacing those above it, so
   // every stated level travels.
-  assert.deepEqual(
-    filterRpcArgs({ ...noInventoryFilters, province, district }),
-    {
-      p_address_format: 'legacy',
-      p_province_id: province,
-      p_district_id: district,
-    },
-  );
-  assert.deepEqual(
-    filterRpcArgs({ ...noInventoryFilters, province, district, ward }),
-    {
-      p_address_format: 'legacy',
-      p_province_id: province,
-      p_district_id: district,
-      p_commune_id: ward,
-    },
-  );
-  // A current address has no district level, so its ward is the level beneath the province.
+  assert.deepEqual(filterRpcArgs({ ...noInventoryFilters, district, ward }), {
+    p_address_format: 'legacy',
+    p_district_id: district,
+    p_commune_id: ward,
+  });
+  // A current address has no district level, so its ward is the only level beneath the province.
   assert.deepEqual(
     filterRpcArgs({
       ...noInventoryFilters,
       addressFormat: 'current',
-      province,
       ward,
     }),
     {
       p_address_format: 'current',
-      p_province_id: province,
       p_commune_id: ward,
     },
   );
 });
 
 test('a district is a legacy-level unit of an address filter set', () => {
-  const province = '11111111-1111-4111-8111-111111111111';
   const district = '55555555-5555-4555-8555-555555555555';
-  const stated = parse({ province, district });
+  const stated = parse({ province: FIXED_PROVINCE.id, district });
   assert.ok(stated.ok);
   assert.equal(stated.filters.district, district);
-  // The district and the ward each narrow the province, so neither stands without it.
-  for (const values of [{ district }, { district: 'quan-1' }])
-    assert.equal(parse(values).ok, false, JSON.stringify(values));
+  // The province is stated by the app, so a district stands without one and keeps its own shape.
+  assert.equal(parse({ district }).ok, true);
+  assert.equal(parse({ district: 'quan-1' }).ok, false);
   // The two-tier current generation records no district, so a current-address search that states
   // one is refused rather than read as a filter that matches nothing.
-  assert.equal(
-    parse({ addressFormat: 'current', province, district }).ok,
-    false,
-  );
+  assert.equal(parse({ addressFormat: 'current', district }).ok, false);
   // The cleared format states no format condition, so a district still applies to the addresses
   // that record it.
-  assert.equal(parse({ addressFormat: 'any', province, district }).ok, true);
+  assert.equal(parse({ addressFormat: 'any', district }).ok, true);
 });
 
 test('the catalog check refuses an absent or wrong-level unit', () => {
-  const province = '11111111-1111-4111-8111-111111111111';
   const otherProvince = '44444444-4444-4444-8444-444444444444';
   const ward = '22222222-2222-4222-8222-222222222222';
   const absent = '33333333-3333-4333-8333-333333333333';
+  // The province is one official unit with a row per catalog generation, so the lineage is matched
+  // by its official code: the stated province's own row carries it.
   const units = [
-    { id: province, unit_level: 'province', parent_id: null },
-    { id: otherProvince, unit_level: 'province', parent_id: null },
-    { id: ward, unit_level: 'commune', parent_id: province },
+    {
+      id: FIXED_PROVINCE.id,
+      unit_level: 'province',
+      parent_id: null,
+      official_code: PROVINCE_CODE,
+    },
+    {
+      id: otherProvince,
+      unit_level: 'province',
+      parent_id: null,
+      official_code: '01',
+    },
+    {
+      id: ward,
+      unit_level: 'commune',
+      parent_id: FIXED_PROVINCE.id,
+      official_code: '26734',
+    },
   ];
   assert.equal(
-    catalogUnitsMatch(units, { ...noInventoryFilters, province }),
+    catalogUnitsMatch(units, noInventoryFilters, PROVINCE_CODE),
     true,
   );
   assert.equal(
-    catalogUnitsMatch(units, { ...noInventoryFilters, province, ward }),
+    catalogUnitsMatch(units, { ...noInventoryFilters, ward }, PROVINCE_CODE),
     true,
   );
-  assert.equal(catalogUnitsMatch([], noInventoryFilters), true);
+  assert.equal(catalogUnitsMatch([], noInventoryFilters, PROVINCE_CODE), true);
   assert.equal(
-    catalogUnitsMatch(units, { ...noInventoryFilters, province: ward }),
+    catalogUnitsMatch(
+      units,
+      { ...noInventoryFilters, district: ward },
+      PROVINCE_CODE,
+    ),
     false,
-    'a ward value in the province slot',
+    'a ward value in the district slot',
   );
   assert.equal(
-    catalogUnitsMatch(units, {
-      ...noInventoryFilters,
-      province,
-      ward: province,
-    }),
+    catalogUnitsMatch(
+      units,
+      { ...noInventoryFilters, ward: FIXED_PROVINCE.id },
+      PROVINCE_CODE,
+    ),
     false,
     'a province value in the ward slot',
   );
   assert.equal(
-    catalogUnitsMatch(units, { ...noInventoryFilters, province: absent }),
-    false,
-    'an unknown province',
-  );
-  assert.equal(
-    catalogUnitsMatch(units, {
-      ...noInventoryFilters,
-      province,
-      ward: absent,
-    }),
+    catalogUnitsMatch(
+      units,
+      { ...noInventoryFilters, ward: absent },
+      PROVINCE_CODE,
+    ),
     false,
     'an unknown ward',
   );
+  // A ward of another province is not inside the province the app records.
   assert.equal(
-    catalogUnitsMatch(units, {
-      ...noInventoryFilters,
-      province: otherProvince,
-      ward,
-    }),
+    catalogUnitsMatch(
+      units.map((unit) =>
+        unit.id === ward ? { ...unit, parent_id: otherProvince } : unit,
+      ),
+      { ...noInventoryFilters, ward },
+      PROVINCE_CODE,
+    ),
     false,
-    'a ward from a different province',
+    'a ward from another province',
+  );
+  // Another official unit's row is not the stated province, however it is identified.
+  assert.equal(
+    catalogUnitsMatch(
+      units.map((unit) =>
+        unit.id === FIXED_PROVINCE.id ? { ...unit, official_code: '01' } : unit,
+      ),
+      { ...noInventoryFilters, ward },
+      PROVINCE_CODE,
+    ),
+    false,
+    'a province row of another official unit',
   );
 });
 
 test('the catalog check follows a legacy ward through its district', () => {
-  const province = '11111111-1111-4111-8111-111111111111';
   const otherProvince = '44444444-4444-4444-8444-444444444444';
+  const legacyProvince = '77777777-7777-4777-8777-777777777777';
   const district = '55555555-5555-4555-8555-555555555555';
   const otherDistrict = '66666666-6666-4666-8666-666666666666';
   const ward = '22222222-2222-4222-8222-222222222222';
+  // A legacy address records the pre-2025 row of the stated province, so its district hangs off that
+  // row rather than the current one the app states: both rows are one official unit.
   const units = [
-    { id: province, unit_level: 'province', parent_id: null },
-    { id: otherProvince, unit_level: 'province', parent_id: null },
-    { id: district, unit_level: 'district', parent_id: province },
-    { id: otherDistrict, unit_level: 'district', parent_id: otherProvince },
-    { id: ward, unit_level: 'commune', parent_id: district },
+    {
+      id: FIXED_PROVINCE.id,
+      unit_level: 'province',
+      parent_id: null,
+      official_code: PROVINCE_CODE,
+    },
+    {
+      id: legacyProvince,
+      unit_level: 'province',
+      parent_id: null,
+      official_code: PROVINCE_CODE,
+    },
+    {
+      id: otherProvince,
+      unit_level: 'province',
+      parent_id: null,
+      official_code: '01',
+    },
+    {
+      id: district,
+      unit_level: 'district',
+      parent_id: legacyProvince,
+      official_code: '760',
+    },
+    {
+      id: otherDistrict,
+      unit_level: 'district',
+      parent_id: otherProvince,
+      official_code: '001',
+    },
+    {
+      id: ward,
+      unit_level: 'commune',
+      parent_id: district,
+      official_code: '26734',
+    },
   ];
   assert.equal(
-    catalogUnitsMatch(units, { ...noInventoryFilters, province, ward }),
+    catalogUnitsMatch(units, { ...noInventoryFilters, ward }, PROVINCE_CODE),
     true,
-    'the legacy ward, its district and the legacy province the district names',
-  );
-  assert.equal(
-    catalogUnitsMatch(units, { ...noInventoryFilters, province }),
-    true,
-    'the legacy province alone',
-  );
-  assert.equal(
-    catalogUnitsMatch(units, {
-      ...noInventoryFilters,
-      province: otherProvince,
-      ward,
-    }),
-    false,
-    'a legacy ward under a district of a different legacy province',
-  );
-  assert.equal(
-    catalogUnitsMatch(units, { ...noInventoryFilters, province: district }),
-    false,
-    'a district value in the province slot',
+    'the legacy ward, its district and the legacy row of the stated province',
   );
   assert.equal(
     catalogUnitsMatch(
       units.filter((unit) => unit.id !== district),
-      {
-        ...noInventoryFilters,
-        province,
-        ward,
-      },
+      { ...noInventoryFilters, ward },
+      PROVINCE_CODE,
     ),
     false,
     'a legacy ward whose district was not read',
   );
   // A stated district is a level of its own: inside the stated province, and the ward's own parent.
   assert.equal(
-    catalogUnitsMatch(units, { ...noInventoryFilters, province, district }),
+    catalogUnitsMatch(
+      units,
+      { ...noInventoryFilters, district },
+      PROVINCE_CODE,
+    ),
     true,
     'the district inside its province',
   );
   assert.equal(
-    catalogUnitsMatch(units, {
-      ...noInventoryFilters,
-      province: otherProvince,
-      district,
-    }),
-    false,
-    'a district from a different province',
-  );
-  assert.equal(
-    catalogUnitsMatch(units, {
-      ...noInventoryFilters,
-      province,
-      district: ward,
-    }),
+    catalogUnitsMatch(
+      units,
+      { ...noInventoryFilters, district: ward },
+      PROVINCE_CODE,
+    ),
     false,
     'a ward value in the district slot',
   );
   assert.equal(
-    catalogUnitsMatch(units, {
-      ...noInventoryFilters,
-      province,
-      district: otherDistrict,
-    }),
+    catalogUnitsMatch(
+      units,
+      { ...noInventoryFilters, district: otherDistrict },
+      PROVINCE_CODE,
+    ),
     false,
     'a district of another province',
   );
   assert.equal(
-    catalogUnitsMatch(units, {
-      ...noInventoryFilters,
-      province,
-      district,
-      ward,
-    }),
+    catalogUnitsMatch(
+      units,
+      { ...noInventoryFilters, district, ward },
+      PROVINCE_CODE,
+    ),
     true,
-    'the legacy province, district and ward together',
+    'the stated province, district and ward together',
   );
   assert.equal(
-    catalogUnitsMatch(units, {
-      ...noInventoryFilters,
-      province,
-      district: otherDistrict,
-      ward,
-    }),
+    catalogUnitsMatch(
+      units,
+      { ...noInventoryFilters, district: otherDistrict, ward },
+      PROVINCE_CODE,
+    ),
     false,
     'a ward outside the stated district',
   );

@@ -10,7 +10,12 @@ import {
   type ComboboxOption,
 } from './combobox';
 
-export type UnitChoice = UnitOption & { id: string };
+export type UnitChoice = UnitOption & {
+  id: string;
+  // The unit above this one, when the list carries it: a province's own row is the one an address
+  // records beside the district or commune picked beneath it.
+  parent_id?: string | null;
+};
 
 // The official-unit picker: a text field that narrows the catalog as a person types. Only a
 // listed unit can be committed — free text is never accepted, and a query that matches nothing

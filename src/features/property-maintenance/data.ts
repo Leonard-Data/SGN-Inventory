@@ -10,7 +10,7 @@ import {
   type Target,
 } from './fields';
 import { isReportDate } from '@/features/employees/report-range';
-import { offeredUnits } from './units';
+import { generationRow, offeredUnits, unitOfferedOn } from './units';
 import {
   crosswalkRecorded,
   offeredCrosswalkRow,
@@ -444,6 +444,7 @@ export async function listUnits(
     (include !== null && !uuid(include))
   )
     throw new ApiError(400, 'invalid-input');
+  const parentId = parent ? await generationParent(context, parent, on) : null;
   let request = context.client
     .from('admin_unit_versions')
     .select('id,name_vi,unit_level,parent_id,valid_from,valid_to')
@@ -451,7 +452,7 @@ export async function listUnits(
     .order('name_vi')
     .order('valid_from', { ascending: false })
     .limit(1000);
-  if (parent) request = request.eq('parent_id', parent);
+  if (parentId) request = request.eq('parent_id', parentId);
   // A level whose parent is not chosen yet lists nothing; only the recorded unit it names comes
   // back, which is how a ward recorded under a district the form no longer holds still resolves.
   else if (level !== 'province' && include) request = request.eq('id', include);
@@ -473,6 +474,34 @@ export async function listUnits(
     if (recorded) offers.push(recorded);
   }
   return { units: offers };
+}
+
+// The identifier the levels beneath a stated parent hang off, for the generation the read is about.
+// One official unit has a row per catalog generation, so the parent a caller names may be that
+// unit's row for the other one: a province held from the current list still reads its pre-2025
+// districts on a legacy day, and a legacy province still reads the current communes. The stated row
+// itself answers whenever its own window covers the read, so a recorded unit is never translated
+// away from the list it belongs to.
+async function generationParent(
+  context: RouteContext,
+  parent: string,
+  on: string | null,
+): Promise<string> {
+  const { data, error } = await context.client
+    .from('admin_unit_versions')
+    .select('id,official_code,unit_level,valid_from,valid_to')
+    .eq('id', parent)
+    .maybeSingle();
+  databaseError(error);
+  if (!data || unitOfferedOn(data, on)) return parent;
+  const { data: rows, error: siblingError } = await context.client
+    .from('admin_unit_versions')
+    .select('id,valid_from,valid_to')
+    .eq('unit_level', data.unit_level)
+    .eq('official_code', data.official_code)
+    .limit(1000);
+  databaseError(siblingError);
+  return generationRow(rows ?? [], on)?.id ?? parent;
 }
 export async function historyPage(
   context: RouteContext,

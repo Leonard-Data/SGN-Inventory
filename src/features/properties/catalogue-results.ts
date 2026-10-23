@@ -22,13 +22,10 @@ import {
 import type { PropertySummary } from './types.ts';
 
 // The filters the summaries carry no field for: an official administrative-unit identity and a
-// recorded contact identity are names in the database's own catalog, not text the summary holds.
-export const ADVANCED_FILTER_KEYS = [
-  'province',
-  'district',
-  'ward',
-  'contact',
-] as const;
+// recorded contact identity are names in the database's own catalog, not text the summary holds. The
+// province is not one of them: the app records one province, so a stated province is no condition
+// (`parseInventoryFilters` drops it) and it never asks the loaded catalogue for anything.
+export const ADVANCED_FILTER_KEYS = ['district', 'ward', 'contact'] as const;
 
 // The filters of a stated set the loaded catalogue cannot answer. Empty means every stated filter
 // is one the summaries can apply locally.
