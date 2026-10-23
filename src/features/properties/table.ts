@@ -14,6 +14,7 @@ import {
   vietnamDate,
 } from './format.ts';
 import type { AddressSummary, PropertySummary } from './types.ts';
+import type { InventorySortField } from './stream.ts';
 
 // Exactly the ten columns the captain asked for, in this order.
 export const TABLE_COLUMNS = [
@@ -31,6 +32,8 @@ export const TABLE_COLUMNS = [
 export type TableColumn = (typeof TABLE_COLUMNS)[number];
 
 // The summary groups the existing facts; the full record still exposes every source field.
+export type SummaryColumn = (typeof SUMMARY_TABLE_COLUMNS)[number];
+
 export const SUMMARY_TABLE_COLUMNS = [
   'property',
   'address',
@@ -44,6 +47,36 @@ export const SUMMARY_TABLE_COLUMNS = [
   'modifiedTime',
   'actions',
 ] as const;
+
+// The heading each column is announced and labelled with, by column, so a new column cannot shift
+// every heading beside it.
+export const SUMMARY_HEADINGS: Record<SummaryColumn, MessageKey> = {
+  property: 'columnPropertyId',
+  address: 'address',
+  price: 'columnPrice',
+  totalArea: 'columnTotalArea',
+  frontage: 'frontage',
+  depth: 'depth',
+  floors: 'floors',
+  creator: 'createdBy',
+  status: 'columnStatus',
+  modifiedTime: 'columnModifiedTime',
+  actions: 'recordActions',
+};
+
+// The columns a header orders by, and the read's own name for each. Property, address, floors,
+// creator and actions are not stated here: the read has no ordering for them, and a header that
+// cannot order is not offered as one.
+export const SUMMARY_SORT_FIELDS: Partial<
+  Record<SummaryColumn, InventorySortField>
+> = {
+  price: 'price',
+  totalArea: 'area',
+  frontage: 'frontage',
+  depth: 'depth',
+  status: 'status',
+  modifiedTime: 'changed',
+};
 
 // The heading each column is announced and labelled with.
 export const COLUMN_HEADINGS: Record<TableColumn, MessageKey> = {

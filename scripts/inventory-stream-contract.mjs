@@ -1063,5 +1063,252 @@ export async function inventoryStreamContract({
     },
   );
 
+  // The table's headers order by their own column. A dedicated set of six rows states
+  // each sortable value, one of every workflow status, a shared price, and rows that record no
+  // price, no area, no frontage and no depth - enough to prove the column orderings, that a missing
+  // value sorts last whichever way the column runs, and that the identity decides a tie.
+  const columnRows = [
+    {
+      id: id('c1'),
+      code: 'SGN-SRTF-01',
+      mode: 'sale',
+      price: 500_000_000,
+      sale: 500_000_000,
+      rent: null,
+      floor: null,
+      land: 100,
+      frontage: 4,
+      depth: 20,
+      status: 'available',
+      changed: 1,
+    },
+    {
+      id: id('c2'),
+      code: 'SGN-SRTF-02',
+      mode: 'sale',
+      price: 500_000_000,
+      sale: 500_000_000,
+      rent: null,
+      floor: 80,
+      land: 100,
+      frontage: null,
+      depth: null,
+      status: 'negotiating',
+      changed: 2,
+    },
+    // A rent listing leads with its monthly rent, exactly as its row states the price.
+    {
+      id: id('c3'),
+      code: 'SGN-SRTF-03',
+      mode: 'rent',
+      price: 25_000_000,
+      sale: null,
+      rent: 25_000_000,
+      floor: 60,
+      land: 60,
+      frontage: 6,
+      depth: 12,
+      status: 'draft',
+      changed: 3,
+    },
+    {
+      id: id('c4'),
+      code: 'SGN-SRTF-04',
+      mode: 'sale',
+      price: null,
+      sale: null,
+      rent: null,
+      floor: null,
+      land: null,
+      frontage: 8,
+      depth: 18,
+      status: 'sold',
+      changed: 4,
+    },
+    {
+      id: id('c5'),
+      code: 'SGN-SRTF-05',
+      mode: 'sale',
+      price: 900_000_000,
+      sale: 900_000_000,
+      rent: null,
+      floor: 200,
+      land: 200,
+      frontage: null,
+      depth: 24,
+      status: 'rented',
+      changed: 5,
+    },
+    {
+      id: id('c6'),
+      code: 'SGN-SRTF-06',
+      mode: 'sale',
+      price: 100_000_000,
+      sale: 100_000_000,
+      rent: null,
+      floor: 40,
+      land: 50,
+      frontage: 10,
+      depth: 30,
+      status: 'withdrawn',
+      changed: 6,
+    },
+  ];
+  const baseChange = Date.parse('2026-09-20T00:00:00.000Z');
+  await asOwner();
+  await db.exec('alter table public.properties disable trigger property_guard');
+  for (const row of columnRows)
+    await db.query(
+      `insert into public.properties(id,property_code,listing_mode,status,property_type,sale_price_vnd,monthly_rent_vnd,land_area_m2,floor_area_m2,frontage_m,depth_m,created_by,entry_on,entry_source,created_at,updated_at)
+      values ($1,$2,$3,$4,'house',$5,$6,$7,$8,$9,$10,$11,null,'unknown',$12,$13)`,
+      [
+        row.id,
+        row.code,
+        row.mode,
+        row.status,
+        row.sale,
+        row.rent,
+        row.land,
+        row.floor,
+        row.frontage,
+        row.depth,
+        sales,
+        new Date(baseChange),
+        new Date(baseChange + row.changed * 3_600_000),
+      ],
+    );
+  await db.exec('alter table public.properties enable trigger property_guard');
+  // The one order each column states, computed from the fixtures with the read's own rule: a
+  // missing value sorts last in both directions and the identity decides what is left.
+  const WORKFLOW = [
+    'draft',
+    'available',
+    'negotiating',
+    'sold',
+    'rented',
+    'withdrawn',
+  ];
+  const columnOrder = (pick, direction) =>
+    [...columnRows]
+      .sort((left, right) => {
+        const a = pick(left);
+        const b = pick(right);
+        // A missing value sorts last whichever way the column runs, and the identity decides the
+        // rest - including a tie between two records that state nothing.
+        const order =
+          a === null || b === null
+            ? a === null
+              ? b === null
+                ? 0
+                : 1
+              : -1
+            : a === b
+              ? 0
+              : direction === 'asc'
+                ? a - b
+                : b - a;
+        if (order !== 0) return order;
+        return direction === 'asc'
+          ? left.id.localeCompare(right.id)
+          : right.id.localeCompare(left.id);
+      })
+      .map((row) => row.id);
+  const COLUMN_KEYS = [
+    ['price', (row) => row.price],
+    ['area', (row) => row.floor ?? row.land],
+    ['frontage', (row) => row.frontage],
+    ['depth', (row) => row.depth],
+    ['status', (row) => WORKFLOW.indexOf(row.status)],
+    ['changed', (row) => row.changed],
+  ];
+
+  await asUser(0);
+  for (const [field, pick] of COLUMN_KEYS)
+    for (const direction of ['asc', 'desc']) {
+      const order = `${field}-${direction}`;
+      const expected = columnOrder(pick, direction);
+      await check(
+        `the ${order} stream is that column's total order, with missing values last`,
+        async () => {
+          const first = await read({ order, query: 'srtf', limit: 2 });
+          assert.equal(first.total, expected.length);
+          assert.deepEqual(
+            first.rows.map((row) => row.id),
+            expected.slice(0, 2),
+          );
+          // The window boundary falls inside the tie the identity decides, so consecutive fetches
+          // neither repeat nor drop a row.
+          const seen = [];
+          for (let offset = 0; offset < expected.length; offset += 2)
+            seen.push(
+              ...(await read({ order, query: 'srtf', offset, limit: 2 })).rows,
+            );
+          assert.deepEqual(
+            seen.map((row) => row.id),
+            expected,
+            `${order} order`,
+          );
+          assert.equal(new Set(seen.map((row) => row.id)).size, seen.length);
+        },
+      );
+    }
+
+  await check(
+    'a column ordering is the ordinary browse, not the eligible-status chronology',
+    async () => {
+      // Every workflow status is in this set: a column ordering reorders the ordinary browse, which
+      // an unarchived record is in whatever its status. Only the entry chronology narrows the
+      // statuses, and it still does.
+      const byPrice = await read({
+        order: 'price-asc',
+        query: 'srtf',
+        limit: 20,
+      });
+      assert.equal(byPrice.total, columnRows.length);
+      const draft = byPrice.rows.find((row) => row.id === columnRows[2].id);
+      assert.ok(draft, 'the draft record is listed');
+      const sold = byPrice.rows.find((row) => row.id === columnRows[3].id);
+      assert.ok(sold, 'the sold record is listed');
+      // The chronology keeps its own boundary: of these six rows only the available and the
+      // negotiating one are eligible, and the other four are absent from it entirely.
+      const chronology = await read({
+        order: 'oldest',
+        query: 'srtf',
+        limit: 20,
+      });
+      const eligible = columnRows
+        .filter((row) => ['available', 'negotiating'].includes(row.status))
+        .map((row) => row.id)
+        .sort();
+      assert.deepEqual(chronology.rows.map((row) => row.id).sort(), eligible);
+      assert.equal(chronology.total, eligible.length);
+    },
+  );
+
+  await check(
+    'a column ordering without the identity tie-break would not be a total order',
+    async () => {
+      // Two records state the same price, and a window of one walks both of them: the order is the
+      // value and then the identity, so the two windows are the same pair in the same sequence.
+      const first = await read({
+        order: 'price-asc',
+        query: 'srtf',
+        offset: 2,
+        limit: 1,
+      });
+      const second = await read({
+        order: 'price-asc',
+        query: 'srtf',
+        offset: 3,
+        limit: 1,
+      });
+      const tied = columnRows
+        .filter((row) => row.price === 500_000_000)
+        .map((row) => row.id)
+        .sort((left, right) => left.localeCompare(right));
+      assert.deepEqual([first.rows[0].id, second.rows[0].id], tied);
+    },
+  );
+
   await asOwner();
 }

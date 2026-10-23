@@ -57,6 +57,7 @@ test('switching the view keeps the search, the ordering and the filters', () => 
     query: 'le loi',
     sort: 'newest',
     view: 'table',
+    hide: null,
     filters,
   });
   assert.deepEqual(
@@ -76,6 +77,7 @@ test('switching the view keeps the search, the ordering and the filters', () => 
     query: 'le loi',
     sort: 'newest',
     view: 'cards',
+    hide: null,
     filters,
   });
   assert.deepEqual(
@@ -103,6 +105,7 @@ test('switching the view keeps the search, the ordering and the filters', () => 
     query: '',
     sort: null,
     view: 'table',
+    hide: null,
     filters: noInventoryFilters,
   });
   assert.equal(plain, '/properties?query=&addressFormat=legacy');

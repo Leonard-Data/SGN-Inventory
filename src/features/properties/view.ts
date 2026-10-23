@@ -3,6 +3,7 @@
 // ordering and the filters, so switching views keeps the result set the person narrowed down and
 // applying a filter keeps the view they chose. A view never changes the read.
 import { filterParams, type InventoryFilters } from './filters.ts';
+import { HIDE_PARAM } from './columns.ts';
 
 export type InventoryView = 'cards' | 'table';
 
@@ -68,22 +69,26 @@ export function inventoryViewParam(view: InventoryView): string | null {
   return view === DEFAULT_INVENTORY_VIEW ? null : view;
 }
 
-// The address of one result set: the search, the ordering, the filters and the view, in one
-// place, so a link that changes one of them keeps the rest. The default view is left out so the
-// ordinary address stays the short one.
+// The address of one result set: the search, the ordering, the hidden columns, the filters and the
+// view, in one place, so a link that changes one of them keeps the rest. The default view and the
+// unstated hidden columns are left out so the ordinary address stays the short one.
 export function inventoryHref({
   query,
   sort,
   view,
+  hide,
   filters,
 }: {
   query: string;
   sort: string | null;
   view: InventoryView;
+  // The columns the person hid, already stated as the address states them.
+  hide: string | null;
   filters: InventoryFilters;
 }): string {
   const params = new URLSearchParams({ query });
   if (sort) params.set('sort', sort);
+  if (hide) params.set(HIDE_PARAM, hide);
   const stated = inventoryViewParam(view);
   if (stated) params.set('view', stated);
   for (const [name, value] of Object.entries(filterParams(filters)))

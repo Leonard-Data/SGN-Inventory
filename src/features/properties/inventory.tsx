@@ -11,6 +11,7 @@ import {
   type FormEvent,
 } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { messages, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { sessionScope } from '@/features/employees/protected-load';
@@ -18,7 +19,7 @@ import type { EmployeeSession } from '@/features/employees/types';
 import { SkeletonCards } from '@/features/skeleton';
 import { CardChunk } from './property-cards';
 import { PropertyDrawer } from './property-drawer';
-import { TableChunk, TableHead } from './property-table';
+import { ColumnMenu, TableChunk, TableHead } from './property-table';
 import { SearchIsland } from './search-island';
 import { useInventoryStream } from './use-inventory-stream';
 import { useCatalogue } from './catalogue-provider';
@@ -66,7 +67,19 @@ import {
   streamOffsets,
   streamWindows,
 } from './stream';
-import { SUMMARY_TABLE_COLUMNS } from './table';
+import {
+  HIDE_PARAM,
+  hiddenColumns,
+  hideParam,
+  shownColumns,
+  toggleColumn,
+} from './columns';
+import type { SummaryColumn } from './table';
+import {
+  isEntryOrder,
+  nextColumnOrder,
+  type InventorySortField,
+} from './stream';
 import type { PropertySummary } from './types';
 
 const NO_MEASURED: ReadonlyMap<number, number> = new Map();
@@ -146,16 +159,25 @@ export function Inventory({
   initialQuery,
   view,
   sort,
+  hide,
   filters,
 }: {
   initialLocale: Locale;
   initialQuery: string;
   view: string | null;
   sort: string | null;
+  // The columns the person hid, as the address states them.
+  hide: string | null;
   filters: InventoryFilters;
 }) {
   const text = messages[initialLocale];
   const locale = initialLocale;
+  const router = useRouter();
+  // The columns the table draws, and the address value that states them. A hidden column is
+  // neither a heading nor a cell, so the two stay in step whatever is hidden.
+  const hidden = useMemo(() => hiddenColumns(hide), [hide]);
+  const hideValue = hideParam(hidden);
+  const visibleColumns = useMemo(() => shownColumns(hidden), [hidden]);
   const parsedView = parseInventoryView(view);
   const requestedView = parsedView.ok
     ? parsedView.view
@@ -178,8 +200,34 @@ export function Inventory({
     query: initialQuery,
     sort,
     view: requestedView,
+    hide: hideValue,
     filters,
   });
+  // A header click cycles the columns ordering; the address is the one place it is kept, so a
+  // reload or a shared link reads the order the header was left in. Hiding a column is the same
+  // kind of change: the address states the hidden set and the stream keeps its rows.
+  function sortBy(field: InventorySortField) {
+    router.push(
+      inventoryHref({
+        query: initialQuery,
+        sort: nextColumnOrder(sort, field),
+        view: requestedView,
+        hide: hideValue,
+        filters,
+      }),
+    );
+  }
+  function toggleShown(column: SummaryColumn) {
+    router.push(
+      inventoryHref({
+        query: initialQuery,
+        sort,
+        view: requestedView,
+        hide: hideParam(toggleColumn(hidden, column)),
+        filters,
+      }),
+    );
+  }
   const endpoint = searchEndpoint({ query: initialQuery, sort, filters });
   // The session is this surface's own protection: the shell reads it, and the stream below reads
   // nothing under any scope but the one in force - this surface's own once it has answered, and the
@@ -702,7 +750,7 @@ export function Inventory({
     return indexes;
   }, [band.first, band.last, chunkCount]);
 
-  const showEntry = order !== null;
+  const showEntry = isEntryOrder(order);
   // The quick view states the caller's own permissions, so a row's controls are live only once this
   // surface's session has answered. A list painted from the held catalogue shows them unavailable
   // until then, instead of taking a click that opens nothing.
@@ -881,6 +929,9 @@ export function Inventory({
                 </button>
               </div>
               {sort ? <input type="hidden" name="sort" value={sort} /> : null}
+              {hideValue ? (
+                <input type="hidden" name={HIDE_PARAM} value={hideValue} />
+              ) : null}
               {viewParam ? (
                 <input type="hidden" name="view" value={viewParam} />
               ) : null}
@@ -914,6 +965,15 @@ export function Inventory({
                 </span>
               ) : null}
             </button>
+            {shownView === 'table' ? (
+              // The column control belongs to the table whose columns it hides, so it is offered
+              // where the table is drawn and not on a phone, which is answered with cards.
+              <ColumnMenu
+                locale={locale}
+                hidden={hidden}
+                onToggle={toggleShown}
+              />
+            ) : null}
             {wide ? (
               // The switch is icon-only: each link's name lives in its visually hidden label, so
               // the visible control is a grid and a table and nothing else.
@@ -924,6 +984,7 @@ export function Inventory({
                     query: initialQuery,
                     sort,
                     view: 'cards',
+                    hide: hideValue,
                     filters,
                   })}
                   prefetch={false}
@@ -952,6 +1013,7 @@ export function Inventory({
                     query: initialQuery,
                     sort,
                     view: 'table',
+                    hide: hideValue,
                     filters,
                   })}
                   prefetch={false}
@@ -980,6 +1042,7 @@ export function Inventory({
             query={initialQuery}
             sort={sort}
             view={requestedView}
+            hide={hideValue}
             filters={filters}
             open={filtersOpen}
             onOpen={setFiltersOpen}
@@ -1073,7 +1136,9 @@ export function Inventory({
               </button>
             </div>
           ) : null}
-          {sort ? <p className="search-hint">{text.ageHint}</p> : null}
+          {isEntryOrder(sort) ? (
+            <p className="search-hint">{text.ageHint}</p>
+          ) : null}
           {searchError ? (
             <p className="search-hint" role="alert">
               {text.queryTooLong}
@@ -1093,6 +1158,7 @@ export function Inventory({
                   query: initialQuery,
                   sort,
                   view: DEFAULT_INVENTORY_VIEW,
+                  hide: hideValue,
                   filters,
                 })}
               >
@@ -1182,6 +1248,7 @@ export function Inventory({
                         query: localQuery,
                         sort,
                         view: requestedView,
+                        hide: hideValue,
                         filters,
                       })}
                     >
@@ -1219,14 +1286,19 @@ export function Inventory({
                     className="inventory-table"
                     aria-label={text.inventory}
                   >
-                    <TableHead locale={locale} />
+                    <TableHead
+                      locale={locale}
+                      shown={visibleColumns}
+                      sort={sort}
+                      onSort={sortBy}
+                    />
                     {band.top > 0 ? (
                       <tbody aria-hidden="true">
                         <tr
                           className="inventory-gap"
                           style={{ height: band.top }}
                         >
-                          <td colSpan={SUMMARY_TABLE_COLUMNS.length} />
+                          <td colSpan={visibleColumns.length} />
                         </tr>
                       </tbody>
                     ) : null}
@@ -1241,6 +1313,7 @@ export function Inventory({
                         resultLocation={resultLocation}
                         addressFormat={addressFormat}
                         matchedFormats={matchedFormats}
+                        shown={visibleColumns}
                         quickView={quickView}
                         onOpen={openDrawer}
                         onMeasured={reportHeight}
@@ -1252,7 +1325,7 @@ export function Inventory({
                           className="inventory-gap"
                           style={{ height: band.bottom }}
                         >
-                          <td colSpan={SUMMARY_TABLE_COLUMNS.length} />
+                          <td colSpan={visibleColumns.length} />
                         </tr>
                       </tbody>
                     ) : null}
