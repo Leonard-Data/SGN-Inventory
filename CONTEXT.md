@@ -137,15 +137,15 @@ The recorded relationship between a property and a contact, such as owner or bro
 _Avoid_: Contact inferred from sheet position
 
 **Duplicate address group**:
-The unarchived properties any of whose addresses carries the same recorded address text after the same lowercased, accent-folded normalisation inventory search uses. Membership states that a decision is needed; it never means the records are the same property, because separate units in one house are an ordinary case.
+The unarchived properties whose primary address carries the same recorded address text after the same lowercased, accent-folded normalisation inventory search uses. Membership states that a decision is needed; it never means the records are the same property, because separate units in one house are an ordinary case.
 _Avoid_: Duplicate property, automatic duplicate
 
 **Address already recorded**:
-The warning shown before a property is created when the address the save is about to store is already recorded, naming the unarchived properties that sit there with a link to open each. It appears in the application's modal warning dialog, so it cannot be missed or answered by accident. It informs and never blocks: a second property at the same building is an ordinary case, so the confirmation that creates anyway is one deliberate step, and an address nobody records creates with no added step at all. A match is decided by the same normalised address comparison the duplicate address group uses, on the address text the save will actually store, and against every address a record holds rather than only the one it marks primary: an address created as non-primary is warned about and grouped like any other.
+The warning shown before a property is created when the address the save is about to store is already recorded, naming the unarchived properties that sit there with a link to open each. It appears in the application's modal warning dialog, so it cannot be missed or answered by accident. It informs and never blocks: a second property at the same building is an ordinary case, so the confirmation that creates anyway is one deliberate step, and an address nobody records creates with no added step at all. A match is decided by the same normalised address comparison the duplicate address group uses, on the address text the save will actually store, and against every address a record holds rather than only the one it marks primary, so an address created as non-primary is warned about like any other. Deliberately wider than the group: the group and the merge it serves stay on primary addresses, because a group whose merge was then refused would be a broken affordance.
 _Avoid_: Address blocked, duplicate prevention, uniqueness check
 
 **Property merge**:
-The deliberate manager/admin decision that folds every other record in a duplicate address group into the group's most complete record, moving their photos, documents, history and contact links onto it and archiving the folded records. The merge proves its own connected set over the records' primary addresses, so a group the duplicate reads publish only through a non-primary address is refused rather than folded.
+The deliberate manager/admin decision that folds every other record in a duplicate address group into the group's most complete record, moving their photos, documents, history and contact links onto it and archiving the folded records. The group and the merge keep one basis — the records' primary addresses — so the merge's own connected-set proof always covers exactly the set the group published.
 _Avoid_: Automatic deduplication, import merge rule
 
 **Folded property**:

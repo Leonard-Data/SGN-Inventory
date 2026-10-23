@@ -13,6 +13,31 @@ shipped is implemented in the code on `main`; where a real-browser or hosted acc
 executed, that is stated in the entry rather than left implied. Correspondence between a feature and
 what was *verified* is in [testing.md](testing.md).
 
+## 23 October 2026 — the duplicate warning covers every address a record holds
+
+### A duplicate is warned about whatever address a record files it under (captain request)
+
+Before a property is created, the form names the records already sitting at the address being saved.
+That warning now compares the composed address against **every** address a record holds instead of
+only the one it marks primary, so a record whose address was recorded as the alternate one is named
+too — the captain's decision of 23 October 2026, "2 all is duplicate warning". The composition and
+the comparison are the same functions inventory search and address saving already use, so nothing new
+decides what counts as the same address.
+
+The post-create shared-address group is deliberately narrower and stays that way: it still reads
+primary addresses only, because it exists to serve a merge whose own proof is over primary addresses.
+A group a person can see but whose Merge control is then refused is a broken affordance; a warning
+that names one record too many costs them a glance, while a merge that cannot run costs them trust.
+Widening the group together with that guard is follow-up work.
+
+_Why it matters:_ a duplicate recorded under the alternate address is the same duplicate, and the
+person creating the second record can now see it before saving instead of finding out later.
+
+_Known gap:_ embedded contract coverage only
+(`scripts/address-duplicate-warning-contract.mjs`, in `npm run test:schema`); no browser or hosted run
+has created against a non-primary address, and the staging gate in [testing.md](testing.md) records
+that observation.
+
 ## 23 October 2026 — the street field suggests the names the captain supplied
 
 ### A street is picked from a suggestion list or typed by hand (captain request)

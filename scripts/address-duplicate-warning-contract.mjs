@@ -5,13 +5,16 @@ import assert from 'node:assert/strict';
 // unarchived properties the caller may already read, and answers nothing for an address nobody
 // records. Nothing here creates, blocks or changes a record.
 //
-// The captain's decision (23 October 2026): "2 all is duplicate warning". Both sides compare the
-// composed text against every address a record holds, not only the one it marks primary, and the
-// non-primary cases below pin that basis in both directions.
+// The captain's decision (23 October 2026): "2 all is duplicate warning". The pre-create read
+// compares the composed text against every address a record holds, not only the one it marks
+// primary. The post-create group keeps its primary-address basis, because it exists to serve a
+// merge that proves its connected set over primary addresses; the cases below pin that difference
+// in both directions rather than assuming the two sides agree.
 //
-// Issue #280 pins the two together: for one fixture, the read a creation asks about its address and
-// the group of the record that creation becomes are driven against each other in both directions,
-// so a change to one side alone fails here instead of leaving both quietly wrong.
+// Issue #280 pins the two together where they must agree: for a primary-address fixture, the read a
+// creation asks about its address and the group of the record that creation becomes are driven
+// against each other, so a change to the shared rule fails here instead of leaving both quietly
+// wrong.
 export async function addressDuplicateWarningContract({
   db,
   asUser,
@@ -109,7 +112,7 @@ export async function addressDuplicateWarningContract({
     ).rows[0].text;
   // A save stores the composition of the parts it was given, so a record built from stated parts
   // is inserted with exactly the text the creation read compares against. `isPrimary` is the mark
-  // the record puts on it, which the two reads must no longer care about.
+  // the record puts on it: the warning reads it either way, the group does not.
   const savedAddress = async (propertyId, address, isPrimary = true) =>
     db.query(
       `insert into public.property_addresses(property_id,format,address_text,house_number,street,
@@ -128,18 +131,19 @@ export async function addressDuplicateWarningContract({
       ],
     );
   const codes = (rows) => rows.map((row) => row.propertyCode).sort();
-  // Both callers on one fixture: what the read names for the parts a creation states must be
-  // exactly the group of the record the same creation becomes, and both must name the expected
-  // records.
+  const group = async (propertyId) =>
+    (
+      await db.query('select public.property_address_group($1) as grp', [
+        propertyId,
+      ])
+    ).rows[0].grp;
+  // Both callers on one fixture, for a duplicate reached through primary addresses: what the read
+  // names for the parts a creation states must be exactly the group of the record the same creation
+  // becomes, and both must name the expected records.
   const pair = async (label, address, saved, expected) => {
     await check(label, async () => {
       const warned = codes(await duplicates(address));
-      const group = (
-        await db.query('select public.property_address_group($1) as grp', [
-          saved,
-        ])
-      ).rows[0].grp;
-      assert.deepEqual(warned, codes(group.members));
+      assert.deepEqual(warned, codes((await group(saved)).members));
       assert.deepEqual(warned, expected);
     });
   };
@@ -317,10 +321,11 @@ export async function addressDuplicateWarningContract({
     ['SGN279-ELSEWHERE', 'SGN279-OTHER'],
   );
   // The captain's decision (23 October 2026): "2 all is duplicate warning". Which address a record
-  // marks primary does not decide whether it is a duplicate, so both sides widen to every address a
-  // record holds: a creation stating its address as non-primary is warned about and grouped exactly
-  // as a primary one is, and a non-primary address no other record holds is named by neither side
-  // beyond the record itself.
+  // marks primary does not decide whether the warning names it, so the warning widens to every
+  // address a record holds. The group does not: it serves a merge that only operates on primary
+  // addresses, so a duplicate reached only through a non-primary address is warned about and not
+  // grouped - neither from the record holding it as non-primary nor from the record holding it as
+  // primary.
   await asOwner();
   await db.query(
     `insert into public.properties(id,property_code,listing_mode,property_type,status,created_by)
@@ -331,32 +336,51 @@ export async function addressDuplicateWarningContract({
   await savedAddress(savedNonPrimary, parityParts, false);
   await savedAddress(soloNonPrimary, soloParts, false);
   await asUser(0);
-  await pair(
-    'an address created as non-primary is warned about and grouped like a primary one',
-    { ...parityParts, is_primary: false },
-    savedNonPrimary,
-    [
-      'SGN279-NONPRIMARY',
-      'SGN279-PLAIN',
-      'SGN279-RECORDED',
-      'SGN279-SAVED',
-      'SGN279-TYPED',
-    ],
-  );
+  // (a) A primary-address duplicate is warned about and grouped, both naming the same records:
+  // the `pair` cases above assert exactly that, while every fixture address is primary.
+  // (b) A non-primary duplicate is warned about and not grouped, in both directions.
   await check(
-    'a non-primary submission is warned about the same records a primary one is',
+    'a non-primary submission is warned about every record the same primary submission names',
     async () => {
+      assert.deepEqual(
+        codes(await duplicates({ ...parityParts, is_primary: false })),
+        [
+          'SGN279-NONPRIMARY',
+          'SGN279-PLAIN',
+          'SGN279-RECORDED',
+          'SGN279-SAVED',
+          'SGN279-TYPED',
+        ],
+      );
       assert.deepEqual(
         codes(await duplicates({ ...parityParts, is_primary: false })),
         codes(await duplicates(parityParts)),
       );
     },
   );
-  await pair(
-    'a non-primary address no other record holds is named by neither side beyond its own record',
-    soloParts,
-    soloNonPrimary,
-    ['SGN279-SOLO'],
+  await check(
+    'a record holding only a non-primary address has no group, though the warning names it',
+    async () => {
+      assert.deepEqual((await group(savedNonPrimary)).members, []);
+    },
+  );
+  await check(
+    'a group on the primary address does not name the record holding it as non-primary',
+    async () => {
+      assert.deepEqual(codes((await group(savedClean)).members), [
+        'SGN279-PLAIN',
+        'SGN279-RECORDED',
+        'SGN279-SAVED',
+        'SGN279-TYPED',
+      ]);
+    },
+  );
+  await check(
+    'a non-primary address no other record holds is warned about and groups nothing',
+    async () => {
+      assert.deepEqual(codes(await duplicates(soloParts)), ['SGN279-SOLO']);
+      assert.deepEqual((await group(soloNonPrimary)).members, []);
+    },
   );
   await check('an archived record is not named', async () => {
     const found = await duplicates(parts);

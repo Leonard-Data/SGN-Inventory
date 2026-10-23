@@ -580,7 +580,7 @@ Prepare distinct active sales/staff/manager/admin identities, an inactive and an
 | Create with listing mode and a known legacy address, without price/dimensions/contact | One property receives a stable unique code; the initial address commits with it and no history row is recorded without an asking price; unknown facts remain unknown; the record is immediately searchable without maintenance approval |
 | Create a property whose composed address an unarchived property already records | Before anything is written the form names those properties, links each by code in a new tab, and one deliberate confirmation then creates the second property; the post-create group shows the same records ([issue #279](database-contract.md#issue-279--the-warning-before-a-record-exists)) |
 | Create the same address in another case and without accents, or with an archived record at that address | The warning names the same properties the post-create group does, and never an archived record |
-| Create a property whose address is stated as non-primary at an address an unarchived property records | The warning names the same properties a primary address does, and the post-create group shows them too: both sides compare every address a record holds |
+| Create a property whose address is stated as non-primary at an address an unarchived property records | The warning names the same properties a primary address does, because it compares every address a record holds; the post-create group does not show them, because it stays on primary addresses and a group whose merge would then be refused is not published |
 | Create a property at an address nobody records, in VI and then EN | The record is created exactly as before: no warning appears and no extra confirmation is asked |
 | Blank/missing required address or listing mode; invalid typed values | Localized validation and database guards reject invalid input; no partial property/address/history state remains |
 | Fail the initial creation after beginning it | Entire creation rolls back; no addressless orphan property or misleading success |
@@ -1316,7 +1316,8 @@ Executed end to end on the development project, before and after the same reques
 
 | Gate | Required observation |
 | --- | --- |
-| Shared address only | A record whose address text matches another unarchived record reports that count and opens the comparison, whether or not the matching address is marked primary; a unique address shows no indicator |
+| Shared address only | A record whose primary address text matches another unarchived record reports that count and opens the comparison; a unique address shows no indicator; a record with no primary address shows none |
+| Warning wider than the group | A duplicate reached only through a non-primary address is named by the pre-create warning and by no group: neither the record holding that address as non-primary nor the group of the record holding it as primary names it, so no merge control is offered for it ([issue #279](database-contract.md#issue-279--the-warning-before-a-record-exists)) |
 | Normalised equality | Records recorded with the same address written in different case or without accents form one group, because membership is the search normalisation of the recorded text, and no fuzzy or reordered-token match is added |
 | Comparison | Sale price, floor area, dimensions, owner names, status and listing mode render side by side in Vietnamese/default and English; a record that records only one of frontage or depth still shows that value; the most complete record is named, and no phone number crosses the comparison |
 | Keep both | Closing the comparison writes nothing: no row, revision, history or archival changes |
