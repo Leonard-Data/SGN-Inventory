@@ -58,6 +58,19 @@ export async function addressDuplicateWarningContract({
     commune_unit_id: commune,
     is_primary: true,
   };
+  // One address recorded with a run of spaces inside a street, beside the same address written
+  // with one space. Composition trims only the ends, so these are two different texts.
+  const spaced = 'b7000000-0000-4000-8000-000000000016';
+  const spacedTwin = 'b7000000-0000-4000-8000-000000000017';
+  const spacedParts = {
+    format: 'current',
+    house_number: '21',
+    street: 'Lý  Thường Kiệt',
+    province_unit_id: province,
+    commune_unit_id: commune,
+    is_primary: true,
+  };
+  const spacedTwinParts = { ...spacedParts, street: 'Lý Thường Kiệt' };
 
   const asOwner = async () => {
     await db.exec('reset role');
@@ -83,8 +96,8 @@ export async function addressDuplicateWarningContract({
         JSON.stringify(address),
         address.house_number,
         address.street,
-        province,
-        commune,
+        address.province_unit_id,
+        address.commune_unit_id,
       ],
     );
   const codes = (rows) => rows.map((row) => row.propertyCode).sort();
@@ -138,6 +151,12 @@ export async function addressDuplicateWarningContract({
             ($6,'SGN279-ELSEWHERE','sale','house','available',$5)`,
     [plain, recorded, savedClean, savedTyped, employees[0], savedElsewhere],
   );
+  await db.query(
+    `insert into public.properties(id,property_code,listing_mode,property_type,status,created_by)
+     values ($1,'SGN279-SPACED','sale','house','available',$3),
+            ($2,'SGN279-TWIN','sale','house','available',$3)`,
+    [spaced, spacedTwin, employees[0]],
+  );
   await savedAddress(plain, parityParts);
   // The one record whose text is the wording it was written with rather than a composition.
   await db.query(
@@ -153,6 +172,8 @@ export async function addressDuplicateWarningContract({
     street: 'nguyen hue',
   });
   await savedAddress(savedElsewhere, elsewhereParts);
+  await savedAddress(spaced, spacedParts);
+  await savedAddress(spacedTwin, spacedTwinParts);
   await db.query('update public.properties set archived_at=now() where id=$1', [
     retired,
   ]);
@@ -189,10 +210,24 @@ export async function addressDuplicateWarningContract({
     ['SGN279-PLAIN', 'SGN279-RECORDED', 'SGN279-SAVED', 'SGN279-TYPED'],
   );
   await pair(
-    'case, accents and extra spacing are ignored by both sides alike',
+    'case, accents and spacing around a part are ignored by both sides alike',
     { ...parityParts, house_number: ' 8 ', street: 'nguyen hue' },
     savedTyped,
     ['SGN279-PLAIN', 'SGN279-RECORDED', 'SGN279-SAVED', 'SGN279-TYPED'],
+  );
+  // A run of spaces inside a part is not folded: both sides treat the two texts as different
+  // addresses, so neither names the record written the other way, in either direction.
+  await pair(
+    'a run of spaces inside a part is not folded, so neither side names the other',
+    spacedParts,
+    spaced,
+    ['SGN279-SPACED'],
+  );
+  await pair(
+    'a run of spaces inside a part is not folded when the creation states the tighter part',
+    spacedTwinParts,
+    spacedTwin,
+    ['SGN279-TWIN'],
   );
   // The other direction: an address these records do not hold is named by neither side, and the
   // group of the record created at it holds only what that address already recorded.
