@@ -3,6 +3,8 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { messages, label, type Locale } from '@/i18n/messages';
 import { vietnamTimestamp } from '@/features/properties/format';
 import { api, RequestError } from './api';
+import { useToast } from '@/features/toasts/toast-host';
+import { LoadingSkeleton } from '@/features/skeleton';
 import {
   deactivationFailure,
   deactivationProblemAfterLoad,
@@ -33,6 +35,7 @@ export function EmployeeDeactivationPanel({
   onClose: () => void;
 }) {
   const text = messages[locale];
+  const notify = useToast();
   const [snapshot, setSnapshot] = useState<DeactivationConfirmation | null>(
     null,
   );
@@ -141,7 +144,7 @@ export function EmployeeDeactivationPanel({
       setSnapshot(next);
       const recorded = deactivationStatus(next.operation);
       if (recorded === 'confirmed') {
-        setNotice(text.employeeDeactivateSuccess);
+        notify({ saved: true, message: text.employeeDeactivateSuccess });
         onChanged();
       } else if (recorded === 'reconciliation') {
         setNotice(text.employeeDeactivateFailed);
@@ -208,9 +211,7 @@ export function EmployeeDeactivationPanel({
 
       <h3>{text.employeeDeactivateOutstanding}</h3>
       {loading ? (
-        <p className="panel-note" role="status">
-          {text.loading}
-        </p>
+        <LoadingSkeleton label={text.loading} shape="rows" rows={2} />
       ) : snapshot ? (
         snapshot.reservations.length ? (
           <ul className="deactivation-reservations">

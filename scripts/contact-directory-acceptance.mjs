@@ -260,7 +260,7 @@ async function createProperty(client, addressText) {
     client.rpc('create_property', {
       p_mode: 'sale',
       p_facts: {},
-      p_address: { format: 'legacy', address_text: addressText },
+      p_address: { format: 'legacy', house_number: addressText },
     }),
   );
   assert.equal(error, null, `create property ${addressText}`);

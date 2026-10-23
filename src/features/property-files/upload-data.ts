@@ -23,9 +23,11 @@ const limitCodes: Record<string, string> = {
   P0022: 'image-too-large',
 };
 
+// A refusal of this file or this record is not a statement about the caller's access: the route
+// already required a live employee, so a permission error here describes the operation itself.
 function databaseFailure(error: { code?: string }): never {
   const limit = error.code ? limitCodes[error.code] : undefined;
-  if (error.code === '42501') throw new ApiError(403, 'access-denied');
+  if (error.code === '42501') throw new ApiError(403, 'operation-refused');
   if (limit) throw new ApiError(400, limit);
   if (error.code === '23514' || error.code === '22P02')
     throw new ApiError(400, 'invalid-input');
@@ -207,14 +209,14 @@ async function completeFile(
     .maybeSingle();
   if (propertyError) databaseFailure(propertyError);
   if (!property || property.archived_at)
-    throw new ApiError(403, 'access-denied');
+    throw new ApiError(403, 'property-unavailable');
   const readyPhotoEditor =
     file.upload_status === 'ready' &&
     file.purpose === 'photo' &&
     (property.created_by === employee.id ||
       ['staff', 'manager', 'admin'].includes(employee.role));
   if (file.uploaded_by !== employee.id && !readyPhotoEditor)
-    throw new ApiError(403, 'access-denied');
+    throw new ApiError(403, 'not-uploader');
   if (file.upload_status !== 'pending' && file.upload_status !== 'ready')
     throw new ApiError(400, 'invalid-file');
   const info = await storedObject(file.object_path);
@@ -295,7 +297,7 @@ export async function listCategories(
   if (error)
     throw new ApiError(
       error.code === '42501' ? 403 : 503,
-      error.code === '42501' ? 'access-denied' : 'unavailable',
+      error.code === '42501' ? 'operation-refused' : 'unavailable',
     );
   return { categories: data ?? [] };
 }

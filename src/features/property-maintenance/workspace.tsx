@@ -3,14 +3,23 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { Locale } from '@/i18n/messages';
 import type { Employee } from '@/features/employees/types';
 import { api, RequestError } from '@/features/employees/api';
+import { LoadingSkeleton } from '@/features/skeleton';
+import { applyServerSummary } from '@/features/properties/catalogue-changes';
+import { supersededAddressIds } from '@/features/properties/catalogue';
+import { useCatalogueChange } from '@/features/properties/catalogue-provider';
 import type { PropertyDetail } from '@/features/properties/detail-data';
+import type { PropertySummary } from '@/features/properties/types';
+import { mayEditProperty } from '@/features/properties/edit-permission';
 import type { ContactDetail } from './data';
 import { MutationForm, RecordFields, AddressFields } from './forms';
-import { LocationEditor } from '@/features/properties/location';
+import { CrosswalkOffer } from './crosswalk-offer';
+import { AddressConversion } from './convert-address';
+import type { AddressCrosswalk } from './crosswalk';
 import { targetFields, type Target, type Changes } from './fields';
 import { maintenanceError, maintenanceText, optionLabel } from './messages';
 import { ContactPicker } from './contact-picker';
 import { failureRoute } from './refusal-rules';
+import { useToast } from '@/features/toasts/toast-host';
 import { useNarrowSections } from './narrow-view';
 import {
   SECTIONS,
@@ -32,30 +41,54 @@ export function Maintenance({
   employee,
   locale,
   onSaved,
+  onRefresh,
   onDenied,
 }: {
   detail: PropertyDetail;
   employee: Employee;
   locale: Locale;
   onSaved: () => void | Promise<void>;
+  onRefresh: () => void | Promise<void>;
   onDenied: (status: number) => void;
 }) {
   const text = maintenanceText(locale),
     property = detail.property,
     staff = ['staff', 'manager', 'admin'].includes(employee.role),
     reviewer = ['manager', 'admin'].includes(employee.role),
-    canEdit =
-      !property.archived_at && (staff || property.created_by === employee.id),
+    canEdit = mayEditProperty(employee, {
+      createdBy: property.created_by,
+      archived: !!property.archived_at,
+    }),
     // Shared-contact detail correction is its own permission: any live employee on a readable
     // property, independent of property-fact authority. Links, creation and unlink stay staff-only.
     canEditContact = !property.archived_at || reviewer;
   const [section, setSection] = useState<Section>(DEFAULT_SECTION),
     narrow = useNarrowSections(),
     [editor, setEditor] = useState<Editor | null>(null),
+    // A saved legacy address reports what the crosswalk says about its ward, so the current address
+    // it names can be recorded from here rather than written on the person's behalf.
+    [crosswalk, setCrosswalk] = useState<AddressCrosswalk | null>(null),
+    // A save whose answer carries a crosswalk offer holds the editor open on that report instead of
+    // closing it before the person can read the outcome or use the one action it offers.
+    offerSaved = useRef(false),
     [selected, setSelected] = useState(''),
     [contactBusy, setContactBusy] = useState(false),
-    [contactError, setContactError] = useState<string | null>(null),
-    [notice, setNotice] = useState(false);
+    [contactError, setContactError] = useState<string | null>(null);
+  const notify = useToast();
+  // A correction inserts a successor and leaves the row it replaced in the list, so the format
+  // switch is offered on the rows the property is still recorded at, never on superseded history.
+  const superseded = supersededAddressIds(detail.addresses);
+  // Every committed edit reports what the server now holds for this property, so the browser's
+  // catalogue follows a changed address or fact instead of keeping the record it had.
+  const applyChange = useCatalogueChange();
+  // The dialog closes on a committed save, so the confirmation names the target it recorded.
+  const targetSaved: Record<Target, string> = {
+    property: text.propertySaved,
+    address: text.addressSaved,
+    mapping: text.addressSaved,
+    contact: text.contactSaved,
+    link: text.linkSaved,
+  };
   const controller = useRef<AbortController | null>(null),
     [facts, setFacts] = useState(property),
     [factsSavedRevision, setFactsSavedRevision] = useState<string | null>(null);
@@ -96,7 +129,6 @@ export function Maintenance({
       values,
     });
     setSelected(typeof values.contact_id === 'string' ? values.contact_id : '');
-    setNotice(false);
   }
   async function contact(id: string) {
     controller.current?.abort();
@@ -136,7 +168,10 @@ export function Maintenance({
   }
   async function save(changes: Changes, explanation?: string) {
     if (!editor) return;
-    return api('/api/properties/' + property.id + '/maintenance', {
+    const result = await api<{
+      summary?: PropertySummary | null;
+      address?: AddressCrosswalk;
+    }>('/api/properties/' + property.id + '/maintenance', {
       target: editor.target,
       targetId: editor.targetId,
       revision: editor.revision,
@@ -144,26 +179,59 @@ export function Maintenance({
       changes,
       ...(explanation ? { explanation } : {}),
     });
+    applyServerSummary(applyChange, result, property.id);
+    setCrosswalk(result.address ?? null);
+    offerSaved.current = !!result.address;
+    return result;
+  }
+  async function candidateRecorded(result: {
+    summary?: PropertySummary | null;
+  }) {
+    applyServerSummary(applyChange, result, property.id);
+    setCrosswalk(null);
+    notify({ saved: true, message: text.crosswalkRecorded });
+    await onSaved();
+  }
+  // The other format's row is written by the database from the official crosswalk; the surface then
+  // re-reads the property so both rows appear with their own format labels.
+  async function converted(result: { summary?: PropertySummary | null }) {
+    applyServerSummary(applyChange, result, property.id);
+    setCrosswalk(null);
+    notify({ saved: true, message: text.converted });
+    await onSaved();
   }
   async function saved() {
+    if (!editor) return;
     setEditor((current) => (current === editor ? null : current));
-    setNotice(true);
+    notify({ saved: true, message: targetSaved[editor.target] });
+    // The offer is the point of this save, so the surface that reports it stays open readable
+    // while the record itself is still re-read behind it.
+    if (offerSaved.current) {
+      offerSaved.current = false;
+      await onRefresh();
+      return;
+    }
     await onSaved();
   }
   async function saveFacts(changes: Changes, explanation?: string) {
-    const result = await api('/api/properties/' + facts.id + '/maintenance', {
-      target: 'property',
-      targetId: facts.id,
-      revision: facts.revision,
-      propertyRevision: facts.revision,
-      changes,
-      ...(explanation ? { explanation } : {}),
-    });
+    const result = await api<{ summary?: PropertySummary | null }>(
+      '/api/properties/' + facts.id + '/maintenance',
+      {
+        target: 'property',
+        targetId: facts.id,
+        revision: facts.revision,
+        propertyRevision: facts.revision,
+        changes,
+        ...(explanation ? { explanation } : {}),
+      },
+    );
+    applyServerSummary(applyChange, result, facts.id);
+    setCrosswalk(null);
     setFactsSavedRevision(facts.revision);
     return result;
   }
   async function savedFacts() {
-    setNotice(true);
+    notify({ saved: true, message: text.propertySaved });
     await onSaved();
   }
   const sectionLabel: Record<Section, string> = {
@@ -175,7 +243,6 @@ export function Maintenance({
     <section className="panel" aria-label={text.editFacts}>
       <div className="panel-body">
         <p>{text.immediate}</p>
-        {notice ? <p role="status">{text.saved}</p> : null}
         {narrow ? (
           <div className="field">
             <label className="field-label" htmlFor="maintenance-section">
@@ -249,14 +316,10 @@ export function Maintenance({
                   values={facts}
                   names={targetFields.property.filter(
                     (k) =>
-                      (k !== 'status' ||
-                        !['sold', 'rented'].includes(String(facts.status))) &&
-                      k !== 'latitude' &&
-                      k !== 'longitude',
+                      k !== 'status' ||
+                      !['sold', 'rented'].includes(String(facts.status)),
                   )}
                 />
-                {/* The point is set by clicking the map; typed coordinates are the keyboard alternative. */}
-                <LocationEditor values={facts} locale={locale} />
                 {/* A mistaken price keeps its own revision; this note is optional. */}
                 <div className="field">
                   <label
@@ -333,8 +396,34 @@ export function Maintenance({
                       </button>
                     ) : null}
                   </span>
+                  {/* Format is fixed on an ordinary save; this is the one deliberate switch, offered
+                      on the row the property is recorded at now rather than one a correction
+                      replaced. */}
+                  {superseded.has(address.id) ? null : (
+                    <AddressConversion
+                      locale={locale}
+                      propertyId={property.id}
+                      address={{
+                        id: address.id,
+                        revision: address.revision,
+                        propertyRevision: property.revision,
+                      }}
+                      format={address.format}
+                      onDenied={onDenied}
+                      onConverted={converted}
+                    />
+                  )}
                 </div>
               ))}
+              {crosswalk ? (
+                <CrosswalkOffer
+                  locale={locale}
+                  propertyId={property.id}
+                  address={crosswalk}
+                  onDenied={onDenied}
+                  onRecorded={candidateRecorded}
+                />
+              ) : null}
               {editor &&
               (editor.target === 'address' || editor.target === 'mapping') &&
               (editor.target !== 'mapping' || reviewer) ? (
@@ -457,7 +546,7 @@ export function Maintenance({
                       api<{ id: string }>('/api/contacts', { changes })
                     }
                     onSaved={async () => {
-                      setNotice(true);
+                      notify({ saved: true, message: text.contactSaved });
                       await onSaved();
                     }}
                     onDenied={onDenied}
@@ -471,7 +560,9 @@ export function Maintenance({
                   </MutationForm>
                 </details>
               ) : null}
-              {contactBusy ? <p role="status">{text.loading}</p> : null}
+              {contactBusy ? (
+                <LoadingSkeleton label={text.loading} shape="rows" rows={2} />
+              ) : null}
               {contactError ? (
                 <p role="alert">{maintenanceError(locale, contactError)}</p>
               ) : null}

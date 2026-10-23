@@ -650,32 +650,27 @@ async function appGet(cookies, route) {
   const body = await response.json().catch(() => null);
   return { status: response.status, body };
 }
-// Walk the chronological endpoint the way the browser does: one bounded page at a time,
-// carrying the cursor until the read stops emitting one.
-async function walkApi(cookies, direction) {
+// Walk the chronological endpoint the way the browser does: one bounded page of thirty rows at a
+// time, stepping the page number until the stated total is covered.
+async function walkApi(cookies, direction, expected) {
   const pages = [];
-  let after = null;
-  for (let guard = 0; guard < 200; guard++) {
-    const route =
-      `/api/properties?sort=${direction}` +
-      (after ? `&after=${encodeURIComponent(after)}` : '');
-    const page = await appGet(cookies, route);
-    assert.equal(
-      page.status,
-      200,
-      `inventory ${direction} page ${pages.length}`,
+  const lastPage = Math.max(1, Math.ceil(expected / 30));
+  for (let page = 1; page <= lastPage; page++) {
+    const response = await appGet(
+      cookies,
+      `/api/properties?sort=${direction}&page=${page}`,
     );
-    assert.equal(page.body?.order, direction, 'page ordering label');
-    pages.push(page.body);
-    if (!page.body.nextCursor) return pages;
+    assert.equal(response.status, 200, `inventory ${direction} page ${page}`);
+    assert.equal(response.body?.order, direction, 'page ordering label');
     assert.equal(
-      page.body.properties.length,
-      30,
-      'a cursor is emitted only from a full exposed page',
+      response.body?.total,
+      expected,
+      'every page states the matching total',
     );
-    after = page.body.nextCursor;
+    assert.equal(response.body?.page, page, 'served page number');
+    pages.push(response.body);
   }
-  assert.fail('Chronological walk did not terminate');
+  return pages;
 }
 
 // ------------------------------------------------------------------ browsers
@@ -809,7 +804,11 @@ const screenExpression = `() => {
       label: link.textContent.trim(),
       current: link.getAttribute('aria-current') === 'true',
     })),
-    pager: pager.map((link) => link.textContent.trim()),
+    nextHref:
+      pager.find(
+        (link) =>
+          link.tagName === 'A' && link.textContent.trim() === 'Trang tiếp',
+      )?.getAttribute('href') ?? null,
     pageInfo: document.querySelector('.pagination .page-info')?.textContent?.trim() ?? null,
     empty: document.querySelector('.state-panel h3')?.textContent?.trim() ?? null,
     overflowX: Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth),
@@ -984,8 +983,8 @@ try {
     fixtures.sales.email,
     fixtures.sales.password,
   );
-  const oldestPages = await walkApi(salesCookies, 'oldest');
-  const newestPages = await walkApi(salesCookies, 'newest');
+  const oldestPages = await walkApi(salesCookies, 'oldest', oldest.length);
+  const newestPages = await walkApi(salesCookies, 'newest', newest.length);
   const oldestApi = oldestPages.flatMap((page) => page.properties);
   const newestApi = newestPages.flatMap((page) => page.properties);
   assert.deepEqual(
@@ -1028,11 +1027,18 @@ try {
   );
   assert.equal(malformedSort.status, 400, 'invalid sort refusal');
   assert.equal(malformedSort.body?.error, 'invalid-input');
-  const malformedCursor = await appGet(
+  const malformedPage = await appGet(
     salesCookies,
-    '/api/properties?sort=oldest&after=not-a-cursor',
+    '/api/properties?sort=oldest&page=not-a-page',
   );
-  assert.equal(malformedCursor.status, 400, 'invalid cursor refusal');
+  assert.equal(malformedPage.status, 400, 'invalid page refusal');
+  assert.equal(malformedPage.body?.error, 'invalid-input');
+  const zeroPage = await appGet(
+    salesCookies,
+    '/api/properties?sort=oldest&page=0',
+  );
+  assert.equal(zeroPage.status, 400, 'zero page refusal');
+  assert.equal(zeroPage.body?.error, 'invalid-input');
   const extraParameter = await appGet(
     salesCookies,
     '/api/properties?sort=oldest&unknown=1',
@@ -1045,15 +1051,13 @@ try {
   // Direct Data API boundary: the read RPC and every direct rewrite stay subject to the
   // session and the delivered guards.
   const anonApi = anonymousClient();
-  const anonRpc = await anonApi.rpc('list_inventory_by_age', {
-    p_direction: 'oldest',
-  });
+  const anonRpc = await anonApi.rpc('page_inventory', { p_order: 'oldest' });
   assert.equal(anonRpc.error?.code, '42501', 'anonymous RPC denial');
   const salesApi = await signIn(fixtures.sales.email, fixtures.sales.password);
   const rpc = await retryResult('direct age RPC', () =>
-    salesApi.rpc('list_inventory_by_age', {
-      p_direction: 'oldest',
-      p_limit: 31,
+    salesApi.rpc('page_inventory', {
+      p_order: 'oldest',
+      p_page_size: 31,
     }),
   );
   assert.equal(rpc.error, null, 'employee age RPC');
@@ -1111,15 +1115,16 @@ try {
     'browser oldest-first page one shows the exact date and age in Vietnamese',
   );
 
-  // The pager is real browser pagination: every emitted Next leads to a non-empty page and the
-  // final page stops linking forward. A full final page must not produce an empty terminal page.
+  // The pager is real browser pagination: every enabled Next leads to a non-empty page and the
+  // terminal page links no further, so a full final page never produces an empty page after it.
+  const pageCount = Math.ceil(oldest.length / 30);
   const walked = [...view.codes];
-  let pageCount = 1;
-  while (view.pager.includes('Trang tiếp')) {
+  let visited = 1;
+  while (view.nextHref) {
     evaluate(
       'sgn37-vi',
       9341,
-      `(() => { const next = [...document.querySelectorAll('.pagination .pager-btn')].find((link) => link.textContent.trim() === 'Trang tiếp'); next.click(); return true; })()`,
+      `(() => { const next = [...document.querySelectorAll('.pagination a.pager-btn')].find((link) => link.textContent.trim() === 'Trang tiếp'); next.click(); return true; })()`,
     );
     const before = view.codes.join(',');
     let next = null;
@@ -1133,10 +1138,16 @@ try {
       'pagination must not reach an empty page',
     );
     view = next;
-    pageCount++;
+    visited++;
     walked.push(...view.codes);
-    assert.ok(pageCount <= 200, 'pagination did not terminate');
+    assert.ok(visited <= pageCount, 'pagination did not terminate');
   }
+  assert.equal(visited, pageCount, 'browser pagination visits every page');
+  assert.equal(
+    view.pageInfo,
+    `Trang ${pageCount}/${pageCount}`,
+    'the terminal page is the last page of the result set',
+  );
   assert.deepEqual(
     walked,
     oldest.map((record) => record.propertyCode),
@@ -1263,7 +1274,7 @@ try {
   );
   assert.equal(deactivatedApi.body?.error, 'access-denied');
   const deactivatedRpc = await retryResult('deactivated direct age RPC', () =>
-    salesApi.rpc('list_inventory_by_age', { p_direction: 'oldest' }),
+    salesApi.rpc('page_inventory', { p_order: 'oldest' }),
   );
   assert.equal(deactivatedRpc.error?.code, '42501', 'deactivated RPC denial');
   evaluate(

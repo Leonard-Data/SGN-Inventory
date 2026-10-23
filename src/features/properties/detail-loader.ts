@@ -1,10 +1,31 @@
 import { api, RequestError } from '../employees/api.ts';
 import type { TodayActivity } from '../employees/activity';
 import type { PropertyDetail } from './detail-data';
-import type { OwnerContactDisclosure } from './types';
+import type {
+  AddressGroup,
+  MergeReport,
+  OwnerContactDisclosure,
+} from './types';
 
 export function loadPropertyDetail(id: string, signal: AbortSignal) {
   return api<PropertyDetail>('/api/properties/' + id, undefined, signal);
+}
+
+// The shared-address group of one property: empty for a unique address, so the indicator is
+// shown only when another property carries the same recorded address.
+export function loadAddressGroup(id: string, signal: AbortSignal) {
+  return api<AddressGroup>(
+    '/api/properties/' + id + '/duplicates',
+    undefined,
+    signal,
+  );
+}
+
+// A deliberate merge of the group into the surviving property, named by the confirmation step.
+export function mergeAddressGroup(keepId: string, merge: string[]) {
+  return api<MergeReport>('/api/properties/' + keepId + '/duplicates', {
+    merge,
+  });
 }
 
 // A deliberate disclosure: the database commits the access record and returns the phone together.

@@ -9,6 +9,8 @@ import {
 } from 'react';
 import { messages, type Locale } from '@/i18n/messages';
 import { api, RequestError } from '@/features/employees/api';
+import { useToast } from '@/features/toasts/toast-host';
+import { LoadingSkeleton } from '@/features/skeleton';
 import { vietnamTimestamp } from '@/features/properties/format';
 import { COMMENT_MAX_LENGTH, COMMENT_REASON_MAX_LENGTH } from './types';
 import { IconAction } from '@/features/icon-action';
@@ -71,6 +73,8 @@ export function Discussion({
   const [draft, setDraft] = useState('');
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
+  const notify = useToast();
+  // Reserved for the neutral outcome that is neither a post nor a failure.
   const [notice, setNotice] = useState<string | null>(null);
   // Removal: the withdrawing comment, the open moderation reason and its kept draft.
   const [removing, setRemoving] = useState<string | null>(null);
@@ -79,8 +83,7 @@ export function Discussion({
   const [action, setAction] = useState<{ id: string; code: string } | null>(
     null,
   );
-  const [removeNotice, setRemoveNotice] = useState<string | null>(null);
-  // Author editing: the open editor, its unsent draft, the kept failure state and its notice.
+  // Author editing: the open editor, its unsent draft and the kept failure state.
   const [editing, setEditing] = useState<EditSession | null>(null);
   const [editDraft, setEditDraft] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
@@ -89,7 +92,6 @@ export function Discussion({
     code: string;
   } | null>(null);
   const [editReconciled, setEditReconciled] = useState(false);
-  const [editNotice, setEditNotice] = useState<string | null>(null);
   const inFlight = useRef<AbortController | null>(null);
   const generation = useRef(0);
   const historyRequestTokens = useRef<Record<string, number>>({});
@@ -347,7 +349,7 @@ export function Discussion({
     invalidateHistory(created.id);
     submissionKey.current = '';
     setDraft('');
-    setNotice(text.commentPosted);
+    notify({ saved: true, message: text.commentPosted });
     setPosting(false);
     const version = ++generation.current;
     try {
@@ -406,7 +408,6 @@ export function Discussion({
     setEditDraft(row.body ?? '');
     setEditAction(null);
     setEditReconciled(false);
-    setEditNotice(null);
     setReasonFor(null);
     setReason('');
     setAction(null);
@@ -430,7 +431,6 @@ export function Discussion({
     }
     setSavingEdit(true);
     setEditAction(null);
-    setEditNotice(null);
     let updated: Comment;
     try {
       updated = (
@@ -491,7 +491,7 @@ export function Discussion({
       setEditDraft('');
       setEditReconciled(false);
     }
-    setEditNotice(text.commentEdited);
+    notify({ saved: true, message: text.commentEdited });
     setSavingEdit(false);
   }
   // Removal replaces the entry in place, so the marker keeps the original posting position.
@@ -504,7 +504,6 @@ export function Discussion({
     }
     setRemoving(row.id);
     setAction(null);
-    setRemoveNotice(null);
     let removed: Comment;
     try {
       removed = (
@@ -530,7 +529,7 @@ export function Discussion({
     invalidateHistory(removed.id);
     setReason('');
     setReasonFor(null);
-    setRemoveNotice(text.commentRemoved);
+    notify({ saved: true, message: text.commentRemoved });
     setRemoving(null);
   }
   const actionMessage = (code: string) =>
@@ -628,7 +627,9 @@ export function Discussion({
           body has, which left the cards flush against the panel edge. The wrapper gives
           them the same card padding at both widths. */}
       <div className="panel-body">
-        {busy ? <p role="status">{text.loading}</p> : null}
+        {busy ? (
+          <LoadingSkeleton label={text.loading} shape="rows" rows={3} />
+        ) : null}
         {error ? (
           <p role="alert">
             {error === 'not-found'
@@ -992,8 +993,6 @@ export function Discussion({
           })}
         </ol>
         {!busy && !error && !comments.length ? <p>{text.noComments}</p> : null}
-        {editNotice ? <p role="status">{editNotice}</p> : null}
-        {removeNotice ? <p role="status">{removeNotice}</p> : null}
         {next ? (
           <p>
             <button

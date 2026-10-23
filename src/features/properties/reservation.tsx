@@ -9,13 +9,18 @@ import {
 } from 'react';
 import { messages, type Locale } from '@/i18n/messages';
 import { api, RequestError } from '@/features/employees/api';
+import { useToast } from '@/features/toasts/toast-host';
+import { LoadingSkeleton } from '@/features/skeleton';
 import {
   RESERVATION_DAYS_DEFAULT,
   RESERVATION_DAYS_MAX,
   RESERVATION_DAYS_MIN,
   RESERVATION_REASON_MAX,
   RESERVATION_REASON_MIN,
+  lockStateMoved,
 } from './reservation-rules';
+import { applyServerSummary } from './catalogue-changes';
+import { useCatalogueChange } from './catalogue-provider';
 import { vietnamTimestamp } from './format';
 import type { ReservationState } from './types';
 
@@ -176,6 +181,7 @@ export function Reservation({
   archived,
   employeeId,
   onDenied,
+  onCommitted,
 }: {
   propertyId: string;
   locale: Locale;
@@ -183,10 +189,18 @@ export function Reservation({
   archived: boolean;
   employeeId: string;
   onDenied: (status: number) => void;
+  // A committed reservation closes the dialog it was recorded from; the confirmation then
+  // follows the person onto the page.
+  onCommitted: () => void;
 }) {
   const text = messages[locale],
     requestReasonId = useId(),
     requestHelpId = useId();
+  const notify = useToast();
+  // Every answer about this property - including the read a lost lock triggers - refreshes the
+  // browser's catalogue from the server's own summary of it, so a conflict leaves the current
+  // state on screen rather than the state the browser held.
+  const applyChange = useCatalogueChange();
   const [state, setState] = useState<ReservationState | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -199,17 +213,20 @@ export function Reservation({
     id: string;
     code: string;
   } | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [releasing, setReleasing] = useState(false);
   const [releaseError, setReleaseError] = useState<string | null>(null);
   const inFlight = useRef<AbortController | null>(null);
   const generation = useRef(0);
   // A mutation's snapshot wins over any read that started before it committed.
-  const apply = useCallback((next: ReservationState) => {
-    inFlight.current?.abort();
-    generation.current += 1;
-    setState(next);
-  }, []);
+  const apply = useCallback(
+    (next: ReservationState) => {
+      inFlight.current?.abort();
+      generation.current += 1;
+      setState(next);
+      applyServerSummary(applyChange, next, propertyId);
+    },
+    [applyChange, propertyId],
+  );
   const failure = useCallback(
     (problem: unknown, set: (code: string) => void) => {
       if (
@@ -236,6 +253,10 @@ export function Reservation({
       .then((value) => {
         if (version !== generation.current) return;
         setState(value);
+        // A read commits nothing, so an answer whose summary could not be read back leaves the
+        // catalogue as it is instead of triggering its own recovery read.
+        if (value.summary !== undefined)
+          applyServerSummary(applyChange, value, propertyId);
         setLoadFailed(false);
       })
       .catch((problem: unknown) => {
@@ -246,7 +267,7 @@ export function Reservation({
         if (version === generation.current) setLoading(false);
       });
     return () => abort.abort();
-  }, [propertyId, refresh, failure]);
+  }, [propertyId, refresh, failure, applyChange]);
   const own = state?.pending.find(
     (request) => request.claimantId === employeeId,
   );
@@ -257,7 +278,6 @@ export function Reservation({
     if (posting) return;
     setPosting(true);
     setPostError(null);
-    setNotice(null);
     try {
       const next = await api<ReservationState>(
         '/api/properties/' + propertyId + '/reservations',
@@ -265,7 +285,8 @@ export function Reservation({
       );
       apply(next);
       setDraft('');
-      setNotice(text.reservationRequested);
+      notify({ saved: true, message: text.reservationRequested });
+      onCommitted();
     } catch (problem) {
       if (
         problem instanceof RequestError &&
@@ -274,11 +295,10 @@ export function Reservation({
         onDenied(problem.status);
         return;
       }
-      // A conflict means the committed state moved on: refetch instead of guessing.
-      if (
-        problem instanceof RequestError &&
-        problem.code === 'reservation-conflict'
-      )
+      // A conflict means the committed state moved on: refetch instead of guessing. The database
+      // decided the lock - the status the browser held never authorized it - so the panel reads
+      // the current state rather than keeping the one it had.
+      if (problem instanceof RequestError && lockStateMoved(problem.code))
         setRefresh((value) => value + 1);
       setPostError(
         problem instanceof RequestError ? problem.code : 'unavailable',
@@ -296,7 +316,6 @@ export function Reservation({
     const data = new FormData(form);
     setDeciding(lockId);
     setDecisionError(null);
-    setNotice(null);
     try {
       const next = await api<ReservationState>(
         '/api/properties/' + propertyId + '/reservations/decision',
@@ -308,7 +327,11 @@ export function Reservation({
         },
       );
       apply(next);
-      setNotice(approve ? text.reservationApproved : text.reservationRejected);
+      notify({
+        saved: true,
+        message: approve ? text.reservationApproved : text.reservationRejected,
+      });
+      onCommitted();
     } catch (problem) {
       if (
         problem instanceof RequestError &&
@@ -323,12 +346,7 @@ export function Reservation({
           code: problem.code,
         });
       else setDecisionError({ id: lockId, code: 'unavailable' });
-      if (
-        problem instanceof RequestError &&
-        ['reservation-conflict', 'reservation-unavailable'].includes(
-          problem.code,
-        )
-      )
+      if (problem instanceof RequestError && lockStateMoved(problem.code))
         setRefresh((value) => value + 1);
     } finally {
       setDeciding(null);
@@ -351,14 +369,14 @@ export function Reservation({
     const data = new FormData(form);
     setReleasing(true);
     setReleaseError(null);
-    setNotice(null);
     try {
       const next = await api<ReservationState>(
         '/api/properties/' + propertyId + '/reservations/release',
         { lockId, reason: data.get('reason') },
       );
       apply(next);
-      setNotice(text.reservationReleased);
+      notify({ saved: true, message: text.reservationReleased });
+      onCommitted();
     } catch (problem) {
       if (
         problem instanceof RequestError &&
@@ -367,10 +385,7 @@ export function Reservation({
         onDenied(problem.status);
         return;
       }
-      if (
-        problem instanceof RequestError &&
-        problem.code === 'reservation-closed'
-      )
+      if (problem instanceof RequestError && lockStateMoved(problem.code))
         setRefresh((value) => value + 1);
       setReleaseError(
         problem instanceof RequestError ? problem.code : 'unavailable',
@@ -380,13 +395,35 @@ export function Reservation({
     }
   }
   const effective = state?.effective ?? null;
+  // The status the server's own last answer reported decides whether the request form is offered,
+  // so a property another employee withdrew stops offering a request the database would refuse.
+  // A property the server no longer carries has no status to offer one from at all.
+  const currentStatus =
+    state?.summary === null ? null : (state?.summary?.status ?? status);
+  // A refusal that means the lock state moved on is shown above the controls: the re-read it
+  // triggers can remove the very form the message would otherwise live inside.
+  const conflict =
+    postError && lockStateMoved(postError)
+      ? message(postError, text.reservationRequestFailed)
+      : decisionError && lockStateMoved(decisionError.code)
+        ? message(decisionError.code, text.reservationDecisionFailed)
+        : releaseError && lockStateMoved(releaseError)
+          ? message(releaseError, text.reservationReleaseFailed)
+          : null;
   return (
     <section
       className="panel reservation"
       data-loaded={state ? 'yes' : 'no'}
       aria-label={text.reservations}
     >
-      {loading && !state ? <p role="status">{text.loading}</p> : null}
+      {loading && !state ? (
+        <LoadingSkeleton
+          label={text.loading}
+          className="skeleton-inset"
+          shape="rows"
+          rows={3}
+        />
+      ) : null}
       {loadFailed ? (
         <p role="alert">
           {text.reservationLoadFailed}{' '}
@@ -404,6 +441,7 @@ export function Reservation({
       ) : null}
       {state ? (
         <>
+          {conflict ? <p role="alert">{conflict}</p> : null}
           {effective ? (
             <div className="reservation-effective">
               <p>
@@ -423,7 +461,7 @@ export function Reservation({
                   locale={locale}
                   busy={releasing}
                   error={
-                    releaseError
+                    releaseError && !lockStateMoved(releaseError)
                       ? message(releaseError, text.reservationReleaseFailed)
                       : null
                   }
@@ -455,7 +493,12 @@ export function Reservation({
           {!state.effective && !own ? (
             archived ? (
               <p className="field-hint">{text.reservationArchived}</p>
-            ) : requestable.includes(status) ? (
+            ) : currentStatus !== null &&
+              requestable.includes(currentStatus) ? (
+              // The status the server last reported only decides whether this control is offered:
+              // the database re-checks current availability, authorization and the competing
+              // reservation when the request is made, and a refusal refreshes this panel from
+              // server state.
               <form onSubmit={submitRequest}>
                 <div className="field">
                   <label className="field-label" htmlFor={requestReasonId}>
@@ -478,7 +521,7 @@ export function Reservation({
                 <p className="field-hint" id={requestHelpId}>
                   {text.reservationReasonHint}
                 </p>
-                {postError ? (
+                {postError && !lockStateMoved(postError) ? (
                   <p role="alert">
                     {message(postError, text.reservationRequestFailed)}
                   </p>
@@ -527,7 +570,8 @@ export function Reservation({
                       locale={locale}
                       busy={deciding === request.id}
                       error={
-                        decisionError?.id === request.id
+                        decisionError?.id === request.id &&
+                        !lockStateMoved(decisionError.code)
                           ? message(
                               decisionError.code,
                               text.reservationDecisionFailed,
@@ -547,9 +591,6 @@ export function Reservation({
           ) : null}
         </>
       ) : null}
-      <p role="status" aria-live="polite">
-        {notice}
-      </p>
       <p className="field-hint">{text.reservationNote}</p>
     </section>
   );

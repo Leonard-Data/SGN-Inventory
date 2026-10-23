@@ -4,6 +4,7 @@ import type { Json } from '@/types/database';
 import type { Locale } from '@/i18n/messages';
 import { label, messages } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
+import { LoadingSkeleton } from '@/features/skeleton';
 import {
   formatVnd,
   formatDecimal,
@@ -15,6 +16,9 @@ import { fields } from './fields';
 import { maintenanceText, optionLabel } from './messages';
 const extraLabels: Record<string, readonly [string, string]> = {
   property_code: ['Mã bất động sản', 'Property code'],
+  // A retained history row or correction may still name the address text the form no longer asks
+  // for, so its recorded wording stays readable in both languages.
+  address_text: ['Địa chỉ đã biết', 'Known address'],
   entry_on: ['Ngày nhập kho gốc', 'Original inventory entry date'],
   entry_source: ['Nguồn ngày nhập kho gốc', 'Original entry provenance'],
   verified_by: ['Người chỉ định ánh xạ', 'Mapping designator'],
@@ -109,7 +113,9 @@ export function History({
         <h2>{text.history}</h2>
       </div>
       <div className="panel-body">
-        {busy ? <p role="status">{text.loading}</p> : null}
+        {busy ? (
+          <LoadingSkeleton label={text.loading} shape="rows" rows={4} />
+        ) : null}
         {error ? (
           <div className="alert" data-tone="danger" role="alert">
             <span>

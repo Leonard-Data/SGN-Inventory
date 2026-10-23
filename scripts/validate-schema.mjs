@@ -17,10 +17,13 @@ import { rankingContract } from './ranking-contract.mjs';
 import { priceHistoryContract } from './price-history-contract.mjs';
 import { inventoryAgeContract } from './inventory-age-contract.mjs';
 import { inventoryFilterContract } from './inventory-filter-contract.mjs';
+import { inventoryPagingContract } from './inventory-paging-contract.mjs';
+import { inventoryStreamContract } from './inventory-stream-contract.mjs';
 import { vendorContract } from './vendor-contract.mjs';
 import { contactDirectoryContract } from './contact-directory-contract.mjs';
 import { propertyVendorLinkContract } from './property-vendor-links-contract.mjs';
 import { referenceCatalogContract } from './reference-catalog-contract.mjs';
+import { legacyCrosswalkContract } from './legacy-crosswalk-contract.mjs';
 import { saleCompletionContract } from './sale-completion-contract.mjs';
 import { employeeDeactivationContract } from './employee-deactivation-contract.mjs';
 import { employeeAccountDeletionContract } from './employee-account-deletion-contract.mjs';
@@ -31,8 +34,17 @@ import { contactLinksConcurrency } from './contact-links-concurrency.mjs';
 import { employeeInvitationContract } from './employee-invitation-contract.mjs';
 import { employeeInvitationConcurrency } from './employee-invitation-concurrency.mjs';
 import { employeeInvitationAcceptanceContract } from './employee-invitation-acceptance-contract.mjs';
+import { employeeInvitationResendContract } from './employee-invitation-resend-contract.mjs';
+import { employeeProfileContract } from './employee-profile-contract.mjs';
 import { applyEmbeddedSchema } from './embedded-schema.mjs';
 import { provinceActivityContract } from './province-activity-contract.mjs';
+import { addressDuplicateMergeContract } from './address-duplicate-merge-contract.mjs';
+import { addressDuplicateWarningContract } from './address-duplicate-warning-contract.mjs';
+import { statusTrailContract } from './status-trail-contract.mjs';
+import { contactNumberContract } from './contact-number-contract.mjs';
+import { propertyDimensionContract } from './property-dimension-contract.mjs';
+import { legacyCreatorNamesContract } from './legacy-creator-names-contract.mjs';
+import { statusRequestContract } from './status-request-contract.mjs';
 const root = process.env.SGN_PROJECT_ROOT || process.cwd();
 const db = new PGlite({extensions:{unaccent,pg_trgm,pgcrypto}});
 await applyEmbeddedSchema({root,exec:(sql)=>db.exec(sql)});
@@ -77,13 +89,19 @@ await check('inactive employee directory read denied',async()=>assert.equal((awa
 await check('inactive RPC denied',()=>fails('select public.request_property_lock($1,$2)',[property,'Deal agreed with customer'],'42501'));
 await asUser(0);
 await check('active salesperson can read inventory',async()=>assert.equal((await db.query('select * from public.properties')).rows.length,2));
-await check('accent insensitive legacy address search',async()=>assert.equal((await db.query("select * from public.search_properties('ly thuong kiet')")).rows.length,1));
+await check('accent insensitive legacy address search',async()=>assert.equal((await db.query("select * from public.page_inventory(p_query => 'ly thuong kiet')")).rows.length,1));
 await check('salesperson cannot bypass revision RPC for another creator property',()=>fails("update public.properties set notes='change' where id=$1 returning id",[other],'42501'));
-await check('salesperson cannot mark property sold',()=>fails("update public.properties set status='sold' where id=$1",[property],'42501'));
+await check('salesperson cannot write a property status directly',()=>fails("update public.properties set status='sold' where id=$1",[property],'42501'));
 await check('salesperson cannot grant admin role',async()=>assert.equal((await db.query("update public.employees set role='admin' where id=$1 returning id",[employees[0]])).rows.length,0));
-// The admin employee list is an application-level surface; the employee rows stay readable to
-// every active employee because reservation, comment and history attribution read them.
-await check('active employee keeps the directory read used for business attribution',async()=>assert.equal((await db.query('select id from public.employees')).rows.length,employees.length + 1));
+// An employee's own record is the only employee row the table read returns; colleague identity
+// for business attribution comes from the sanctioned name projection, which carries no personal
+// field.
+await check('an active employee reads only their own employee row',async()=>assert.deepEqual((await db.query('select id from public.employees')).rows.map((row)=>row.id),[employees[0]]));
+await check('the sanctioned name projection resolves colleagues without a personal field',async()=>{
+  const rows=(await db.query('select * from public.list_employee_names($1)',[employees])).rows;
+  assert.deepEqual(rows.map((row)=>row.id),employees);
+  assert.deepEqual(Object.keys(rows[0]).sort(),['display_name','id']);
+});
 // An access revision advances only when a recorded access fact changes, and it is assigned on
 // every update so no client can choose it; a protected read compares it with the session it
 // authorized on. Fixture 5 is restored to staff, active and its original locale at the end.
@@ -116,16 +134,28 @@ await check('colleague cannot read private employee activity',async()=>assert.eq
 const competing=(await db.query('select public.request_property_lock($1,$2) as id',[property,'Another pending employee claim for same property'])).rows[0].id;
 await asUser(2);
 await db.query('select public.decide_property_lock($1,true,$2)',[lock,'Agreement verified independently by manager']);
-await check('manager approval creates one effective reservation',async()=>assert.equal((await db.query('select * from public.v_effective_property_locks')).rows.length,1));
+await check('manager approval creates one effective reservation',async()=>{
+  const rows=(await db.query('select requested_by,employee_name from public.v_effective_property_locks')).rows;
+  assert.equal(rows.length,1);
+  assert.equal(rows[0].requested_by,employees[0]);
+  // The claimant's name resolves through the sanctioned projection, not a colleague row read.
+  assert.equal(rows[0].employee_name,'Fixture 0');
+});
+await check('manager lock summary still covers every employee',async()=>{
+  const rows=(await db.query('select employee_id,display_name,effective_lock_count::int as count from public.v_admin_locks_by_employee')).rows;
+  assert.equal(rows.length,employees.length + 1);
+  const claimant=rows.find((row)=>row.employee_id===employees[0]);
+  assert.deepEqual({displayName:claimant?.display_name,count:claimant?.count},{displayName:'Fixture 0',count:1});
+});
 await check('second approval fails exclusivity constraint',()=>fails('select public.decide_property_lock($1,true,$2)',[competing,'Another agreement reviewed by manager'],'23505'));
 const own=(await db.query('select public.request_property_lock($1,$2) as id',[other,'Manager own customer agreement pending review'])).rows[0].id;
 await check('manager self approval forbidden',()=>fails('select public.decide_property_lock($1,true,$2)',[own,'Attempting self approval is forbidden'],'42501'));
 const maintainSql='select public.maintain_property($1,$2,$3,$4,$5,(select revision from public.properties where id=$1)) as id';
 async function maintainFacts(id,changes){const rev=(await db.query('select revision from public.properties where id=$1',[id])).rows[0].revision;return db.query(maintainSql,[id,'property',id,rev,changes]);}
 async function addAddress(id,changes){const rev=(await db.query('select revision from public.properties where id=$1',[id])).rows[0].revision;return (await db.query(maintainSql,[id,'address',null,rev,changes])).rows[0].id;}
-await check('new address cannot contain district',()=>addAddress(other,{format:'current',address_text:'Test',district_text:'Quận 1'}).then(()=>assert.fail('must reject'),error=>assert.equal(error.code,'23514')));
+await check('new address cannot contain district',()=>addAddress(other,{format:'current',house_number:'Test',district_text:'Quận 1'}).then(()=>assert.fail('must reject'),error=>assert.equal(error.code,'23514')));
 await check('unverified address stays in separate analytic bucket',async()=>assert.equal((await db.query('select * from public.v_admin_inventory_by_area')).rows[0].current_commune_label,'Chưa xác minh địa chỉ mới'));
-const verifiedId=await addAddress(other,{format:'current',address_text:'Fixture current address',commune_text:'Untrusted label'});
+const verifiedId=await addAddress(other,{format:'current',house_number:'Fixture current address',commune_text:'Untrusted label'});
 const verifiedRev=(await db.query('select revision from public.property_addresses where id=$1',[verifiedId])).rows[0].revision;
 const verifiedChanges={province_unit_id:provinceA,commune_unit_id:commune,mapping_status:'verified',verification_method:'manual',source_url:'https://example.test/evidence',effective_on:'2026-10-10',mapping_evidence:'Property boundary checked against official evidence'};
 await check('wrong current province/commune hierarchy rejected',()=>fails(maintainSql,[other,'mapping',verifiedId,verifiedRev,{...verifiedChanges,province_unit_id:provinceB}],'23514'));
@@ -134,7 +164,7 @@ await db.query(maintainSql,[other,'mapping',verifiedId,verifiedRev,verifiedChang
 await check('analytics uses canonical verified unit name',async()=>assert.ok((await db.query('select * from public.v_admin_inventory_by_area')).rows.some(r=>r.current_commune_label==='Fixture Commune')));
 // The form keeps the official selection alone, so search must reach that address through the
 // official unit name even though no written source label was recorded for it.
-await check('address search reaches an official unit name with no source label',async()=>assert.equal((await db.query("select * from public.search_properties('Fixture Commune')")).rows.length,1));
+await check('address search reaches an official unit name with no source label',async()=>assert.equal((await db.query("select * from public.page_inventory(p_query => 'Fixture Commune')")).rows.length,1));
 await asUser(0);
 await check('salesperson admin analytics return no rows',async()=>assert.equal((await db.query('select * from public.v_admin_inventory_by_area')).rows.length,0));
 await asUser(1);
@@ -427,12 +457,12 @@ await db.query("insert into public.properties(id,property_code,listing_mode,stat
 await db.query("insert into public.property_addresses(property_id,format,address_text) values($1,'legacy',$3),($2,'legacy',$4)",[literalProperty,wildcardControl,'Nhà 50%_ Nguyễn Trãi \\ '+ '%'.repeat(120),'Nhà 500X Nguyễn Trãi X control']);
 await asUser(0);
 await check('search treats percent and underscore as literal with excluded controls',async()=>{
-  for(const query of ['50%','%_','%_CODE']) assert.deepEqual((await db.query('select id from public.search_properties($1)',[query])).rows.map(row=>row.id),[literalProperty]);
+  for(const query of ['50%','%_','%_CODE']) assert.deepEqual((await db.query('select id from public.page_inventory(p_query => $1)',[query])).rows.map(row=>row.id),[literalProperty]);
 });
-await check('literal backslash is not an escape supplied by caller',async()=>assert.deepEqual((await db.query('select id from public.search_properties($1)',['\\'])).rows.map(row=>row.id),[literalProperty]));
-await check('120 literal characters remain permitted after SQL escaping',async()=>assert.deepEqual((await db.query('select id from public.search_properties($1)',['%'.repeat(120)])).rows.map(row=>row.id),[literalProperty]));
-await check('oversized raw query remains rejected by search',async()=>assert.deepEqual((await db.query('select id from public.search_properties($1)',['%'.repeat(121)])).rows,[]));
-await check('address search is contiguous, not reordered tokens',async()=>assert.deepEqual((await db.query('select id from public.search_properties($1)',['trai nguyen'])).rows,[]));
+await check('literal backslash is not an escape supplied by caller',async()=>assert.deepEqual((await db.query('select id from public.page_inventory(p_query => $1)',['\\'])).rows.map(row=>row.id),[literalProperty]));
+await check('120 literal characters remain permitted after SQL escaping',async()=>assert.deepEqual((await db.query('select id from public.page_inventory(p_query => $1)',['%'.repeat(120)])).rows.map(row=>row.id),[literalProperty]));
+await check('oversized raw query is refused, never read as empty inventory',()=>fails('select id from public.page_inventory(p_query => $1)',['%'.repeat(121)],'22023'));
+await check('address search is contiguous, not reordered tokens',async()=>assert.deepEqual((await db.query('select id from public.page_inventory(p_query => $1)',['trai nguyen'])).rows,[]));
 await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
 const archivedProperty='20000000-0000-4000-8000-000000000006';
 const archivedViewKey='80000000-0000-4000-8000-000000000001';
@@ -758,8 +788,15 @@ await rankingContract({db,asUser,check,fails,employees});
 await inventoryAgeContract({db,asUser,check,fails,employees});
 // Advance Filter and Search Island: the advanced status/mode/type/price/area inventory filters.
 await inventoryFilterContract({db,asUser,check,fails,employees});
+// Ticket #140: the counted, offset-paged inventory read that replaced the cursor walks.
+await inventoryPagingContract({db,asUser,check,fails,employees});
+// Ticket #154: the streamed inventory read that replaced the numbered pager on the page, ordered
+// by the record's latest change since issue #258.
+await inventoryStreamContract({db,asUser,check,fails,employees});
 // Seeded Vietnamese province/city and ward/commune reference catalogue.
 await referenceCatalogContract({db,asUser,check,fails,employees,root});
+// Issue #223: the official old-to-new crosswalk and the attested whole-mapping evidence.
+await legacyCrosswalkContract({db,asUser,check,fails,employees,root});
 // Ticket #35: reviewer-only province activity grouped by latest verified primary province.
 await provinceActivityContract({db,asUser,check,fails,employees});
 // Issue #38: one reviewed logical sale completion and the completed-sale ranking.
@@ -778,6 +815,12 @@ await employeeInvitationContract({db,asUser,check,fails});
 await employeeInvitationConcurrency({root,check});
 // Issue #69: accepting the recorded invitation, linking and activating the exact invitee.
 await employeeInvitationAcceptanceContract({db,asUser,check,fails});
+// Sending a recorded, still unaccepted invitation again: one more recorded attempt, no second
+// invitation row, and no resend for an accepted, active or deletion-in-flight person.
+await employeeInvitationResendContract({db,asUser,check,fails});
+// Employee profile edit: the admin edit, the person's own name and bio, the last-active-admin
+// rule, the deactivated/deleted refusal and the bio limit.
+await employeeProfileContract({db,asUser,check,fails});
 // Ticket #73: the vendor directory authority, validation, retry and paging rules.
 await vendorContract({db,asUser,check,fails,employees});
 // Ticket #74: property-to-vendor links, their correction and the recorded link row as the trail;
@@ -788,7 +831,27 @@ await propertyVendorLinkContract({db,asUser,check,fails,employees,property,other
 await auditRetentionContract({db,asUser,check,fails,employees});
 // Ticket #71: the shared Contact directory read and its contact-scoped correction.
 await contactDirectoryContract({db,asUser,check,fails,employees});
-const report={checked_at:new Date().toISOString(),engine:'PGlite embedded PostgreSQL plus an embedded real PostgreSQL engine for the two-connection last-admin, property-vendor-link and contact-link races; mocked auth/storage schemas',passed,
+// Issue #147: the shared-address group, and the deliberate merge of duplicate records.
+await addressDuplicateMergeContract({db,asUser,check,fails,employees,validationKey});
+// Issue #279: the warning before a record exists, decided by that same address rule.
+await addressDuplicateWarningContract({db,asUser,check,fails,employees});
+// Ticket #173: the property status trail and direct non-final status changes.
+await statusTrailContract({db,asUser,check,fails,employees});
+// Ticket #174: sold and rented as a reviewer decision recorded on the same trail.
+await statusRequestContract({db,asUser,check,fails,employees});
+// Recording a contact number on any unarchived property: any active employee may create the
+// contact and its link, while correcting or unlinking it stays staff/manager/admin.
+await contactNumberContract({db,asUser,check,fails,employees,property});
+// A stored frontage or depth contradicting its own area text: the rounding the legacy sheet's
+// dimension columns lost, reported by row so the operator sees which records are wrong.
+await propertyDimensionContract({db,check,employees});
+// The legacy import's placeholder display names: each creator address resolves to the name the
+// archived import rows record for it, and to no invented name where the source names none.
+await legacyCreatorNamesContract({db,root,check});
+// No run timestamp here: the artifact is committed, so a clock reading makes every branch
+// rewrite it and every pull request conflict with every other one. The run time is printed
+// to the run log instead, where it costs no diff.
+const report={engine:'PGlite embedded PostgreSQL plus an embedded real PostgreSQL engine for the two-connection last-admin, property-vendor-link and contact-link races; mocked auth/storage schemas',passed,
  limitations:['Not a live Supabase integration test','HTTP Auth, presigned R2 URLs, Vercel and browser flows not exercised','Hosted/staging independent-session contention at production load remains an acceptance gate']};
 await fs.writeFile(path.join(root,'docs/validation-results.json'),JSON.stringify(report,null,2)+'\n');
-console.log(`${passed} assertions passed`);await db.close();
+console.log(`${passed} assertions passed at ${new Date().toISOString()}`);await db.close();

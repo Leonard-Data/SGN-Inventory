@@ -763,8 +763,8 @@ try {
     demoted: 403,
   });
 
-  // The attribution read the rest of the application depends on is not revoked: an active
-  // staff session still reads employee rows through RLS while the admin page is refused.
+  // The row read is the staff member's own record while the admin page is refused, and the
+  // colleague name the rest of the application attributes comes from the sanctioned projection.
   const staffClient = createClient(
     environment.supabaseUrl,
     environment.publishableKey,
@@ -777,22 +777,34 @@ try {
     }),
   );
   assert.equal(staffAuth.error, null, 'Staff fixture authentication');
-  const attribution = await retryResult('staff attribution read', () =>
+  const colleagueRow = await retryResult('staff colleague row read', () =>
     staffClient
       .from('employees')
-      .select('id,display_name')
+      .select('id,display_name,phone,bio')
       .eq('id', manifest.identities.manager.employeeId)
       .maybeSingle(),
   );
+  assert.equal(colleagueRow.error, null, 'Staff colleague row read');
+  assert.equal(
+    colleagueRow.data,
+    null,
+    'Staff cannot read a colleague employee row',
+  );
+  const attribution = await retryResult('staff attribution read', () =>
+    staffClient.rpc('list_employee_names', {
+      p_ids: [manifest.identities.manager.employeeId],
+    }),
+  );
   assert.equal(attribution.error, null, 'Staff attribution read');
   assert.equal(
-    attribution.data?.display_name,
+    attribution.data?.[0]?.display_name,
     `${namespace} manager`,
-    'Staff still reads the colleague row used for business attribution',
+    'Staff resolves the colleague name through the sanctioned projection',
   );
-  observed('the existing employee read used for attribution is preserved', {
-    staffCanReadColleague: true,
-  });
+  observed(
+    'the employee row read is own-record only and attribution uses the sanctioned projection',
+    { staffCanReadColleagueRow: false, staffResolvesColleagueName: true },
+  );
 
   const inactive = await appLogin(
     manifest.identities.inactive.email,

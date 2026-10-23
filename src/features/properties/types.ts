@@ -4,24 +4,43 @@ export type AddressSummary = {
   addressText: string;
   mappingStatus: string;
   isPrimary: boolean;
+  // The address parts the table's own columns state. A legacy address keeps the district it
+  // records; a current-format address has none, which the table shows as a missing value rather
+  // than as a district it does not have.
+  houseNumber: string | null;
+  street: string | null;
+  commune: string | null;
+  district: string | null;
+  // The official names of the province, district and ward this variant chose, largest tier first.
+  // The catalogue read states them so a chosen unit is searchable by its official name; the stream
+  // read answers a typed query in the database instead and states none.
+  units?: string[];
 };
-import type { InventoryOrder } from './age-cursor';
+import type { InventoryOrder } from './stream';
 
 export type PropertySummary = {
   id: string;
   propertyCode: string;
   listingMode: string;
   status: string;
+  // The recorded type, the two recorded prices and the recorded creation and modification times:
+  // the table states them and the drawer repeats them.
+  propertyType: string;
+  salePriceVnd: string | null;
+  monthlyRentVnd: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
   addresses: AddressSummary[];
   coverFileId: string | null;
-  // Present only in the chronological inventory views. An absent field means the ordering does
-  // not apply here; null entryOn with entrySource 'unknown' is the explicit unknown date.
+  // The recorded original entry date and the database-computed age, returned by the stream read
+  // for both orderings but shown only in the chronological views. null entryOn with entrySource
+  // 'unknown' is the explicit unknown date.
   entryOn?: string | null;
   entrySource?: string | null;
   ageDays?: number | null;
   // Plot and floor fields the site plate draws from, kept exactly as the
-  // database returns them. search_properties returns setof public.properties, so
-  // these need no schema change.
+  // database returns them. The stream read casts them to text, so no schema change
+  // is needed to carry them.
   frontageM: string | null;
   depthM: string | null;
   landAreaM2: string | null;
@@ -29,11 +48,34 @@ export type PropertySummary = {
   floors: number | null;
   direction: string | null;
   accessType: string | null;
+  // The display name of the employee the record references as its creator, resolved from
+  // that employee row. Null when the creator is missing or no longer resolvable, which the
+  // card renders as nothing rather than as a placeholder.
+  createdBy: string | null;
+  // The display name of the colleague the record references as its last modifier, resolved the
+  // same way and absent for the same reasons as the creator. Carried on the summary so the quick
+  // view states it without a read of its own.
+  updatedBy?: string | null;
+  // The creator's employee identity, carried by the reads that return it so a filter can compare
+  // who created a record rather than the display name two colleagues can share. Absent when a read
+  // states no creator reference at all, which the whole-inventory read does not.
+  createdById?: string | null;
 };
-export type PropertyPage = {
+// One page of the browser catalogue: the summaries this page carries and the cursor the page after
+// it starts after, or null when this page ended the traversal. The cursor is a position in one
+// stable ordering, never a grant of access to the rows it names.
+export type CataloguePage = {
   properties: PropertySummary[];
   nextCursor: string | null;
-  order?: InventoryOrder;
+};
+// One window of the stream: the rows this read answered with, the position they start at, and the
+// matching total that arrived on the same read, so the count and the rows cannot describe
+// different result sets.
+export type PropertyStream = {
+  properties: PropertySummary[];
+  total: number;
+  offset: number;
+  order: InventoryOrder | null;
 };
 // A pending request never reserves the property; only an approved, unexpired reservation is
 // effective and it carries the claimant and the expiry the browser displays.
@@ -56,6 +98,50 @@ export type ReservationState = {
   effective: EffectiveReservation | null;
   pending: ReservationRequest[];
   canDecide: boolean;
+  // The property's catalogued summary as the server read it back with this answer, so the browser
+  // refreshes its own copy from server state rather than from what it held. Absent when the server
+  // could not read it back, and null when the property is no longer in the caller's catalogue.
+  summary?: PropertySummary | null;
+};
+// One member of a shared-address group, as the comparison reads it. Owner names are listed the
+// way the record's own contact panel lists them; no phone crosses this boundary.
+export type AddressGroupMember = {
+  id: string;
+  propertyCode: string;
+  listingMode: string;
+  status: string;
+  salePriceVnd: string | null;
+  landAreaM2: string | null;
+  floorAreaM2: string | null;
+  frontageM: string | null;
+  depthM: string | null;
+  owners: string[];
+};
+// The group is empty for a unique address, so the indicator appears only when it holds a second
+// property. keepId names the most complete record, the one a merge would keep.
+export type AddressGroup = {
+  keepId: string | null;
+  members: AddressGroupMember[];
+};
+// What the pre-create warning names: the identity and recorded code of a property that already
+// records the address being saved. Nothing about its owner or contacts crosses this boundary.
+export type AddressMatch = {
+  id: string;
+  propertyCode: string;
+};
+export type MergeReport = {
+  keep: { id: string; propertyCode: string };
+  merged: { id: string; propertyCode: string }[];
+  moved: {
+    files: number;
+    contactLinks: number;
+    alreadyLinked: number;
+    history: number;
+  };
+  // The kept property's authoritative summary as the server read it back (absent when it could not
+  // be read at all: the browser then reads the catalogue again). The retired records are the ones
+  // `merged` names, so that one list is what the browser drops.
+  summary?: PropertySummary | null;
 };
 // The database returns the disclosure contact and the committed activity reference. A matched
 // retry can return the reference without a contact when the owner link was later removed.

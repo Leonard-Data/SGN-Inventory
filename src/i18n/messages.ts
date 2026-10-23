@@ -25,6 +25,85 @@ const vi = {
   previous: 'Trang trước',
   next: 'Trang tiếp',
   first: 'Trang đầu',
+  last: 'Trang cuối',
+  inventoryMatchCount: 'Tổng {total} bất động sản phù hợp',
+  // The results are one stream of everything the filters match: the address states which view
+  // draws it, never which page of it holds a row.
+  viewLabel: 'Cách hiển thị',
+  viewCards: 'Thẻ',
+  viewTable: 'Bảng',
+  streamPartialFailed: 'Chưa tải được một phần danh sách.',
+  columnPropertyId: 'Mã bất động sản',
+  columnCreatedDate: 'Ngày tạo',
+  columnPrice: 'Giá',
+  columnStatus: 'Trạng thái',
+  columnHouseNumber: 'Số nhà',
+  columnStreet: 'Đường',
+  columnWard: 'Xã / phường',
+  columnDistrict: 'Quận / huyện',
+  columnTotalArea: 'Tổng diện tích (m²)',
+  columnModifiedTime: 'Cập nhật lúc',
+  // The modified column says how long ago a record changed, until a week has passed and the
+  // recorded day places it better than a phrase does.
+  relativeJustNow: 'vừa xong',
+  relativeMinuteAgo: '{n} phút trước',
+  relativeMinutesAgo: '{n} phút trước',
+  relativeHourAgo: '{n} giờ trước',
+  relativeHoursAgo: '{n} giờ trước',
+  relativeDayAgo: '{n} ngày trước',
+  relativeDaysAgo: '{n} ngày trước',
+  quickView: 'Xem nhanh',
+  recordActions: 'Thao tác',
+  inventorySearchHint: 'Tìm theo địa chỉ hoặc mã hồ sơ, không cần dấu.',
+  searchHelp: 'Cách tìm kiếm',
+  inventorySearchHelp:
+    'Tìm theo một đoạn địa chỉ liên tiếp hoặc một mã hồ sơ. Dấu % và _ được tìm như ký tự thường. Dùng bộ lọc để giới hạn giá, diện tích và khu vực.',
+  // The address box narrows the page the browser already holds, so what the person sees is stated
+  // as the loaded catalogue and never as a search of the whole inventory.
+  catalogueLocalCount:
+    'Trong danh mục đã tải: {matches} / {loaded} bất động sản phù hợp.',
+  catalogueLocalNote:
+    'Kết quả lọc trong danh mục đã tải theo mã bất động sản và các phần địa chỉ đã ghi; nhấn nút tìm kiếm để tìm toàn bộ kho, nơi cũng tìm theo tên tỉnh/thành phố đã ghi và tên chính thức của các đơn vị hành chính mà trang đã tải không giữ.',
+  catalogueSearchWholeNote:
+    'Trình duyệt chỉ so khớp mã bất động sản và các phần địa chỉ đã tải, nên tên tỉnh/thành phố đã ghi hay tên chính thức của các đơn vị hành chính chỉ được tìm khi tìm toàn bộ kho.',
+  catalogueSearchWhole: 'Tìm toàn bộ kho theo nội dung này',
+  catalogueLocalLoading:
+    'Đang tải danh mục. Nhấn nút tìm kiếm để tìm toàn bộ kho.',
+  catalogueLocalFailed:
+    'Không tải được danh mục. Nhấn nút tìm kiếm để tìm toàn bộ kho.',
+  catalogueLocalEmpty: 'Không có kết quả trong các bất động sản đã tải.',
+  // An empty list narrowed to the reader's own records says something about their own work, not
+  // about the inventory, so it never reads as "there is nothing here".
+  catalogueLocalNoneCreated: 'Không có hồ sơ nào bạn tạo khớp bộ lọc này.',
+  // The progressive load states no progress of its own: the rows paint from the catalogue the
+  // browser holds, so a load that stopped says so beside its retry and nothing claims a count.
+  catalogueLoadFailed: 'Không tải được danh mục.',
+  catalogueLoadStopped:
+    'Đã dừng tải danh mục; vẫn tìm được trong các bất động sản đã tải.',
+  catalogueMoreMatches: 'Có thể có thêm kết quả khi quá trình tải tiếp tục.',
+  catalogueRefresh: 'Làm mới danh mục',
+  catalogueRefreshKnown:
+    'Đang làm mới danh mục · {loaded} / {total} bất động sản · khoảng {percent}%',
+  catalogueRefreshUnknown:
+    'Đang làm mới danh mục · đã tải {loaded} bất động sản',
+  catalogueRefreshResumedKnown:
+    'Tiếp tục làm mới danh mục · {loaded} / {total} bất động sản · khoảng {percent}%',
+  catalogueRefreshResumedUnknown:
+    'Tiếp tục làm mới danh mục · đã tải {loaded} bất động sản',
+  catalogueRefreshStopped:
+    'Làm mới danh mục đã dừng · đã tải {loaded} bất động sản. Thử lại sẽ tiếp tục từ đây.',
+  vndBillion: ' tỷ',
+  vndMillion: ' triệu',
+  quickUpload: 'Tải tập tin nhanh',
+  ownerContact: 'Liên hệ chủ nhà',
+  showOwnerPhone: 'Hiện số điện thoại chủ nhà',
+  hideOwnerPhone: 'Ẩn số điện thoại chủ nhà',
+  fullRecord: 'Mở hồ sơ',
+  editProperty: 'Sửa thông tin',
+  editPrice: 'Sửa giá',
+  editNote: 'Sửa ghi chú',
+  addNote: 'Thêm ghi chú',
+  recentPosts: 'Bình luận vừa đăng',
   listingMode: 'Loại giao dịch',
   status: 'Trạng thái kho',
   address: 'Địa chỉ',
@@ -44,37 +123,65 @@ const vi = {
   rented: 'Đã cho thuê',
   withdrawn: 'Ngừng chào',
   archived: 'Hồ sơ lưu trữ — chỉ người quản lý xem',
-  search: 'Tìm địa chỉ',
+  search: 'Tìm địa chỉ hoặc mã hồ sơ',
   searchHint:
-    'Nhập một đoạn địa chỉ liền nhau; không cần dấu. % và _ là ký tự thường, không phải ký tự đại diện.',
-  queryTooLong: 'Địa chỉ tìm kiếm tối đa 120 ký tự.',
-  sortLabel: 'Thứ tự theo ngày nhập kho',
-  sortDefault: 'Mặc định',
-  sortOldest: 'Cũ nhất trước',
-  sortNewest: 'Mới nhất trước',
-  orderReverse: 'Đảo chiều',
-  orderReverseHint: 'Chọn thứ tự theo ngày nhập kho để đảo chiều thứ tự.',
+    'Nhập một đoạn địa chỉ liền nhau hoặc một mã hồ sơ; không cần dấu. % và _ là ký tự thường, không phải ký tự đại diện.',
+  queryTooLong: 'Địa chỉ hoặc mã hồ sơ tìm kiếm tối đa 120 ký tự.',
+  sortLabel: 'Thứ tự',
+  sortDefault: 'Mới cập nhật gần đây',
+  sortOldest: 'Ngày nhập kho: cũ nhất trước',
+  sortNewest: 'Ngày nhập kho: mới nhất trước',
+  // The column control above the table, and the state the Order control shows while a column
+  // header is what set the order.
+  columnsLabel: 'Cột hiển thị',
+  sortByHeader: 'Theo tiêu đề cột',
   ageHint:
     'Chỉ gồm hồ sơ đang chào hoặc đang thương lượng, chưa lưu trữ. Thứ tự dùng ngày nhập kho gốc, không đổi khi cập nhật, đổi giá hoặc đăng lại. Hồ sơ chưa xác định ngày nhập kho được liệt kê sau cùng, không bị ẩn.',
   filters: 'Bộ lọc',
   filtersApply: 'Áp dụng bộ lọc',
+  catalogueFiltersHeading: 'Bộ lọc trong danh mục đã tải',
+  catalogueFiltersHint:
+    'Các bộ lọc này chạy ngay trên danh mục đã tải trong trình duyệt và không gửi yêu cầu nào.',
+  catalogueFiltersAdvancedHint:
+    'Địa chỉ bạn đã tìm hoặc bất kỳ tiêu chí toàn kho nào trong bảng này khiến lần chạy trở thành một lần tìm từ cơ sở dữ liệu, và chính yêu cầu đó áp dụng cả các bộ lọc này.',
+  advancedSearchHeading: 'Tìm kiếm toàn kho',
+  advancedSearchHint:
+    'Tỉnh/thành phố, xã/phường, người liên hệ và thứ tự theo ngày nhập kho không có trong danh mục đã tải, nên chúng chỉ được tìm khi bạn bấm nút bên dưới. Kết quả khi đó là câu trả lời của toàn kho, không phải của danh mục đã tải.',
+  advancedSearchRun: 'Tìm toàn kho',
+  advancedSearchNote:
+    'Kết quả tìm kiếm trên toàn kho, không phải danh mục đã tải.',
   filtersClear: 'Xoá bộ lọc',
   filtersRemove: 'Bỏ điều kiện lọc',
   filtersAny: 'Tất cả',
-  filtersInvalid: 'Bộ lọc chưa hợp lệ. Kiểm tra lại giá và diện tích đã nhập.',
+  filtersInvalid:
+    'Bộ lọc chưa hợp lệ. Kiểm tra lại giá, diện tích, chiều ngang và chiều sâu đã nhập.',
+  addressFormat: 'Định dạng địa chỉ',
+  addressFormatHint:
+    'Chỉ hồ sơ có địa chỉ ở định dạng đã chọn mới khớp, và nội dung tìm kiếm chỉ so với địa chỉ ở định dạng đó: địa chỉ cũ là mặc định, địa chỉ mới khi bạn chọn. Bỏ điều kiện định dạng để tìm trong cả hai định dạng; hồ sơ không có địa chỉ ở định dạng đã chọn không xuất hiện.',
+  // Matches nothing, so nothing is committed: the picker states why.
+  comboboxNoMatch: 'Không có đơn vị chính thức nào khớp với nội dung đã gõ.',
   priceFilterHint:
-    'Không chọn loại giao dịch: mỗi hồ sơ dùng giá chào riêng — hồ sơ cho thuê dùng giá thuê tháng (VND/tháng), còn hồ sơ bán và bán và cho thuê dùng giá bán (nguyên VND). Chọn Bán hoặc Bán và cho thuê để chỉ so sánh giá bán; chọn Cho thuê để chỉ so sánh giá thuê tháng.',
+    'Giá nhập theo đơn vị tỷ, triệu hoặc VND và được so sánh bằng VND nguyên. Không chọn loại giao dịch: mỗi hồ sơ dùng giá chào riêng — hồ sơ cho thuê dùng giá thuê tháng, còn hồ sơ bán và bán và cho thuê dùng giá bán. Chọn Bán hoặc Bán và cho thuê để chỉ so sánh giá bán; chọn Cho thuê để chỉ so sánh giá thuê tháng.',
   areaFilterHint:
     'Diện tích khớp khi diện tích đất hoặc diện tích sàn nằm trong khoảng.',
   province: 'Tỉnh / thành phố',
+  district: 'Quận / huyện',
   ward: 'Xã / phường',
   areaAdminHint:
-    'Lọc theo tỉnh/thành phố và xã/phường của địa chỉ. Chọn tỉnh/thành phố sẽ gồm mọi xã/phường thuộc tỉnh/thành phố đó; chọn xã/phường sẽ thu hẹp trong xã/phường đó. Khi cả hai được chọn, xã/phường là điều kiện có hiệu lực.',
+    'Công ty ghi địa chỉ trong một tỉnh/thành phố, nên quận/huyện và xã/phường đều thuộc tỉnh/thành phố đó. Địa chỉ cũ gồm quận/huyện và xã/phường — chọn quận/huyện để thu hẹp danh sách xã/phường; địa chỉ mới chỉ gồm xã/phường. Chọn được nhiều xã/phường cùng lúc: kết quả gồm mọi hồ sơ thuộc bất kỳ xã/phường nào đã chọn, và khi nhiều cấp được chọn, tất cả cùng có hiệu lực trên cùng một địa chỉ.',
+  wardAdd: 'Thêm xã / phường',
+  areaLevelHint: 'Chọn cấp địa chỉ phía trên trước để dùng bộ lọc này.',
   areaFilterUnavailable:
-    'Chưa tải được danh mục tỉnh/thành phố và xã/phường. Bộ lọc giá và diện tích vẫn dùng được.',
+    'Chưa tải được danh mục quận/huyện và xã/phường. Bộ lọc giá và diện tích vẫn dùng được.',
   contactFilter: 'Người liên hệ',
   contactFilterHint:
     'Chỉ gồm người liên hệ bạn được phép đọc. Bộ lọc này kết hợp với các điều kiện khác.',
+  // The price field: the unit the amount is typed in, and the whole-VND amount it will save.
+  priceUnit: 'Đơn vị giá',
+  priceSaves: 'Sẽ lưu:',
+  priceInvalid:
+    'Số tiền không hợp lệ. Chỉ dùng chữ số và tối đa một dấu phẩy hoặc dấu chấm cho phần thập phân mà đơn vị đã chọn có.',
+  priceConfirm: 'Số tiền này có vẻ bất thường. Lưu đúng số tiền đang hiển thị?',
   priceUnitVnd: 'VND',
   priceUnitMonthly: 'VND/tháng',
   priceRangeFrom: 'Giá từ',
@@ -85,8 +192,18 @@ const vi = {
   rentPriceTo: 'Giá thuê tháng đến',
   areaRangeFrom: 'Diện tích từ',
   areaRangeTo: 'Diện tích đến',
+  frontageRangeFrom: 'Chiều ngang từ',
+  frontageRangeTo: 'Chiều ngang đến',
+  depthRangeFrom: 'Chiều sâu từ',
+  depthRangeTo: 'Chiều sâu đến',
+  dimensionFilterHint:
+    'Chiều ngang và chiều sâu tính theo mét và khớp khi giá trị đã ghi nằm trong khoảng. Hồ sơ chưa ghi kích thước không khớp với khoảng đã đặt.',
   emptyFiltered: 'Không có bất động sản khớp bộ lọc.',
   entryDate: 'Ngày nhập kho gốc',
+  createdBy: 'Người tạo hồ sơ',
+  modifiedBy: 'Người sửa hồ sơ',
+  creatorFilter: 'Người tạo',
+  mine: 'Do tôi tạo',
   entryDateUnknown: 'Chưa xác định',
   entryDateLegacy: 'Theo hồ sơ gốc',
   entrySourceRecorded: 'Ghi nhận khi tạo hồ sơ',
@@ -131,6 +248,24 @@ const vi = {
   direction: 'Hướng',
   contacts: 'Liên hệ chủ nhà / môi giới',
   noContacts: 'Chưa có liên kết liên hệ được ghi nhận.',
+  // A recorded contact number is a new row beside the earlier ones: the newest is shown first
+  // and nothing already recorded is rewritten.
+  contactNumber: 'Số liên hệ',
+  contactNumberNewest: 'Số liên hệ mới nhất',
+  addContactNumber: 'Thêm số liên hệ',
+  contactNumberName: 'Tên người liên hệ',
+  contactNumberPhone: 'Số điện thoại',
+  contactNumberSave: 'Lưu số liên hệ',
+  contactNumberSaved: 'Đã thêm số liên hệ.',
+  contactNumberNote:
+    'Số mới hiển thị trước; các liên hệ đã ghi trước đó vẫn được giữ nguyên.',
+  contactNumberDenied: 'Bạn không thể thêm số liên hệ cho bất động sản này.',
+  contactNumberInvalid: 'Kiểm tra tên người liên hệ và số điện thoại.',
+  contactNumberFailed:
+    'Chưa xác nhận được kết quả. Đọc lại thông tin hiện tại trước khi thử lại.',
+  // The record is committed and the contact is not: the two outcomes are stated separately.
+  createContactFailed:
+    'Đã tạo bất động sản nhưng chưa ghi được số liên hệ. Thêm số liên hệ trong hồ sơ vừa tạo.',
   owner: 'Chủ nhà',
   broker: 'Môi giới',
   representative: 'Đại diện',
@@ -302,9 +437,10 @@ const vi = {
   openMenu: 'Mở menu điều hướng',
   breadcrumb: 'Đường dẫn',
   close: 'Đóng',
-  navSearch: 'Tìm kiếm',
+  navHome: 'Trang chủ',
   navNewProperty: 'Thêm bất động sản',
   navCorrections: 'Yêu cầu đính chính',
+  navStatusRequests: 'Yêu cầu đổi trạng thái',
   sales: 'Kinh doanh',
   staff: 'Nhân viên',
   manager: 'Quản lý',
@@ -317,8 +453,11 @@ const vi = {
     'Các danh tính nhân viên đã được ghi nhận. “Chưa liên kết đăng nhập” chỉ nói về tài khoản đăng nhập; trạng thái lời mời được hiển thị riêng theo bản ghi lời mời thực tế.',
   employeeDirectoryEmpty: 'Chưa có danh tính nhân viên nào được ghi nhận.',
   employeeDirectoryFailed: 'Không thể tải danh sách nhân viên.',
-  employeePageInfo: 'Trang này: {n} nhân viên',
+  employeeLoadedInfo: 'Đã tải {n} nhân viên',
   employeeName: 'Họ tên',
+  employeeUnnamed: 'Chưa có tên',
+  employeeInvitationHistory: 'Lịch sử lời mời',
+  discardChanges: 'Bạn có thay đổi chưa lưu. Hủy các thay đổi này?',
   employeeRole: 'Vai trò',
   employeeAccess: 'Trạng thái truy cập',
   employeeAccessActive: 'Đang hoạt động',
@@ -445,6 +584,69 @@ const vi = {
     'Máy chủ chưa có cấu hình gửi lời mời. Yêu cầu đã được ghi nhận; hãy thử lại sau khi cấu hình được khôi phục.',
   employeeInviteLoadFailed: 'Không thể tải trạng thái lời mời.',
   employeeInviteOpen: 'Ghi nhận lời mời',
+  // Sending a recorded invitation again (expired or lost links).
+  employeeInviteResendOpen: 'Gửi lại lời mời',
+  employeeInviteResendConfirm: 'Gửi lại lời mời',
+  employeeInviteResendCountLabel: 'Số lần đã gửi lại',
+  employeeInviteResendLast: 'Lần gửi lại gần nhất',
+  employeeInviteResendNever: 'Chưa gửi lại lần nào',
+  employeeInviteResendSentLabel: 'Đã gửi',
+  employeeInviteResendFailedLabel: 'Bị từ chối',
+  employeeInviteResendUnconfirmedLabel: 'Chưa xác nhận',
+  employeeInviteResendNote:
+    'Gửi lại sẽ tạo một liên kết mới cho đúng địa chỉ đã ghi nhận; liên kết cũ từ lời mời trước có thể không còn dùng được. Lời mời vẫn ở trạng thái đã ghi nhận và mỗi lần gửi lại được ghi nhận riêng.',
+  employeeInviteResendRoleNote:
+    'Vai trò đã ghi nhận được giữ nguyên; lần gửi lại không thay đổi vai trò hay người được mời.',
+  employeeInviteResendSuccess:
+    'Nhà cung cấp đã nhận lần gửi lại; trạng thái đã ghi nhận và thời điểm gửi được hiển thị bên dưới.',
+  employeeInviteResendFailed:
+    'Nhà cung cấp từ chối lần gửi lại nên không có liên kết mới nào được gửi. Trạng thái đã ghi nhận trước đó vẫn giữ nguyên.',
+  employeeInviteResendUnconfirmed:
+    'Chưa xác nhận được lần gửi lại. Trạng thái đã ghi nhận trước đó vẫn giữ nguyên; hãy thử lại.',
+  employeeInviteResendNotRecorded:
+    'Chưa có lời mời nào được nhà cung cấp xác nhận cho người này, nên không có gì để gửi lại.',
+  employeeInviteAlreadyAccepted:
+    'Người này đã chấp nhận lời mời hoặc tài khoản đã hoạt động; không thể gửi lại lời mời.',
+  // Employee profile edit and the signed-in person's own profile.
+  employeeBio: 'Tiểu sử',
+  employeeBioNone: 'Chưa có tiểu sử',
+  employeePhone: 'Số điện thoại',
+  employeeEdit: 'Sửa thông tin',
+  employeeEditNote:
+    'Sửa họ tên, số điện thoại, vai trò và tiểu sử đã ghi nhận. Email đăng nhập không đổi được ở đây; thao tác chỉ được lưu khi bấm lưu và báo lại những gì đã thay đổi.',
+  employeeEditEmailNote:
+    'Email đăng nhập không phải trường sửa được; hãy dùng quy trình tài khoản riêng nếu địa chỉ sai.',
+  employeeEditPhoneHint: 'Không bắt buộc. Giữ nguyên dạng số đã ghi nhận.',
+  employeeEditRoleHint:
+    'Vai trò được ghi vào hồ sơ nhân viên; mọi lần đổi vai trò đều được ghi lại.',
+  employeeEditBioHint:
+    'Văn bản thường, tối đa 280 ký tự, không có liên kết. Hiện trên mục của người này trong danh sách nhân viên.',
+  employeeEditSaved: 'Đã lưu thay đổi: {fields}.',
+  employeeEditNotEditable:
+    'Không sửa được: nhân viên đã bị tắt quyền truy cập hoặc tài khoản đăng nhập đã bị xóa.',
+  employeeEditLastAdmin:
+    'Không thể lưu: phải còn ít nhất một quản trị viên đang hoạt động.',
+  employeeEditNotFound: 'Không tìm thấy nhân viên này.',
+  employeeProfileTitle: 'Thông tin của tôi',
+  employeeProfileIntro:
+    'Bạn tự sửa họ tên và tiểu sử của mình. Số điện thoại, vai trò và email đăng nhập do quản trị viên quản lý.',
+  employeeProfileNameHint:
+    'Tên hiển thị của bạn trong ứng dụng. Văn bản thường, tối đa 120 ký tự.',
+  employeeProfileBioHint:
+    'Văn bản thường, tối đa 280 ký tự, không có liên kết. Người xem danh sách nhân viên sẽ đọc tiểu sử này trên mục của bạn.',
+  employeeProfileEmailNote:
+    'Email đăng nhập không thay đổi ở đây và không phải trường của biểu mẫu này.',
+  employeeProfileSave: 'Lưu thay đổi',
+  employeeProfileSaved: 'Đã lưu họ tên và tiểu sử của bạn.',
+  employeeProfileUnchanged: 'Không có thay đổi nào để lưu.',
+  employeeProfileNameRequired: 'Hãy nhập họ tên.',
+  employeeProfileNameTooLong: 'Họ tên tối đa 120 ký tự.',
+  employeeProfilePhoneTooLong: 'Số điện thoại tối đa 40 ký tự.',
+  employeeProfileBioTooLong: 'Tiểu sử tối đa 280 ký tự.',
+  employeeProfilePlainText:
+    'Chỉ dùng văn bản thường: không có mã định dạng và không có liên kết.',
+  employeeProfileLoadFailed: 'Không thể tải thông tin của bạn.',
+  employeeProfileFailed: 'Không thể lưu thông tin của bạn.',
   // The invitation destination is now the acceptance journey (issue #69): the delivered link
   // is verified, the invitee sets a name and password, and activates immediately on success.
   inviteTitle: 'Thiết lập tài khoản',
@@ -550,13 +752,13 @@ const vi = {
     'Tìm theo tên đã ghi; chỉ tên, không tìm số điện thoại. % và _ là ký tự thường. Tối đa 120 ký tự.',
   contactColumnName: 'Người liên hệ',
   contactColumnRelation: 'Quan hệ trên bất động sản',
-  contactColumnPhone: 'Số điện thoại đã ghi',
+  contactColumnPhone: 'Số điện thoại',
   contactPrimaryLink: 'Liên hệ chính',
   contactColumnProperties: 'Bất động sản liên quan',
   contactColumnActions: 'Thao tác',
   contactNoProperties: 'Chưa gắn bất động sản nào',
   contactPropertyCount: '{n} liên kết đang hoạt động',
-  contactPageInfo: 'Trang này: {n} người liên hệ',
+  contactLoadedInfo: 'Đã tải {n} người liên hệ',
   contactDirectoryEmpty: 'Chưa có người liên hệ nào được ghi nhận.',
   contactDirectoryEmptyQuery: 'Không tìm thấy người liên hệ phù hợp.',
   contactOwnersEmpty:
@@ -572,10 +774,12 @@ const vi = {
   contactLinkedPropertiesNote:
     'Quan hệ được ghi theo từng bất động sản: cùng một người có thể là chủ nhà ở nơi này và môi giới ở nơi khác. Mọi bất động sản nêu trên đều nhận thay đổi và hiển thị thông tin mới ở lần đọc kế tiếp; thay đổi người liên hệ dùng chung không ghi vào lịch sử bất động sản.',
   contactClassifiedAs: 'Phân loại chung',
-  contactRawPhoneText: 'Văn bản điện thoại gốc',
-  contactEditorTitle: 'Đính chính người liên hệ dùng chung',
+  contactRawPhoneText: 'Số điện thoại ban đầu',
+  contactEditorTitle: 'Cập nhật thông tin liên hệ',
+  contactOptional:
+    'Để trống thông tin chưa biết. Giữ số điện thoại và nội dung theo nguồn đã ghi.',
   contactSharedIdentityNote:
-    'Đây là người liên hệ dùng chung: đính chính sẽ áp dụng cho mọi bất động sản đang gắn với người này.',
+    'Thay đổi này áp dụng cho tất cả bất động sản liên kết với người liên hệ.',
   saving: 'Đang lưu…',
   notes: 'Ghi chú',
   languageName: 'Ngôn ngữ / Language',
@@ -710,6 +914,11 @@ const vi = {
     'Bất động sản đã bán chưa có người được ghi nhận (tính đến {date}): {n} — hiển thị riêng, không gán cho nhân viên nào.',
   completedSalesFailed: 'Không tải được xếp hạng bán thành công.',
   rank: 'Hạng',
+  // Save confirmations. Each one names what was recorded, never a generic "saved".
+  toastDismiss: 'Đóng thông báo',
+  vendorCreated: 'Đã ghi nhận nhà cung cấp.',
+  vendorLinked: 'Đã liên kết nhà cung cấp.',
+  vendorUnlinked: 'Đã gỡ liên kết nhà cung cấp.',
 };
 export type MessageKey = keyof typeof vi;
 
@@ -741,11 +950,89 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     previous: 'Previous page',
     next: 'Next page',
     first: 'First page',
+    last: 'Last page',
+    inventoryMatchCount: '{total} matching properties',
+    viewLabel: 'View',
+    viewCards: 'Cards',
+    viewTable: 'Table',
+    streamPartialFailed: 'Part of the list could not be loaded.',
+    columnPropertyId: 'Property ID',
+    columnCreatedDate: 'Created date',
+    columnPrice: 'Price',
+    columnStatus: 'Status',
+    columnHouseNumber: 'House number',
+    columnStreet: 'Street',
+    columnWard: 'Commune / ward',
+    columnDistrict: 'District',
+    columnTotalArea: 'Total area (m²)',
+    columnModifiedTime: 'Modified',
+    relativeJustNow: 'just now',
+    relativeMinuteAgo: '{n} minute ago',
+    relativeMinutesAgo: '{n} minutes ago',
+    relativeHourAgo: '{n} hour ago',
+    relativeHoursAgo: '{n} hours ago',
+    relativeDayAgo: '{n} day ago',
+    relativeDaysAgo: '{n} days ago',
+    quickView: 'Quick view',
+    recordActions: 'Actions',
+    inventorySearchHint:
+      'Search by address or property code; accents are optional.',
+    searchHelp: 'Search help',
+    inventorySearchHelp:
+      'Search for a continuous address fragment or a property code. The % and _ characters are literal. Use filters to narrow the price, area and location.',
+    // The address box narrows the page the browser already holds, so what the person sees is
+    // stated as the loaded catalogue and never as a search of the whole inventory.
+    catalogueLocalCount:
+      'In the loaded catalogue: {matches} of {loaded} properties match.',
+    catalogueLocalNote:
+      'Matches are filtered in the loaded catalogue on the property code and the recorded address parts; use the search button to search the whole inventory, which also matches the recorded province label and the official unit names the loaded page does not carry.',
+    catalogueSearchWholeNote:
+      'The browser matches only the property code and the address parts it holds, so a province label or an official unit name is searched only by the whole-inventory search.',
+    catalogueSearchWhole: 'Search the whole inventory for this text',
+    catalogueLocalLoading:
+      'Loading the catalogue. Use the search button to search the whole inventory.',
+    catalogueLocalFailed:
+      'The catalogue could not be loaded. Use the search button to search the whole inventory.',
+    catalogueLocalEmpty: 'No matches in the loaded properties.',
+    // An empty list narrowed to the reader's own records says something about their own work, not
+    // about the inventory, so it never reads as "there is nothing here".
+    catalogueLocalNoneCreated: 'No property you created matches this filter.',
+    // The progressive load states no progress of its own: the rows paint from the catalogue the
+    // browser holds, so a load that stopped says so beside its retry and nothing claims a count.
+    catalogueLoadFailed: 'The catalogue could not be loaded.',
+    catalogueLoadStopped:
+      'The catalogue stopped loading; the properties already loaded stay searchable.',
+    catalogueMoreMatches: 'More matches may appear as loading continues.',
+    catalogueRefresh: 'Refresh catalogue',
+    catalogueRefreshKnown:
+      'Refreshing catalogue · {loaded} / {total} properties · approximately {percent}%',
+    catalogueRefreshUnknown:
+      'Refreshing catalogue · {loaded} properties loaded',
+    catalogueRefreshResumedKnown:
+      'Continuing the catalogue refresh · {loaded} / {total} properties · approximately {percent}%',
+    catalogueRefreshResumedUnknown:
+      'Continuing the catalogue refresh · {loaded} properties loaded',
+    catalogueRefreshStopped:
+      'Catalogue refresh stopped · {loaded} properties loaded. Retry continues from here.',
+    vndBillion: 'bn',
+    vndMillion: 'm',
+    quickUpload: 'Quick upload',
+    ownerContact: 'Owner contact',
+    showOwnerPhone: 'Show owner phone',
+    hideOwnerPhone: 'Hide owner phone',
+    fullRecord: 'Open record',
+    editProperty: 'Edit property',
+    editPrice: 'Edit price',
+    editNote: 'Edit note',
+    addNote: 'Add note',
+    recentPosts: 'Posted here',
     listingMode: 'Listing mode',
     status: 'Inventory status',
     address: 'Address',
-    legacy: 'Legacy address',
-    current: 'Current address',
+    // The two address formats read as the labelled choices the form offers, so one format never
+    // reads two ways between the form and the record it states.
+    legacy: 'Legacy Address',
+    current: 'Current Address',
     alternate: 'Alternate address',
     unresolved: 'Unverified',
     candidate: 'Candidate address — unverified',
@@ -760,38 +1047,62 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     rented: 'Rented',
     withdrawn: 'Withdrawn',
     archived: 'Archived record — reviewers only',
-    search: 'Search address',
+    search: 'Search address or property code',
     searchHint:
-      'Enter a contiguous address fragment; accents are optional. % and _ are literal characters, not wildcards.',
-    queryTooLong: 'Search addresses must be at most 120 characters.',
-    sortLabel: 'Original entry date order',
-    sortDefault: 'Default',
-    sortOldest: 'Oldest first',
+      'Enter a contiguous address fragment or a property code; accents are optional. % and _ are literal characters, not wildcards.',
+    queryTooLong:
+      'Search addresses or property codes must be at most 120 characters.',
+    sortLabel: 'Order',
+    sortDefault: 'Most recently changed first',
+    sortOldest: 'Oldest inventory entry first',
     sortNewest: 'Newest first',
-    orderReverse: 'Reverse',
-    orderReverseHint: 'Choose an entry-date order to reverse it.',
+    columnsLabel: 'Columns',
+    sortByHeader: 'Set by the table header',
     ageHint:
       'Available and negotiating unarchived inventory only. Order uses the original inventory entry date and does not change on update, price edit or relisting. Records with an unknown entry date are listed last, never hidden.',
     filters: 'Filters',
     filtersApply: 'Apply filters',
+    catalogueFiltersHeading: 'Filters in the loaded catalogue',
+    catalogueFiltersHint:
+      'These filters run on the loaded catalogue in the browser and send no request.',
+    catalogueFiltersAdvancedHint:
+      'The address you submitted, or any whole-inventory criterion in this panel, makes the run one database search, and that request applies these filters too.',
+    advancedSearchHeading: 'Whole-inventory search',
+    advancedSearchHint:
+      'Province/city, commune/ward, contact and the inventory-entry order are not in the loaded catalogue, so they are searched only when you press the button below. Those results are the whole inventory, not the loaded catalogue.',
+    advancedSearchRun: 'Run advanced search',
+    advancedSearchNote:
+      'These results come from a whole-inventory search, not from the loaded catalogue.',
     filtersClear: 'Clear filters',
     filtersRemove: 'Remove filter',
     filtersAny: 'Any',
     filtersInvalid:
-      'The filter set is not valid. Check the entered price and area bounds.',
+      'The filter set is not valid. Check the entered price, area, frontage and depth bounds.',
+    addressFormat: 'Address format',
+    addressFormatHint:
+      'Only a property recording an address in the selected format matches, and a typed search is compared with that format’s address: the legacy address by default, the current one when you choose it. Clear the format filter to search both formats; a property with no address in the selected format does not appear.',
+    comboboxNoMatch: 'No official unit matches what you typed.',
     priceFilterHint:
-      'With no listing mode selected, each record uses its own asking price: rental records use monthly asking rent (VND/month), while sale and sale-and-rent records use asking sale price in whole VND. Select Sale or Sale and rent to compare asking sale prices only; select Rent to compare monthly asking rents only.',
+      'Prices take a tỷ, triệu or VND unit and are compared as whole VND. With no listing mode selected, each record uses its own asking price: rental records use monthly asking rent, while sale and sale-and-rent records use asking sale price. Select Sale or Sale and rent to compare asking sale prices only; select Rent to compare monthly asking rents only.',
     areaFilterHint:
       'Area matches when the land area or the floor area is inside the range.',
     province: 'Province / city',
+    district: 'District',
     ward: 'Commune / ward',
     areaAdminHint:
-      "Filter by the address's province/city and commune/ward. Choosing a province/city includes every commune/ward in it; choosing a commune/ward narrows to that ward. When both are set, the ward is the condition in force.",
+      'The company records addresses in one province/city, so the district and the commune/ward both belong to it. A legacy address has a district and a commune/ward — choosing a district narrows the commune/ward list; a current address has a commune/ward only. You can choose several communes/wards at once: the results are every record in any of them, and when several levels are set, all of them must hold on the same address.',
+    wardAdd: 'Add commune / ward',
+    areaLevelHint: 'Choose the level above first to use this filter.',
     areaFilterUnavailable:
-      'The province and ward catalog could not be loaded. The price and area filters still work.',
+      'The district and ward catalog could not be loaded. The price and area filters still work.',
     contactFilter: 'Contact',
     contactFilterHint:
       'Only contacts you may read. This filter combines with the other conditions.',
+    priceUnit: 'Price unit',
+    priceSaves: 'Saves:',
+    priceInvalid:
+      'Invalid amount. Use digits and at most one comma or dot for the decimal places the selected unit holds.',
+    priceConfirm: 'This amount looks unusual. Save exactly the amount shown?',
     priceUnitVnd: 'VND',
     priceUnitMonthly: 'VND/month',
     priceRangeFrom: 'Price from',
@@ -802,8 +1113,18 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     rentPriceTo: 'Monthly rent to',
     areaRangeFrom: 'Area from',
     areaRangeTo: 'Area to',
+    frontageRangeFrom: 'Frontage from',
+    frontageRangeTo: 'Frontage to',
+    depthRangeFrom: 'Depth from',
+    depthRangeTo: 'Depth to',
+    dimensionFilterHint:
+      'Frontage and depth are in metres and match when the recorded value is inside the range. A record with no recorded dimension does not match a stated range.',
     emptyFiltered: 'No property matches these filters.',
     entryDate: 'Original inventory entry date',
+    createdBy: 'Record created by',
+    modifiedBy: 'Record modified by',
+    creatorFilter: 'Created by',
+    mine: 'Created by me',
     entryDateUnknown: 'Unknown',
     entryDateLegacy: 'From the legacy record',
     entrySourceRecorded: 'Recorded when the record was created',
@@ -848,6 +1169,21 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     direction: 'Direction',
     contacts: 'Owner / broker contacts',
     noContacts: 'No recorded contact links.',
+    contactNumber: 'Contact number',
+    contactNumberNewest: 'Newest contact number',
+    addContactNumber: 'Add contact number',
+    contactNumberName: 'Contact name',
+    contactNumberPhone: 'Phone number',
+    contactNumberSave: 'Save contact number',
+    contactNumberSaved: 'Contact number added.',
+    contactNumberNote:
+      'The newest number shows first; earlier recorded contacts are kept as they are.',
+    contactNumberDenied: 'You cannot add a contact number to this property.',
+    contactNumberInvalid: 'Check the contact name and the phone number.',
+    contactNumberFailed:
+      'The outcome could not be confirmed. Read the current information before retrying.',
+    createContactFailed:
+      'Property created, but the contact number was not recorded. Add it on the record you just created.',
     owner: 'Owner',
     broker: 'Broker',
     representative: 'Representative',
@@ -1002,9 +1338,10 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     openMenu: 'Open navigation menu',
     breadcrumb: 'Breadcrumb',
     close: 'Close',
-    navSearch: 'Search',
+    navHome: 'Home',
     navNewProperty: 'Create property',
     navCorrections: 'Correction requests',
+    navStatusRequests: 'Status change requests',
     sales: 'Sales',
     staff: 'Staff',
     manager: 'Manager',
@@ -1017,8 +1354,11 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
       'Recorded employee identities. “Not linked to sign-in” only describes the sign-in account; a recorded invitation is shown as its own marker.',
     employeeDirectoryEmpty: 'No employee identities are recorded.',
     employeeDirectoryFailed: 'The employee list could not be loaded.',
-    employeePageInfo: 'This page: {n} employees',
+    employeeLoadedInfo: 'Loaded {n} employees',
     employeeName: 'Name',
+    employeeUnnamed: 'No name yet',
+    employeeInvitationHistory: 'Invitation history',
+    discardChanges: 'You have unsaved changes. Discard them?',
     employeeRole: 'Role',
     employeeAccess: 'Access',
     employeeAccessActive: 'Active',
@@ -1147,6 +1487,69 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
       'The server has no invitation configuration. The request is recorded; retry after configuration is restored.',
     employeeInviteLoadFailed: 'The invitation state did not load.',
     employeeInviteOpen: 'Record an invitation',
+    // Sending a recorded invitation again (expired or lost links).
+    employeeInviteResendOpen: 'Send the invitation again',
+    employeeInviteResendConfirm: 'Send the invitation again',
+    employeeInviteResendCountLabel: 'Further sends recorded',
+    employeeInviteResendLast: 'Last further send',
+    employeeInviteResendNever: 'Not sent again yet',
+    employeeInviteResendSentLabel: 'Sent',
+    employeeInviteResendFailedLabel: 'Refused',
+    employeeInviteResendUnconfirmedLabel: 'Unconfirmed',
+    employeeInviteResendNote:
+      'Sending it again creates a fresh link for exactly the recorded address; an earlier link from that invitation may stop working. The invitation stays recorded and each further send is recorded on its own.',
+    employeeInviteResendRoleNote:
+      'The recorded role stays as it is; sending it again changes neither the role nor the person.',
+    employeeInviteResendSuccess:
+      'The provider accepted the further send; the recorded state and the time it was sent are shown below.',
+    employeeInviteResendFailed:
+      'The provider refused the further send, so no new link was sent. The earlier recorded state is unchanged.',
+    employeeInviteResendUnconfirmed:
+      'The further send is not confirmed. The earlier recorded state is unchanged; retry when you are ready.',
+    employeeInviteResendNotRecorded:
+      'No invitation is recorded as accepted by the provider for this person, so there is nothing to send again.',
+    employeeInviteAlreadyAccepted:
+      'This person already accepted the invitation or their account is active; the invitation cannot be sent again.',
+    // Employee profile edit and the signed-in person's own profile.
+    employeeBio: 'Bio',
+    employeeBioNone: 'No bio yet',
+    employeePhone: 'Phone',
+    employeeEdit: 'Edit details',
+    employeeEditNote:
+      'Edit the recorded name, phone, role and bio. The sign-in email cannot be changed here; the save is one deliberate action and reports what changed.',
+    employeeEditEmailNote:
+      'The sign-in email is not an editable field; use the separate account process if the address is wrong.',
+    employeeEditPhoneHint: 'Optional. Keep the digits as recorded.',
+    employeeEditRoleHint:
+      'The role is recorded on the employee row; every role change is recorded with who made it.',
+    employeeEditBioHint:
+      'Plain text, at most 280 characters, no links. It appears on this person’s entry in the employee list.',
+    employeeEditSaved: 'Saved changes: {fields}.',
+    employeeEditNotEditable:
+      'Not editable: this employee is deactivated or their sign-in account is deleted.',
+    employeeEditLastAdmin:
+      'Cannot save: at least one active admin must remain.',
+    employeeEditNotFound: 'This employee could not be found.',
+    employeeProfileTitle: 'My profile',
+    employeeProfileIntro:
+      'You edit your own name and bio. Phone, role and the sign-in email are managed by an admin.',
+    employeeProfileNameHint:
+      'The name shown for you in the app. Plain text, at most 120 characters.',
+    employeeProfileBioHint:
+      'Plain text, at most 280 characters, no links. Anyone who opens the employee list reads this bio on your entry.',
+    employeeProfileEmailNote:
+      'The sign-in email is not changed here and is not a field of this form.',
+    employeeProfileSave: 'Save changes',
+    employeeProfileSaved: 'Your name and bio were saved.',
+    employeeProfileUnchanged: 'Nothing changed.',
+    employeeProfileNameRequired: 'Enter a name.',
+    employeeProfileNameTooLong: 'The name is at most 120 characters.',
+    employeeProfilePhoneTooLong: 'The phone is at most 40 characters.',
+    employeeProfileBioTooLong: 'The bio is at most 280 characters.',
+    employeeProfilePlainText:
+      'Plain text only: no formatting markup and no links.',
+    employeeProfileLoadFailed: 'Your profile could not be loaded.',
+    employeeProfileFailed: 'Your profile could not be saved.',
     // The invitation destination is now the acceptance journey (issue #69): the delivered link
     // is verified, the invitee sets a name and password, and activates immediately on success.
     inviteTitle: 'Set up your account',
@@ -1252,13 +1655,13 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
       'Matches the recorded name only, never a phone number. % and _ are ordinary characters. At most 120 characters.',
     contactColumnName: 'Contact',
     contactColumnRelation: 'Property relationship',
-    contactColumnPhone: 'Recorded phone',
+    contactColumnPhone: 'Phone',
     contactPrimaryLink: 'Primary contact',
     contactColumnProperties: 'Linked properties',
     contactColumnActions: 'Actions',
     contactNoProperties: 'No linked property',
     contactPropertyCount: '{n} active links',
-    contactPageInfo: 'This page: {n} contacts',
+    contactLoadedInfo: 'Loaded {n} contacts',
     contactDirectoryEmpty: 'No contacts are recorded.',
     contactDirectoryEmptyQuery: 'No contacts match this search.',
     contactOwnersEmpty:
@@ -1274,10 +1677,12 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     contactLinkedPropertiesNote:
       'The relationship is recorded per property: the same person may be an owner on one and a broker on another. Every property listed above receives the change and shows the new details on its next read; a shared-contact correction is not recorded in property history.',
     contactClassifiedAs: 'General classification',
-    contactRawPhoneText: 'Original phone text',
-    contactEditorTitle: 'Correct the shared contact',
+    contactRawPhoneText: 'Original phone number',
+    contactEditorTitle: 'Update contact details',
+    contactOptional:
+      'Leave unknown details blank. Preserve phone numbers and recorded source text.',
     contactSharedIdentityNote:
-      'This is the shared contact: a correction applies to every property linked to it.',
+      'This change applies to every property linked to this contact.',
     saving: 'Saving…',
     notes: 'Notes',
     signInHelp:
@@ -1432,6 +1837,11 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
       'Sold properties with no recorded closer (as of {date}): {n} — shown separately, never assigned to an employee.',
     completedSalesFailed: 'The completed-sales ranking did not load.',
     rank: 'Rank',
+    // Save confirmations. Each one names what was recorded, never a generic "saved".
+    toastDismiss: 'Dismiss notification',
+    vendorCreated: 'Vendor recorded.',
+    vendorLinked: 'Vendor linked.',
+    vendorUnlinked: 'Vendor unlinked.',
   },
 };
 export function label(

@@ -29,7 +29,7 @@ export async function recoverFiles(
     .maybeSingle();
   if (propertyError) throw new ApiError(503, 'unavailable');
   if (!property || property.archived_at)
-    throw new ApiError(403, 'access-denied');
+    throw new ApiError(403, 'property-unavailable');
   let query = context.client
     .from('property_files')
     .select(

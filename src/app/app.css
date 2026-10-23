@@ -4,26 +4,24 @@
    The reusable token layer of the design system: one palette, one type scale,
    one spacing scale, one set of radii, one motion curve.
 
-   Origin: the :root block below is byte-identical to the token block in
-   assets/sgn-app.css (the app layer that ships the six prototype screens), so
-   the prototype and any new surface share exactly one palette. Values are
-   copied, not paraphrased — do not "tidy" them.
+   Canonical token and base-rule owner for auth and application surfaces.
+   The palette originates in the design package; sgn-app.css consumes these
+   tokens and owns only shared component rules and scoped app variants.
 
    Colour rule: one accent, used at most twice per screen. --brand-deep is the
    accent mixed 58% toward black and covers the whole navigation rail, so the
    accent itself never has to carry surface area.
-   Type rule: three families, three jobs. Oswald 500 for display/titles, Inter
-   for all UI and body copy, IBM Plex Mono for codes, figures, units and every
-   uppercase micro-label. Figures are tabular.
-   Fonts are served from Google Fonts (see provenance: no font binaries exist
-   in the source evidence, so no fonts/ directory ships with this package).
+   Type rule: two families, two jobs. Inter carries every heading, label and
+   body line (600 headings, 400 body); IBM Plex Mono carries codes, figures,
+   units and every uppercase micro-label. Figures are tabular.
+   Fonts are self-hosted with next/font, including Vietnamese subsets.
    ════════════════════════════════════════════════════════════════════════════ */
 
-/* The package loads these three families from Google Fonts at runtime. This
+/* The package loads these families from Google Fonts at runtime. This
    application self-hosts them with next/font (see src/app/layout.tsx), which
-   exposes --sgn-font-display/--sgn-font-body/--sgn-font-mono; --font-* below
-   re-points to those instead of the CDN request. Same families, same weights,
-   no runtime network dependency. */
+   exposes --sgn-font-body/--sgn-font-mono; --font-* below re-points to those
+   instead of the CDN request. Same families, same weights, no runtime network
+   dependency. */
 
 :root {
   /* ── surfaces and ink ─────────────────────────────────────────────────── */
@@ -59,7 +57,6 @@
   --shadow-raise: 0 1px 2px color-mix(in oklab, var(--fg) 8%, transparent);
 
   /* ── type ─────────────────────────────────────────────────────────────── */
-  --font-display: var(--sgn-font-display), 'Arial Narrow', system-ui, sans-serif;
   --font-body: var(--sgn-font-body), system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: var(--sgn-font-mono), ui-monospace, Menlo, monospace;
 
@@ -67,9 +64,13 @@
   --text-sm: 14px;
   --text-base: 16px;
   --text-lg: 18px;
+  /* One heading scale, close to body size: a page title and a section title
+     read as levels of the same voice rather than two different faces. */
+  --text-h1: clamp(24px, 1.9vw, 28px);
+  --text-h2: clamp(18px, 1.5vw, 21px);
 
   --leading-body: 1.55;
-  --tracking-display: -.01em;
+  --tracking-heading: -.015em;
   --tracking-mono-wide: .14em;
 
   /* ── space ────────────────────────────────────────────────────────────── */
@@ -111,6 +112,13 @@
 /* ── reusable primitives promoted out of the app layer ───────────────────── */
 
 *, *::before, *::after { box-sizing: border-box; }
+/* The directories scroll with the document, so the document is the scrollport that reserves
+   the room its scrollbar takes. Without it every 100%-wide table reflows by the scrollbar's
+   width each time the page grows past the viewport while the stream loads and measures. The
+   inventory stream already reserves the same gutter on its own bounded scrollport. Scoped to
+   the application shell: the sign-in surfaces are centred cards that do not scroll, and this
+   change is not theirs. */
+html:has(.sgn-app) { scrollbar-gutter: stable; }
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
@@ -126,10 +134,10 @@ h1, h2, p, ol, ul, dl, dd, figure { margin: 0; }
 h1, h2, h3 { text-wrap: balance; }
 p { text-wrap: pretty; }
 h1, h2, .type-display {
-  font-family: var(--font-display);
-  font-weight: 500;
-  letter-spacing: var(--tracking-display);
-  line-height: 1.12;
+  font-family: var(--font-body);
+  font-weight: 600;
+  letter-spacing: var(--tracking-heading);
+  line-height: 1.2;
 }
 img { display: block; max-width: 100%; }
 button { font: inherit; color: inherit; cursor: pointer; }
@@ -148,8 +156,8 @@ a { color: inherit; }
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
 
-/* ── the three roles, spelled out ────────────────────────────────────────── */
-/* display   Oswald 500   clamp(26px,2.3vw,34px) page title · 1.12 · -.01em
+/* ── the roles, spelled out ──────────────────────────────────────────────── */
+/* heading   Inter 600    clamp(22px,1.9vw,28px) page title · 1.2 · -.015em
    lead      Inter 400    16px · 1.55
    body/UI   Inter 400/500/600  14–16px · 1.55
    micro     IBM Plex Mono 400  10–11px · uppercase · letter-spacing .06–.14em

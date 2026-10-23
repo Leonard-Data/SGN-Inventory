@@ -8,6 +8,13 @@ export function renderedSession(employee: Employee) {
   return `${employee.id}:${employee.role}`;
 }
 
+// The key one session's authorized scope is read, cached and painted under: the employee, their role
+// and the server-maintained access revision. Two sessions share a key only when all three agree, so
+// a row cached under one key is never shown for another.
+export function sessionScope(session: EmployeeSession) {
+  return `${renderedSession(session.employee)}:${session.accessRevision}`;
+}
+
 export function sessionDiffers(
   renderedFor: string | null,
   renderedAccessRevision: number | null,
@@ -35,17 +42,20 @@ export function refocusAction(
 // stops instead of reading again.
 export class AccessChangedError extends Error {}
 
+export type ProtectedSource<T> =
+  string | ((signal: AbortSignal, session: EmployeeSession) => Promise<T>);
+
 export async function loadProtected<T>(options: {
-  source: string | ((signal: AbortSignal) => Promise<T>);
+  source: ProtectedSource<T>;
   signal: AbortSignal;
   renderedFor: string | null;
   renderedAccessRevision: number | null;
   onIdentityChange: () => void;
 }) {
-  const readSource = () =>
+  const readSource = (session: EmployeeSession) =>
     typeof options.source === 'string'
       ? api<T>(options.source, undefined, options.signal)
-      : options.source(options.signal);
+      : options.source(options.signal, session);
   // The session read brackets the data read on both sides, so the data is only
   // accepted when the access it was authorized on did not move under it.
   let session = await api<EmployeeSession>(
@@ -64,7 +74,7 @@ export async function loadProtected<T>(options: {
     )
       options.onIdentityChange();
     options.signal.throwIfAborted();
-    const data = await readSource();
+    const data = await readSource(session);
     options.signal.throwIfAborted();
     const current = await api<EmployeeSession>(
       '/api/session',

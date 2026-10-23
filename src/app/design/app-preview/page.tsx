@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { AppShell } from '@/features/navigation/app-shell';
 import { Plate } from '@/features/properties/plate';
 import { PropertyCard } from '@/features/properties/property-card';
+import { LoadingSkeleton, SkeletonCards } from '@/features/skeleton';
 import { formatVnd, vietnamDate } from '@/features/properties/format';
 import { label, messages } from '@/i18n/messages';
 import { maintenanceText } from '@/features/property-maintenance/messages';
@@ -62,6 +63,7 @@ const reviewCopy = {
     edit: 'Sửa',
     deactivate: 'Vô hiệu hóa',
     reactivate: 'Kích hoạt lại',
+    loading: 'Đang tải…',
   },
   en: {
     timeline: 'Asking price',
@@ -98,6 +100,7 @@ const reviewCopy = {
     edit: 'Edit',
     deactivate: 'Deactivate',
     reactivate: 'Reactivate',
+    loading: 'Loading…',
   },
 };
 
@@ -205,6 +208,29 @@ export default function AppPreviewPage() {
               showEntry={record.entryOn !== undefined}
             />
           ))}
+        </div>
+      </section>
+
+      <section className="page-section">
+        <SkeletonCards label={reviewCopy[locale].loading} />
+        <div className="panel">
+          <div className="panel-body">
+            <LoadingSkeleton
+              label={reviewCopy[locale].loading}
+              shape="table"
+              rows={3}
+              columns={4}
+            />
+          </div>
+        </div>
+        <div className="panel">
+          <div className="panel-body">
+            <LoadingSkeleton
+              label={reviewCopy[locale].loading}
+              shape="rows"
+              rows={2}
+            />
+          </div>
         </div>
       </section>
 

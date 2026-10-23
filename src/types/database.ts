@@ -32,6 +32,49 @@ export type Database = {
         Update: never;
         Relationships: [];
       };
+      property_status_changes: {
+        Row: {
+          id: string;
+          property_id: string;
+          origin: string;
+          state: string;
+          from_status: string;
+          to_status: string;
+          requested_by: string;
+          requested_by_name: string;
+          requested_at: string;
+          note: string | null;
+          decided_by: string | null;
+          decided_by_name: string | null;
+          decided_at: string | null;
+          decision_reason: string | null;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [
+          {
+            foreignKeyName: 'property_status_changes_decided_by_fkey';
+            columns: ['decided_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'property_status_changes_property_id_fkey';
+            columns: ['property_id'];
+            isOneToOne: false;
+            referencedRelation: 'properties';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'property_status_changes_requested_by_fkey';
+            columns: ['requested_by'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       property_comment_removals: {
         Row: {
           author_id: string;
@@ -229,6 +272,7 @@ export type Database = {
           id: string;
           relation: string;
           resolution_notes: string | null;
+          source_attested: boolean;
           source_url: string;
           to_unit_id: string;
           verified_by: string | null;
@@ -239,6 +283,7 @@ export type Database = {
           id?: string;
           relation: string;
           resolution_notes?: string | null;
+          source_attested?: boolean;
           source_url: string;
           to_unit_id: string;
           verified_by?: string | null;
@@ -249,6 +294,7 @@ export type Database = {
           id?: string;
           relation?: string;
           resolution_notes?: string | null;
+          source_attested?: boolean;
           source_url?: string;
           to_unit_id?: string;
           verified_by?: string | null;
@@ -428,6 +474,7 @@ export type Database = {
           access_revision: number;
           account_deleted_at: string | null;
           auth_user_id: string | null;
+          bio: string | null;
           created_at: string;
           display_name: string;
           email: string;
@@ -441,6 +488,7 @@ export type Database = {
           access_revision?: number;
           account_deleted_at?: string | null;
           auth_user_id?: string | null;
+          bio?: string | null;
           created_at?: string;
           display_name: string;
           email: string;
@@ -454,6 +502,7 @@ export type Database = {
           access_revision?: number;
           account_deleted_at?: string | null;
           auth_user_id?: string | null;
+          bio?: string | null;
           created_at?: string;
           display_name?: string;
           email?: string;
@@ -558,6 +607,11 @@ export type Database = {
           provider_user_id: string | null;
           recorded_at: string | null;
           requested_at: string;
+          resend_actor_id: string | null;
+          resend_attempted_at: string | null;
+          resend_count: number;
+          resend_detail: string | null;
+          resend_outcome: string | null;
           revision: number;
           role: string;
           state: string;
@@ -1861,6 +1915,10 @@ export type Database = {
       };
     };
     Functions: {
+      add_property_contact: {
+        Args: { p_property_id: string; p_changes: Json };
+        Returns: string;
+      };
       begin_employee_account_deletion: {
         Args: { p_employee_id: string; p_key: string };
         Returns: Json;
@@ -1890,6 +1948,16 @@ export type Database = {
           p_outcome: string;
           p_provider_user_id?: string | null;
           p_detail?: string | null;
+        };
+        Returns: Json;
+      };
+      resend_employee_invitation: {
+        Args: {
+          p_invitation_id: string;
+          p_resend_count: number;
+          p_outcome: string;
+          p_detail?: string | null;
+          p_provider_user_id?: string | null;
         };
         Returns: Json;
       };
@@ -1964,7 +2032,41 @@ export type Database = {
         };
         Returns: string;
       };
+      property_address_group: {
+        Args: { p_property_id: string };
+        Returns: Json;
+      };
+      property_address_duplicates: {
+        Args: { p_address: Json };
+        Returns: Json;
+      };
+      merge_address_properties: {
+        Args: {
+          p_keep_property_id: string;
+          p_merge_property_ids: string[];
+          p_moved_object_ids?: string[];
+          p_move_signature?: string | null;
+        };
+        Returns: Json;
+      };
       create_contact: { Args: { p_changes: Json }; Returns: string };
+      record_address_candidate: {
+        Args: {
+          p_property_id: string;
+          p_legacy_address_id: string;
+          p_property_revision: string;
+        };
+        Returns: string;
+      };
+      convert_address_format: {
+        Args: {
+          p_property_id: string;
+          p_address_id: string;
+          p_address_revision: string;
+          p_property_revision: string;
+        };
+        Returns: string;
+      };
       contact_impact: { Args: { p_contact_id: string }; Returns: Json };
       submit_correction: {
         Args: {
@@ -2064,6 +2166,10 @@ export type Database = {
         Args: { p_action: string; p_payment_id: string; p_reason: string };
         Returns: undefined;
       };
+      decide_status_request: {
+        Args: { p_approve: boolean; p_change_id: string; p_reason: string };
+        Returns: Json;
+      };
       fail_property_upload: { Args: { p_file_id: string }; Returns: boolean };
       mark_upload_cleaned: { Args: { p_file_id: string }; Returns: undefined };
       employee_owner_contact_ranking: {
@@ -2134,6 +2240,20 @@ export type Database = {
           reason: string | null;
           removal_kind: string | null;
           version: number | null;
+        }[];
+      };
+      list_employee_names: {
+        Args: { p_ids: string[] };
+        Returns: { display_name: string; id: string }[];
+      };
+      list_employee_credit_options: {
+        Args: never;
+        Returns: {
+          account_deleted_at: string | null;
+          auth_user_id: string | null;
+          display_name: string;
+          id: string;
+          is_active: boolean;
         }[];
       };
       list_vendors: {
@@ -2309,99 +2429,93 @@ export type Database = {
         Args: { p_key: string; p_property_id: string };
         Returns: Json;
       };
-      list_inventory_by_age: {
+      page_inventory: {
         Args: {
-          p_after_id?: string;
-          p_after_on?: string;
-          p_after_unknown?: boolean;
-          p_area_id?: string;
-          p_area_max?: number;
-          p_area_min?: number;
-          p_contact_id?: string;
-          p_direction: string;
-          p_limit?: number;
-          p_mode?: string;
-          p_price_max?: string;
-          p_price_min?: string;
+          p_order?: string | null;
+          p_page?: number;
+          p_page_size?: number;
           p_query?: string;
           p_status?: string;
+          p_mode?: string;
           p_type?: string;
+          p_price_min?: string;
+          p_price_max?: string;
+          p_area_min?: number;
+          p_area_max?: number;
+          p_area_id?: string;
+          p_contact_id?: string;
         };
         Returns: {
-          access_type: string | null;
-          age_days: number | null;
+          total_count: number;
+          page_number: number;
+          id: string;
+          property_code: string;
+          listing_mode: string;
+          status: string;
           cover_file_id: string | null;
+          frontage_m: string | null;
           depth_m: string | null;
-          direction: string | null;
-          entry_on: string | null;
-          entry_source: string;
+          land_area_m2: string | null;
           floor_area_m2: string | null;
           floors: number | null;
-          frontage_m: string | null;
-          id: string;
-          land_area_m2: string | null;
-          listing_mode: string;
-          property_code: string;
-          status: string;
-        }[];
-      };
-      search_properties: {
-        Args: {
-          p_after?: string;
-          p_area_id?: string;
-          p_area_max?: number;
-          p_area_min?: number;
-          p_contact_id?: string;
-          p_limit?: number;
-          p_mode?: string;
-          p_price_max?: string;
-          p_price_min?: string;
-          p_query?: string;
-          p_status?: string;
-          p_type?: string;
-        };
-        Returns: {
-          access_type: string;
-          archived_at: string | null;
-          area_raw: string | null;
-          bathrooms: number | null;
-          bedrooms: number | null;
-          construction_text: string | null;
-          cover_file_id: string | null;
-          created_at: string;
-          created_by: string | null;
-          depth_m: number | null;
           direction: string | null;
+          access_type: string | null;
           entry_on: string | null;
           entry_source: string;
-          floor_area_m2: number | null;
-          floors: number | null;
-          frontage_m: number | null;
-          id: string;
-          land_area_m2: number | null;
-          latitude: number | null;
-          legal_status: string;
-          listing_mode: string;
-          longitude: number | null;
-          map_sheet_number: string | null;
-          monthly_rent_vnd: number | null;
-          notes: string | null;
-          ownership_type: string | null;
-          parcel_number: string | null;
-          property_code: string;
-          property_type: string;
-          record_review_status: string;
-          sale_price_vnd: number | null;
-          status: string;
-          updated_at: string;
-          updated_by: string | null;
+          age_days: number | null;
         }[];
-        SetofOptions: {
-          from: '*';
-          to: 'properties';
-          isOneToOne: false;
-          isSetofReturn: true;
+      };
+      stream_inventory: {
+        Args: {
+          p_order?: string | null;
+          p_query?: string;
+          p_offset?: number;
+          p_limit?: number;
+          p_status?: string;
+          p_mode?: string;
+          p_type?: string;
+          p_access_type?: string;
+          p_price_min?: string;
+          p_price_max?: string;
+          p_area_min?: number;
+          p_area_max?: number;
+          p_province_id?: string;
+          p_district_id?: string;
+          p_commune_ids?: string[];
+          p_contact_id?: string;
+          p_address_format?: string;
+          p_frontage_min?: number;
+          p_frontage_max?: number;
+          p_depth_min?: number;
+          p_depth_max?: number;
+          p_created_by_me?: boolean;
         };
+        // One window of the stream beside the matching total. A window past the end, or a filter
+        // that matches nothing, answers one row whose window columns are null, so the total is
+        // stated by every read.
+        Returns: {
+          total_count: number;
+          id: string | null;
+          property_code: string | null;
+          listing_mode: string | null;
+          status: string | null;
+          property_type: string | null;
+          cover_file_id: string | null;
+          frontage_m: string | null;
+          depth_m: string | null;
+          land_area_m2: string | null;
+          floor_area_m2: string | null;
+          floors: number | null;
+          direction: string | null;
+          access_type: string | null;
+          entry_on: string | null;
+          entry_source: string | null;
+          age_days: number | null;
+          created_at: string | null;
+          updated_at: string | null;
+          sale_price_vnd: string | null;
+          monthly_rent_vnd: string | null;
+        }[];
       };
       set_file_category: {
         Args: {
@@ -2412,6 +2526,28 @@ export type Database = {
         Returns: undefined;
       };
       set_my_locale: { Args: { p_locale: string }; Returns: undefined };
+      set_property_status: {
+        Args: {
+          p_note?: string | null;
+          p_property_id: string;
+          p_status: string;
+        };
+        Returns: Json;
+      };
+      update_employee_profile: {
+        Args: {
+          p_employee_id: string;
+          p_display_name: string;
+          p_phone: string;
+          p_role: string;
+          p_bio: string;
+        };
+        Returns: Json;
+      };
+      update_my_profile: {
+        Args: { p_display_name: string; p_bio: string };
+        Returns: Json;
+      };
       set_property_cover: {
         Args: { p_file_id?: string; p_property_id: string };
         Returns: undefined;

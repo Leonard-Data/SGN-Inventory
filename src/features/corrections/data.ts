@@ -8,6 +8,7 @@ import {
   revisions,
   target,
 } from '@/features/property-maintenance/data';
+import { catalogueSummaryOf } from '@/features/properties/catalogue-data';
 function explanation(value: unknown) {
   if (
     typeof value !== 'string' ||
@@ -64,10 +65,7 @@ export async function correctionPage(
     ]),
   ];
   const actors = actorIds.length
-    ? await context.client
-        .from('employees')
-        .select('id,display_name')
-        .in('id', actorIds)
+    ? await context.client.rpc('list_employee_names', { p_ids: actorIds })
     : { data: [], error: null };
   databaseError(actors.error);
   return {
@@ -182,6 +180,22 @@ export async function transitionCorrection(
       p_reason: reason,
     });
     databaseError(error);
+    // An application is the only outcome that changed the property, so it is the only one that
+    // answers with the authoritative summary the browser's catalogue takes.
+    if (body.action === 'apply') {
+      const { data, error: readError } = await context.client
+        .from('correction_requests')
+        .select('property_id')
+        .eq('id', id)
+        .maybeSingle();
+      // The maintenance is committed by now, so an unreadable property id leaves the summary
+      // unknown rather than reporting the applied correction as a failure.
+      if (readError || !data) return { ok: true };
+      return {
+        ok: true,
+        summary: await catalogueSummaryOf(context, data.property_id),
+      };
+    }
   }
   return { ok: true };
 }
@@ -222,10 +236,7 @@ export async function amendmentPage(
   const amendments = (data ?? []).slice(0, 20),
     actorIds = [...new Set(amendments.map((a) => a.actor_id))];
   const actors = actorIds.length
-    ? await context.client
-        .from('employees')
-        .select('id,display_name')
-        .in('id', actorIds)
+    ? await context.client.rpc('list_employee_names', { p_ids: actorIds })
     : { data: [], error: null };
   databaseError(actors.error);
   return {

@@ -3,7 +3,9 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { messages, type Locale } from '@/i18n/messages';
 import { api, RequestError } from '@/features/employees/api';
+import { useToast } from '@/features/toasts/toast-host';
 import { useProtectedData } from '@/features/employees/use-protected-data';
+import { LoadingSkeleton } from '@/features/skeleton';
 import type { Vendor, VendorLink, VendorPage } from './types';
 
 // The choice line keeps the company name first and adds only recorded details, so two
@@ -37,6 +39,7 @@ export function PropertyVendors({
   onDenied: (status: number) => void;
 }) {
   const text = messages[locale];
+  const notify = useToast();
   const { data, error, busy, surface, reload } = useProtectedData<{
     vendors: VendorLink[];
   }>('/api/properties/' + propertyId + '/vendors');
@@ -75,12 +78,13 @@ export function PropertyVendors({
 
   // A kept draft and a read-back of the recorded relationships: no optimistic local link
   // and no automatic resubmission after an unconfirmed outcome.
-  async function call(work: () => Promise<unknown>) {
+  async function call(work: () => Promise<unknown>, message: string) {
     if (actionBusy) return;
     setActionBusy(true);
     setActionProblem(null);
     try {
       await work();
+      notify({ saved: true, message });
       setConfirming(null);
       setFound(null);
       setQuery('');
@@ -118,7 +122,9 @@ export function PropertyVendors({
         <h2>{text.vendorsLink}</h2>
       </div>
       <div className="panel-body">
-        {busy && !data ? <p role="status">{text.loading}</p> : null}
+        {busy && !data ? (
+          <LoadingSkeleton label={text.loading} shape="rows" rows={3} />
+        ) : null}
         {error ? (
           <div className="alert" data-tone="danger" role="alert">
             <span>
@@ -173,14 +179,16 @@ export function PropertyVendors({
                               className="btn btn-sm"
                               disabled={actionBusy}
                               onClick={() =>
-                                void call(() =>
-                                  api(
-                                    '/api/properties/' +
-                                      propertyId +
-                                      '/vendors/' +
-                                      vendor.vendorId,
-                                    { revision: vendor.revision },
-                                  ),
+                                void call(
+                                  () =>
+                                    api(
+                                      '/api/properties/' +
+                                        propertyId +
+                                        '/vendors/' +
+                                        vendor.vendorId,
+                                      { revision: vendor.revision },
+                                    ),
+                                  text.vendorUnlinked,
                                 )
                               }
                             >
@@ -289,11 +297,13 @@ export function PropertyVendors({
                     className="btn btn-sm"
                     disabled={actionBusy || chosen === ''}
                     onClick={() =>
-                      void call(() =>
-                        api('/api/properties/' + propertyId + '/vendors', {
-                          vendorId: chosen,
-                          propertyRevision,
-                        }),
+                      void call(
+                        () =>
+                          api('/api/properties/' + propertyId + '/vendors', {
+                            vendorId: chosen,
+                            propertyRevision,
+                          }),
+                        text.vendorLinked,
                       )
                     }
                   >

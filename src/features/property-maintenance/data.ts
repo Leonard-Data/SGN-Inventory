@@ -2,12 +2,23 @@ import 'server-only';
 import type { Json } from '@/types/database';
 import { ApiError, uuid, type RouteContext } from '@/lib/supabase/route';
 import { cursorPair } from '@/lib/supabase/query';
+import { catalogueSummaryOf } from '@/features/properties/catalogue-data';
+import type { AddressMatch } from '@/features/properties/types';
 import {
   InputError,
+  recordsAddressPart,
   validateChanges,
   targetFields,
   type Target,
 } from './fields';
+import { isReportDate } from '@/features/employees/report-range';
+import { generationRow, offeredUnits, unitOfferedOn } from './units';
+import {
+  crosswalkRecorded,
+  offeredCrosswalkRow,
+  type AddressCrosswalk,
+  type CrosswalkOutcome,
+} from './crosswalk';
 
 export function databaseError(error: { code?: string } | null) {
   if (!error) return;
@@ -15,6 +26,14 @@ export function databaseError(error: { code?: string } | null) {
   if (code === '42501') throw new ApiError(403, 'access-denied');
   if (code === 'PT403') throw new ApiError(403, 'contact-refusal');
   if (code === 'PT409') throw new ApiError(409, 'stale-edit');
+  // The six reasons an address format conversion refuses to write anything, each stated on its own
+  // so the surface can say which one held.
+  if (code === 'PT421') throw new ApiError(400, 'crosswalk-units-missing');
+  if (code === 'PT422') throw new ApiError(409, 'crosswalk-ambiguous');
+  if (code === 'PT423') throw new ApiError(409, 'address-format-duplicate');
+  if (code === 'PT424') throw new ApiError(409, 'crosswalk-missing');
+  if (code === 'PT425') throw new ApiError(409, 'address-superseded');
+  if (code === 'PT426') throw new ApiError(409, 'crosswalk-level-change');
   if (code === '23505') throw new ApiError(409, 'conflict');
   if (
     [
@@ -73,19 +92,261 @@ export async function createProperty(
     throw new ApiError(400, 'invalid-input');
   const facts = changes('property', body.facts),
     address = changes('address', body.address);
+  // The known address text is the server's composition of these parts, so a creation states only
+  // the parts and the database composes the text; a text of its own beside them is refused.
   if (
-    !address.address_text ||
     !['legacy', 'current'].includes(String(address.format)) ||
     Object.hasOwn(facts, 'status')
   )
     throw new ApiError(400, 'invalid-input');
+  // The typed address the form used to require is now the composition, so its requirement moves to
+  // the parts a person supplied: a lone province is not an address.
+  if (!recordsAddressPart(address))
+    throw new ApiError(400, 'address-parts-required');
   const { data, error } = await context.client.rpc('create_property', {
     p_mode: body.mode as string,
     p_facts: facts,
     p_address: address,
   });
   databaseError(error);
-  return { id: data };
+  // The catalogue summary comes from the server's own read of the committed record, never from the
+  // submitted facts, so the browser's list can take the change without guessing at it.
+  const id = data as string;
+  return {
+    id,
+    summary: await catalogueSummaryOf(context, id),
+  };
+}
+// Which unarchived properties already record the address this creation is about to save. The
+// database composes the text from the same parts the save stores and compares it with the one
+// definition of "the same address" the post-create group uses, so the warning and the group can
+// never disagree. It is the caller's own read under ordinary row-level security, so a match is
+// never a property the person may not open.
+export async function addressDuplicates(
+  context: RouteContext,
+  value: unknown,
+): Promise<AddressMatch[]> {
+  const { data, error } = await context.client.rpc(
+    'property_address_duplicates',
+    { p_address: changes('address', value) },
+  );
+  databaseError(error);
+  return (data ?? []) as AddressMatch[];
+}
+
+// What the official crosswalk says about the ward of the legacy address a save just recorded. It is
+// read from the committed row, and only its own ward unit: nothing is inferred from address text.
+export async function savedLegacyAddress(
+  context: RouteContext,
+  propertyId: string,
+  addressId?: string,
+): Promise<{ address?: AddressCrosswalk }> {
+  try {
+    // Every address of the property travels with the read, because whether the crosswalk's current
+    // address is already recorded is a question about the territory the property records today. The
+    // property's own revision travels with the outcome so the offer carries the context the
+    // database will check, read back rather than assumed from the request.
+    const [property, saved] = await Promise.all([
+      context.client
+        .from('properties')
+        .select('revision')
+        .eq('id', propertyId)
+        .maybeSingle(),
+      context.client
+        .from('property_addresses')
+        .select('id,format,commune_unit_id')
+        .eq('property_id', propertyId),
+    ]);
+    databaseError(property.error);
+    databaseError(saved.error);
+    const rows = saved.data ?? [],
+      legacy = (
+        addressId ? rows.filter((row) => row.id === addressId) : rows
+      ).find((row) => row.format === 'legacy' && row.commune_unit_id !== null);
+    if (!legacy?.commune_unit_id || !property.data) return {};
+    const report = (
+      await crosswalkOutcomes(context, [legacy.commune_unit_id])
+    ).get(legacy.commune_unit_id)!;
+    // The recorded check and the action's own guard compare the same territory: the target commune's
+    // official code, whichever current row of the property carries it.
+    const codes = await unitCodes(context, [
+      ...(report.targetId ? [report.targetId] : []),
+      ...rows.flatMap((row) =>
+        row.format === 'current' && row.commune_unit_id
+          ? [row.commune_unit_id]
+          : [],
+      ),
+    ]);
+    return {
+      address: {
+        addressId: legacy.id,
+        propertyRevision: property.data.revision,
+        crosswalk: crosswalkRecorded(
+          rows,
+          report.targetId ? codes.get(report.targetId) : undefined,
+          codes,
+        )
+          ? { kind: 'recorded' }
+          : report,
+      },
+    };
+  } catch {
+    // The record is committed; reporting the crosswalk is an auxiliary read that never turns a
+    // saved address into a failed save.
+    return {};
+  }
+}
+async function unitCodes(
+  context: RouteContext,
+  ids: readonly string[],
+): Promise<Map<string, string>> {
+  if (!ids.length) return new Map();
+  const { data, error } = await context.client
+    .from('admin_unit_versions')
+    .select('id,official_code')
+    .in('id', ids);
+  databaseError(error);
+  return new Map((data ?? []).map((unit) => [unit.id, unit.official_code]));
+}
+// Each ward's outcome carries the single target unit it names, because the recorded check and the
+// write guard both compare against that target: the state reported and the state accepted can never
+// describe different wards. A CrosswalkOutcome already, so a surface that only states the outcome
+// reads it as one.
+export type WardCrosswalk = CrosswalkOutcome & { targetId: string | null };
+
+// The three crosswalk outcomes as the official rows state them, for each recorded ward, shared with
+// the property detail page so a recorded address and a saved one are described by the same read and
+// the same wording. Every ward is answered by the same three reads whatever their number, so a page
+// naming several wards costs no more round trips than one.
+export async function crosswalkOutcomes(
+  context: RouteContext,
+  wardIds: readonly string[],
+): Promise<Map<string, WardCrosswalk>> {
+  const outcomes = new Map<string, WardCrosswalk>();
+  const wards = [...new Set(wardIds)];
+  if (!wards.length) return outcomes;
+  const { data, error } = await context.client
+    .from('admin_unit_crosswalks')
+    .select('from_unit_id,relation,to_unit_id')
+    .in('from_unit_id', wards);
+  databaseError(error);
+  const byWard = new Map<string, { relation: string; to_unit_id: string }[]>();
+  for (const row of data ?? []) {
+    const rows = byWard.get(row.from_unit_id);
+    if (rows) rows.push(row);
+    else byWard.set(row.from_unit_id, [row]);
+  }
+  const offered = new Map<string, string>();
+  // A ward with no row, or with something other than one whole/rename row, is reported as it is
+  // and offered nothing: a partial transfer needs property-level evidence this read cannot give.
+  for (const ward of wards) {
+    const rows = byWard.get(ward) ?? [];
+    const row = offeredCrosswalkRow(rows);
+    if (row) offered.set(ward, row.to_unit_id);
+    else if (rows.length === 0)
+      outcomes.set(ward, { kind: 'none', targetId: null });
+    else
+      outcomes.set(ward, {
+        kind: 'several',
+        count: rows.length,
+        targetId: null,
+      });
+  }
+  const targetRows = [...new Set(offered.values())];
+  const targets = new Map<
+    string,
+    { name_vi: string; parent_id: string | null }
+  >();
+  if (targetRows.length) {
+    const { data, error } = await context.client
+      .from('admin_unit_versions')
+      .select('id,name_vi,parent_id')
+      .in('id', targetRows);
+    databaseError(error);
+    for (const row of data ?? []) targets.set(row.id, row);
+  }
+  const provinceIds = [
+    ...new Set(
+      [...targets.values()].flatMap((target) =>
+        target.parent_id ? [target.parent_id] : [],
+      ),
+    ),
+  ];
+  const provinces = new Map<string, string>();
+  if (provinceIds.length) {
+    const { data, error } = await context.client
+      .from('admin_unit_versions')
+      .select('id,name_vi')
+      .in('id', provinceIds);
+    databaseError(error);
+    for (const row of data ?? []) provinces.set(row.id, row.name_vi);
+  }
+  for (const [ward, targetId] of offered) {
+    const target = targets.get(targetId);
+    const province = target?.parent_id
+      ? provinces.get(target.parent_id)
+      : undefined;
+    // A target that does not resolve to a current commune inside a named province is not offered,
+    // because the message could not name it and the candidate states both, so it names no target.
+    outcomes.set(
+      ward,
+      target && province
+        ? {
+            kind: 'mapped',
+            commune: target.name_vi,
+            province,
+            targetId,
+          }
+        : {
+            kind: 'several',
+            count: byWard.get(ward)?.length ?? 0,
+            targetId: null,
+          },
+    );
+  }
+  return outcomes;
+}
+// The one explicit action behind a legacy save: record the current address the crosswalk names as a
+// candidate. The database derives the target, date and source from the crosswalk itself.
+export async function recordCandidate(
+  context: RouteContext,
+  id: string,
+  body: Record<string, unknown>,
+) {
+  exactKeys(body, ['addressId', 'propertyRevision']);
+  if (!uuid(id) || !uuid(body.addressId) || !uuid(body.propertyRevision))
+    throw new ApiError(400, 'invalid-input');
+  const { error } = await context.client.rpc('record_address_candidate', {
+    p_property_id: id,
+    p_legacy_address_id: body.addressId,
+    p_property_revision: body.propertyRevision,
+  });
+  databaseError(error);
+  return { id, summary: await catalogueSummaryOf(context, id) };
+}
+// The one deliberate action that changes an existing address's format: a new row in the other
+// format is written from the official crosswalk, and the row it converts stays as it is.
+export async function convertAddressFormat(
+  context: RouteContext,
+  id: string,
+  body: Record<string, unknown>,
+) {
+  exactKeys(body, ['addressId', 'addressRevision', 'propertyRevision']);
+  if (
+    !uuid(id) ||
+    !uuid(body.addressId) ||
+    !uuid(body.addressRevision) ||
+    !uuid(body.propertyRevision)
+  )
+    throw new ApiError(400, 'invalid-input');
+  const { error } = await context.client.rpc('convert_address_format', {
+    p_property_id: id,
+    p_address_id: body.addressId,
+    p_address_revision: body.addressRevision,
+    p_property_revision: body.propertyRevision,
+  });
+  databaseError(error);
+  return { id, summary: await catalogueSummaryOf(context, id) };
 }
 // An optional explanation is a correction note, not another business field: it is only
 // accepted on an authorized price edit and the database attaches it to that revision's
@@ -140,7 +401,16 @@ export async function maintainProperty(
     p_explanation: explanation,
   });
   databaseError(error);
-  return { id: data };
+  // An address edit reindexes the same property, so the summary is read back from the server after
+  // the change rather than assembled from what was submitted. The address operation returns the row
+  // it recorded, whose ward is then reported against the official crosswalk.
+  return {
+    id,
+    summary: await catalogueSummaryOf(context, id),
+    ...(kind === 'address'
+      ? await savedLegacyAddress(context, id, data as string)
+      : {}),
+  };
 }
 export async function contactDetail(context: RouteContext, id: string) {
   if (!uuid(id)) throw new ApiError(400, 'invalid-input');
@@ -184,14 +454,22 @@ export async function listUnits(
   params: URLSearchParams,
 ) {
   const level = params.get('level'),
-    parent = params.get('parent');
+    parent = params.get('parent'),
+    on = params.get('on'),
+    include = params.get('include'),
+    includes = include === null ? [] : include.split(',');
   if (
-    [...params.keys()].some((k) => !['level', 'parent'].includes(k)) ||
+    [...params.keys()].some(
+      (k) => !['level', 'parent', 'on', 'include'].includes(k),
+    ) ||
     !['province', 'district', 'commune'].includes(level ?? '') ||
-    (level !== 'province' && !uuid(parent)) ||
-    (level === 'province' && parent !== null)
+    (level !== 'province' && !uuid(parent) && !includes.length) ||
+    (level === 'province' && parent !== null) ||
+    (on !== null && !isReportDate(on)) ||
+    !includes.every(uuid)
   )
     throw new ApiError(400, 'invalid-input');
+  const parentId = parent ? await generationParent(context, parent, on) : null;
   let request = context.client
     .from('admin_unit_versions')
     .select('id,name_vi,unit_level,parent_id,valid_from,valid_to')
@@ -199,10 +477,59 @@ export async function listUnits(
     .order('name_vi')
     .order('valid_from', { ascending: false })
     .limit(1000);
-  if (parent) request = request.eq('parent_id', parent);
+  if (parentId) request = request.eq('parent_id', parentId);
+  // A level whose parent is not chosen yet lists nothing; only the recorded unit it names comes
+  // back, which is how a ward recorded under a district the form no longer holds still resolves.
+  else if (level !== 'province' && includes.length)
+    request = request.in('id', includes);
   const { data, error } = await request;
   databaseError(error);
-  return { units: data ?? [] };
+  // The day rule is applied here so it is defined once; shortcut: a level and parent group over
+  // 1,000 rows would hit the page cap before the filter, upgrade when one does.
+  const offers = offeredUnits(data ?? [], on, includes);
+  // A recorded identifier that belongs to another generation is in no dated list at all, so its own
+  // row answers with the official name and keeps the value selectable beside the list.
+  const missing = includes.filter(
+    (id) => !offers.some((unit) => unit.id === id),
+  );
+  if (missing.length) {
+    const { data: recorded, error: lookup } = await context.client
+      .from('admin_unit_versions')
+      .select('id,name_vi,unit_level,parent_id,valid_from,valid_to')
+      .in('id', missing)
+      .eq('unit_level', level!);
+    databaseError(lookup);
+    if (recorded) offers.push(...recorded);
+  }
+  return { units: offers };
+}
+
+// The identifier the levels beneath a stated parent hang off, for the generation the read is about.
+// One official unit has a row per catalog generation, so the parent a caller names may be that
+// unit's row for the other one: a province held from the current list still reads its pre-2025
+// districts on a legacy day, and a legacy province still reads the current communes. The stated row
+// itself answers whenever its own window covers the read, so a recorded unit is never translated
+// away from the list it belongs to.
+async function generationParent(
+  context: RouteContext,
+  parent: string,
+  on: string | null,
+): Promise<string> {
+  const { data, error } = await context.client
+    .from('admin_unit_versions')
+    .select('id,official_code,unit_level,valid_from,valid_to')
+    .eq('id', parent)
+    .maybeSingle();
+  databaseError(error);
+  if (!data || unitOfferedOn(data, on)) return parent;
+  const { data: rows, error: siblingError } = await context.client
+    .from('admin_unit_versions')
+    .select('id,valid_from,valid_to')
+    .eq('unit_level', data.unit_level)
+    .eq('official_code', data.official_code)
+    .limit(1000);
+  databaseError(siblingError);
+  return generationRow(rows ?? [], on)?.id ?? parent;
 }
 export async function historyPage(
   context: RouteContext,

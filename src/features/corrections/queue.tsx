@@ -4,7 +4,9 @@ import { messages, type Locale } from '@/i18n/messages';
 import type { Employee } from '@/features/employees/types';
 import type { PropertyDetail } from '@/features/properties/detail-data';
 import { useProtectedData } from '@/features/employees/use-protected-data';
+import { LoadingSkeleton } from '@/features/skeleton';
 import { api, RequestError } from '@/features/employees/api';
+import { useToast } from '@/features/toasts/toast-host';
 import { BusinessValues } from '@/features/property-maintenance/history';
 import type { ContactDetail } from '@/features/property-maintenance/data';
 import {
@@ -15,6 +17,9 @@ import {
 } from '@/features/property-maintenance/messages';
 import { failureRoute } from '@/features/property-maintenance/refusal-rules';
 import { vietnamTimestamp } from '@/features/properties/format';
+import { applyServerSummary } from '@/features/properties/catalogue-changes';
+import { useCatalogueChange } from '@/features/properties/catalogue-provider';
+import type { PropertySummary } from '@/features/properties/types';
 import { CorrectionDraft } from './draft';
 import { Amendments } from './amendments';
 import { changedValues } from './changes';
@@ -46,6 +51,17 @@ function RequestActions({
   useEffect(() => () => controller.current?.abort(), []);
   const text = maintenanceText(locale),
     staff = ['staff', 'manager', 'admin'].includes(employee.role);
+  const notify = useToast();
+  // An applied correction changed the property through the same maintenance operation, so the
+  // browser's catalogue takes the server's own read of it.
+  const applyChange = useCatalogueChange();
+  // The dialog closes on a committed decision, so the confirmation names the decision.
+  const decided: Record<string, string> = {
+    apply: text.correctionApplied,
+    reject: text.correctionRejected,
+    withdraw: text.correctionWithdrawn,
+    amend: text.requestSaved,
+  };
   // previewContact() and decide('apply') both route through the shared refusal decision.
   function failure(error: unknown) {
     if (
@@ -65,11 +81,17 @@ function RequestActions({
     setBusy(true);
     setError(null);
     try {
-      await api('/api/corrections/' + snapshot.id, {
+      const result = await api<{
+        ok: true;
+        summary?: PropertySummary | null;
+      }>('/api/corrections/' + snapshot.id, {
         action,
         requestRevision: snapshot.revision,
         reason,
       });
+      if (action === 'apply')
+        applyServerSummary(applyChange, result, snapshot.property_id);
+      notify({ saved: true, message: decided[action] ?? text.requestSaved });
       onSaved();
     } catch (error) {
       failure(error);
@@ -305,7 +327,9 @@ export function CorrectionQueue({
         <h2 className="panel-title">{text.queue}</h2>
       </div>
       <div className="panel-body">
-        {busy ? <p role="status">{text.loading}</p> : null}
+        {busy ? (
+          <LoadingSkeleton label={text.loading} shape="rows" rows={3} />
+        ) : null}
         {error ? (
           <div className="alert" data-tone="danger" role="alert">
             <span>

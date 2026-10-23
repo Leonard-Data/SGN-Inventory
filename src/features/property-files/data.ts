@@ -20,7 +20,7 @@ export async function propertyFiles(
   if (error)
     throw new ApiError(
       error.code === '42501' ? 403 : 503,
-      error.code === '42501' ? 'access-denied' : 'unavailable',
+      error.code === '42501' ? 'operation-refused' : 'unavailable',
     );
   return { files: files ?? [] };
 }
