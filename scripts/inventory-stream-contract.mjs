@@ -126,13 +126,14 @@ export async function inventoryStreamContract({
     frontageMax = null,
     depthMin = null,
     depthMax = null,
+    createdByMe = null,
   } = {}) {
     const result = await db.query(
       `select * from public.stream_inventory(p_order => $1::text,p_query => $2::text,p_offset => $3::integer,
         p_limit => $4::integer,p_status => $5::text,p_address_format => $6::text,p_province_id => $7::uuid,
         p_district_id => $8::uuid,p_commune_ids => $9::uuid[],p_access_type => $10::text,
         p_frontage_min => $11::numeric,p_frontage_max => $12::numeric,p_depth_min => $13::numeric,
-        p_depth_max => $14::numeric)`,
+        p_depth_max => $14::numeric,p_created_by_me => $15::boolean)`,
       [
         order,
         query,
@@ -148,6 +149,7 @@ export async function inventoryStreamContract({
         frontageMax,
         depthMin,
         depthMax,
+        createdByMe,
       ],
     );
     // Every read answers at least one row: the window's rows, or the counting row alone when the
@@ -1154,6 +1156,10 @@ export async function inventoryStreamContract({
       changed: 6,
     },
   ];
+  // Two of the six are recorded by another employee, so the creator selection has a colleague's
+  // records to leave out and the reader's own to return.
+  const colleagueRows = new Set([columnRows[4].id, columnRows[5].id]);
+  const creatorOf = (row) => (colleagueRows.has(row.id) ? employees[1] : sales);
   const baseChange = Date.parse('2026-09-20T00:00:00.000Z');
   await asOwner();
   await db.exec('alter table public.properties disable trigger property_guard');
@@ -1172,7 +1178,7 @@ export async function inventoryStreamContract({
         row.floor,
         row.frontage,
         row.depth,
-        sales,
+        creatorOf(row),
         new Date(baseChange),
         new Date(baseChange + row.changed * 3_600_000),
       ],
@@ -1307,6 +1313,125 @@ export async function inventoryStreamContract({
         .map((row) => row.id)
         .sort((left, right) => left.localeCompare(right));
       assert.deepEqual([first.rows[0].id, second.rows[0].id], tied);
+    },
+  );
+
+  // A header ordering and the creator selection are criteria of the one read, so an address that
+  // states both is answered by both: the ordering walks only the reader's own records, never a
+  // wider set, and the eligible chronology keeps its own boundary beside the criterion.
+  await asUser(0);
+  const mine = columnRows.filter((row) => creatorOf(row) === sales);
+  const colleagues = columnRows.filter(
+    (row) => creatorOf(row) === employees[1],
+  );
+  await check(
+    'the creator selection narrows every ordering to the employee’s own records',
+    async () => {
+      assert.ok(
+        mine.length > 0 && colleagues.length > 0,
+        'both employees recorded rows',
+      );
+      // Without the criterion the same ordering states the whole filtered set, so the criterion is
+      // what narrows it and no ordering ever does.
+      const wider = await read({
+        order: 'price-asc',
+        query: 'srtf',
+        limit: 20,
+      });
+      assert.equal(wider.total, columnRows.length);
+      for (const [field, pick] of COLUMN_KEYS)
+        for (const direction of ['asc', 'desc']) {
+          const order = `${field}-${direction}`;
+          const expected = columnOrder(pick, direction).filter((id) =>
+            mine.some((row) => row.id === id),
+          );
+          const scoped = await read({
+            order,
+            query: 'srtf',
+            limit: 20,
+            createdByMe: true,
+          });
+          assert.equal(scoped.total, expected.length, `${order} total`);
+          assert.deepEqual(
+            scoped.rows.map((row) => row.id),
+            expected,
+            `${order} rows`,
+          );
+        }
+      const browse = await read({
+        query: 'srtf',
+        limit: 20,
+        createdByMe: true,
+      });
+      assert.equal(browse.total, mine.length);
+      assert.deepEqual(
+        browse.rows.map((row) => row.id).sort(),
+        mine.map((row) => row.id).sort(),
+      );
+      // The entry chronology is the eligible-status view, and the criterion composes with it rather
+      // than replacing it.
+      const chronology = await read({
+        order: 'oldest',
+        query: 'srtf',
+        limit: 20,
+        createdByMe: true,
+      });
+      const eligibleMine = mine
+        .filter((row) => ['available', 'negotiating'].includes(row.status))
+        .map((row) => row.id)
+        .sort();
+      assert.equal(chronology.total, eligibleMine.length);
+      assert.deepEqual(
+        chronology.rows.map((row) => row.id).sort(),
+        eligibleMine,
+      );
+    },
+  );
+
+  await asUser(1);
+  await check(
+    'the creator selection is the employee reading the list, not a name the caller states',
+    async () => {
+      const theirs = await read({
+        order: 'price-asc',
+        query: 'srtf',
+        limit: 20,
+        createdByMe: true,
+      });
+      assert.equal(theirs.total, colleagues.length);
+      assert.deepEqual(
+        theirs.rows.map((row) => row.id).sort(),
+        colleagues.map((row) => row.id).sort(),
+      );
+      // The two employees' selections are disjoint: neither read can answer with the other's rows.
+      assert.equal(
+        theirs.rows.filter((row) => mine.some((own) => own.id === row.id))
+          .length,
+        0,
+      );
+    },
+  );
+
+  await check(
+    'the creator selection is refused without an active employee rather than ignored',
+    async () => {
+      // An inactive employee has no employee identity for the criterion to compare against.
+      await asUser(4);
+      await fails(
+        'select * from public.stream_inventory(p_query => $1::text,p_created_by_me => true)',
+        [marker],
+        '42501',
+      );
+      // The same holds for a session with no employee at all, which the owner role reaches past
+      // RLS and so cannot answer by accident.
+      await asOwner();
+      await fails(
+        'select * from public.stream_inventory(p_query => $1::text,p_created_by_me => true)',
+        [marker],
+        '42501',
+      );
+      // The read is unchanged for a caller that states no creator criterion.
+      assert.equal((await read({ query: 'strmfix' })).total > 0, true);
     },
   );
 

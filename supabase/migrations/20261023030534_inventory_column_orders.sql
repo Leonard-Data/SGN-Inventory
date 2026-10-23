@@ -8,22 +8,31 @@
 -- is one total order and a window boundary can neither drop nor repeat a row.
 -- The order itself is now stated once: the window numbers the whole filtered set in that order and
 -- the answered rows carry that position, instead of the same twenty expressions appearing in the
--- window and again in the outer select. Nothing else about the read changes - the same parameters,
--- the same columns, the same matching total, the archived boundary, the filters, the employee
--- guard, the grants and no record becoming eligible or ineligible.
--- This migration follows `20261022095500_inventory_recent_change_order.sql` and replaces the
--- function body rather than adding a second overload. It is a replace-function change with no
+-- window and again in the outer select.
+-- The read also states the creator selection, so a header ordering and "created by me" mean both
+-- what they say: `p_created_by_me` narrows the same filtered set to the records the employee reading
+-- the list created, resolved from that session rather than named by the caller, and is refused
+-- (`42501`) when there is no such employee rather than answered as an inventory that ignores it.
+-- Nothing else about the read changes - the same columns, the same matching total, the archived
+-- boundary, the remaining filters, the employee guard for the chronology and no record becoming
+-- eligible or ineligible.
+-- This migration follows `20261022095500_inventory_recent_change_order.sql`. The criterion is a new
+-- signature, so the read the project already has is dropped with its grants before the replacement
+-- is stated; it stays one function rather than two overloads. It is a function change with no
 -- table, column, index or data change.
 begin;
 
-create or replace function public.stream_inventory(p_order text default null,p_query text default '',p_offset integer default 0,
+drop function public.stream_inventory(text,text,integer,integer,text,text,text,numeric,numeric,numeric,
+  numeric,uuid,uuid,uuid,uuid,text,text,numeric,numeric,numeric,numeric);
+
+create function public.stream_inventory(p_order text default null,p_query text default '',p_offset integer default 0,
   p_limit integer default 100,p_status text default null,p_mode text default null,p_type text default null,
   p_price_min numeric default null,p_price_max numeric default null,p_area_min numeric default null,
   p_area_max numeric default null,p_province_id uuid default null,p_district_id uuid default null,
   p_commune_id uuid default null,p_contact_id uuid default null,
   p_address_format text default null,p_access_type text default null,p_frontage_min numeric default null,
   p_frontage_max numeric default null,
-  p_depth_min numeric default null,p_depth_max numeric default null)
+  p_depth_min numeric default null,p_depth_max numeric default null,p_created_by_me boolean default null)
 returns table(total_count bigint,id uuid,property_code text,listing_mode text,status text,property_type text,
   cover_file_id uuid,frontage_m text,depth_m text,land_area_m2 text,floor_area_m2 text,floors smallint,direction text,
   access_type text,entry_on date,entry_source text,age_days integer,created_at timestamptz,updated_at timestamptz,
@@ -53,6 +62,11 @@ begin
     if p_order in ('oldest','newest') and private.employee_id() is null then
       raise exception 'active employee required' using errcode='42501';
     end if;
+  end if;
+  -- The creator selection compares each record's creator with the employee reading the list, so it
+  -- is refused when there is no such employee rather than answered as an inventory that ignores it.
+  if coalesce(p_created_by_me,false) and private.employee_id() is null then
+    raise exception 'active employee required' using errcode='42501';
   end if;
   -- An overlong search is refused rather than returned as an empty inventory, so a caller never
   -- mistakes a rejected query for a result set with no matches.
@@ -167,6 +181,9 @@ begin
         or exists (select 1 from public.property_addresses a where a.property_id = p.id
           and a.search_text like s.address_pattern escape E'\\'
           and (p_address_format is null or a.format = p_address_format)))
+      -- The creator selection is the employee reading the list, taken from the session: a record
+      -- that names no creator is nobody's, and a caller cannot name somebody else.
+      and (not coalesce(p_created_by_me,false) or p.created_by = private.employee_id())
   ), counted as materialized (
     select count(*)::bigint as total from filtered
   ), windowed as materialized (
@@ -233,7 +250,7 @@ begin
   order by w.position;
 end;
 $$;
-revoke all on function public.stream_inventory(text,text,integer,integer,text,text,text,numeric,numeric,numeric,numeric,uuid,uuid,uuid,uuid,text,text,numeric,numeric,numeric,numeric) from public,anon;
-grant execute on function public.stream_inventory(text,text,integer,integer,text,text,text,numeric,numeric,numeric,numeric,uuid,uuid,uuid,uuid,text,text,numeric,numeric,numeric,numeric) to authenticated;
+revoke all on function public.stream_inventory(text,text,integer,integer,text,text,text,numeric,numeric,numeric,numeric,uuid,uuid,uuid,uuid,text,text,numeric,numeric,numeric,numeric,boolean) from public,anon;
+grant execute on function public.stream_inventory(text,text,integer,integer,text,text,text,numeric,numeric,numeric,numeric,uuid,uuid,uuid,uuid,text,text,numeric,numeric,numeric,numeric,boolean) to authenticated;
 
 commit;

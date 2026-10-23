@@ -50,13 +50,8 @@ export async function browseProperties(
   // different inventory than the one the address describes.
   const filters = parseInventoryFilters(params, INVENTORY_ADDRESS_FORMAT_ANY);
   if (!filters.ok) throw new ApiError(400, 'invalid-input');
-  // The creator selection is answered from the loaded catalogue, which is the only place a record's
-  // creator is already known; this read carries no creator criterion, so a caller asking for one is
-  // refused instead of being answered with an inventory that ignores it.
-  if (filters.filters.createdBy !== null)
-    throw new ApiError(400, 'invalid-input');
-  // The window offset is read the same way: a mangled or negative value is refused rather than
-  // quietly served as a different window than the caller asked for.
+  // The creator selection reaches the read as its own criterion, which compares each record's
+  // creator with the employee reading the list, so it is never approximated or widened here.
   const window = parseStreamOffset(params);
   if (!window.ok) throw new ApiError(400, 'invalid-input');
   // The retired page number and page size are not parameters of the stream: a caller that still

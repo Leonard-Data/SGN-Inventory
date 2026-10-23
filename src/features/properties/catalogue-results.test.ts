@@ -11,10 +11,17 @@ import {
   resultMode,
   searchEndpoint,
 } from './catalogue-results.ts';
-import { noInventoryFilters, type InventoryFilters } from './filters.ts';
+import {
+  filterRpcArgs,
+  INVENTORY_ADDRESS_FORMAT_ANY,
+  noInventoryFilters,
+  parseInventoryFilters,
+  type InventoryFilters,
+} from './filters.ts';
 import { FIXED_PROVINCE } from '../property-maintenance/units.ts';
 import {
   STREAM_PAGE_SIZE,
+  INVENTORY_SORT_FIELDS,
   localStreamWindows,
   streamChunkRows,
 } from './stream.ts';
@@ -239,8 +246,8 @@ test('a submitted search states its criteria in one address and nothing else', (
     ),
     { query: '', addressFormat: 'legacy' },
   );
-  // The creator selection is answered from the loaded catalogue alone, so it never becomes a
-  // criterion this read is asked to apply and then cannot.
+  // The creator selection is a criterion of this read as well, so a submitted search states it
+  // beside the rest and the read applies both.
   assert.deepEqual(
     stated(
       searchEndpoint({
@@ -249,8 +256,45 @@ test('a submitted search states its criteria in one address and nothing else', (
         filters: { ...filters, createdBy: 'mine' },
       }),
     ),
-    stated(endpoint),
+    {
+      query: 'le loi',
+      sort: 'oldest',
+      status: 'available',
+      mode: 'rent',
+      addressFormat: 'legacy',
+      createdBy: 'mine',
+    },
   );
+});
+
+// A header click states the ordering and keeps the filters, so the creator selection travels with it
+// into the one read that applies both: the ordering can never widen the set to a colleague's records.
+test('a header ordering reads the creator selection beside the order it states', () => {
+  const filters = { ...noInventoryFilters, createdBy: 'mine' };
+  for (const field of INVENTORY_SORT_FIELDS)
+    for (const direction of ['asc', 'desc'] as const) {
+      const order = `${field}-${direction}`;
+      const address = searchEndpoint({ query: '', sort: order, filters });
+      const params = new URLSearchParams(
+        address.slice(address.indexOf('?') + 1),
+      );
+      assert.equal(params.get('sort'), order, order);
+      assert.equal(params.get('createdBy'), 'mine', order);
+      // The route reads that address back into the criteria it hands the read, so neither the
+      // ordering nor the criterion is lost on the way.
+      const parsed = parseInventoryFilters(
+        params,
+        INVENTORY_ADDRESS_FORMAT_ANY,
+      );
+      assert.ok(parsed.ok, order);
+      assert.equal(parsed.filters.createdBy, 'mine', order);
+      assert.equal(filterRpcArgs(parsed.filters).p_created_by_me, true, order);
+      assert.equal(
+        resultMode({ query: '', filters: parsed.filters, sort: order }),
+        'advanced',
+        order,
+      );
+    }
 });
 
 test('a local filter is applied to the recorded fields exactly as the database read applies it', () => {

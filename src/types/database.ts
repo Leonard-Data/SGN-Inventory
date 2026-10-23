@@ -2488,6 +2488,7 @@ export type Database = {
           p_frontage_max?: number;
           p_depth_min?: number;
           p_depth_max?: number;
+          p_created_by_me?: boolean;
         };
         // One window of the stream beside the matching total. A window past the end, or a filter
         // that matches nothing, answers one row whose window columns are null, so the total is
