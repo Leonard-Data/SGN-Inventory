@@ -30,7 +30,7 @@ function refusal(status: 403 | 404 | 503): SignOutcome {
     status,
     code:
       status === 403
-        ? 'access-denied'
+        ? 'operation-refused'
         : status === 404
           ? 'not-found'
           : 'unavailable',

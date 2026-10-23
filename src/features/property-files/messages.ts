@@ -165,6 +165,12 @@ const errorsVi: Record<string, string> = {
   'file-conflict':
     'Trạng thái tập tin đã thay đổi. Tải lại trạng thái trước khi tiếp tục.',
   'access-denied': 'Không có quyền thực hiện thao tác này.',
+  'property-unavailable':
+    'Bất động sản này đã lưu trữ hoặc không còn nhận tập tin. Không có tập tin nào được thay đổi.',
+  'not-uploader':
+    'Tập tin này do nhân viên khác đăng ký. Chỉ người đăng ký mới có thể hoàn tất tập tin đó.',
+  'operation-refused':
+    'Máy chủ từ chối thao tác này với tập tin hoặc bất động sản này. Bạn vẫn có quyền truy cập; hãy tải lại trạng thái rồi thử lại.',
   'not-found': 'Không tìm thấy tập tin hoặc không có quyền đọc.',
   'unknown-object-state':
     'Không xác định được dữ liệu đã lưu hay chưa. Tải lại trạng thái; không tải lên khi chưa rõ.',
@@ -196,6 +202,12 @@ const errorsEn: Record<keyof typeof errorsVi, string> = {
   'file-conflict':
     'File state changed. Reload authoritative state before continuing.',
   'access-denied': 'You do not have permission for this operation.',
+  'property-unavailable':
+    'This property is archived or no longer accepts files. Nothing was changed.',
+  'not-uploader':
+    'This file was registered by another employee. Only that employee can complete it.',
+  'operation-refused':
+    'The server refused this operation on this property or file. Your access is intact; reload the state and try again.',
   'not-found': 'File not found or not accessible.',
   'unknown-object-state':
     'The stored object state is unknown. Reload state; do not upload blindly.',
