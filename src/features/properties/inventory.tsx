@@ -193,9 +193,9 @@ export function Inventory({
   const filterCount = activeFilterCount(filters);
   // The format the list's searches read through, which decides the address each row states.
   const addressFormat = searchedAddressFormat(filters);
-  // The address of the list as it stands: the search, the ordering, the view and the filters. It
-  // names the result set this list is showing, so it is also what the carrier holds the list's own
-  // state under and what a property's link carries back as `returnTo`.
+  // The address of the list as it stands: the search, the ordering, the view, the hidden columns
+  // and the filters. A property's link carries it back as `returnTo`, so a return keeps the columns
+  // the person hid.
   const resultLocation = inventoryHref({
     query: initialQuery,
     sort,
@@ -203,9 +203,21 @@ export function Inventory({
     hide: hideValue,
     filters,
   });
+  // The result set this list is showing: the search, the ordering, the view and the filters, and
+  // not the hidden columns, which change no row, no order and no read. This is what the carrier
+  // holds the list's own state under and what the restore compares, so hiding a column leaves the
+  // person's place in the same rows.
+  const resultSet = inventoryHref({
+    query: initialQuery,
+    sort,
+    view: requestedView,
+    hide: null,
+    filters,
+  });
   // A header click cycles the columns ordering; the address is the one place it is kept, so a
-  // reload or a shared link reads the order the header was left in. Hiding a column is the same
-  // kind of change: the address states the hidden set and the stream keeps its rows.
+  // reload or a shared link reads the order the header was left in. Hiding a column is stated in
+  // the address the same way, but it is not a read: the result set leaves it out, so the stream
+  // keeps its rows and the person keeps their place in them.
   function sortBy(field: InventorySortField) {
     router.push(
       inventoryHref({
@@ -251,13 +263,13 @@ export function Inventory({
     [clear],
   );
   const [searchError, setSearchError] = useState(false);
-  // The list the person left, read once for the address this list is opened at: the text the
+  // The list the person left, read once for the result set this list is opened at: the text the
   // address box held (typed, and not necessarily submitted), whether it was edited at all, and
   // where the stream was scrolled. A result set the carrier holds no entry for opens at its own
   // first rows with the address's own search, which is also where a reload of the application
   // starts: the carrier is browser memory for the session, not storage.
   const carrier = useListStateCarrier();
-  const [restored] = useState(() => readListState(carrier, resultLocation));
+  const [restored] = useState(() => readListState(carrier, resultSet));
   const [typed, setTyped] = useState(() => restored?.text ?? initialQuery);
   const [addressEdited, setAddressEdited] = useState(
     () => restored?.edited ?? false,
@@ -464,19 +476,19 @@ export function Inventory({
     },
     [],
   );
-  // The position the list was opened at and the address it belongs to: `target` is what still has to
-  // be reached, and until the first attempt has been made it - not the measurement - is what the
+  // The position the list was opened at and the result set it belongs to: `target` is what still has
+  // to be reached, and until the first attempt has been made it - not the measurement - is what the
   // carrier holds, because until then the stream is not where the person was. `rows` is the number
   // of rows that attempt was made against, so a result set that has since lost rows releases it.
-  // A later address inside the same visit is a different result set, so the position recorded here
-  // is dropped rather than applied to its rows.
+  // A later result set inside the same visit - another search, ordering, view or filter - is a
+  // different one, so the position recorded here is dropped rather than applied to its rows.
   const opening = useRef<{
-    address: string;
+    name: string;
     target: { top: number; left: number; page: number } | null;
     rows: number | null;
     attempted: boolean;
   }>({
-    address: resultLocation,
+    name: resultSet,
     target:
       restored !== null &&
       (restored.scrollTop > 0 ||
@@ -580,7 +592,7 @@ export function Inventory({
   // settling keeps their own position, which is what ends the restore; the browser adjusting the
   // stream under them as a chunk measures is not. A result set that has lost rows since the visit
   // cannot hold the position any more, so the target is released rather than retried. A different
-  // result-set address is not this position's list at all, so the position is dropped and the new
+  // result set is not this position's list at all, so the position is dropped and the new
   // one opens at its own first rows. The scroll this sets is measured by the stream and by the
   // document it sits in, so the band follows it and the rows sit where the person left them.
   const restoreReady = positionReady({
@@ -592,9 +604,9 @@ export function Inventory({
   useLayoutEffect(() => {
     const open = opening.current;
     const node = streamNode.current;
-    if (open.address !== resultLocation) {
+    if (open.name !== resultSet) {
       opening.current = {
-        address: resultLocation,
+        name: resultSet,
         target: null,
         rows: null,
         attempted: false,
@@ -652,7 +664,7 @@ export function Inventory({
             height: node.clientHeight,
           },
     );
-  }, [container, resultLocation, restoreReady, offsets, syncViewport, total]);
+  }, [container, resultSet, restoreReady, offsets, syncViewport, total]);
   // Scrolling the list is the person's own, so input inside the stream - a wheel, a touch, a scroll
   // key while it holds focus, or a press on its scrollbar - ends the restore and the position they
   // take is the one they keep. Input anywhere else, the address box or the toolbar included, is not
@@ -690,8 +702,8 @@ export function Inventory({
     };
   }, [container]);
 
-  // The list is kept in the carrier as it is used, so the address the person is looking at already
-  // holds it when they come back. Written on every position change so navigation while mounted
+  // The list is kept in the carrier as it is used, so the result set the person is looking at
+  // already holds it when they come back. Written on every position change so navigation while mounted
   // always leaves the latest position behind. Before the restore has been attempted, the target is
   // what is held, so a return never loses the position it is restoring; from the first attempt on,
   // what the stream measured is held, so a position the results cannot reach is never published.
@@ -699,14 +711,14 @@ export function Inventory({
     const open = opening.current;
     const place =
       open.target !== null && !open.attempted ? open.target : viewport;
-    writeListState(carrier, resultLocation, {
+    writeListState(carrier, resultSet, {
       text: typed,
       edited: addressEdited,
       scrollTop: place.top,
       scrollLeft: place.left,
       pageTop: place.page,
     });
-  }, [carrier, resultLocation, typed, addressEdited, viewport]);
+  }, [carrier, resultSet, typed, addressEdited, viewport]);
 
   // The band asks the stream for the windows it would show, and tells it which row position it is
   // centred on, so a deep scroll keeps its own windows and drops the far ones. A locally filtered
