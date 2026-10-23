@@ -170,7 +170,7 @@ test('the list keeps one entry per street name and both real streets behind one 
     foldedCounts.set(name, (foldedCounts.get(name) ?? 0) + 1);
   assert.deepEqual(
     STREET_NAMES.filter(
-      (_, index) => foldedCounts.get(folded[index])! > 1,
+      (name) => foldedCounts.get(foldUnitName(name))! > 1,
     ).sort(),
     ['Nguyễn Văn Luông', 'Nguyễn Văn Lượng'].sort(),
   );
