@@ -123,6 +123,12 @@ export type AddressGroup = {
   keepId: string | null;
   members: AddressGroupMember[];
 };
+// What the pre-create warning names: the identity and recorded code of a property that already
+// records the address being saved. Nothing about its owner or contacts crosses this boundary.
+export type AddressMatch = {
+  id: string;
+  propertyCode: string;
+};
 export type MergeReport = {
   keep: { id: string; propertyCode: string };
   merged: { id: string; propertyCode: string }[];

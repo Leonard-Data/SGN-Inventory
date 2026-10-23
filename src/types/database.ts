@@ -2036,6 +2036,10 @@ export type Database = {
         Args: { p_property_id: string };
         Returns: Json;
       };
+      property_address_duplicates: {
+        Args: { p_address: Json };
+        Returns: Json;
+      };
       merge_address_properties: {
         Args: {
           p_keep_property_id: string;
