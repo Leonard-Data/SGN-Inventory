@@ -658,9 +658,10 @@ async function unitIds(db, cache) {
 }
 
 export function currentAddressText(address, target) {
+  // The house number and the street name one line, as the application composes them: one space
+  // between the two, `, ` between that pair and the levels above it.
   return [
-    address.house_number,
-    address.street,
+    [address.house_number, address.street].filter(Boolean).join(' '),
     target.name,
     target.provinceName,
   ]

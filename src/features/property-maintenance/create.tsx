@@ -1,5 +1,5 @@
 'use client';
-import { useId, useState, type FormEvent } from 'react';
+import { useId, useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, RequestError } from '@/features/employees/api';
 import { confirmsPrice } from '@/features/properties/price-input';
@@ -19,6 +19,7 @@ import {
 } from './fields';
 import { AddressFields, RecordFields } from './forms';
 import { createAfterWarning } from './create-duplicate';
+import { DetailActionDialog } from '@/features/properties/detail-dialog';
 import { CrosswalkOffer } from './crosswalk-offer';
 import type { AddressCrosswalk } from './crosswalk';
 import { maintenanceError, maintenanceText, optionLabel } from './messages';
@@ -50,7 +51,9 @@ export function CreateProperty({
     // check runs again on what will actually be saved.
     [duplicates, setDuplicates] = useState<AddressMatch[] | null>(null),
     contactNameId = useId(),
-    contactPhoneId = useId();
+    contactPhoneId = useId(),
+    // The warning is a modal, so its own confirm submits the form the person already filled in.
+    formRef = useRef<HTMLFormElement>(null);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy || !confirmsPrice(event.currentTarget, locale)) return;
@@ -116,6 +119,9 @@ export function CreateProperty({
         return;
       }
       const result = outcome.created;
+      // The record exists, so the warning has nothing left to hold: it closes before the person is
+      // taken to the record it produced.
+      setDuplicates(null);
       // The new record enters the browser's catalogue from the server's own answer, so the list
       // already holds it when the person returns from the record they just created.
       applyServerSummary(applyChange, result, result.id);
@@ -146,6 +152,8 @@ export function CreateProperty({
       setError(
         failure instanceof RequestError ? failure.code : 'invalid-input',
       );
+      // The warning closes so the refusal is visible instead of hidden behind it.
+      setDuplicates(null);
       setBusy(false);
     }
   }
@@ -184,6 +192,7 @@ export function CreateProperty({
       <div className="panel-body">
         <p>{text.immediate}</p>
         <form
+          ref={formRef}
           onSubmit={submit}
           // A draft that changes after the warning was read is a different address, so the next
           // submit asks again rather than confirming a stale match.
@@ -266,32 +275,6 @@ export function CreateProperty({
                 </p>
               ) : null}
             </div>
-            {duplicates?.length ? (
-              <div className="alert" data-tone="neutral" role="alert">
-                <div>
-                  <p>
-                    {text.duplicateAddressBefore.replace(
-                      '{n}',
-                      formatInteger(duplicates.length, locale),
-                    )}
-                  </p>
-                  <ul>
-                    {duplicates.map((match) => (
-                      <li key={match.id}>
-                        <a
-                          href={'/properties/' + match.id}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          {match.propertyCode}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                  <p>{text.duplicateAddressHint}</p>
-                </div>
-              </div>
-            ) : null}
           </fieldset>
           {error ? (
             <p role="alert" className="field-error">
@@ -299,7 +282,21 @@ export function CreateProperty({
             </p>
           ) : null}
           <div className="form-foot">
-            {duplicates ? (
+            <button className="btn btn-primary" disabled={busy}>
+              {busy ? text.saving : text.create}
+            </button>
+          </div>
+        </form>
+        {/* The warning is the highlight, not a line buried in the form: a modal the person has to
+            answer, naming the records that already hold the address and still letting them create. */}
+        <DetailActionDialog
+          open={Boolean(duplicates?.length)}
+          onClose={() => setDuplicates(null)}
+          title={text.duplicateAddressTitle}
+          closeLabel={copy.cancel}
+          size="default"
+          footer={
+            <>
               <button
                 className="btn"
                 type="button"
@@ -308,16 +305,42 @@ export function CreateProperty({
               >
                 {text.createBack}
               </button>
-            ) : null}
-            <button className="btn btn-primary" disabled={busy}>
-              {busy
-                ? text.saving
-                : duplicates
-                  ? text.createAnyway
-                  : text.create}
-            </button>
+              <button
+                className="btn btn-primary"
+                type="button"
+                disabled={busy}
+                onClick={() => formRef.current?.requestSubmit()}
+              >
+                {busy ? text.saving : text.createAnyway}
+              </button>
+            </>
+          }
+        >
+          <div className="alert" data-tone="neutral" role="alert">
+            <div>
+              <p>
+                {text.duplicateAddressBefore.replace(
+                  '{n}',
+                  formatInteger(duplicates?.length ?? 0, locale),
+                )}
+              </p>
+              <ul>
+                {duplicates?.map((match) => (
+                  <li key={match.id}>
+                    <a
+                      href={'/properties/' + match.id}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {match.propertyCode}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+              <p>{text.duplicateAddressHint}</p>
+            </div>
           </div>
-        </form>
+        </DetailActionDialog>
         <p className="search-hint">{copy.legalNote}</p>
       </div>
     </section>

@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { RequestError } from '../employees/api.ts';
 import { createAfterWarning } from './create-duplicate.ts';
+
+const form = readFileSync(new URL('./create.tsx', import.meta.url), 'utf8');
 
 const match = { id: 'property-1', propertyCode: 'SGN-00000001' };
 const address = { format: 'current', house_number: '12' };
@@ -79,4 +82,26 @@ test('a session that is gone is reported, not turned into a warning', async () =
       { denied: status },
     );
   }
+});
+
+// The warning is the highlight, not a line inside the form: the match list opens the application's
+// own modal, which names the records and offers the deliberate confirm, and that confirm is the
+// form's own submission - the one path that creates exactly once.
+test('a match opens the modal warning, whose confirm submits the form', async () => {
+  assert.match(form, /<DetailActionDialog/);
+  assert.match(form, /title=\{text\.duplicateAddressTitle\}/);
+  assert.match(form, /open=\{Boolean\(duplicates\?\.length\)\}/);
+  assert.match(form, /onClose=\{\(\) => setDuplicates\(null\)\}/);
+  // The records that already hold the address, each one a link that opens it.
+  assert.match(form, /duplicates\?\.map/);
+  assert.match(form, /href=\{'\/properties\/' \+ match\.id\}/);
+  // The deliberate confirmation, and backing out of it without creating anything.
+  assert.match(form, /formRef\.current\?\.requestSubmit\(\)/);
+  assert.match(form, /text\.createAnyway/);
+  assert.match(form, /text\.createBack/);
+  // The warning sits inside the dialog, in the same attention block the form used to hold it in.
+  assert.match(
+    form,
+    /<DetailActionDialog[\s\S]*className="alert"[\s\S]*text\.duplicateAddressHint[\s\S]*<\/DetailActionDialog>/,
+  );
 });
