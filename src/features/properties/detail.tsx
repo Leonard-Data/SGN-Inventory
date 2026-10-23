@@ -43,7 +43,6 @@ import { Discussion } from '@/features/property-comments/discussion';
 import { Reservation } from './reservation';
 import { SaleCompletion } from '@/features/sales/completion';
 import { detailMessages } from './messages';
-import { PropertyLocation } from './location';
 import { DetailActionDialog } from './detail-dialog';
 import { SharedAddress } from './duplicates';
 import { contactRows } from './contact-rows';
@@ -902,26 +901,6 @@ export function Detail({
                         }
                         onDenied={denyFiles}
                         onMerged={changed}
-                      />
-                    </div>
-                  </div>
-
-                  {/* location */}
-                  <div className="panel" data-od-id="panel-location">
-                    <div className="panel-head">
-                      <h2>{dt.location}</h2>
-                    </div>
-                    <div className="panel-body">
-                      <PropertyLocation
-                        key={
-                          'location' +
-                          property.id +
-                          property.revision +
-                          refreshTick
-                        }
-                        latitude={property.latitude}
-                        longitude={property.longitude}
-                        locale={locale}
                       />
                     </div>
                   </div>

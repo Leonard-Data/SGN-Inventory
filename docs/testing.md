@@ -602,23 +602,6 @@ Prepare distinct active sales/staff/manager/admin identities, an inactive and an
 
 Add embedded database regressions only for consumer-visible invariants and run `npm run test:schema` when implementing the schema/workflow changes. Browser, real Data API/Storage boundaries and separate-session contention remain distinct staging proof. Record sanitized observations without tokens, private source payloads or customer records; no scenario above has been executed by this documentation change.
 
-## Property map location acceptance
-
-Scope: the property detail and edit location surfaces. Tiles are OpenStreetMap raster tiles only (`https://tile.openstreetmap.org`), loaded client-side with no API key, no second tile stack and no geocoding service; addresses are never resolved from or written to a map service. The originally referenced component (`tonghohin/shadcn-map`) pairs Leaflet with React Leaflet; this repository drives Leaflet directly through a local wrapper instead, because `react-leaflet` and its `@react-leaflet/core` companion are Hippocratic-2.1 (Ethical Source) rather than permissive, and it keeps the single OpenStreetMap raster stack with no API key. OpenStreetMap's tile usage policy allows rate limiting, so a shared office IP or an offline/blocked tile host can produce `tileerror` events mid-session.
-
-| Scenario | Required observation |
-| --- | --- |
-| Recorded point on the detail page | The map shows the recorded point with an "open in map" OpenStreetMap link; the visible caption and the map's group label state the recorded latitude and longitude, and the Leaflet and OpenStreetMap credit links stay visible and reachable by keyboard |
-| No recorded point | The detail page states that no location is recorded and renders no map |
-| Place, move and clear a point in the editor | Clicking the map places/moves the marker, a typed latitude and longitude take effect only after pressing Apply coordinates, clearing removes both coordinates, and the save writes both or neither through the maintenance RPC; range and precision are rejected exactly as the save path rejects them, and a change set naming only one axis is rejected |
-| Location versus correction requests | In the application UI the location editor is the only place coordinates are set or cleared: the correction report/request draft and its amend path never offer latitude or longitude, so a single coordinate or a half-cleared pair can never be requested; the editor keeps the pair together with the 7-decimal range guidance |
-| Tiles fail to load in the editor | The map stays mounted and the capture surface stays usable: the localized notice says the background could not load, and both clicking the blank map and typing coordinates still set the point; no page reload is needed |
-| Tiles fail to load on the detail page | A tile error never unmounts the map: the recorded location stays on the map, and the localized notice appears alongside it only while no tile has ever loaded and at least one errored; the notice clears once a tile loads, and the open-in-map link stays visible either way |
-| Keyboard and screen reader | The interactive map is a labelled group that says what it is for, never a static image; the typed latitude/longitude inputs and their apply action are reachable and operable by keyboard alone, with localized VI/EN labels, hint and invalid-coordinate message |
-| VI/EN switching | Labels, hints, the tile-failure notice and the no-location state are equivalent in both languages and no coordinate value is rewritten |
-
-Embedded coverage applies to the shared save-path validation and the correction draft's field list (`npm run test:unit` and `npm run test:schema`); the tile-failure behaviour, the real Leaflet rendering and the keyboard journey require the browser gate above and are not claimed by those tests.
-
 ## Shared-contact detail-edit acceptance (ticket #70)
 
 Scope: the confirmed requirement that any Active employee may edit owner and property contact details, with the correction applied to the shared person (property history no longer records contact changes), plus the [implemented contract](maintenance-contract.md#shared-identities-and-local-links). Use the authorized isolated development/staging target with real Supabase Auth, Data API/RLS and the actual VI/EN browser interface; two independent sessions are required for the race and stale-context rows. Embedded `scripts/maintenance-contract.mjs` assertions are the deterministic supplement, not this acceptance.

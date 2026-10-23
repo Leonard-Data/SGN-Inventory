@@ -123,7 +123,7 @@ available.
 | Framework          | Next.js `16.4.0` (App Router), React `19.3.0`, TypeScript `6.0.3`, plain CSS                                                                  |
 | Supabase           | `@supabase/supabase-js` `2.117.3`, `@supabase/ssr` `0.12.7` (Postgres, Auth, RLS in one Postgres database)                                    |
 | File bytes         | Cloudflare R2 through `@aws-sdk/client-s3` `3.1152.0` and `@aws-sdk/s3-request-presigner` `3.1152.0`                                          |
-| Other runtime deps | `leaflet` `1.9.4` (property map point), `sharp` `0.35.5` and `pdf-lib` `1.17.1` (upload validation), `@vercel/analytics` `2.0.1`              |
+| Other runtime deps | `sharp` `0.35.5` and `pdf-lib` `1.17.1` (upload validation), `@vercel/analytics` `2.0.1`                                                      |
 | Tooling            | Supabase CLI `2.120.0`, Vercel CLI `63.1.2`, ESLint `9.39.5` + `eslint-config-next` `16.4.0`, Prettier `3.9.9`, Husky `9.1.7`                 |
 | Tests              | `@electric-sql/pglite` `0.5.8` and `embedded-postgres` `18.4.0-beta.17` for embedded Postgres checks; Python `3.11+` for workbook preparation |
 | Hosting            | Vercel, with the database, Auth and RLS on Supabase                                                                                           |

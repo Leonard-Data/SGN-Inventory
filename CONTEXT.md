@@ -149,7 +149,7 @@ A record whose content and links were moved onto the surviving property by a mer
 _Avoid_: Deleted property, merged duplicate
 
 **Property location**:
-The recorded map point for a property, stored as a `latitude`/`longitude` pair that a staff editor sets or corrects by clicking a map during property-fact editing. It is saved through the same revision-checked maintenance path as the other facts, so it grants no separate editing authority and a change flags the record for review. Its absence is an unrecorded location, never a coordinate at the world origin.
+The recorded map point for a property, stored as a `latitude`/`longitude` pair. The interface offers no map and no coordinate entry, so no screen shows or sets the point; the recorded values stay as they were, and the database keeps its own range and both-or-neither rules over the pair. Its absence is an unrecorded location, never a coordinate at the world origin.
 _Avoid_: Address text as location, an empty world map pretending to be data
 
 **Contact**:
