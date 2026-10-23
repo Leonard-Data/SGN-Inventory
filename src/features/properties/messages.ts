@@ -59,10 +59,6 @@ const vi = {
     'Một hồ sơ được gộp đang có đặt chỗ đã duyệt. Xử lý đặt chỗ trước.',
   rentalActive:
     'Một hồ sơ được gộp đang có hợp đồng thuê hiệu lực. Kết thúc hợp đồng trước.',
-  location: 'Vị trí',
-  locationRecorded: 'Vị trí đã ghi',
-  noLocation: 'Chưa ghi nhận vị trí trên bản đồ.',
-  openInMap: 'Mở trong bản đồ',
 };
 
 const en: Record<keyof typeof vi, string> = {
@@ -123,10 +119,6 @@ const en: Record<keyof typeof vi, string> = {
     'One of the merged records holds an approved reservation. Resolve it first.',
   rentalActive:
     'One of the merged records has a live rental agreement. End it first.',
-  location: 'Location',
-  locationRecorded: 'Recorded location',
-  noLocation: 'No location recorded on the map.',
-  openInMap: 'Open in map',
 };
 
 export const detailMessages: Record<Locale, Record<keyof typeof vi, string>> = {

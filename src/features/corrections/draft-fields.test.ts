@@ -6,15 +6,6 @@ function propertyNames(staff: boolean, propertyStatus: string) {
   return correctionFieldNames({ target: 'property', staff, propertyStatus });
 }
 
-test('a property correction can never name a single coordinate', () => {
-  for (const staff of [true, false])
-    for (const status of ['available', 'sold', 'rented']) {
-      const names = propertyNames(staff, status);
-      assert.equal(names.includes('latitude'), false);
-      assert.equal(names.includes('longitude'), false);
-    }
-});
-
 test('property corrections keep the other facts and the status boundary', () => {
   const names = propertyNames(true, 'available');
   for (const name of ['listing_mode', 'sale_price_vnd', 'notes', 'status'])

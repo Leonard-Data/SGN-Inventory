@@ -963,17 +963,3 @@ dialog.sgn-dialog::backdrop { background: color-mix(in oklab, var(--fg) 46%, tra
   .sgn-content { max-width: none; padding: 0; }
 }
 
-/* ── location map (Leaflet) ────────────────────────────────────────────── */
-.sgn-location { display: flex; flex-direction: column; gap: var(--space-3); }
-.sgn-map {
-  width: 100%;
-  height: 260px;
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  border: 1px solid var(--border-soft);
-  background: var(--surface);
-}
-.sgn-map .leaflet-container { font-family: var(--font-body); }
-.leaflet-div-icon.sgn-map-pin { background: transparent; border: 0; }
-.sgn-map-caption { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--muted); }
-.sgn-map-actions { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
