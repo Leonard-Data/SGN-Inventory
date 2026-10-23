@@ -37,7 +37,7 @@ import {
   type InventoryFilters,
 } from './filters';
 import { inventoryHref, type InventoryView } from './view';
-import { isInventoryOrder } from './stream';
+import { columnOrder, isEntryOrder, isInventoryOrder } from './stream';
 import { resultMode } from './catalogue-results';
 
 // The official catalog rows the district and ward pickers read. Names are source data and are
@@ -77,6 +77,10 @@ function Chip({
   );
 }
 
+// The Order control's own value for "the table header set the order": it names the state the
+// control is in, never an ordering, so it is not one of the values the address can carry.
+const HEADER_ORDER = 'header';
+
 // The search island: the same inventory filters in a compact panel opened from the list. It is
 // an addition to the free-text search box, not a replacement, and it applies filters by
 // navigating to the filtered address, so the address stays the single source of truth and the
@@ -86,6 +90,7 @@ export function SearchIsland({
   query,
   sort,
   view,
+  hide,
   filters,
   open,
   onOpen,
@@ -96,6 +101,8 @@ export function SearchIsland({
   sort: string | null;
   // The view the address states: applying or removing a filter keeps the person's chosen view.
   view: InventoryView;
+  // The hidden columns the address states, kept on every link this panel builds.
+  hide: string | null;
   filters: InventoryFilters;
   open: boolean;
   onOpen: (open: boolean) => void;
@@ -123,7 +130,14 @@ export function SearchIsland({
   // The stated ordering, when the address carries one. A chronological ordering is an advanced
   // criterion: it names the eligible-status database view, which the loaded catalogue cannot
   // state, so it is submitted from this panel rather than run as soon as a control changes.
-  const appliedOrder = isInventoryOrder(sort) ? sort : '';
+  // A column ordering is stated by the table header instead, so this control shows it as its own
+  // state rather than as one of the two entry orderings it offers.
+  const headerOrder = columnOrder(sort) !== null;
+  const appliedOrder = headerOrder
+    ? HEADER_ORDER
+    : isInventoryOrder(sort)
+      ? sort
+      : '';
   const appliedStateKey = JSON.stringify([
     query,
     sort,
@@ -349,8 +363,15 @@ export function SearchIsland({
     router.push(
       inventoryHref({
         query,
-        sort: isInventoryOrder(order) ? order : null,
+        // The header's own ordering is kept unless this panel states another one.
+        sort:
+          order === HEADER_ORDER
+            ? sort
+            : isInventoryOrder(order)
+              ? order
+              : null,
         view,
+        hide,
         filters: parsed.filters,
       }),
     );
@@ -381,7 +402,7 @@ export function SearchIsland({
         ward: communeValue(selectedWards),
         contact: contact || null,
       },
-      sort: order || null,
+      sort: order === HEADER_ORDER ? sort : order || null,
     }) === 'advanced';
   // The current filter set stays visible as removable chips, and each chip removes exactly its
   // own condition, so the address is still the only place a filter lives.
@@ -484,6 +505,7 @@ export function SearchIsland({
           query,
           sort,
           view,
+          hide,
           filters: withoutCommune(filters, communeId),
         }),
       );
@@ -496,12 +518,13 @@ export function SearchIsland({
         : key === 'addressFormat'
           ? { ...filters, addressFormat: INVENTORY_ADDRESS_FORMAT_ANY }
           : { ...filters, [key]: null };
-    router.push(inventoryHref({ query, sort, view, filters: next }));
+    router.push(inventoryHref({ query, sort, view, hide, filters: next }));
   }
   const clearHref = inventoryHref({
     query,
     sort,
     view,
+    hide,
     filters: noInventoryFilters,
   });
   const select = (
@@ -715,10 +738,8 @@ export function SearchIsland({
                 </div>
                 <p className="field-hint">{text.addressFormatHint}</p>
               </div>
-              {/* The creator selection is answered from the loaded catalogue alone, so it is
-                  offered only for a run that stays in it. A whole-inventory search has no creator
-                  criterion; a locked field the form cannot submit keeps that run from stating a
-                  filter it will not apply. */}
+              {/* The creator selection is a criterion of the whole-inventory read as well, so it is
+                  offered for either run: the address carries it beside every other filter. */}
               <div className="form-grid-3">
                 <div className="field">
                   <label className="field-label" htmlFor="filter-createdBy">
@@ -732,19 +753,10 @@ export function SearchIsland({
                     onChange={(event) =>
                       setCreatedBy(event.currentTarget.value)
                     }
-                    disabled={advancedDraft}
-                    aria-describedby={
-                      advancedDraft ? 'filter-createdBy-hint' : undefined
-                    }
                   >
                     <option value="">{text.filtersAny}</option>
                     <option value="mine">{text.mine}</option>
                   </select>
-                  {advancedDraft ? (
-                    <p className="field-hint" id="filter-createdBy-hint">
-                      {text.creatorFilterCatalogueOnly}
-                    </p>
-                  ) : null}
                 </div>
               </div>
               <div className="field-group">
@@ -897,10 +909,19 @@ export function SearchIsland({
                       <option value="newest" hidden>
                         {text.sortNewest}
                       </option>
+                      {/* The order a table header set, stated here so the two controls never
+                        describe two different orders. Only that header changes it. */}
+                      {headerOrder ? (
+                        <option value={HEADER_ORDER} hidden>
+                          {text.sortByHeader}
+                        </option>
+                      ) : null}
                     </select>
                   </div>
                 </div>
-                {order ? <p className="field-hint">{text.ageHint}</p> : null}
+                {isEntryOrder(order) ? (
+                  <p className="field-hint">{text.ageHint}</p>
+                ) : null}
               </div>
             </div>
             {invalid ? (

@@ -7,17 +7,74 @@
 // result set.
 export * from '../stream/window.ts';
 
-export type InventoryOrder = 'oldest' | 'newest';
+// The two inventory-entry orderings the Order control states, and the columns a table header can
+// order by. A column ordering is the field and its direction in one address value, so a reload or
+// a shared link reads the same order the header was left in.
+export type InventoryEntryOrder = 'oldest' | 'newest';
+export const INVENTORY_SORT_FIELDS = [
+  'price',
+  'area',
+  'frontage',
+  'depth',
+  'status',
+  'changed',
+] as const;
+export type InventorySortField = (typeof INVENTORY_SORT_FIELDS)[number];
+export type SortDirection = 'asc' | 'desc';
+export type InventoryColumnOrder = `${InventorySortField}-${SortDirection}`;
+export type InventoryOrder = InventoryEntryOrder | InventoryColumnOrder;
+
+// Every ordering this application knows, in one place: the address read, the Order control and
+// the table header all ask this set whether a stated value is one of them.
+const ORDERS: ReadonlySet<string> = new Set([
+  'oldest',
+  'newest',
+  ...INVENTORY_SORT_FIELDS.flatMap((field) => [
+    `${field}-asc`,
+    `${field}-desc`,
+  ]),
+]);
 
 export function isInventoryOrder(value: unknown): value is InventoryOrder {
-  return value === 'oldest' || value === 'newest';
+  return typeof value === 'string' && ORDERS.has(value);
 }
 
-// The direction toggle has a target only when an entry-date ordering is active: the default
-// order has no chronology to reverse.
+// Whether the stated order is the inventory-entry chronology, which is the eligible-status view
+// rather than a reordering of the ordinary browse.
+export function isEntryOrder(
+  order: string | null,
+): order is InventoryEntryOrder {
+  return order === 'oldest' || order === 'newest';
+}
+
+// The column and direction a stated order names, or null for the entry chronology and for an
+// address that states no order at all.
+export function columnOrder(
+  order: string | null,
+): { field: InventorySortField; direction: SortDirection } | null {
+  if (!isInventoryOrder(order) || isEntryOrder(order)) return null;
+  const split = order.lastIndexOf('-');
+  return {
+    field: order.slice(0, split) as InventorySortField,
+    direction: order.slice(split + 1) as SortDirection,
+  };
+}
+
+// One header click: ascending, then descending, then back to the default order the list opens on.
+export function nextColumnOrder(
+  order: string | null,
+  field: InventorySortField,
+): InventoryOrder | null {
+  const stated = columnOrder(order);
+  if (stated?.field !== field) return `${field}-asc`;
+  return stated.direction === 'asc' ? `${field}-desc` : null;
+}
+
+// The direction toggle has a target only when an entry-date ordering is active: a column order
+// states its own direction and the default order has no chronology to reverse.
 export function reversedOrder(
   order: InventoryOrder | null,
-): InventoryOrder | null {
-  if (order === null) return null;
+): InventoryEntryOrder | null {
+  if (!isEntryOrder(order)) return null;
   return order === 'oldest' ? 'newest' : 'oldest';
 }

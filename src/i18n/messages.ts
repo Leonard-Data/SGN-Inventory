@@ -131,6 +131,10 @@ const vi = {
   sortDefault: 'Mới cập nhật gần đây',
   sortOldest: 'Ngày nhập kho: cũ nhất trước',
   sortNewest: 'Ngày nhập kho: mới nhất trước',
+  // The column control above the table, and the state the Order control shows while a column
+  // header is what set the order.
+  columnsLabel: 'Cột hiển thị',
+  sortByHeader: 'Theo tiêu đề cột',
   ageHint:
     'Chỉ gồm hồ sơ đang chào hoặc đang thương lượng, chưa lưu trữ. Thứ tự dùng ngày nhập kho gốc, không đổi khi cập nhật, đổi giá hoặc đăng lại. Hồ sơ chưa xác định ngày nhập kho được liệt kê sau cùng, không bị ẩn.',
   filters: 'Bộ lọc',
@@ -200,8 +204,6 @@ const vi = {
   modifiedBy: 'Người sửa hồ sơ',
   creatorFilter: 'Người tạo',
   mine: 'Do tôi tạo',
-  creatorFilterCatalogueOnly:
-    'Bộ lọc này chỉ chạy trên danh mục đã tải. Lần tìm toàn kho không lọc theo người tạo, nên ô này tạm khoá.',
   entryDateUnknown: 'Chưa xác định',
   entryDateLegacy: 'Theo hồ sơ gốc',
   entrySourceRecorded: 'Ghi nhận khi tạo hồ sơ',
@@ -1054,6 +1056,8 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     sortDefault: 'Most recently changed first',
     sortOldest: 'Oldest inventory entry first',
     sortNewest: 'Newest first',
+    columnsLabel: 'Columns',
+    sortByHeader: 'Set by the table header',
     ageHint:
       'Available and negotiating unarchived inventory only. Order uses the original inventory entry date and does not change on update, price edit or relisting. Records with an unknown entry date are listed last, never hidden.',
     filters: 'Filters',
@@ -1121,8 +1125,6 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     modifiedBy: 'Record modified by',
     creatorFilter: 'Created by',
     mine: 'Created by me',
-    creatorFilterCatalogueOnly:
-      'Only the loaded catalogue can answer this filter. A whole-inventory search does not filter by creator, so this field is locked for it.',
     entryDateUnknown: 'Unknown',
     entryDateLegacy: 'From the legacy record',
     entrySourceRecorded: 'Recorded when the record was created',

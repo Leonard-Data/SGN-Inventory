@@ -11,6 +11,7 @@ import {
   type FormEvent,
 } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { messages, type Locale } from '@/i18n/messages';
 import { useProtectedData } from '@/features/employees/use-protected-data';
 import { sessionScope } from '@/features/employees/protected-load';
@@ -18,7 +19,7 @@ import type { EmployeeSession } from '@/features/employees/types';
 import { SkeletonCards } from '@/features/skeleton';
 import { CardChunk } from './property-cards';
 import { PropertyDrawer } from './property-drawer';
-import { TableChunk, TableHead } from './property-table';
+import { ColumnMenu, TableChunk, TableHead } from './property-table';
 import { SearchIsland } from './search-island';
 import { useInventoryStream } from './use-inventory-stream';
 import { useCatalogue } from './catalogue-provider';
@@ -66,7 +67,19 @@ import {
   streamOffsets,
   streamWindows,
 } from './stream';
-import { SUMMARY_TABLE_COLUMNS } from './table';
+import {
+  HIDE_PARAM,
+  hiddenColumns,
+  hideParam,
+  shownColumns,
+  toggleColumn,
+} from './columns';
+import type { SummaryColumn } from './table';
+import {
+  isEntryOrder,
+  nextColumnOrder,
+  type InventorySortField,
+} from './stream';
 import type { PropertySummary } from './types';
 
 const NO_MEASURED: ReadonlyMap<number, number> = new Map();
@@ -74,7 +87,7 @@ const NO_FORMATS: ReadonlyMap<string, string> = new Map();
 // A typed search the loaded catalogue cannot answer yet: no rows to filter, not a failed read.
 const NO_MATCHES: CatalogueMatch[] = [];
 
-// The viewport query behind the switch: below this width the ten-column table is not offered at
+// The viewport query behind the switch: below this width the summary table is not offered at
 // all, so nobody lands on a table that cannot work there.
 const WIDE_QUERY = `(min-width: ${PHONE_MAX_WIDTH_PX + 1}px)`;
 function subscribeWide(onChange: () => void) {
@@ -146,16 +159,24 @@ export function Inventory({
   initialQuery,
   view,
   sort,
+  hide,
   filters,
 }: {
   initialLocale: Locale;
   initialQuery: string;
   view: string | null;
   sort: string | null;
+  // The columns the person hid, as the address states them.
+  hide: string | null;
   filters: InventoryFilters;
 }) {
   const text = messages[initialLocale];
   const locale = initialLocale;
+  const router = useRouter();
+  // The columns the address states, and the address value that states them. A hidden column is
+  // neither a heading nor a cell, so the two stay in step whatever is hidden.
+  const statedHidden = useMemo(() => hiddenColumns(hide), [hide]);
+  const statedHide = hideParam(statedHidden);
   const parsedView = parseInventoryView(view);
   const requestedView = parsedView.ok
     ? parsedView.view
@@ -171,15 +192,74 @@ export function Inventory({
   const filterCount = activeFilterCount(filters);
   // The format the list's searches read through, which decides the address each row states.
   const addressFormat = searchedAddressFormat(filters);
-  // The address of the list as it stands: the search, the ordering, the view and the filters. It
-  // names the result set this list is showing, so it is also what the carrier holds the list's own
-  // state under and what a property's link carries back as `returnTo`.
+  // The address of the list as it stands: the search, the ordering, the view, the hidden columns
+  // and the filters. A property's link carries it back as `returnTo`, so a return keeps the columns
+  // the person hid.
   const resultLocation = inventoryHref({
     query: initialQuery,
     sort,
     view: requestedView,
+    hide: statedHide,
     filters,
   });
+  // The result set this list is showing: the search, the ordering, the view and the filters, and
+  // not the hidden columns, which change no row, no order and no read. This is what the carrier
+  // holds the list's own state under and what the restore compares, so hiding a column leaves the
+  // person's place in the same rows.
+  const resultSet = inventoryHref({
+    query: initialQuery,
+    sort,
+    view: requestedView,
+    hide: null,
+    filters,
+  });
+  // A header click cycles the columns ordering and a toggle hides one column; the address is the
+  // one place either is kept, so a reload or a shared link reads the choice back. Both are a server
+  // navigation, so the choice just made is held beside the address until the answer states it, or
+  // the next click would be computed from the answer the previous one brought and would silently
+  // drop it. That hold is not a second record of the choice: it names the address it was asked at
+  // and is dropped the moment that address is replaced, so coming back to that address later reads
+  // it again.
+  const [asked, setAsked] = useState<{
+    at: string;
+    hidden: ReadonlySet<SummaryColumn>;
+    ordered: string | null;
+  } | null>(null);
+  // The hold lasts only while the address it was asked at is the address: once an answer replaces
+  // it, it is dropped rather than kept to be applied again if that address is visited again.
+  useEffect(() => {
+    if (asked === null || asked.at === resultLocation) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the address replaced the hold, so the hold no longer describes this list
+    setAsked(null);
+  }, [asked, resultLocation]);
+  const pending = asked !== null && asked.at === resultLocation ? asked : null;
+  // What the table draws and what every address carrying the choice states: the columns and the
+  // ordering the person last asked for, until the answer lands.
+  const hidden = pending !== null ? pending.hidden : statedHidden;
+  const hideValue = hideParam(hidden);
+  const ordered = pending !== null ? pending.ordered : sort;
+  const visibleColumns = useMemo(() => shownColumns(hidden), [hidden]);
+  function applyChoice(next: {
+    hidden: ReadonlySet<SummaryColumn>;
+    ordered: string | null;
+  }) {
+    setAsked({ at: resultLocation, ...next });
+    router.push(
+      inventoryHref({
+        query: initialQuery,
+        sort: next.ordered,
+        view: requestedView,
+        hide: hideParam(next.hidden),
+        filters,
+      }),
+    );
+  }
+  function sortBy(field: InventorySortField) {
+    applyChoice({ hidden, ordered: nextColumnOrder(ordered, field) });
+  }
+  function toggleShown(column: SummaryColumn) {
+    applyChoice({ hidden: toggleColumn(hidden, column), ordered });
+  }
   const endpoint = searchEndpoint({ query: initialQuery, sort, filters });
   // The session is this surface's own protection: the shell reads it, and the stream below reads
   // nothing under any scope but the one in force - this surface's own once it has answered, and the
@@ -203,13 +283,13 @@ export function Inventory({
     [clear],
   );
   const [searchError, setSearchError] = useState(false);
-  // The list the person left, read once for the address this list is opened at: the text the
+  // The list the person left, read once for the result set this list is opened at: the text the
   // address box held (typed, and not necessarily submitted), whether it was edited at all, and
   // where the stream was scrolled. A result set the carrier holds no entry for opens at its own
   // first rows with the address's own search, which is also where a reload of the application
   // starts: the carrier is browser memory for the session, not storage.
   const carrier = useListStateCarrier();
-  const [restored] = useState(() => readListState(carrier, resultLocation));
+  const [restored] = useState(() => readListState(carrier, resultSet));
   const [typed, setTyped] = useState(() => restored?.text ?? initialQuery);
   const [addressEdited, setAddressEdited] = useState(
     () => restored?.edited ?? false,
@@ -416,19 +496,19 @@ export function Inventory({
     },
     [],
   );
-  // The position the list was opened at and the address it belongs to: `target` is what still has to
-  // be reached, and until the first attempt has been made it - not the measurement - is what the
+  // The position the list was opened at and the result set it belongs to: `target` is what still has
+  // to be reached, and until the first attempt has been made it - not the measurement - is what the
   // carrier holds, because until then the stream is not where the person was. `rows` is the number
   // of rows that attempt was made against, so a result set that has since lost rows releases it.
-  // A later address inside the same visit is a different result set, so the position recorded here
-  // is dropped rather than applied to its rows.
+  // A later result set inside the same visit - another search, ordering, view or filter - is a
+  // different one, so the position recorded here is dropped rather than applied to its rows.
   const opening = useRef<{
-    address: string;
+    name: string;
     target: { top: number; left: number; page: number } | null;
     rows: number | null;
     attempted: boolean;
   }>({
-    address: resultLocation,
+    name: resultSet,
     target:
       restored !== null &&
       (restored.scrollTop > 0 ||
@@ -532,7 +612,7 @@ export function Inventory({
   // settling keeps their own position, which is what ends the restore; the browser adjusting the
   // stream under them as a chunk measures is not. A result set that has lost rows since the visit
   // cannot hold the position any more, so the target is released rather than retried. A different
-  // result-set address is not this position's list at all, so the position is dropped and the new
+  // result set is not this position's list at all, so the position is dropped and the new
   // one opens at its own first rows. The scroll this sets is measured by the stream and by the
   // document it sits in, so the band follows it and the rows sit where the person left them.
   const restoreReady = positionReady({
@@ -544,9 +624,9 @@ export function Inventory({
   useLayoutEffect(() => {
     const open = opening.current;
     const node = streamNode.current;
-    if (open.address !== resultLocation) {
+    if (open.name !== resultSet) {
       opening.current = {
-        address: resultLocation,
+        name: resultSet,
         target: null,
         rows: null,
         attempted: false,
@@ -604,7 +684,7 @@ export function Inventory({
             height: node.clientHeight,
           },
     );
-  }, [container, resultLocation, restoreReady, offsets, syncViewport, total]);
+  }, [container, resultSet, restoreReady, offsets, syncViewport, total]);
   // Scrolling the list is the person's own, so input inside the stream - a wheel, a touch, a scroll
   // key while it holds focus, or a press on its scrollbar - ends the restore and the position they
   // take is the one they keep. Input anywhere else, the address box or the toolbar included, is not
@@ -642,8 +722,8 @@ export function Inventory({
     };
   }, [container]);
 
-  // The list is kept in the carrier as it is used, so the address the person is looking at already
-  // holds it when they come back. Written on every position change so navigation while mounted
+  // The list is kept in the carrier as it is used, so the result set the person is looking at
+  // already holds it when they come back. Written on every position change so navigation while mounted
   // always leaves the latest position behind. Before the restore has been attempted, the target is
   // what is held, so a return never loses the position it is restoring; from the first attempt on,
   // what the stream measured is held, so a position the results cannot reach is never published.
@@ -651,14 +731,14 @@ export function Inventory({
     const open = opening.current;
     const place =
       open.target !== null && !open.attempted ? open.target : viewport;
-    writeListState(carrier, resultLocation, {
+    writeListState(carrier, resultSet, {
       text: typed,
       edited: addressEdited,
       scrollTop: place.top,
       scrollLeft: place.left,
       pageTop: place.page,
     });
-  }, [carrier, resultLocation, typed, addressEdited, viewport]);
+  }, [carrier, resultSet, typed, addressEdited, viewport]);
 
   // The band asks the stream for the windows it would show, and tells it which row position it is
   // centred on, so a deep scroll keeps its own windows and drops the far ones. A locally filtered
@@ -702,7 +782,7 @@ export function Inventory({
     return indexes;
   }, [band.first, band.last, chunkCount]);
 
-  const showEntry = order !== null;
+  const showEntry = isEntryOrder(order);
   // The quick view states the caller's own permissions, so a row's controls are live only once this
   // surface's session has answered. A list painted from the held catalogue shows them unavailable
   // until then, instead of taking a click that opens nothing.
@@ -880,7 +960,12 @@ export function Inventory({
                   </svg>
                 </button>
               </div>
-              {sort ? <input type="hidden" name="sort" value={sort} /> : null}
+              {ordered ? (
+                <input type="hidden" name="sort" value={ordered} />
+              ) : null}
+              {hideValue ? (
+                <input type="hidden" name={HIDE_PARAM} value={hideValue} />
+              ) : null}
               {viewParam ? (
                 <input type="hidden" name="view" value={viewParam} />
               ) : null}
@@ -914,6 +999,15 @@ export function Inventory({
                 </span>
               ) : null}
             </button>
+            {shownView === 'table' ? (
+              // The column control belongs to the table whose columns it hides, so it is offered
+              // where the table is drawn and not on a phone, which is answered with cards.
+              <ColumnMenu
+                locale={locale}
+                hidden={hidden}
+                onToggle={toggleShown}
+              />
+            ) : null}
             {wide ? (
               // The switch is icon-only: each link's name lives in its visually hidden label, so
               // the visible control is a grid and a table and nothing else.
@@ -922,8 +1016,9 @@ export function Inventory({
                   className="seg-btn"
                   href={inventoryHref({
                     query: initialQuery,
-                    sort,
+                    sort: ordered,
                     view: 'cards',
+                    hide: hideValue,
                     filters,
                   })}
                   prefetch={false}
@@ -950,8 +1045,9 @@ export function Inventory({
                   className="seg-btn"
                   href={inventoryHref({
                     query: initialQuery,
-                    sort,
+                    sort: ordered,
                     view: 'table',
+                    hide: hideValue,
                     filters,
                   })}
                   prefetch={false}
@@ -978,8 +1074,9 @@ export function Inventory({
           <SearchIsland
             locale={locale}
             query={initialQuery}
-            sort={sort}
+            sort={ordered}
             view={requestedView}
+            hide={hideValue}
             filters={filters}
             open={filtersOpen}
             onOpen={setFiltersOpen}
@@ -1073,7 +1170,9 @@ export function Inventory({
               </button>
             </div>
           ) : null}
-          {sort ? <p className="search-hint">{text.ageHint}</p> : null}
+          {isEntryOrder(sort) ? (
+            <p className="search-hint">{text.ageHint}</p>
+          ) : null}
           {searchError ? (
             <p className="search-hint" role="alert">
               {text.queryTooLong}
@@ -1091,8 +1190,9 @@ export function Inventory({
                 className="btn btn-secondary btn-sm"
                 href={inventoryHref({
                   query: initialQuery,
-                  sort,
+                  sort: ordered,
                   view: DEFAULT_INVENTORY_VIEW,
+                  hide: hideValue,
                   filters,
                 })}
               >
@@ -1180,8 +1280,9 @@ export function Inventory({
                       className="btn btn-secondary btn-sm"
                       href={inventoryHref({
                         query: localQuery,
-                        sort,
+                        sort: ordered,
                         view: requestedView,
+                        hide: hideValue,
                         filters,
                       })}
                     >
@@ -1219,14 +1320,19 @@ export function Inventory({
                     className="inventory-table"
                     aria-label={text.inventory}
                   >
-                    <TableHead locale={locale} />
+                    <TableHead
+                      locale={locale}
+                      shown={visibleColumns}
+                      sort={ordered}
+                      onSort={sortBy}
+                    />
                     {band.top > 0 ? (
                       <tbody aria-hidden="true">
                         <tr
                           className="inventory-gap"
                           style={{ height: band.top }}
                         >
-                          <td colSpan={SUMMARY_TABLE_COLUMNS.length} />
+                          <td colSpan={visibleColumns.length} />
                         </tr>
                       </tbody>
                     ) : null}
@@ -1241,6 +1347,7 @@ export function Inventory({
                         resultLocation={resultLocation}
                         addressFormat={addressFormat}
                         matchedFormats={matchedFormats}
+                        shown={visibleColumns}
                         quickView={quickView}
                         onOpen={openDrawer}
                         onMeasured={reportHeight}
@@ -1252,7 +1359,7 @@ export function Inventory({
                           className="inventory-gap"
                           style={{ height: band.bottom }}
                         >
-                          <td colSpan={SUMMARY_TABLE_COLUMNS.length} />
+                          <td colSpan={visibleColumns.length} />
                         </tr>
                       </tbody>
                     ) : null}

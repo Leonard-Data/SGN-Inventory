@@ -11,6 +11,7 @@ export default async function Properties({
     query?: string | string[];
     view?: string | string[];
     sort?: string | string[];
+    hide?: string | string[];
     status?: string | string[];
     mode?: string | string[];
     type?: string | string[];
@@ -48,6 +49,9 @@ export default async function Properties({
       // stream opens at its first rows.
       view={search.get('view')}
       sort={search.get('sort')}
+      // The hidden columns pass through as stated; a name this table does not have is not a
+      // column, so it hides nothing rather than reshaping the table.
+      hide={search.get('hide')}
       filters={inventoryFilters(search)}
     />
   );

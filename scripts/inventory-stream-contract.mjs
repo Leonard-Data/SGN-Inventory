@@ -126,13 +126,14 @@ export async function inventoryStreamContract({
     frontageMax = null,
     depthMin = null,
     depthMax = null,
+    createdByMe = null,
   } = {}) {
     const result = await db.query(
       `select * from public.stream_inventory(p_order => $1::text,p_query => $2::text,p_offset => $3::integer,
         p_limit => $4::integer,p_status => $5::text,p_address_format => $6::text,p_province_id => $7::uuid,
         p_district_id => $8::uuid,p_commune_ids => $9::uuid[],p_access_type => $10::text,
         p_frontage_min => $11::numeric,p_frontage_max => $12::numeric,p_depth_min => $13::numeric,
-        p_depth_max => $14::numeric)`,
+        p_depth_max => $14::numeric,p_created_by_me => $15::boolean)`,
       [
         order,
         query,
@@ -148,6 +149,7 @@ export async function inventoryStreamContract({
         frontageMax,
         depthMin,
         depthMax,
+        createdByMe,
       ],
     );
     // Every read answers at least one row: the window's rows, or the counting row alone when the
@@ -1060,6 +1062,376 @@ export async function inventoryStreamContract({
       assert.ok(index, 'the browse order index exists');
       assert.match(index.indexdef, /updated_at DESC, id DESC/i);
       assert.match(index.indexdef, /WHERE \(archived_at IS NULL\)\s*$/i);
+    },
+  );
+
+  // The table's headers order by their own column. A dedicated set of six rows states
+  // each sortable value, one of every workflow status, a shared price, and rows that record no
+  // price, no area, no frontage and no depth - enough to prove the column orderings, that a missing
+  // value sorts last whichever way the column runs, and that the identity decides a tie.
+  const columnRows = [
+    {
+      id: id('c1'),
+      code: 'SGN-SRTF-01',
+      mode: 'sale',
+      price: 500_000_000,
+      sale: 500_000_000,
+      rent: null,
+      floor: null,
+      land: 100,
+      frontage: 4,
+      depth: 20,
+      status: 'available',
+      changed: 1,
+    },
+    {
+      id: id('c2'),
+      code: 'SGN-SRTF-02',
+      mode: 'sale',
+      price: 500_000_000,
+      sale: 500_000_000,
+      rent: null,
+      floor: 80,
+      land: 100,
+      frontage: null,
+      depth: null,
+      status: 'negotiating',
+      changed: 2,
+    },
+    // A rent listing leads with its monthly rent, exactly as its row states the price.
+    {
+      id: id('c3'),
+      code: 'SGN-SRTF-03',
+      mode: 'rent',
+      price: 25_000_000,
+      sale: null,
+      rent: 25_000_000,
+      floor: 60,
+      land: 60,
+      frontage: 6,
+      depth: 12,
+      status: 'draft',
+      changed: 3,
+    },
+    {
+      id: id('c4'),
+      code: 'SGN-SRTF-04',
+      mode: 'sale',
+      price: null,
+      sale: null,
+      rent: null,
+      floor: null,
+      land: null,
+      frontage: 8,
+      depth: 18,
+      status: 'sold',
+      changed: 4,
+    },
+    {
+      id: id('c5'),
+      code: 'SGN-SRTF-05',
+      mode: 'sale',
+      price: 900_000_000,
+      sale: 900_000_000,
+      rent: null,
+      floor: 200,
+      land: 200,
+      frontage: null,
+      depth: 24,
+      status: 'rented',
+      changed: 5,
+    },
+    {
+      id: id('c6'),
+      code: 'SGN-SRTF-06',
+      mode: 'sale',
+      price: 100_000_000,
+      sale: 100_000_000,
+      rent: null,
+      floor: 40,
+      land: 50,
+      frontage: 10,
+      depth: 30,
+      status: 'withdrawn',
+      changed: 6,
+    },
+  ];
+  // Two of the six are recorded by another employee, so the creator selection has a colleague's
+  // records to leave out and the reader's own to return.
+  const colleagueRows = new Set([columnRows[4].id, columnRows[5].id]);
+  const creatorOf = (row) => (colleagueRows.has(row.id) ? employees[1] : sales);
+  const baseChange = Date.parse('2026-09-20T00:00:00.000Z');
+  await asOwner();
+  await db.exec('alter table public.properties disable trigger property_guard');
+  for (const row of columnRows)
+    await db.query(
+      `insert into public.properties(id,property_code,listing_mode,status,property_type,sale_price_vnd,monthly_rent_vnd,land_area_m2,floor_area_m2,frontage_m,depth_m,created_by,entry_on,entry_source,created_at,updated_at)
+      values ($1,$2,$3,$4,'house',$5,$6,$7,$8,$9,$10,$11,null,'unknown',$12,$13)`,
+      [
+        row.id,
+        row.code,
+        row.mode,
+        row.status,
+        row.sale,
+        row.rent,
+        row.land,
+        row.floor,
+        row.frontage,
+        row.depth,
+        creatorOf(row),
+        new Date(baseChange),
+        new Date(baseChange + row.changed * 3_600_000),
+      ],
+    );
+  await db.exec('alter table public.properties enable trigger property_guard');
+  // The one order each column states, computed from the fixtures with the read's own rule: a
+  // missing value sorts last in both directions and the identity decides what is left.
+  const WORKFLOW = [
+    'draft',
+    'available',
+    'negotiating',
+    'sold',
+    'rented',
+    'withdrawn',
+  ];
+  const columnOrder = (pick, direction) =>
+    [...columnRows]
+      .sort((left, right) => {
+        const a = pick(left);
+        const b = pick(right);
+        // A missing value sorts last whichever way the column runs, and the identity decides the
+        // rest - including a tie between two records that state nothing.
+        const order =
+          a === null || b === null
+            ? a === null
+              ? b === null
+                ? 0
+                : 1
+              : -1
+            : a === b
+              ? 0
+              : direction === 'asc'
+                ? a - b
+                : b - a;
+        if (order !== 0) return order;
+        return direction === 'asc'
+          ? left.id.localeCompare(right.id)
+          : right.id.localeCompare(left.id);
+      })
+      .map((row) => row.id);
+  const COLUMN_KEYS = [
+    ['price', (row) => row.price],
+    ['area', (row) => row.floor ?? row.land],
+    ['frontage', (row) => row.frontage],
+    ['depth', (row) => row.depth],
+    ['status', (row) => WORKFLOW.indexOf(row.status)],
+    ['changed', (row) => row.changed],
+  ];
+
+  await asUser(0);
+  for (const [field, pick] of COLUMN_KEYS)
+    for (const direction of ['asc', 'desc']) {
+      const order = `${field}-${direction}`;
+      const expected = columnOrder(pick, direction);
+      await check(
+        `the ${order} stream is that column's total order, with missing values last`,
+        async () => {
+          const first = await read({ order, query: 'srtf', limit: 2 });
+          assert.equal(first.total, expected.length);
+          assert.deepEqual(
+            first.rows.map((row) => row.id),
+            expected.slice(0, 2),
+          );
+          // The window boundary falls inside the tie the identity decides, so consecutive fetches
+          // neither repeat nor drop a row.
+          const seen = [];
+          for (let offset = 0; offset < expected.length; offset += 2)
+            seen.push(
+              ...(await read({ order, query: 'srtf', offset, limit: 2 })).rows,
+            );
+          assert.deepEqual(
+            seen.map((row) => row.id),
+            expected,
+            `${order} order`,
+          );
+          assert.equal(new Set(seen.map((row) => row.id)).size, seen.length);
+        },
+      );
+    }
+
+  await check(
+    'a column ordering is the ordinary browse, not the eligible-status chronology',
+    async () => {
+      // Every workflow status is in this set: a column ordering reorders the ordinary browse, which
+      // an unarchived record is in whatever its status. Only the entry chronology narrows the
+      // statuses, and it still does.
+      const byPrice = await read({
+        order: 'price-asc',
+        query: 'srtf',
+        limit: 20,
+      });
+      assert.equal(byPrice.total, columnRows.length);
+      const draft = byPrice.rows.find((row) => row.id === columnRows[2].id);
+      assert.ok(draft, 'the draft record is listed');
+      const sold = byPrice.rows.find((row) => row.id === columnRows[3].id);
+      assert.ok(sold, 'the sold record is listed');
+      // The chronology keeps its own boundary: of these six rows only the available and the
+      // negotiating one are eligible, and the other four are absent from it entirely.
+      const chronology = await read({
+        order: 'oldest',
+        query: 'srtf',
+        limit: 20,
+      });
+      const eligible = columnRows
+        .filter((row) => ['available', 'negotiating'].includes(row.status))
+        .map((row) => row.id)
+        .sort();
+      assert.deepEqual(chronology.rows.map((row) => row.id).sort(), eligible);
+      assert.equal(chronology.total, eligible.length);
+    },
+  );
+
+  await check(
+    'a column ordering without the identity tie-break would not be a total order',
+    async () => {
+      // Two records state the same price, and a window of one walks both of them: the order is the
+      // value and then the identity, so the two windows are the same pair in the same sequence.
+      const first = await read({
+        order: 'price-asc',
+        query: 'srtf',
+        offset: 2,
+        limit: 1,
+      });
+      const second = await read({
+        order: 'price-asc',
+        query: 'srtf',
+        offset: 3,
+        limit: 1,
+      });
+      const tied = columnRows
+        .filter((row) => row.price === 500_000_000)
+        .map((row) => row.id)
+        .sort((left, right) => left.localeCompare(right));
+      assert.deepEqual([first.rows[0].id, second.rows[0].id], tied);
+    },
+  );
+
+  // A header ordering and the creator selection are criteria of the one read, so an address that
+  // states both is answered by both: the ordering walks only the reader's own records, never a
+  // wider set, and the eligible chronology keeps its own boundary beside the criterion.
+  await asUser(0);
+  const mine = columnRows.filter((row) => creatorOf(row) === sales);
+  const colleagues = columnRows.filter(
+    (row) => creatorOf(row) === employees[1],
+  );
+  await check(
+    'the creator selection narrows every ordering to the employee’s own records',
+    async () => {
+      assert.ok(
+        mine.length > 0 && colleagues.length > 0,
+        'both employees recorded rows',
+      );
+      // Without the criterion the same ordering states the whole filtered set, so the criterion is
+      // what narrows it and no ordering ever does.
+      const wider = await read({
+        order: 'price-asc',
+        query: 'srtf',
+        limit: 20,
+      });
+      assert.equal(wider.total, columnRows.length);
+      for (const [field, pick] of COLUMN_KEYS)
+        for (const direction of ['asc', 'desc']) {
+          const order = `${field}-${direction}`;
+          const expected = columnOrder(pick, direction).filter((id) =>
+            mine.some((row) => row.id === id),
+          );
+          const scoped = await read({
+            order,
+            query: 'srtf',
+            limit: 20,
+            createdByMe: true,
+          });
+          assert.equal(scoped.total, expected.length, `${order} total`);
+          assert.deepEqual(
+            scoped.rows.map((row) => row.id),
+            expected,
+            `${order} rows`,
+          );
+        }
+      const browse = await read({
+        query: 'srtf',
+        limit: 20,
+        createdByMe: true,
+      });
+      assert.equal(browse.total, mine.length);
+      assert.deepEqual(
+        browse.rows.map((row) => row.id).sort(),
+        mine.map((row) => row.id).sort(),
+      );
+      // The entry chronology is the eligible-status view, and the criterion composes with it rather
+      // than replacing it.
+      const chronology = await read({
+        order: 'oldest',
+        query: 'srtf',
+        limit: 20,
+        createdByMe: true,
+      });
+      const eligibleMine = mine
+        .filter((row) => ['available', 'negotiating'].includes(row.status))
+        .map((row) => row.id)
+        .sort();
+      assert.equal(chronology.total, eligibleMine.length);
+      assert.deepEqual(
+        chronology.rows.map((row) => row.id).sort(),
+        eligibleMine,
+      );
+    },
+  );
+
+  await asUser(1);
+  await check(
+    'the creator selection is the employee reading the list, not a name the caller states',
+    async () => {
+      const theirs = await read({
+        order: 'price-asc',
+        query: 'srtf',
+        limit: 20,
+        createdByMe: true,
+      });
+      assert.equal(theirs.total, colleagues.length);
+      assert.deepEqual(
+        theirs.rows.map((row) => row.id).sort(),
+        colleagues.map((row) => row.id).sort(),
+      );
+      // The two employees' selections are disjoint: neither read can answer with the other's rows.
+      assert.equal(
+        theirs.rows.filter((row) => mine.some((own) => own.id === row.id))
+          .length,
+        0,
+      );
+    },
+  );
+
+  await check(
+    'the creator selection is refused without an active employee rather than ignored',
+    async () => {
+      // An inactive employee has no employee identity for the criterion to compare against.
+      await asUser(4);
+      await fails(
+        'select * from public.stream_inventory(p_query => $1::text,p_created_by_me => true)',
+        [marker],
+        '42501',
+      );
+      // The same holds for a session with no employee at all, which the owner role reaches past
+      // RLS and so cannot answer by accident.
+      await asOwner();
+      await fails(
+        'select * from public.stream_inventory(p_query => $1::text,p_created_by_me => true)',
+        [marker],
+        '42501',
+      );
+      // The read is unchanged for a caller that states no creator criterion.
+      assert.equal((await read({ query: 'strmfix' })).total > 0, true);
     },
   );
 

@@ -268,6 +268,66 @@
 .inventory-table [data-column='actions'] {
   width: 150px;
 }
+/* A sortable heading is a button, and the arrow states the direction its column is in: faint while
+   the column is not the active order, pointing the way when it is. The button covers the heading's
+   own padding so the heading row keeps its height and the target is the whole cell. */
+.inventory-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 40px;
+  margin: calc(var(--space-3) * -1);
+  padding: var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.inventory-sort:hover {
+  color: var(--fg);
+}
+.inventory-sort-arrow {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  opacity: 0.35;
+}
+.inventory-table th[aria-sort='ascending'] .inventory-sort-arrow,
+.inventory-table th[aria-sort='descending'] .inventory-sort-arrow {
+  opacity: 1;
+  color: var(--accent);
+}
+.inventory-table th[aria-sort='descending'] .inventory-sort-arrow {
+  transform: rotate(180deg);
+}
+/* The columns control above the table: a menu opened from a labelled summary, holding one checkbox
+   per column that can be hidden. */
+.inventory-columns {
+  position: relative;
+}
+.inventory-columns > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.inventory-columns > summary::-webkit-details-marker {
+  display: none;
+}
+.inventory-columns[open] > .inventory-columns-panel {
+  position: absolute;
+  left: 0;
+  top: calc(100% + var(--space-2));
+  z-index: 3;
+  display: grid;
+  gap: var(--space-1);
+  width: 240px;
+  padding: var(--space-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-raise);
+}
 .inventory-secondary {
   display: block;
   margin-top: var(--space-1);

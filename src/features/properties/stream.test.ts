@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  columnOrder,
+  INVENTORY_SORT_FIELDS,
   isInventoryOrder,
   loadedWindows,
+  nextColumnOrder,
   parseStreamOffset,
   retainedWindows,
   reversedOrder,
@@ -279,17 +282,63 @@ test('the kept windows are the band’s own and the nearest others', () => {
   );
 });
 
-test('only the two chronological orderings are accepted', () => {
+test('the two entry orderings and every sortable column are accepted, and nothing else', () => {
   assert.equal(isInventoryOrder('oldest'), true);
   assert.equal(isInventoryOrder('newest'), true);
-  for (const value of ['', 'asc', 'desc', 'OLDEST', null, undefined])
-    assert.equal(isInventoryOrder(value), false);
+  for (const field of INVENTORY_SORT_FIELDS)
+    for (const direction of ['asc', 'desc'])
+      assert.equal(isInventoryOrder(`${field}-${direction}`), true);
+  // A column ordering this table does not offer, a direction that is not one of the two, and a
+  // value in another case are refused rather than read as a different order.
+  for (const value of [
+    '',
+    'asc',
+    'desc',
+    'OLDEST',
+    'floors-asc',
+    'creator-desc',
+    'price',
+    'price-ascending',
+    'price-ASC',
+    'price-asc ',
+    ' price-asc',
+    '-asc',
+    null,
+    undefined,
+  ])
+    assert.equal(isInventoryOrder(value), false, `order=${String(value)}`);
+});
+
+test('a stated order names its column and direction, or no column at all', () => {
+  assert.deepEqual(columnOrder('price-asc'), {
+    field: 'price',
+    direction: 'asc',
+  });
+  assert.deepEqual(columnOrder('changed-desc'), {
+    field: 'changed',
+    direction: 'desc',
+  });
+  // The entry chronology and an absent order are the default-order states, not a column sort.
+  for (const value of ['oldest', 'newest', null, '', 'floors-asc'])
+    assert.equal(columnOrder(value), null);
+});
+
+test('a header click cycles ascending, descending and back to the default order', () => {
+  assert.equal(nextColumnOrder(null, 'price'), 'price-asc');
+  assert.equal(nextColumnOrder('price-asc', 'price'), 'price-desc');
+  assert.equal(nextColumnOrder('price-desc', 'price'), null);
+  // Another column starts over at ascending, and the entry chronology does too.
+  assert.equal(nextColumnOrder('area-desc', 'price'), 'price-asc');
+  assert.equal(nextColumnOrder('oldest', 'status'), 'status-asc');
 });
 
 test('the direction toggle reverses only an active entry-date ordering', () => {
   assert.equal(reversedOrder(null), null);
   assert.equal(reversedOrder('oldest'), 'newest');
   assert.equal(reversedOrder('newest'), 'oldest');
+  // A column sorts in the direction its own order states, so there is nothing to reverse.
+  assert.equal(reversedOrder('price-asc'), null);
+  assert.equal(reversedOrder('changed-desc'), null);
 });
 
 test('the read length is the hundred rows the captain settled on', () => {

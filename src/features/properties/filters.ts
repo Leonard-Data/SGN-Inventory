@@ -376,6 +376,7 @@ export type InventoryFilterArgs = {
   p_commune_ids?: string[];
   p_contact_id?: string;
   p_address_format?: string;
+  p_created_by_me?: boolean;
 };
 
 // The format a filter set searches through, held in one place so the local match and the database
@@ -422,9 +423,9 @@ export function filterRpcArgs(filters: InventoryFilters): InventoryFilterArgs {
   const communes = communeIds(filters.ward);
   if (communes.length) args.p_commune_ids = communes;
   if (filters.contact) args.p_contact_id = filters.contact;
-  // The creator selection has no argument here on purpose: the whole-inventory read carries no
-  // creator criterion, so that selection is answered from the loaded catalogue alone
-  // (`catalogue-results.ts`) and never reaches this read.
+  // The creator selection travels as the criterion itself, never as an identity: the read resolves
+  // the signed-in employee and compares each record's creator with it.
+  if (filters.createdBy) args.p_created_by_me = true;
   return args;
 }
 

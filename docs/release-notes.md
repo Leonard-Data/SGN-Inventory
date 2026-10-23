@@ -13,6 +13,41 @@ shipped is implemented in the code on `main`; where a real-browser or hosted acc
 executed, that is stated in the entry rather than left implied. Correspondence between a feature and
 what was *verified* is in [testing.md](testing.md).
 
+## 23 October 2026 — the properties table orders and hides by column
+
+### A table header orders the whole list, and a column can be hidden
+
+The properties table's headings now order the list. Price, total area, frontage, depth, status and
+last changed each turn their heading into a button that cycles ascending, descending and back to the
+default browse, carrying the active direction as `aria-sort`, and a Columns control above the table
+hides or shows any column but the property code and the actions — a hidden column loses its heading
+and its cells together. Both choices travel in the properties address beside the search, the view
+and the filters, so a reload or a shared link keeps the table the person shaped, and hiding a column
+leaves their place in the same rows.
+
+The read behind the ordering is the same `stream_inventory` call the list already made: the server
+accepts one order key per sortable column and direction beside the two entry-date orderings, sorts
+records that state no value last in both directions, breaks ties on the property identity and orders
+status by the workflow its states progress through rather than alphabetically, so consecutive
+windows neither repeat nor drop a row. A column ordering is the ordinary unarchived browse
+reordered, so it keeps that browse's statuses and its RLS boundary; only the entry chronology stays
+the eligible-status, employee-only view, and an order the read does not know is still refused.
+Stating an order also fixes a filter that used to be answered from the loaded rows alone: a header
+sort applied while "created by me" is active now returns only that person's records in the requested
+order, because the whole-inventory read gained that criterion and the panel's creator field is no
+longer locked for an advanced run.
+
+_Why it matters:_ getting a truthful order across 18.8k records was previously possible only by
+choosing the entry-date chronology or scrolling the default browse. A salesperson can now ask "what
+is the cheapest available stock", "what is largest" or "what has been sitting untouched longest"
+and get the whole filtered inventory in that order, sharing the address that states it.
+
+_Known gap:_ the header ordering, the Columns control and the creator criterion have unit and
+embedded schema coverage only. No signed-in browser has exercised the header cycle, the column
+toggles or a shared address at any width, and the migration replacing the read has not been applied
+to the development project, so the real Data API call and the interaction remain staging gates in
+[testing.md](testing.md#inventory-table-header-ordering-and-hidden-columns).
+
 ## 22 October 2026 — the inventory opens on what changed most recently
 
 ### The list's first window is the most recently changed inventory (#258)
