@@ -233,19 +233,17 @@ test('a picker offers the unit an address recorded before this entry still holds
   // The legacy day hides the current generation, but the recorded id stays offered with its own
   // official name, and it stays the value the form submits.
   assert.deepEqual(
-    offeredUnits(
-      [legacyProvince, recordedProvince],
-      LEGACY_CATALOG_DAY,
+    offeredUnits([legacyProvince, recordedProvince], LEGACY_CATALOG_DAY, [
       recordedProvince.id,
-    ),
+    ]),
     [legacyProvince, recordedProvince],
   );
   assert.deepEqual(
-    offeredUnits([recordedWard], LEGACY_CATALOG_DAY, recordedWard.id),
+    offeredUnits([recordedWard], LEGACY_CATALOG_DAY, [recordedWard.id]),
     [recordedWard],
   );
   assert.deepEqual(
-    offeredUnits([legacyProvince, recordedProvince], LEGACY_CATALOG_DAY, ''),
+    offeredUnits([legacyProvince, recordedProvince], LEGACY_CATALOG_DAY, []),
     [legacyProvince],
   );
 });

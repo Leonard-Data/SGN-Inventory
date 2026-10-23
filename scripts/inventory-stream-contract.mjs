@@ -120,7 +120,7 @@ export async function inventoryStreamContract({
     addressFormat = null,
     province = null,
     district = null,
-    commune = null,
+    communes = null,
     accessType = null,
     frontageMin = null,
     frontageMax = null,
@@ -130,7 +130,7 @@ export async function inventoryStreamContract({
     const result = await db.query(
       `select * from public.stream_inventory(p_order => $1::text,p_query => $2::text,p_offset => $3::integer,
         p_limit => $4::integer,p_status => $5::text,p_address_format => $6::text,p_province_id => $7::uuid,
-        p_district_id => $8::uuid,p_commune_id => $9::uuid,p_access_type => $10::text,
+        p_district_id => $8::uuid,p_commune_ids => $9::uuid[],p_access_type => $10::text,
         p_frontage_min => $11::numeric,p_frontage_max => $12::numeric,p_depth_min => $13::numeric,
         p_depth_max => $14::numeric)`,
       [
@@ -142,7 +142,7 @@ export async function inventoryStreamContract({
         addressFormat,
         province,
         district,
-        commune,
+        communes,
         accessType,
         frontageMin,
         frontageMax,
@@ -774,7 +774,7 @@ export async function inventoryStreamContract({
       const ward = await read({
         province: legacyProvince,
         district: legacyDistrict.id,
-        commune: legacyWard.id,
+        communes: [legacyWard.id],
         limit: 100,
       });
       assert.deepEqual(
@@ -804,7 +804,7 @@ export async function inventoryStreamContract({
       const current = await read({
         addressFormat: 'current',
         province: currentProvince,
-        commune: currentCommune.id,
+        communes: [currentCommune.id],
         limit: 100,
       });
       assert.deepEqual(
@@ -825,7 +825,7 @@ export async function inventoryStreamContract({
       for (const level of [
         { province: legacyProvince },
         { district: legacyDistrict.id },
-        { commune: legacyWard.id },
+        { communes: [legacyWard.id] },
       ]) {
         const result = await read({ ...level, query: '', limit: 200 });
         assert.ok(
@@ -852,19 +852,81 @@ export async function inventoryStreamContract({
       // The same name under two types is two units: equality is on the expanded type, never on the
       // name with the type dropped, so neither ward answers the other's filter.
       const byXa = await read({
-        commune: xaYenVien.id,
+        communes: [xaYenVien.id],
         query: '',
         limit: 200,
       });
       assert.ok(byXa.rows.some((row) => row.id === textXaYenVien));
       assert.ok(!byXa.rows.some((row) => row.id === textThiTranYenVien));
       const byThiTran = await read({
-        commune: thiTranYenVien.id,
+        communes: [thiTranYenVien.id],
         query: '',
         limit: 200,
       });
       assert.ok(byThiTran.rows.some((row) => row.id === textThiTranYenVien));
       assert.ok(!byThiTran.rows.some((row) => row.id === textXaYenVien));
+    },
+  );
+
+  await check(
+    'a set of communes answers the union of what each answers alone',
+    async () => {
+      // One commune at a time, then both together: the set is the union of the two, never the last
+      // one replacing the one before it, and the recorded-unit and recorded-text paths both join
+      // it. The text fixtures here name their commune only in the recorded text.
+      const one = await read({
+        communes: [legacyWard.id],
+        query: '',
+        limit: 200,
+      });
+      const other = await read({
+        communes: [xaYenVien.id],
+        query: '',
+        limit: 200,
+      });
+      const union = await read({
+        communes: [legacyWard.id, xaYenVien.id],
+        query: '',
+        limit: 200,
+      });
+      const expected = [
+        ...new Set([...one.rows, ...other.rows].map((row) => row.id)),
+      ].sort();
+      assert.deepEqual(union.rows.map((row) => row.id).sort(), expected);
+      assert.equal(union.total, expected.length);
+      assert.ok(expected.includes(textImported));
+      assert.ok(expected.includes(textXaYenVien));
+      // The ward whose name differs only by its administrative type is not in the set.
+      assert.ok(!union.rows.some((row) => row.id === textThiTranYenVien));
+      // The order the set is stated in never changes the answer, and the set composes with the
+      // other conditions, including the selected address format.
+      const reversed = await read({
+        communes: [xaYenVien.id, legacyWard.id],
+        query: '',
+        limit: 200,
+      });
+      assert.deepEqual(
+        reversed.rows.map((row) => row.id),
+        union.rows.map((row) => row.id),
+      );
+      const withFormat = await read({
+        communes: [legacyWard.id, xaYenVien.id],
+        addressFormat: 'legacy',
+        query: '',
+        limit: 200,
+      });
+      assert.deepEqual(withFormat.rows.map((row) => row.id).sort(), expected);
+      // A set with no entry, a commune stated twice or an absent entry is refused rather than read
+      // as the smaller set it would become once those entries were dropped.
+      for (const communes of [
+        [],
+        [legacyWard.id, legacyWard.id],
+        [legacyWard.id, null],
+      ])
+        await assert.rejects(
+          read({ communes, query: '', limit: 200 }),
+          JSON.stringify(communes),
+        );
     },
   );
 

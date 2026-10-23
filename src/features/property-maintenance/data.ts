@@ -432,16 +432,17 @@ export async function listUnits(
   const level = params.get('level'),
     parent = params.get('parent'),
     on = params.get('on'),
-    include = params.get('include');
+    include = params.get('include'),
+    includes = include === null ? [] : include.split(',');
   if (
     [...params.keys()].some(
       (k) => !['level', 'parent', 'on', 'include'].includes(k),
     ) ||
     !['province', 'district', 'commune'].includes(level ?? '') ||
-    (level !== 'province' && !uuid(parent) && !uuid(include)) ||
+    (level !== 'province' && !uuid(parent) && !includes.length) ||
     (level === 'province' && parent !== null) ||
     (on !== null && !isReportDate(on)) ||
-    (include !== null && !uuid(include))
+    !includes.every(uuid)
   )
     throw new ApiError(400, 'invalid-input');
   const parentId = parent ? await generationParent(context, parent, on) : null;
@@ -455,23 +456,26 @@ export async function listUnits(
   if (parentId) request = request.eq('parent_id', parentId);
   // A level whose parent is not chosen yet lists nothing; only the recorded unit it names comes
   // back, which is how a ward recorded under a district the form no longer holds still resolves.
-  else if (level !== 'province' && include) request = request.eq('id', include);
+  else if (level !== 'province' && includes.length)
+    request = request.in('id', includes);
   const { data, error } = await request;
   databaseError(error);
   // The day rule is applied here so it is defined once; shortcut: a level and parent group over
   // 1,000 rows would hit the page cap before the filter, upgrade when one does.
-  const offers = offeredUnits(data ?? [], on, include);
+  const offers = offeredUnits(data ?? [], on, includes);
   // A recorded identifier that belongs to another generation is in no dated list at all, so its own
   // row answers with the official name and keeps the value selectable beside the list.
-  if (include && !offers.some((unit) => unit.id === include)) {
+  const missing = includes.filter(
+    (id) => !offers.some((unit) => unit.id === id),
+  );
+  if (missing.length) {
     const { data: recorded, error: lookup } = await context.client
       .from('admin_unit_versions')
       .select('id,name_vi,unit_level,parent_id,valid_from,valid_to')
-      .eq('id', include)
-      .eq('unit_level', level!)
-      .maybeSingle();
+      .in('id', missing)
+      .eq('unit_level', level!);
     databaseError(lookup);
-    if (recorded) offers.push(recorded);
+    if (recorded) offers.push(...recorded);
   }
   return { units: offers };
 }

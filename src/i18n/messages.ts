@@ -164,7 +164,8 @@ const vi = {
   district: 'Quận / huyện',
   ward: 'Xã / phường',
   areaAdminHint:
-    'Công ty ghi địa chỉ trong một tỉnh/thành phố, nên quận/huyện và xã/phường đều thuộc tỉnh/thành phố đó. Địa chỉ cũ gồm quận/huyện và xã/phường — chọn quận/huyện để thu hẹp danh sách xã/phường; địa chỉ mới chỉ gồm xã/phường. Khi nhiều cấp được chọn, tất cả cùng có hiệu lực trên cùng một địa chỉ.',
+    'Công ty ghi địa chỉ trong một tỉnh/thành phố, nên quận/huyện và xã/phường đều thuộc tỉnh/thành phố đó. Địa chỉ cũ gồm quận/huyện và xã/phường — chọn quận/huyện để thu hẹp danh sách xã/phường; địa chỉ mới chỉ gồm xã/phường. Chọn được nhiều xã/phường cùng lúc: kết quả gồm mọi hồ sơ thuộc bất kỳ xã/phường nào đã chọn, và khi nhiều cấp được chọn, tất cả cùng có hiệu lực trên cùng một địa chỉ.',
+  wardAdd: 'Thêm xã / phường',
   areaLevelHint: 'Chọn cấp địa chỉ phía trên trước để dùng bộ lọc này.',
   areaFilterUnavailable:
     'Chưa tải được danh mục quận/huyện và xã/phường. Bộ lọc giá và diện tích vẫn dùng được.',
@@ -1085,7 +1086,8 @@ export const messages: Record<Locale, Record<keyof typeof vi, string>> = {
     district: 'District',
     ward: 'Commune / ward',
     areaAdminHint:
-      'The company records addresses in one province/city, so the district and the commune/ward both belong to it. A legacy address has a district and a commune/ward — choosing a district narrows the commune/ward list; a current address has a commune/ward only. When several are set, all of them must hold on the same address.',
+      'The company records addresses in one province/city, so the district and the commune/ward both belong to it. A legacy address has a district and a commune/ward — choosing a district narrows the commune/ward list; a current address has a commune/ward only. You can choose several communes/wards at once: the results are every record in any of them, and when several levels are set, all of them must hold on the same address.',
+    wardAdd: 'Add commune / ward',
     areaLevelHint: 'Choose the level above first to use this filter.',
     areaFilterUnavailable:
       'The district and ward catalog could not be loaded. The price and area filters still work.',

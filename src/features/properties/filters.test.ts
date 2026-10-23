@@ -3,14 +3,18 @@ import test from 'node:test';
 import {
   activeFilterCount,
   catalogUnitsMatch,
+  communeIds,
+  communeValue,
   filterParams,
   filterRpcArgs,
   INVENTORY_ACCESS_TYPES,
   INVENTORY_ADDRESS_FORMAT_ANY,
   INVENTORY_ADDRESS_FORMATS,
+  appliedUnitLookups,
   noInventoryFilters,
   offeredAddressLevels,
   parseInventoryFilters,
+  withoutCommune,
 } from './filters.ts';
 import { FIXED_PROVINCE } from '../property-maintenance/units.ts';
 
@@ -482,7 +486,7 @@ test('each stated level beneath the province is its own read parameter', () => {
   assert.deepEqual(filterRpcArgs({ ...noInventoryFilters, district, ward }), {
     p_address_format: 'legacy',
     p_district_id: district,
-    p_commune_id: ward,
+    p_commune_ids: [ward],
   });
   // A current address has no district level, so its ward is the only level beneath the province.
   assert.deepEqual(
@@ -493,9 +497,91 @@ test('each stated level beneath the province is its own read parameter', () => {
     }),
     {
       p_address_format: 'current',
-      p_commune_id: ward,
+      p_commune_ids: [ward],
     },
   );
+});
+
+test('the commune filter carries a set, and one selection reads as it always did', () => {
+  const first = '22222222-2222-4222-8222-222222222222';
+  const second = '88888888-8888-4888-8888-888888888888';
+  // One commune is the one-element set, stated in the address exactly as it always was, so an
+  // existing link reads back unchanged.
+  const single = parse({ ward: first });
+  assert.ok(single.ok);
+  assert.equal(single.filters.ward, first);
+  assert.deepEqual(communeIds(single.filters.ward), [first]);
+  assert.deepEqual(filterRpcArgs(single.filters), {
+    p_address_format: 'legacy',
+    p_commune_ids: [first],
+  });
+  // Several communes travel as the set they are, in the order they were chosen, so one read
+  // answers the union of what each commune would answer alone.
+  const stated = parse({ ward: `${first},${second}` });
+  assert.ok(stated.ok);
+  assert.deepEqual(communeIds(stated.filters.ward), [first, second]);
+  assert.deepEqual(filterRpcArgs(stated.filters), {
+    p_address_format: 'legacy',
+    p_commune_ids: [first, second],
+  });
+  // The set round-trips through the address, so a reload or a return from a property reads the same
+  // communes back.
+  assert.deepEqual(filterParams(stated.filters), {
+    addressFormat: 'legacy',
+    ward: `${first},${second}`,
+  });
+  assert.equal(communeValue([first, second]), `${first},${second}`);
+  assert.equal(communeValue([]), null);
+  const reloaded = parseInventoryFilters(
+    new URLSearchParams(filterParams(stated.filters)),
+  );
+  assert.ok(reloaded.ok);
+  assert.deepEqual(reloaded.filters, stated.filters);
+  // Removing one commune narrows the set to the others, and removing the last one clears the
+  // criterion altogether.
+  assert.equal(withoutCommune(stated.filters, first).ward, second);
+  assert.equal(withoutCommune(stated.filters, second).ward, first);
+  assert.equal(withoutCommune(single.filters, first).ward, null);
+  assert.deepEqual(filterParams(withoutCommune(single.filters, first)), {
+    addressFormat: 'legacy',
+  });
+});
+
+// The summary names the applied units from the catalog: a set of communes is named by one read, so
+// three chosen communes cost one commune read rather than three.
+test('an applied commune set is named by one catalog read', () => {
+  const ids = [
+    '22222222-2222-4222-8222-222222222222',
+    '88888888-8888-4888-8888-888888888888',
+    '99999999-9999-4999-8999-999999999999',
+  ];
+  assert.deepEqual(appliedUnitLookups(null, ids.join(',')), [
+    { level: 'commune', include: ids.join(',') },
+  ]);
+  assert.deepEqual(appliedUnitLookups(null, ids[0]!), [
+    { level: 'commune', include: ids[0] },
+  ]);
+  const district = '11111111-1111-4111-8111-111111111111';
+  assert.deepEqual(appliedUnitLookups(district, ids.join(',')), [
+    { level: 'district', include: district },
+    { level: 'commune', include: ids.join(',') },
+  ]);
+  assert.deepEqual(appliedUnitLookups(null, null), []);
+});
+
+test('a malformed, empty or duplicated commune is refused rather than dropped', () => {
+  const first = '22222222-2222-4222-8222-222222222222';
+  const second = '88888888-8888-4888-8888-888888888888';
+  for (const ward of [
+    `${first},`,
+    `,${first}`,
+    `${first},,${second}`,
+    // A commune stated twice is refused rather than read as the set minus the repeat.
+    `${first},${first}`,
+    `${first},ward-14`,
+    `${first},ho-chi-minh`,
+  ])
+    assert.equal(parse({ ward }).ok, false, ward);
 });
 
 test('a district is a legacy-level unit of an address filter set', () => {
@@ -517,6 +603,7 @@ test('a district is a legacy-level unit of an address filter set', () => {
 test('the catalog check refuses an absent or wrong-level unit', () => {
   const otherProvince = '44444444-4444-4444-8444-444444444444';
   const ward = '22222222-2222-4222-8222-222222222222';
+  const secondWard = '99999999-9999-4999-8999-999999999999';
   const absent = '33333333-3333-4333-8333-333333333333';
   // The province is one official unit with a row per catalog generation, so the lineage is matched
   // by its official code: the stated province's own row carries it.
@@ -538,6 +625,12 @@ test('the catalog check refuses an absent or wrong-level unit', () => {
       unit_level: 'commune',
       parent_id: FIXED_PROVINCE.id,
       official_code: '26734',
+    },
+    {
+      id: secondWard,
+      unit_level: 'commune',
+      parent_id: FIXED_PROVINCE.id,
+      official_code: '26735',
     },
   ];
   assert.equal(
@@ -575,6 +668,26 @@ test('the catalog check refuses an absent or wrong-level unit', () => {
     ),
     false,
     'an unknown ward',
+  );
+  assert.equal(
+    catalogUnitsMatch(
+      units,
+      { ...noInventoryFilters, ward: `${ward},${secondWard}` },
+      PROVINCE_CODE,
+    ),
+    true,
+    'a set of communes of the stated province',
+  );
+  // A set is only as good as every commune in it: one absent commune refuses the whole set rather
+  // than being dropped and the rest applied.
+  assert.equal(
+    catalogUnitsMatch(
+      units,
+      { ...noInventoryFilters, ward: `${ward},${absent}` },
+      PROVINCE_CODE,
+    ),
+    false,
+    'an unknown commune in the set',
   );
   // A ward of another province is not inside the province the app records.
   assert.equal(

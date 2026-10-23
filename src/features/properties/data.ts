@@ -5,6 +5,7 @@ import type { AddressSummary, PropertyStream } from './types';
 import { propertyCreators, propertyModifiers } from './creator';
 import {
   catalogUnitsMatch,
+  communeIds,
   filterRpcArgs,
   INVENTORY_ADDRESS_FORMAT_ANY,
   INVENTORY_FILTER_KEYS,
@@ -188,18 +189,19 @@ function accessError(code: string | undefined): ApiError {
     : new ApiError(503, 'unavailable');
 }
 
-// The district must be a district-level unit inside the one province the business records and the
-// ward a commune-level unit inside the stated district or that province, so an address that mixes
-// levels or parents is refused rather than applied to a different unit. Units are matched whatever
-// their validity window, because a property recorded in the closed pre-2025 generation is filtered
-// by its own legacy district and ward, and the province is matched by its official code because one
-// official unit has a row per catalog generation.
+// The district must be a district-level unit inside the one province the business records and each
+// stated commune a commune-level unit inside the stated district or that province, so an address
+// that mixes levels or parents is refused rather than applied to a different unit. Units are matched
+// whatever their validity window, because a property recorded in the closed pre-2025 generation is
+// filtered by its own legacy district and ward, and the province is matched by its official code
+// because one official unit has a row per catalog generation.
 async function assertAreaUnits(
   context: RouteContext,
   filters: InventoryFilters,
 ): Promise<void> {
   const { district, ward } = filters;
-  if (district === null && ward === null) return;
+  const communes = communeIds(ward);
+  if (district === null && !communes.length) return;
   const province = await context.client
     .from('admin_unit_versions')
     .select('official_code')
@@ -212,7 +214,7 @@ async function assertAreaUnits(
     .select('id,unit_level,parent_id,official_code')
     .in(
       'id',
-      [district, ward].filter((id): id is string => id !== null),
+      [district, ...communes].filter((id): id is string => id !== null),
     );
   if (error) throw new ApiError(503, 'unavailable');
   const units = new Map((data ?? []).map((unit) => [unit.id, unit]));

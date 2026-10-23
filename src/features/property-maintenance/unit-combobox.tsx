@@ -33,6 +33,7 @@ export function UnitCombobox({
   selectedLabel,
   disabled,
   hint,
+  placeholder,
 }: {
   id: string;
   // The form field the committed identifier reaches; the visible field carries typed text.
@@ -53,6 +54,9 @@ export function UnitCombobox({
   // A dependent picker waits for the level above it; the hint says so while it does.
   disabled?: boolean;
   hint?: string;
+  // Stated while the field holds no committed unit, so a picker that adds one value at a time says
+  // what it does with an empty field.
+  placeholder?: string;
 }) {
   const [state, setState] = useState(closedCombobox);
   const field = useRef<HTMLInputElement>(null);
@@ -154,6 +158,7 @@ export function UnitCombobox({
           aria-activedescendant={activeId}
           aria-describedby={describedBy || undefined}
           value={shown}
+          placeholder={placeholder}
           disabled={disabled}
           onChange={(event) => {
             const typed = event.currentTarget.value;
