@@ -6,6 +6,7 @@ import {
   validateChanges,
   formChanges,
   correctionFieldNames,
+  createPropertyFieldNames,
   targetFields,
 } from './fields.ts';
 
@@ -331,4 +332,66 @@ test('location form changes omit an untouched point and emit a cleared point', (
   const unrecorded = new FormData();
   unrecorded.set('latitude', '10.8000000');
   assert.throws(() => formChanges('property', unrecorded, {}));
+});
+
+test('the create form omits the four source-only fields the maintenance form keeps', () => {
+  // The four stay out of creation only: the edit-facts form still offers them for a record that
+  // holds provenance in them.
+  for (const name of [
+    'parcel_number',
+    'map_sheet_number',
+    'construction_text',
+    'area_raw',
+  ]) {
+    assert.equal(createPropertyFieldNames.includes(name), false, name);
+    assert.ok(targetFields.property.includes(name), name);
+    assert.ok(
+      correctionFieldNames({
+        target: 'property',
+        staff: true,
+        propertyStatus: 'available',
+      }).includes(name),
+      name,
+    );
+  }
+  // Pinned so a later change cannot quietly drop a field the create form shows today.
+  assert.deepEqual(
+    [...createPropertyFieldNames],
+    [
+      'listing_mode',
+      'property_type',
+      'access_type',
+      'sale_price_vnd',
+      'monthly_rent_vnd',
+      'land_area_m2',
+      'floor_area_m2',
+      'frontage_m',
+      'depth_m',
+      'floors',
+      'bedrooms',
+      'bathrooms',
+      'direction',
+      'ownership_type',
+      'notes',
+    ],
+  );
+});
+
+test('a legacy-format address creates a property with no source-only fields submitted', () => {
+  const form = legacyForm();
+  form.set('listing_mode', 'sale');
+  form.set('property_type', 'unclassified');
+  form.set('access_type', 'unknown');
+  const facts = formChanges('property', form),
+    address = formChanges('address', form);
+  // Nothing in creation starts requiring them: the submission validates without any of the four.
+  for (const name of [
+    'parcel_number',
+    'map_sheet_number',
+    'construction_text',
+    'area_raw',
+  ])
+    assert.equal(name in facts, false, name);
+  assert.equal(address.format, 'legacy');
+  assert.equal(address.district_text, 'Quận 1');
 });

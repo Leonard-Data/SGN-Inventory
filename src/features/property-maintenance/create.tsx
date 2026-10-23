@@ -8,7 +8,7 @@ import { useCatalogueChange } from '@/features/properties/catalogue-provider';
 import type { PropertySummary } from '@/features/properties/types';
 import type { Locale } from '@/i18n/messages';
 import { messages } from '@/i18n/messages';
-import { formChanges, targetFields } from './fields';
+import { createPropertyFieldNames, formChanges } from './fields';
 import { AddressFields, RecordFields } from './forms';
 import { CrosswalkOffer } from './crosswalk-offer';
 import type { AddressCrosswalk } from './crosswalk';
@@ -162,10 +162,7 @@ export function CreateProperty({
                     property_type: 'unclassified',
                     access_type: 'unknown',
                   }}
-                  names={targetFields.property.filter(
-                    (k) =>
-                      k !== 'status' && k !== 'latitude' && k !== 'longitude',
-                  )}
+                  names={createPropertyFieldNames}
                 />
               </div>
             </div>
