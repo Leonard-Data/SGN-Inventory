@@ -129,14 +129,14 @@ export async function contactDirectoryContract({ db, asUser, check, fails }) {
         await db.query(createProperty, [
           'sale',
           {},
-          { format: 'legacy', address_text: 'SGN71 directory parent left' },
+          { format: 'legacy', house_number: 'SGN71 directory parent left' },
         ])
       ).rows[0].id;
       right = (
         await db.query(createProperty, [
           'sale',
           {},
-          { format: 'legacy', address_text: 'SGN71 directory parent right' },
+          { format: 'legacy', house_number: 'SGN71 directory parent right' },
         ])
       ).rows[0].id;
       await asUser(5);
@@ -309,7 +309,7 @@ export async function contactDirectoryContract({ db, asUser, check, fails }) {
         await db.query(createProperty, [
           'sale',
           {},
-          { format: 'legacy', address_text: 'SGN71 archived parent' },
+          { format: 'legacy', house_number: 'SGN71 archived parent' },
         ])
       ).rows[0].id;
       archivedOwner = (

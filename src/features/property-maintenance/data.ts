@@ -90,8 +90,9 @@ export async function createProperty(
     throw new ApiError(400, 'invalid-input');
   const facts = changes('property', body.facts),
     address = changes('address', body.address);
+  // The known address text is the server's composition of these parts, so a creation states only
+  // the parts; the database refuses a text of its own beside them.
   if (
-    !address.address_text ||
     !['legacy', 'current'].includes(String(address.format)) ||
     Object.hasOwn(facts, 'status')
   )

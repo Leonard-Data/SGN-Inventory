@@ -20,7 +20,6 @@ const LEGACY_PROVINCE = '11111111-1111-4111-8111-111111111111',
 function legacyForm() {
   const form = new FormData();
   form.set('format', 'legacy');
-  form.set('address_text', '12 Nguyễn Du, Quận 1');
   form.set('district_text', 'Quận 1');
   form.set('province_unit_id', LEGACY_PROVINCE);
   form.set('district_unit_id', LEGACY_DISTRICT);
@@ -40,7 +39,6 @@ test('the two address formats read in both languages and keep a recorded distric
   assert.deepEqual(
     formChanges('address', form, {
       format: 'legacy',
-      address_text: '12 Nguyễn Du, Quận 1',
       house_number: '12',
       district_text: 'Quận 1',
       province_unit_id: LEGACY_PROVINCE,
@@ -54,7 +52,6 @@ test('the two address formats read in both languages and keep a recorded distric
 test('a legacy address saves all three unit ids and its district text', () => {
   assert.deepEqual(formChanges('address', legacyForm()), {
     format: 'legacy',
-    address_text: '12 Nguyễn Du, Quận 1',
     district_text: 'Quận 1',
     province_unit_id: LEGACY_PROVINCE,
     district_unit_id: LEGACY_DISTRICT,
@@ -69,7 +66,6 @@ test('an edited address whose recorded units are unchanged submits nothing', () 
   assert.deepEqual(
     formChanges('address', legacyForm(), {
       format: 'legacy',
-      address_text: '12 Nguyễn Du, Quận 1',
       district_text: 'Quận 1',
       province_unit_id: LEGACY_PROVINCE,
       district_unit_id: LEGACY_DISTRICT,
@@ -82,7 +78,6 @@ test('an edited address whose recorded units are unchanged submits nothing', () 
 test('a legacy address recorded with current-generation units keeps them and saves a change', () => {
   const recorded = {
     format: 'legacy',
-    address_text: '12 Nguyễn Du, Quận 1',
     district_text: 'Quận 1',
     province_unit_id: CURRENT_PROVINCE,
     commune_unit_id: CURRENT_WARD,
@@ -100,28 +95,20 @@ test('a legacy address recorded with current-generation units keeps them and sav
 
 test('a current address still refuses a district id as well as district text', () => {
   for (const changes of [
-    {
-      format: 'current',
-      address_text: '12 Nguyễn Du',
-      district_unit_id: LEGACY_DISTRICT,
-    },
-    {
-      format: 'current',
-      address_text: '12 Nguyễn Du',
-      district_text: 'Quận 1',
-    },
+    { format: 'current', district_unit_id: LEGACY_DISTRICT },
+    { format: 'current', district_text: 'Quận 1' },
   ])
     assert.throws(() => validateChanges('address', changes));
   // A legacy address with a district is valid.
   assert.deepEqual(
     validateChanges('address', {
       format: 'legacy',
-      address_text: '12 Nguyễn Du, Quận 1',
+      house_number: '12 Nguyễn Du',
       district_unit_id: LEGACY_DISTRICT,
     }),
     {
       format: 'legacy',
-      address_text: '12 Nguyễn Du, Quận 1',
+      house_number: '12 Nguyễn Du',
       district_unit_id: LEGACY_DISTRICT,
     },
   );
@@ -130,7 +117,7 @@ test('a current address still refuses a district id as well as district text', (
 test('an address form renders its district label wherever it offers the district picker', () => {
   // The correction draft names the correctable fields and not the label, while the picker that
   // writes the label is still offered, so the label rides along with the picker.
-  const names = addressFields(['address_text', 'district_unit_id'], true);
+  const names = addressFields(['house_number', 'district_unit_id'], true);
   assert.ok(names.includes('district_text'));
   // A label the picker wrote through those rendered fields reaches the save.
   const form = new FormData();
@@ -143,12 +130,14 @@ test('an address form renders its district label wherever it offers the district
   // A selection that offers no district picker renders no label, and neither does a current
   // address even when a caller names one.
   assert.equal(
-    addressFields(['address_text'], true).includes('district_text'),
+    addressFields(['house_number'], true).includes('district_text'),
     false,
   );
-  const current = addressFields(['address_text', 'district_text'], false);
+  const current = addressFields(['house_number', 'district_text'], false);
   assert.equal(current.includes('district_text'), false);
-  assert.ok(current.includes('address_text'));
+  assert.ok(current.includes('house_number'));
+  // The known address is the server's composition of the parts, so no address form offers it.
+  assert.equal(addressFields(undefined, false).includes('address_text'), false);
   // A caller naming no fields gets every one of them.
   assert.ok(addressFields(undefined, true).includes('district_text'));
 });
@@ -159,8 +148,9 @@ test('a staff address correction can name the legacy district unit', () => {
     staff: true,
     propertyStatus: 'available',
   });
-  for (const name of ['address_text', 'district_unit_id'])
-    assert.ok(names.includes(name), name);
+  assert.ok(names.includes('district_unit_id'));
+  // The known address is composed from the parts a correction names, never typed beside them.
+  assert.equal(names.includes('address_text'), false);
   // The district label is written by the picker, so a correction never offers it, and the source
   // labels stay provenance.
   for (const name of ['province_text', 'district_text', 'commune_text'])
@@ -209,10 +199,13 @@ test('maintenance boundary rejects invented authority, unknown fields and rounde
   ])
     assert.throws(() => validateChanges('property', changes));
   assert.throws(() =>
+    validateChanges('address', { format: 'current', district_text: 'Quận 1' }),
+  );
+  // A known address stated by a save is refused rather than stored beside the parts.
+  assert.throws(() =>
     validateChanges('address', {
-      format: 'current',
-      address_text: 'Known',
-      district_text: 'Quận 1',
+      format: 'legacy',
+      address_text: 'Known address',
     }),
   );
   assert.throws(() => validateChanges('contact', { phones: [123] }));

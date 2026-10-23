@@ -118,7 +118,6 @@ export const fields: Record<string, Field> = {
     options: ['legacy', 'current'],
     required: true,
   },
-  address_text: { vi: 'Địa chỉ đã biết', en: 'Known address', required: true },
   house_number: { vi: 'Số nhà', en: 'House number' },
   street: { vi: 'Đường', en: 'Street' },
   province_text: {
@@ -219,7 +218,6 @@ export const targetFields: Record<Target, readonly string[]> = {
   ],
   address: [
     'format',
-    'address_text',
     'house_number',
     'street',
     'province_text',
@@ -272,7 +270,6 @@ export function addressFields(
   const selected = names ? new Set(names) : null,
     picker = legacy && (selected === null || selected.has('district_unit_id'));
   return [
-    'address_text',
     'house_number',
     'street',
     ...(picker ? ['district_text'] : []),

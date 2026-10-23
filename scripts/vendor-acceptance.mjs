@@ -924,7 +924,7 @@ async function createLinkProperty(client, address) {
     client.rpc('create_property', {
       p_mode: 'sale',
       p_facts: {},
-      p_address: { format: 'legacy', address_text: address },
+      p_address: { format: 'legacy', house_number: address },
     }),
   );
   assert.equal(result.error, null, 'create link fixture property');

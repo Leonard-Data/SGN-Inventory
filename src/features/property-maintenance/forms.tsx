@@ -203,13 +203,9 @@ export function RecordFields({
       );
     const wide =
       ['phones'].includes(field.kind ?? '') ||
-      [
-        'notes',
-        'address_text',
-        'construction_text',
-        'area_raw',
-        'mapping_evidence',
-      ].includes(name);
+      ['notes', 'construction_text', 'area_raw', 'mapping_evidence'].includes(
+        name,
+      );
     return (
       <div className={'field' + (wide ? ' span-all' : '')} key={name}>
         <label className="field-label" htmlFor={id}>

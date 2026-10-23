@@ -216,7 +216,7 @@ async function createProperty(adminA) {
     p_facts: {},
     p_address: {
       format: 'legacy',
-      address_text: `${namespace} acceptance fixture address ${runToken}`,
+      house_number: `${namespace} acceptance fixture address ${runToken}`,
     },
   });
   assert.equal(

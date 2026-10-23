@@ -427,7 +427,7 @@ export async function inventoryAgeContract({
     await db.query('select public.create_property($1,$2,$3) as id', [
       'sale',
       {},
-      { format: 'legacy', address_text: 'AGEFIX newly created identity' },
+      { format: 'legacy', house_number: 'AGEFIX newly created identity' },
     ])
   ).rows[0].id;
   await check(
@@ -455,7 +455,7 @@ export async function inventoryAgeContract({
         [
           'sale',
           { entry_on: '2020-01-01' },
-          { format: 'legacy', address_text: 'AGEFIX forged' },
+          { format: 'legacy', house_number: 'AGEFIX forged' },
         ],
         '23514',
       ),
