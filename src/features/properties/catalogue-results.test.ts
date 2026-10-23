@@ -143,6 +143,15 @@ test('criteria the catalogue cannot answer route to an advanced search', () => {
     { ...noInventoryFilters, contact: CONTACT },
   ])
     assert.equal(resultMode({ query: '', filters, sort: null }), 'advanced');
+  // A set of communes is the same criterion, not a set the catalogue could answer in part: the
+  // summaries carry no commune field, so the whole set is answered by the read that holds the
+  // catalog, and the two search paths can never answer one set with different rows.
+  const communes = { ...noInventoryFilters, ward: `${WARD},${DISTRICT}` };
+  assert.deepEqual(advancedFilterKeys(communes), ['ward']);
+  assert.equal(
+    resultMode({ query: '', filters: communes, sort: null }),
+    'advanced',
+  );
   // A stated ordering is the eligible-status chronology the database reads, and an ordering this
   // application does not know is refused by that read rather than served as another order.
   for (const sort of ['oldest', 'newest', 'anything-else'])

@@ -23,12 +23,15 @@ import {
   INVENTORY_LISTING_MODES,
   INVENTORY_PROPERTY_TYPES,
   INVENTORY_STATUSES,
+  communeIds,
+  communeValue,
   noInventoryFilters,
   offeredAddressLevels,
   parseInventoryFilters,
   searchedAddressFormat,
   squareMetres,
   wholeVnd,
+  withoutCommune,
   type InventoryFilterKey,
   type InventoryFilters,
 } from './filters';
@@ -39,6 +42,39 @@ import { resultMode } from './catalogue-results';
 // The official catalog rows the district and ward pickers read. Names are source data and are
 // never translated, so a language switch keeps the same unit name.
 type AdminUnit = UnitOption & { id: string };
+
+// One applied condition as a removable chip: the summary's own chip and the communes chosen inside
+// the panel are the same control, so removing one reads the same everywhere. A condition with no
+// removal of its own is stated as the same chip without the control.
+function Chip({
+  label,
+  removeLabel,
+  onRemove,
+}: {
+  label: string;
+  removeLabel?: string;
+  onRemove?: () => void;
+}) {
+  return (
+    <span className="chip">
+      {label}
+      {onRemove ? (
+        <button type="button" onClick={onRemove} aria-label={removeLabel}>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+      ) : null}
+    </span>
+  );
+}
 
 // The search island: the same inventory filters in a compact panel opened from the list. It is
 // an addition to the free-text search box, not a replacement, and it applies filters by
@@ -68,6 +104,11 @@ export function SearchIsland({
   const text = messages[locale];
   const appliedMode = filters.mode ?? '';
   const appliedDistrict = filters.district ?? '';
+  // The communes the address states, as the set they are: one value is the single commune an older
+  // address carries, and several are the set the panel chose.
+  const appliedCommunes = communeIds(filters.ward);
+  // The stated value the set travels as, which is stable across renders and so the key the effects
+  // below read the applied communes by.
   const appliedWard = filters.ward ?? '';
   const appliedContact = filters.contact ?? '';
   const appliedCreatedBy = filters.createdBy ?? '';
@@ -94,7 +135,7 @@ export function SearchIsland({
   // applying or dismissing returns both to the filter set the address currently states. The contact
   // selection is the same shape: it starts at the applied value and returns to it on dismiss.
   const [district, setDistrict] = useState(appliedDistrict);
-  const [ward, setWard] = useState(appliedWard);
+  const [selectedWards, setSelectedWards] = useState(appliedCommunes);
   const [contact, setContact] = useState(appliedContact);
   // The format the panel will apply: one of the two formats, or the cleared state it inherited from
   // the address, which the two-value control cannot display but a submission keeps.
@@ -113,7 +154,7 @@ export function SearchIsland({
     setMode(appliedMode);
     setOrder(appliedOrder);
     setDistrict(appliedDistrict);
-    setWard(appliedWard);
+    setSelectedWards(communeIds(appliedWard));
     setContact(appliedContact);
     setCreatedBy(appliedCreatedBy);
     setFormat(appliedFormat);
@@ -133,7 +174,7 @@ export function SearchIsland({
     setOrder(appliedOrder);
     setInvalid(false);
     setDistrict(appliedDistrict);
-    setWard(appliedWard);
+    setSelectedWards(communeIds(appliedWard));
     setContact(appliedContact);
     setCreatedBy(appliedCreatedBy);
     setFormat(appliedFormat);
@@ -157,7 +198,7 @@ export function SearchIsland({
   // district, and a current commune off the province itself. A dependent level waits for the level
   // above it, unless the address already states a ward the panel must keep visible and removable.
   const wardParent = legacyUnits ? district : FIXED_PROVINCE.id;
-  const wardDisabled = legacyUnits && !district && !ward;
+  const wardDisabled = legacyUnits && !district && !selectedWards.length;
   // A denial clears the protected surface through the handler the inventory list already uses.
   // The district level exists only in the legacy generation.
   useEffect(() => {
@@ -230,7 +271,7 @@ export function SearchIsland({
   useEffect(() => {
     const applied: [string, string][] = [];
     if (appliedDistrict) applied.push(['district', appliedDistrict]);
-    if (appliedWard) applied.push(['commune', appliedWard]);
+    for (const id of communeIds(appliedWard)) applied.push(['commune', id]);
     if (!applied.length) return;
     const abort = new AbortController();
     void Promise.all(
@@ -343,14 +384,14 @@ export function SearchIsland({
       filters: {
         ...noInventoryFilters,
         district: district || null,
-        ward: ward || null,
+        ward: communeValue(selectedWards),
         contact: contact || null,
       },
       sort: order || null,
     }) === 'advanced';
   // The current filter set stays visible as removable chips, and each chip removes exactly its
   // own condition, so the address is still the only place a filter lives.
-  const applied: { key: InventoryFilterKey; label: string }[] = [];
+  const applied: { key: InventoryFilterKey; id?: string; label: string }[] = [];
   if (filters.status)
     applied.push({
       key: 'status',
@@ -383,10 +424,15 @@ export function SearchIsland({
       key: 'district',
       label: `${text.district}: ${unitName(districts, filters.district)}`,
     });
-  if (filters.ward)
+  // Each chosen commune is its own condition in the summary, so the set states how many are chosen
+  // and which, and removing one narrows the set again rather than clearing it.
+  for (const id of appliedCommunes)
     applied.push({
       key: 'ward',
-      label: `${text.ward}: ${unitName(wards, filters.ward)}`,
+      id: 'ward:' + id,
+      label: `${text.ward}${
+        appliedCommunes.length > 1 ? ` (${appliedCommunes.length})` : ''
+      }: ${unitName(wards, id)}`,
     });
   if (filters.contact)
     applied.push({
@@ -435,7 +481,18 @@ export function SearchIsland({
       key: 'depthMax',
       label: `${text.depthRangeTo}: ${metres(filters.depthMax)}`,
     });
-  function remove(key: InventoryFilterKey) {
+  function remove(key: InventoryFilterKey, communeId?: string) {
+    // Removing one commune of a set leaves the others in the address, so the criterion narrows
+    // instead of disappearing; removing the last one removes the condition.
+    if (key === 'ward' && communeId)
+      return router.push(
+        inventoryHref({
+          query,
+          sort,
+          view,
+          filters: withoutCommune(filters, communeId),
+        }),
+      );
     // Each level narrows the one above it, so removing a level removes the levels beneath it too.
     // The format is cleared rather than unstated, so the next load reads the cleared search back
     // instead of reopening the default legacy one.
@@ -557,47 +614,22 @@ export function SearchIsland({
             {text.filtersClear}
           </Link>
         ) : null}
-        <span className="chip">
-          {text.addressFormat}: {formatLabel(appliedFormat)}
-          {appliedFormat === INVENTORY_ADDRESS_FORMAT_ANY ? null : (
-            <button
-              type="button"
-              onClick={() => remove('addressFormat')}
-              aria-label={`${text.filtersRemove}: ${text.addressFormat}`}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                aria-hidden="true"
-              >
-                <path d="M6 6l12 12M18 6L6 18" />
-              </svg>
-            </button>
-          )}
-        </span>
+        <Chip
+          label={`${text.addressFormat}: ${formatLabel(appliedFormat)}`}
+          removeLabel={`${text.filtersRemove}: ${text.addressFormat}`}
+          onRemove={
+            appliedFormat === INVENTORY_ADDRESS_FORMAT_ANY
+              ? undefined
+              : () => remove('addressFormat')
+          }
+        />
         {applied.map((condition) => (
-          <span className="chip" key={condition.key}>
-            {condition.label}
-            <button
-              type="button"
-              onClick={() => remove(condition.key)}
-              aria-label={`${text.filtersRemove}: ${condition.label}`}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                aria-hidden="true"
-              >
-                <path d="M6 6l12 12M18 6L6 18" />
-              </svg>
-            </button>
-          </span>
+          <Chip
+            key={condition.id ?? condition.key}
+            label={condition.label}
+            removeLabel={`${text.filtersRemove}: ${condition.label}`}
+            onRemove={() => remove(condition.key, condition.id)}
+          />
         ))}
       </div>
       <dialog
@@ -675,7 +707,7 @@ export function SearchIsland({
                         // never match.
                         setFormat(next);
                         setDistrict('');
-                        setWard('');
+                        setSelectedWards([]);
                       }}
                     >
                       {INVENTORY_ADDRESS_FORMATS.map((value) => (
@@ -789,25 +821,60 @@ export function SearchIsland({
                       onChange={(next) => {
                         if (next === district) return;
                         setDistrict(next);
-                        setWard('');
+                        setSelectedWards([]);
                       }}
                       anyLabel={text.filtersAny}
                       noMatch={text.comboboxNoMatch}
                     />
                   ) : null}
-                  <UnitCombobox
-                    id="filter-ward"
-                    name="ward"
-                    label={text.ward}
-                    units={wards}
-                    value={ward}
-                    selectedLabel={appliedNames[ward]}
-                    disabled={wardDisabled}
-                    hint={wardDisabled ? text.areaLevelHint : undefined}
-                    onChange={setWard}
-                    anyLabel={text.filtersAny}
-                    noMatch={text.comboboxNoMatch}
-                  />
+                  {/* The commune filter carries a set: the field adds one commune at a time and the
+                      chips beside it state the communes chosen so far, each removable on its own. */}
+                  <div>
+                    <UnitCombobox
+                      id="filter-ward"
+                      name="ward-candidate"
+                      label={text.ward}
+                      units={wards.filter(
+                        (unit) => !selectedWards.includes(unit.id),
+                      )}
+                      value=""
+                      placeholder={text.wardAdd}
+                      disabled={wardDisabled}
+                      hint={wardDisabled ? text.areaLevelHint : undefined}
+                      onChange={(next) => {
+                        if (!next) return;
+                        setSelectedWards((current) =>
+                          current.includes(next) ? current : [...current, next],
+                        );
+                      }}
+                      noMatch={text.comboboxNoMatch}
+                    />
+                    <input
+                      type="hidden"
+                      name="ward"
+                      value={communeValue(selectedWards) ?? ''}
+                    />
+                    {selectedWards.length ? (
+                      <div
+                        className="chips"
+                        role="group"
+                        aria-label={text.ward}
+                      >
+                        {selectedWards.map((id) => (
+                          <Chip
+                            key={id}
+                            label={unitName(wards, id)}
+                            removeLabel={`${text.filtersRemove}: ${unitName(wards, id)}`}
+                            onRemove={() =>
+                              setSelectedWards((current) =>
+                                current.filter((commune) => commune !== id),
+                              )
+                            }
+                          />
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
                 <p className="field-hint">{text.areaAdminHint}</p>
                 {districtFailed || wardFailed ? (

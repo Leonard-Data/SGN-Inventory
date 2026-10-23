@@ -7,7 +7,10 @@
 // that stated province (`FIXED_PROVINCE`) rather than a chosen one: the district only exists in the
 // closed pre-2025 three-tier generation, so it is a legacy-address filter and no part of a
 // current-address search. The read applies every level that is
-// stated to one address of the searched format. The contact
+// stated to one address of the searched format. The ward level carries one commune or a set of
+// them, so a search spans several communes at once: the address states them comma-separated, one
+// value reads exactly as the single commune the filter always carried, and the read matches a
+// property when any one of them is the address's own commune. The contact
 // value is a recorded contact identity, so it is validated with the same UUID shape. The address
 // format is the format of the address a search is matched through: the page states the legacy address
 // unless the address clears the filter, and clearing it states no format condition so a property
@@ -115,6 +118,32 @@ export function wholeVnd(value: string): boolean {
   return WHOLE_VND.test(value);
 }
 
+// The communes a stated ward carries: one value is the single commune an older address states, and
+// several are separated by a comma in the order they were chosen. An empty statement is no set at
+// all, which is the same as no ward condition.
+export function communeIds(value: string | null): string[] {
+  return value === null || value === '' ? [] : value.split(',');
+}
+
+// The one stated value a set of communes travels as, or the absent condition an empty set is.
+export function communeValue(ids: readonly string[]): string | null {
+  return ids.length ? ids.join(',') : null;
+}
+
+// The filter set with one commune removed from its set: the others stay, so removing a commune
+// narrows the search, and removing the last one clears the criterion.
+export function withoutCommune(
+  filters: InventoryFilters,
+  id: string,
+): InventoryFilters {
+  return {
+    ...filters,
+    ward: communeValue(
+      communeIds(filters.ward).filter((commune) => commune !== id),
+    ),
+  };
+}
+
 // The one measured-value rule: a positive number with at most two decimals and inside the numeric
 // ceiling. An area and a frontage or depth bound are both stated by it, as the database read states
 // them.
@@ -198,8 +227,14 @@ export function parseInventoryFilters(
   // A unit value is an official catalog identity and the contact is a recorded identity, so a
   // malformed value is refused here; an out-of-catalog or wrong-level unit and an unknown or
   // unreadable contact are refused by the route's own checks.
-  for (const value of [province, district, ward, contact])
+  for (const value of [province, district, contact])
     if (value !== null && !UUID_VALUE.test(value)) return refuse();
+  // The ward is one identity or a set of them, so every entry is an identity of its own: an empty
+  // entry, a malformed one or a commune stated twice is refused here rather than read as the set
+  // minus what did not parse.
+  const communes = communeIds(ward);
+  if (communes.some((id) => !UUID_VALUE.test(id))) return refuse();
+  if (new Set(communes).size !== communes.length) return refuse();
   // One province is recorded, so a link that still states it keeps working while a link naming any
   // other province is refused rather than applied as a filter the app cannot mean. Either way the
   // stated province is dropped: it is not a condition this app offers, and the levels beneath it
@@ -260,13 +295,14 @@ export function activeFilterCount(filters: InventoryFilters): number {
 }
 
 // The catalog check the route runs after parsing: a district value must name a district-level unit
-// and a ward value a commune-level one, each inside the one province the business records, so absent,
-// out-of-catalog, swapped or mismatched units are refused instead of matching a different inventory.
-// The province is one official unit with a row per catalog generation, so it is matched by its
-// official code rather than by the version row id a recorded address happens to reference: a legacy
-// ward hangs under its district, whose own parent is that province's pre-2025 row, while a current
-// ward hangs directly off its current row. A ward whose district is missing from the list, or which
-// hangs off another district than the one stated, stays mismatched.
+// and every stated ward a commune-level one, each inside the one province the business records, so
+// absent, out-of-catalog, swapped or mismatched units are refused instead of matching a different
+// inventory. A set of wards is refused whole by one bad entry rather than narrowed to the entries
+// the catalog does carry. The province is one official unit with a row per catalog generation, so it
+// is matched by its official code rather than by the version row id a recorded address happens to
+// reference: a legacy ward hangs under its district, whose own parent is that province's pre-2025
+// row, while a current ward hangs directly off its current row. A ward whose district is missing
+// from the list, or which hangs off another district than the one stated, stays mismatched.
 export function catalogUnitsMatch(
   units: readonly {
     id: string;
@@ -290,15 +326,21 @@ export function catalogUnitsMatch(
     if (unit?.unit_level !== 'district' || !isProvince(unit.parent_id))
       return false;
   }
-  if (ward === null) return true;
-  const unit = byId.get(ward);
-  if (unit?.unit_level !== 'commune') return false;
-  // The stated district is the ward's own parent, so a ward outside it names no address this set
-  // could match.
-  if (district !== null && unit.parent_id !== district) return false;
-  if (isProvince(unit.parent_id)) return true;
-  const parent = unit.parent_id === null ? undefined : byId.get(unit.parent_id);
-  return parent?.unit_level === 'district' && isProvince(parent.parent_id);
+  // Every stated commune stands on its own: one that is absent, of another level or outside the
+  // stated district refuses the whole set rather than being dropped from it.
+  for (const id of communeIds(ward)) {
+    const unit = byId.get(id);
+    if (unit?.unit_level !== 'commune') return false;
+    // The stated district is the commune's own parent, so a commune outside it names no address
+    // this set could match.
+    if (district !== null && unit.parent_id !== district) return false;
+    if (isProvince(unit.parent_id)) continue;
+    const parent =
+      unit.parent_id === null ? undefined : byId.get(unit.parent_id);
+    if (parent?.unit_level !== 'district' || !isProvince(parent.parent_id))
+      return false;
+  }
+  return true;
 }
 
 export type InventoryFilterArgs = {
@@ -316,7 +358,7 @@ export type InventoryFilterArgs = {
   p_depth_max?: number;
   p_province_id?: string;
   p_district_id?: string;
-  p_commune_id?: string;
+  p_commune_ids?: string[];
   p_contact_id?: string;
   p_address_format?: string;
 };
@@ -360,7 +402,10 @@ export function filterRpcArgs(filters: InventoryFilters): InventoryFilterArgs {
   // searched format: a district and a ward narrow inside the one stated province, rather than one
   // narrower unit replacing the levels above it. No province travels: the app records one.
   if (filters.district) args.p_district_id = filters.district;
-  if (filters.ward) args.p_commune_id = filters.ward;
+  // The communes travel as the set they are, so one read answers the union of what each commune
+  // would answer alone rather than the last one replacing the one before it.
+  const communes = communeIds(filters.ward);
+  if (communes.length) args.p_commune_ids = communes;
   if (filters.contact) args.p_contact_id = filters.contact;
   // The creator selection has no argument here on purpose: the whole-inventory read carries no
   // creator criterion, so that selection is answered from the loaded catalogue alone
