@@ -5,10 +5,10 @@
 # script the repository already defines; `.github/workflows/ci.yml` (`npm run
 # check`) stays the full CI-parity owner.
 #
-# Every command prepends the Node toolchain `.nvmrc` and `engines` pin, the way
-# CI provides it, because the gate host's own `node`/`npm` do not satisfy them.
-# The prefix is harmless on a machine without that directory: the command then
-# uses whatever toolchain is on PATH and fails loudly if none is.
+# Every command resolves the Node toolchain from `.nvmrc` at run time, the way CI
+# provides it, because the gate host's own `node`/`npm` do not satisfy the pin.
+# `.nvmrc` stays the one place the version is written, and a toolchain that is
+# not installed fails the command instead of silently falling back to that host.
 #
 # no-mistakes reads `commands.*` and `test.instructions` only from the
 # default-branch copy of this file, so these pins take effect once this file is
@@ -16,15 +16,15 @@
 
 commands:
   # A run worktree starts with tracked files only, so the ignored dependency tree
-  # the pinned commands need is materialized the way CI does it. CI installs the
-  # npm from `packageManager` before `npm ci`, because Node 24.14.0 bundles npm
-  # 11.9.0 and `.npmrc` sets `engine-strict=true`. CI also sets `HUSKY=0` so
-  # `npm ci` does not run the root `prepare` script and install git hooks.
-  prepare: 'HUSKY=0 PATH="${NVM_DIR:-$HOME/.nvm}/versions/node/v24.14.0/bin:$PATH" npx --yes npm@11.13.0 ci --prefer-offline'
+  # the pinned commands need is materialized the way CI does it: `packageManager`
+  # names the npm to install first, because the npm bundled with the `.nvmrc`
+  # Node is older and `.npmrc` sets `engine-strict=true`. CI also sets `HUSKY=0`
+  # so `npm ci` does not run the root `prepare` script and install git hooks.
+  prepare: 'N="$(cat .nvmrc)"; B="${NVM_DIR:-$HOME/.nvm}/versions/node/v$N/bin"; { [ -x "$B/node" ] && [ -x "$B/npm" ]; } || { echo "no Node $N from .nvmrc at $B" >&2; exit 1; }; export PATH="$B:$PATH"; S=$(node -p "require(\"./package.json\").packageManager"); HUSKY=0 npx --yes "$S" ci --prefer-offline'
   # `test:unit` (node --test) plus `test:schema` (embedded migration assertions).
-  test: 'PATH="${NVM_DIR:-$HOME/.nvm}/versions/node/v24.14.0/bin:$PATH" npm test'
-  lint: 'PATH="${NVM_DIR:-$HOME/.nvm}/versions/node/v24.14.0/bin:$PATH" npm run lint && npm run typecheck'
-  format: 'PATH="${NVM_DIR:-$HOME/.nvm}/versions/node/v24.14.0/bin:$PATH" npm run format:check'
+  test: 'N="$(cat .nvmrc)"; B="${NVM_DIR:-$HOME/.nvm}/versions/node/v$N/bin"; { [ -x "$B/node" ] && [ -x "$B/npm" ]; } || { echo "no Node $N from .nvmrc at $B" >&2; exit 1; }; export PATH="$B:$PATH"; npm test'
+  lint: 'N="$(cat .nvmrc)"; B="${NVM_DIR:-$HOME/.nvm}/versions/node/v$N/bin"; { [ -x "$B/node" ] && [ -x "$B/npm" ]; } || { echo "no Node $N from .nvmrc at $B" >&2; exit 1; }; export PATH="$B:$PATH"; npm run lint && npm run typecheck'
+  format: 'N="$(cat .nvmrc)"; B="${NVM_DIR:-$HOME/.nvm}/versions/node/v$N/bin"; { [ -x "$B/node" ] && [ -x "$B/npm" ]; } || { echo "no Node $N from .nvmrc at $B" >&2; exit 1; }; export PATH="$B:$PATH"; npm run format:check'
 
 test:
   instructions: |
@@ -34,10 +34,10 @@ test:
     `scripts/validate-schema.mjs`. Add a case to those suites when a change needs
     one.
     When a change genuinely needs end-user verification, use the repository's own
-    paths: `npm run test:acceptance` (it needs `.env.acceptance.local`) and the
-    staging gates in `docs/testing.md` (they need a live environment), driven
-    with the project's existing tooling - the `next dev` server, `supabase
-    start`, and `chrome-devtools-axi`. Record in the evidence what was not
-    exercised without a live environment.
+    live paths: `npm run test:acceptance`, the staging gates in
+    `docs/testing.md`, and `chrome-devtools-axi` to drive the running app. Those
+    paths need the private acceptance environment, whose prerequisites and setup
+    `docs/testing.md` owns and a run worktree normally does not have; when it is
+    unavailable, record in the evidence what was not exercised.
     In place of those paths, do not write a database shim, a browser driver, or
     any other improvised harness, and do not install anything to build one.
