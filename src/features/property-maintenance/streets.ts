@@ -1,6 +1,8 @@
-// The street names the address form suggests, in the order the source list states them and
-// verbatim: a street name is source data, so nothing here translates, folds or rewrites it. The
-// list is a suggestion layer only - a street it does not name is still typed and saved as before.
+// The street names the address form suggests, in the order the captain supplied them. The thirteen
+// entries that were the same street name differently written were removed on the captain's decision;
+// 'Nguyễn Văn Luông' and 'Nguyễn Văn Lượng' both stay because they are two different real streets.
+// Nothing here translates, folds or rewrites a name at runtime, and the list is a suggestion layer
+// only - a street it does not name is still typed and saved as before.
 export const STREET_NAMES: readonly string[] = [
   'Lý Thường Kiệt',
   'Lê Đại Hành',
@@ -57,7 +59,6 @@ export const STREET_NAMES: readonly string[] = [
   'Lạc Long Quân',
   'Hồ Hảo Hớn',
   'Cửu Long',
-  'trần xuân hoà',
   'Phan Văn Trị',
   'Cư Xá Đồng Tiến',
   'Nguyễn Thông',
@@ -266,7 +267,6 @@ export const STREET_NAMES: readonly string[] = [
   'Gò Dầu',
   'Độc Lập',
   'Thân Văn Nhiếp',
-  'Kênh Tân Hòa',
   'Song Hành',
   'Ngô Bệ',
   'Trương Quyền',
@@ -317,7 +317,6 @@ export const STREET_NAMES: readonly string[] = [
   'Hoa Thị',
   'Nguyễn Văn Mai',
   'Thái Văn Lung',
-  'Phạm Văn Bach',
   'Hồng Lĩnh',
   'Mạc Thị Bưởi',
   'Cao Bá Nhạ',
@@ -331,7 +330,6 @@ export const STREET_NAMES: readonly string[] = [
   'Vạn Kiếp',
   'Châu Thới',
   'Lương Hữu Khánh',
-  'An Điểm',
   'Nguyễn Đình Chính',
   'Xóm Đất',
   'Lý Nam Đế',
@@ -484,7 +482,6 @@ export const STREET_NAMES: readonly string[] = [
   'Thăng Long',
   'Tháp Mười',
   'Trần Văn Hoàng',
-  'Đỗ Sơn',
   'Công Chúa Ngọc Hân',
   'Thép Mới',
   'Châu Vĩnh Tế',
@@ -516,7 +513,6 @@ export const STREET_NAMES: readonly string[] = [
   'Bùi Thế Mỹ',
   'BÌnh Giã',
   'Sư Thiện Chiếu',
-  'Tràn Tán',
   'Tứ Hải',
   'Bàu Cát 3',
   'Mạc Thiên Tích',
@@ -543,7 +539,6 @@ export const STREET_NAMES: readonly string[] = [
   'Đường số 9 Cư Xá Bình Thới',
   'CX Tự Do',
   'Tân Hàng',
-  'Huỳnh Thiên Lộc',
   'Vũ Tùng',
   'Nguyễn Duy Trinh',
   'Mai Xuân Thưởng',
@@ -582,7 +577,6 @@ export const STREET_NAMES: readonly string[] = [
   'Trương Hoàng Thanh',
   'Trần Văn Dư',
   'Phan Liêm',
-  'Phú Đinh',
   'ngô tất tố',
   'hoàng việt',
   'Bến Vân Đồn',
@@ -629,7 +623,6 @@ export const STREET_NAMES: readonly string[] = [
   'Bàu Bàng',
   'Đường 64',
   'Số 8',
-  'Nguyễn Văn Mại',
   'Trường trinh',
   'Số 39',
   'Đường Số 65',
@@ -778,7 +771,6 @@ export const STREET_NAMES: readonly string[] = [
   'đường số 11 (KDC Miếu Nổi)',
   'Tống Văn Hên',
   'Đỗ Bí',
-  'Cống lỡ',
   'đường số 61',
   '5A Cư Xá Bình Thới',
   'Bình Tây',
@@ -794,7 +786,6 @@ export const STREET_NAMES: readonly string[] = [
   'cư xá phú thọ hòa',
   'Bạch Đằng 1',
   'phạm quý thích',
-  'bảy hiển',
   'Lê Quốc Thịnh',
   'Yên Đỗ',
   'Hương Lộ 2',
@@ -961,7 +952,6 @@ export const STREET_NAMES: readonly string[] = [
   'Chiến Thắng',
   'Tân Vĩnh',
   'Mai Văn Vĩnh',
-  'Nguyễn  Cảnh Dị',
   'Số 84A',
   'Đoàn Giỏi',
   'Hiền Vương',
@@ -973,7 +963,6 @@ export const STREET_NAMES: readonly string[] = [
   'đường số 40',
   'Hồ Đắc Di',
   'Đường Số 3 Cư Xá Bình Thới',
-  'Hoàng  Diệu',
   'CX Đồng Tiến',
   'lê thiệt',
   'Trần Trọng Cung',
