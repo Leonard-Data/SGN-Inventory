@@ -324,10 +324,16 @@ with the registered size, hash and content type, was answered `403 {"error":"ope
 by `POST /api/properties/{id}/files/{fileId}/complete` after the recovery list reported
 `objectState: present`, and the row stayed `pending`; presigned reads kept working throughout.
 Setting the production deployment's value to the value its database row holds, and redeploying
-production, is the repair — a production credential change that remains unauthorized and
-unexecuted. Independent per-stage keys are the intended end state; separating them needs a fresh
-key, its matching database row and a production redeploy, which stays a deliberate later decision
-and has not been executed.
+production, repaired it on 2026-10-23: the production-only Vercel entry was replaced with the
+database row's value (compared by fingerprint, never printed), production was redeployed as
+`dpl_FQcEgJ78T6XMMxevudsMJkj8k2vV` and aliased to `sgnewhouse.online`, and the same registration
+then completed through the deployed route — `200 {"status":"ready"}`, a signed read returned
+202 315 bytes whose sha256 equals the registration, and the audit trail recorded the `ready`
+transition. A registration whose object survived completes on retry; one whose bytes the
+15-minute pending rule already discarded needs a fresh upload, which is its documented behaviour.
+Independent per-stage keys are the intended end state; separating them needs a fresh key, its
+matching database row and a production redeploy, which stays a deliberate later decision and has
+not been executed.
 
 Not executed: no schema migration, no RLS or policy change, no merge of any duplicate-address
 group, no property approved or verified, no deployment.
