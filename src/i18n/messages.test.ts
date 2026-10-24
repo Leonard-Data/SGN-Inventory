@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { messages } from './messages.ts';
+import { messages, label } from './messages.ts';
 
 test('VI and EN dictionaries expose the same keys', () => {
   assert.deepEqual(
@@ -25,4 +25,14 @@ test('the canonical authentication strings are present', () => {
   assert.equal(messages.en.stepDone, 'Done');
   assert.equal(messages.vi.remember, 'Ghi nhớ đăng nhập');
   assert.equal(messages.en.remember, 'Keep me signed in');
+});
+
+// The negotiating status is stated as the captain asked for it: Vietnamese exactly as written,
+// and English unchanged. The badge, the status control and the filter all read the status through
+// `label`, so they cannot state a different wording than this one.
+test('the Vietnamese negotiating label is exactly Thương Lượng', () => {
+  assert.equal(messages.vi.negotiating, 'Thương Lượng');
+  assert.equal(messages.en.negotiating, 'Negotiating');
+  assert.equal(label('vi', 'negotiating'), 'Thương Lượng');
+  assert.equal(label('en', 'negotiating'), 'Negotiating');
 });

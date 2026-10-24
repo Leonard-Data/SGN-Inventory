@@ -1,6 +1,5 @@
 'use client';
-import { memo, useId, type ReactNode } from 'react';
-import Link from 'next/link';
+import { memo, type ReactNode } from 'react';
 import { label, messages, type Locale } from '@/i18n/messages';
 import { LoadingSkeleton } from '@/features/skeleton';
 import {
@@ -27,7 +26,6 @@ export const TableChunk = memo(function TableChunk({
   count,
   reserved,
   locale,
-  resultLocation,
   addressFormat,
   matchedFormats,
   shown,
@@ -40,7 +38,6 @@ export const TableChunk = memo(function TableChunk({
   count: number;
   reserved: number;
   locale: Locale;
-  resultLocation: string;
   // The format the search reads through, which decides the address each row states.
   addressFormat: string | null;
   // The stored address format each property matched through, while a local search is filtering. It
@@ -50,7 +47,7 @@ export const TableChunk = memo(function TableChunk({
   // heading nor a cell, so the grid stays consistent.
   shown: readonly SummaryColumn[];
   // Whether a row's quick view can open yet: it states the caller's own permissions, so it waits for
-  // this surface's session to answer. Both controls that open it state the same thing.
+  // this surface's session to answer. The property code control states the same thing.
   quickView: boolean;
   onOpen: (record: PropertySummary, opener: HTMLElement | null) => void;
   onMeasured: (index: number, height: number) => void;
@@ -217,26 +214,6 @@ export const TableChunk = memo(function TableChunk({
               </time>
             </td>
           ),
-          actions: (
-            <td className="inventory-cell" data-column="actions" key="actions">
-              <div className="inventory-actions">
-                <button
-                  className="btn btn-ghost btn-sm"
-                  type="button"
-                  aria-label={`${text.quickView}: ${record.propertyCode}`}
-                  disabled={!quickView}
-                  onClick={(event) => onOpen(record, event.currentTarget)}
-                >
-                  {text.quickView}
-                </button>
-                <RecordMenu
-                  record={record}
-                  locale={locale}
-                  resultLocation={resultLocation}
-                />
-              </div>
-            </td>
-          ),
         };
         return (
           <tr key={record.id} className="inventory-row">
@@ -247,63 +224,6 @@ export const TableChunk = memo(function TableChunk({
     </tbody>
   );
 });
-
-function RecordMenu({
-  record,
-  locale,
-  resultLocation,
-}: {
-  record: PropertySummary;
-  locale: Locale;
-  resultLocation: string;
-}) {
-  const id = useId();
-  const text = messages[locale];
-  return (
-    <details
-      className="inventory-menu"
-      onKeyDown={(event) => {
-        if (event.key === 'Escape') {
-          event.currentTarget.open = false;
-          event.currentTarget.querySelector('summary')?.focus();
-        }
-      }}
-    >
-      <summary
-        aria-label={`${text.recordActions}: ${record.propertyCode}`}
-        aria-controls={id}
-      >
-        <svg
-          viewBox="0 0 24 24"
-          width="20"
-          height="20"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.7"
-          aria-hidden="true"
-        >
-          <circle cx="5" cy="12" r="1" />
-          <circle cx="12" cy="12" r="1" />
-          <circle cx="19" cy="12" r="1" />
-        </svg>
-      </summary>
-      <div id={id}>
-        <Link
-          className="link"
-          href={
-            '/properties/' +
-            record.id +
-            '?' +
-            new URLSearchParams({ returnTo: resultLocation })
-          }
-          prefetch={false}
-        >
-          {text.fullRecord}
-        </Link>
-      </div>
-    </details>
-  );
-}
 
 // The heading row. Every column the read can order by states so in its heading: the name is a
 // button that cycles ascending, descending and back to the default order, the heading carries the

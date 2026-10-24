@@ -76,6 +76,9 @@ const PRICE_FIELDS = ['sale_price_vnd', 'monthly_rent_vnd'] as const;
 // The one field the note's quick edit writes: the same field record the full editor writes, so a
 // cleared field is the record's own null rather than a blank that would read as a note.
 const NOTE_FIELDS = ['notes'] as const;
+// The property type is the same field record the full editor writes, so the quick view offers the
+// same options and the save meets the same refusals.
+const TYPE_FIELDS = ['property_type'] as const;
 
 type UploadRow = {
   id: string;
@@ -222,6 +225,7 @@ function QuickView({
   const draftId = useId();
   const statusId = useId();
   const priceId = useId();
+  const typeId = useId();
   const hintId = useId();
   // null while the newest comments are still being read; an empty list is a real answer.
   const [comments, setComments] = useState<QuickComment[] | null>(null);
@@ -241,6 +245,9 @@ function QuickView({
   // The note is edited in place beside the pencil that opened it, like the price above.
   const [editingNote, setEditingNote] = useState(false);
   const noteButton = useRef<HTMLButtonElement | null>(null);
+  // The property type is edited the same way.
+  const [editingType, setEditingType] = useState(false);
+  const typeButton = useRef<HTMLButtonElement | null>(null);
   // The owner phone is held only after a deliberate disclosure, and hiding it drops the value
   // again, so a hidden number is never in the page text.
   const [disclosure, setDisclosure] = useState<OwnerContactDisclosure | null>(
@@ -499,6 +506,8 @@ function QuickView({
       createdBy: record.created_by,
       archived: !!record.archived_at,
     });
+  // The type this panel states: the record's own once it has been read, the summary's until then.
+  const statedType = record?.property_type ?? property.propertyType;
   // A committed edit moves the property's revision, so the panel reads the record again rather
   // than editing against the snapshot it opened on.
   function reloadRecord() {
@@ -528,6 +537,16 @@ function QuickView({
     closeNoteEdit();
     reloadRecord();
   }
+  // A type the server refused leaves this closed and the stated value as the record holds it: the
+  // panel only states the new type after the record itself reads it back.
+  function closeTypeEdit() {
+    setEditingType(false);
+    requestAnimationFrame(() => typeButton.current?.focus());
+  }
+  function typeSaved() {
+    closeTypeEdit();
+    reloadRecord();
+  }
   const entryDate = property.entryOn ? vietnamDate(property.entryOn) : null;
   const created = vietnamDate(property.createdAt);
   const updated = vietnamTimestamp(property.updatedAt, locale);
@@ -552,11 +571,6 @@ function QuickView({
       label: text.listingMode,
       value: label(locale, property.listingMode),
       known: Boolean(property.listingMode),
-    },
-    {
-      label: text.propertyType,
-      value: label(locale, property.propertyType),
-      known: Boolean(property.propertyType),
     },
     {
       label: text.landArea,
@@ -678,6 +692,46 @@ function QuickView({
           onDenied={onDenied}
           onChanged={(change) => onStatusChanged(change.to_status)}
         />
+      </section>
+      {/* The type a record is filed under, changed here through the same field record and the same
+          maintenance path the full editor writes it through. The stated value is the record's own,
+          so a refused save states the refusal and leaves this value as it was. */}
+      <section
+        className="quick-view-section"
+        aria-labelledby={typeId}
+        data-od-id="quick-view-type"
+      >
+        <h3 id={typeId}>{text.propertyType}</h3>
+        <div className="quick-view-line">
+          {/* The record's own value once it has been read, and the list's summary until then: a
+              committed change is read back into the same state, so this never states a type the
+              database has already moved past, and a refused save states nothing new. */}
+          <span className={statedType ? undefined : 'is-unknown'}>
+            {label(locale, statedType)}
+          </span>
+          {canEdit ? (
+            <button
+              className="btn btn-sm btn-secondary"
+              ref={typeButton}
+              type="button"
+              aria-expanded={editingType}
+              onClick={() => setEditingType((open) => !open)}
+            >
+              {text.editPropertyType}
+            </button>
+          ) : null}
+        </div>
+        {editingType && record ? (
+          <QuickFieldEditor
+            propertyId={propertyId}
+            record={record}
+            locale={locale}
+            names={TYPE_FIELDS}
+            onDenied={onDenied}
+            onDone={typeSaved}
+            onCancel={closeTypeEdit}
+          />
+        ) : null}
       </section>
       <section className="quick-view-section" aria-labelledby={factsId}>
         <h3 id={factsId}>{factsText.facts}</h3>

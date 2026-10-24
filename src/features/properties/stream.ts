@@ -60,6 +60,12 @@ export function columnOrder(
   };
 }
 
+// The order the list opens in, and the one a third click on a heading returns it to: the record's
+// own modification time, most recently modified first, then the property identity. `stream_inventory`
+// reads exactly this when `p_order` is absent, `orderCatalogue` sorts the loaded rows into it, and
+// the address omits `sort` for it, so the read, the table and the URL state one default.
+export const DEFAULT_ORDER: InventoryColumnOrder = 'changed-desc';
+
 // One header click: ascending, then descending, then back to the default order the list opens on.
 export function nextColumnOrder(
   order: string | null,

@@ -311,3 +311,89 @@ test('the note edit reuses the record editor path and records no history', () =>
     {},
   );
 });
+
+// The quick view states the record's property type and offers to change it through the same field
+// record, the same target and the same maintenance route the full editor writes it through, so the
+// options, the validation and the refusals are that one path's rather than a second writer's.
+test('the quick view saves a changed property type through the record editor path', () => {
+  assert.match(drawer, /const TYPE_FIELDS = \['property_type'\] as const;/);
+  assert.match(drawer, /data-od-id="quick-view-type"/);
+  // The stated value is labelled through the one status/option dictionary.
+  assert.match(drawer, /\{label\(locale, statedType\)\}/);
+  const section = drawer.slice(
+    drawer.indexOf('data-od-id="quick-view-type"'),
+    drawer.indexOf('aria-labelledby={factsId}'),
+  );
+  assert.match(section, /<QuickFieldEditor[\s\S]{0,240}names=\{TYPE_FIELDS\}/);
+  assert.match(section, /onDone=\{typeSaved\}/);
+  assert.match(section, /onCancel=\{closeTypeEdit\}/);
+  // The one save path every quick-view field edit takes: the record's own revision against the
+  // maintenance route, so a stale panel is refused rather than overwriting a newer record.
+  assert.match(drawer, /`\/api\/properties\/\$\{propertyId\}\/maintenance`/);
+  assert.match(
+    drawer,
+    /target: 'property',\s*targetId: propertyId,\s*revision: record\.revision,\s*propertyRevision: record\.revision,/,
+  );
+  // A chosen type that differs from the recorded one is the change the save submits, and the
+  // same choice saved again is no change at all.
+  const changed = new FormData();
+  changed.set('property_type', 'villa');
+  assert.deepEqual(
+    formChanges('property', changed, { property_type: 'house' }),
+    { property_type: 'villa' },
+  );
+  const unchanged = new FormData();
+  unchanged.set('property_type', 'house');
+  assert.deepEqual(
+    formChanges('property', unchanged, { property_type: 'house' }),
+    {},
+  );
+});
+
+// Only a person who may edit the record is offered the type control; everybody else still reads
+// the type, so the fact is never hidden to state a permission.
+test('the property type is read-only for somebody who may not edit the record', () => {
+  const section = drawer.slice(
+    drawer.indexOf('data-od-id="quick-view-type"'),
+    drawer.indexOf('aria-labelledby={factsId}'),
+  );
+  // The value is stated outside the permission, the control inside it.
+  const value = section.indexOf('{label(locale, statedType)}');
+  const gate = section.indexOf('{canEdit ? (');
+  const control = section.indexOf('{text.editPropertyType}');
+  assert.ok(value >= 0 && gate > value && control > gate);
+});
+
+// A refused save states the refusal and leaves the stated type as the record holds it: the panel
+// only reads a new type back after the record itself answers with it.
+test('a refused property type save leaves the stated type untouched', () => {
+  const section = drawer.slice(
+    drawer.indexOf('data-od-id="quick-view-type"'),
+    drawer.indexOf('aria-labelledby={factsId}'),
+  );
+  // The value comes from the record the server answered with, never from the editor's draft: the
+  // summary the row handed over is only the value until the record itself has been read.
+  assert.doesNotMatch(section, /setRecord|propertyType =/);
+  assert.match(
+    drawer,
+    /const statedType = record\?\.property_type \?\? property\.propertyType;/,
+  );
+  // The only way a new type reaches the panel is the reload a committed save asks for.
+  assert.match(
+    drawer,
+    /function typeSaved\(\) \{\s*closeTypeEdit\(\);\s*reloadRecord\(\);/,
+  );
+  // The editor reports a refusal instead of closing, and closing is only what `typeSaved` does.
+  const editor = drawer.slice(drawer.indexOf('function QuickFieldEditor('));
+  assert.match(editor, /onDenied=\{onDenied\}/);
+  assert.match(editor, /onSaved=\{\(\) => \{/);
+});
+
+test('the property type edit carries both languages', () => {
+  for (const locale of ['vi', 'en'] as const)
+    assert.ok(
+      messages[locale].editPropertyType.trim().length,
+      `${locale}.editPropertyType`,
+    );
+  assert.notEqual(messages.vi.editPropertyType, messages.en.editPropertyType);
+});

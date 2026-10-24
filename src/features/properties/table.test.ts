@@ -227,7 +227,8 @@ test('a row states the recorded address the search read it through', () => {
 });
 
 // The list states these four facts in their own columns and the quick view states the same four
-// as facts about the record, so both read this one projection and cannot disagree.
+// as facts about the record, so both read this one projection and cannot disagree. The property
+// code opens the quick view, so the table states no separate actions column.
 test('the summary table states frontage, depth, floors and the creator beside the area', () => {
   assert.deepEqual(SUMMARY_TABLE_COLUMNS, [
     'property',
@@ -240,7 +241,6 @@ test('the summary table states frontage, depth, floors and the creator beside th
     'creator',
     'status',
     'modifiedTime',
-    'actions',
   ]);
 });
 

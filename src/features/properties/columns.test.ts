@@ -8,20 +8,20 @@ import {
   shownColumns,
   toggleColumn,
 } from './columns.ts';
-import { SUMMARY_TABLE_COLUMNS } from './table.ts';
+import { SUMMARY_TABLE_COLUMNS, type SummaryColumn } from './table.ts';
 
 const hidden = (...columns: string[]) => hiddenColumns(columns.join(','));
 
-test('a property code and an actions cell are never hidden', () => {
-  assert.deepEqual([...FIXED_COLUMNS], ['property', 'actions']);
+test('a property code is never hidden, and the row has no actions column to keep', () => {
+  assert.deepEqual([...FIXED_COLUMNS], ['property']);
   assert.ok(!HIDEABLE_COLUMNS.includes('property'));
-  assert.ok(!HIDEABLE_COLUMNS.includes('actions'));
+  // The table no longer draws an actions column: the property code is the row's one control, so
+  // no column offers a second door to the same quick view.
+  assert.ok(!SUMMARY_TABLE_COLUMNS.includes('actions' as SummaryColumn));
   // Every other column the table draws is offered, in the table's own order.
   assert.deepEqual(
     [...HIDEABLE_COLUMNS],
-    SUMMARY_TABLE_COLUMNS.filter(
-      (column) => column !== 'property' && column !== 'actions',
-    ),
+    SUMMARY_TABLE_COLUMNS.filter((column) => column !== 'property'),
   );
 });
 
@@ -29,8 +29,8 @@ test('an address hides the columns it names and nothing else', () => {
   assert.equal(hiddenColumns(null).size, 0);
   assert.equal(hiddenColumns('').size, 0);
   assert.deepEqual([...hidden('address,price')].sort(), ['address', 'price']);
-  // The two columns that can never be hidden stay shown even when an address names them, and a
-  // name this table does not have hides nothing: neither reshapes the table.
+  // The one column that can never be hidden stays shown even when an address names it, and a name
+  // this table does not have hides nothing: neither reshapes the table.
   assert.deepEqual([...hidden('property,actions,notes,price')], ['price']);
   // A repeated or padded name is the same column, not a second one.
   assert.deepEqual([...hidden(' price , price ')], ['price']);
@@ -52,7 +52,6 @@ test('hiding a column takes it out of the shown columns, and showing it puts it 
     'creator',
     'status',
     'modifiedTime',
-    'actions',
   ]);
 });
 
@@ -62,7 +61,7 @@ test('a column that can never be hidden is not hidden by a toggle either', () =>
     assert.equal(toggleColumn(hidden('price'), column).has(column), false);
   }
   assert.ok(shownColumns(hidden()).includes('property'));
-  assert.ok(shownColumns(hidden()).includes('actions'));
+  assert.ok(!shownColumns(hidden()).includes('actions' as SummaryColumn));
 });
 
 test('the address states the hidden columns in one order, and nothing when none are hidden', () => {
