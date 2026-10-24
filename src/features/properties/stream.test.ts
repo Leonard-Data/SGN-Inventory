@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   columnOrder,
+  DEFAULT_ORDER,
   INVENTORY_SORT_FIELDS,
   isInventoryOrder,
   loadedWindows,
@@ -22,6 +23,9 @@ import {
   streamWindowUrl,
   streamWindows,
 } from './stream.ts';
+import { SUMMARY_SORT_FIELDS } from './table.ts';
+import { parseInventoryFilters } from './filters.ts';
+import { inventoryHref } from './view.ts';
 
 // The imported inventory the captain's brief names, so the arithmetic is exercised over a set
 // far larger than anything the page ever holds at once.
@@ -330,6 +334,41 @@ test('a header click cycles ascending, descending and back to the default order'
   // Another column starts over at ascending, and the entry chronology does too.
   assert.equal(nextColumnOrder('area-desc', 'price'), 'price-asc');
   assert.equal(nextColumnOrder('oldest', 'status'), 'status-asc');
+});
+
+// The order the third click returns to is the order the list opens in - most recently modified
+// first - and it is stated once, so the read, the table and the address cannot drift apart.
+test('the third click returns the list to the default order it opened in', () => {
+  assert.deepEqual(columnOrder(DEFAULT_ORDER), {
+    field: 'changed',
+    direction: 'desc',
+  });
+  // The table's Modified heading is that same column, so the header, the read and the address
+  // name one order rather than three that happen to agree today.
+  assert.equal(
+    SUMMARY_SORT_FIELDS.modifiedTime,
+    columnOrder(DEFAULT_ORDER)?.field,
+  );
+  // The address states the default by omitting the ordering, so a cleared sort reads back as the
+  // default rather than as a stated one.
+  const parsed = parseInventoryFilters(new URLSearchParams());
+  assert.ok(parsed.ok);
+  const href = inventoryHref({
+    query: '',
+    sort: null,
+    view: 'table',
+    hide: null,
+    filters: parsed.filters,
+  });
+  assert.equal(new URLSearchParams(href.split('?')[1]).has('sort'), false);
+  // And the header cycle lands on exactly that: price ascending, descending, then no ordering.
+  assert.equal(
+    nextColumnOrder(
+      nextColumnOrder(nextColumnOrder(null, 'price')!, 'price'),
+      'price',
+    ),
+    null,
+  );
 });
 
 test('the direction toggle reverses only an active entry-date ordering', () => {

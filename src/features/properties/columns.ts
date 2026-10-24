@@ -3,14 +3,14 @@
 // the address beside the view and the ordering, through the page's parameter list, so a reload or
 // a shared link keeps it.
 //
-// The property code and the actions are never hidden: one names the record and the other is what
-// the row is for, so a table without either is not the list this page shows.
+// The property code is never hidden: it names the record and opens its quick view, so a table
+// without it is not the list this page shows.
 import { SUMMARY_TABLE_COLUMNS, type SummaryColumn } from './table.ts';
 
 export const HIDE_PARAM = 'hide';
 
-// The two columns a row cannot be read or operated without.
-export const FIXED_COLUMNS: readonly SummaryColumn[] = ['property', 'actions'];
+// The one column a row cannot be read without.
+export const FIXED_COLUMNS: readonly SummaryColumn[] = ['property'];
 
 export const HIDEABLE_COLUMNS: readonly SummaryColumn[] =
   SUMMARY_TABLE_COLUMNS.filter((column) => !FIXED_COLUMNS.includes(column));
@@ -37,7 +37,7 @@ export function shownColumns(
   return SUMMARY_TABLE_COLUMNS.filter((column) => !hidden.has(column));
 }
 
-// One checkbox: the column toggles, unless it is one of the two that are always shown.
+// One checkbox: the column toggles, unless it is the one that is always shown.
 export function toggleColumn(
   hidden: ReadonlySet<SummaryColumn>,
   column: SummaryColumn,

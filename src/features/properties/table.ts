@@ -34,6 +34,8 @@ export type TableColumn = (typeof TABLE_COLUMNS)[number];
 // The summary groups the existing facts; the full record still exposes every source field.
 export type SummaryColumn = (typeof SUMMARY_TABLE_COLUMNS)[number];
 
+// A row is opened by its property code, so the table carries no separate actions column: the row's
+// own control is the one door to the quick view.
 export const SUMMARY_TABLE_COLUMNS = [
   'property',
   'address',
@@ -45,7 +47,6 @@ export const SUMMARY_TABLE_COLUMNS = [
   'creator',
   'status',
   'modifiedTime',
-  'actions',
 ] as const;
 
 // The heading each column is announced and labelled with, by column, so a new column cannot shift
@@ -61,12 +62,11 @@ export const SUMMARY_HEADINGS: Record<SummaryColumn, MessageKey> = {
   creator: 'createdBy',
   status: 'columnStatus',
   modifiedTime: 'columnModifiedTime',
-  actions: 'recordActions',
 };
 
-// The columns a header orders by, and the read's own name for each. Property, address, floors,
-// creator and actions are not stated here: the read has no ordering for them, and a header that
-// cannot order is not offered as one.
+// The columns a header orders by, and the read's own name for each. Property, address, floors and
+// creator are not stated here: the read has no ordering for them, and a header that cannot order
+// is not offered as one.
 export const SUMMARY_SORT_FIELDS: Partial<
   Record<SummaryColumn, InventorySortField>
 > = {

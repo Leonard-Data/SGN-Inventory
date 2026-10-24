@@ -1344,7 +1344,6 @@ export function Inventory({
                         count={Math.min(chunkRows, total - index * chunkRows)}
                         reserved={heights[index] ?? STREAM_ESTIMATE_PX}
                         locale={locale}
-                        resultLocation={resultLocation}
                         addressFormat={addressFormat}
                         matchedFormats={matchedFormats}
                         shown={visibleColumns}

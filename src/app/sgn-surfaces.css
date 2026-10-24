@@ -186,7 +186,7 @@
 }
 .inventory-table {
   width: 100%;
-  /* The eleven columns need this much; below it the stream scrolls sideways, never the page. */
+  /* The ten columns need this much; below it the stream scrolls sideways, never the page. */
   min-width: 1600px;
   table-layout: fixed;
   border-collapse: separate;
@@ -243,17 +243,23 @@
   text-align: right;
 }
 .inventory-table [data-column='totalArea'] {
-  width: 100px;
+  width: 165px;
   text-align: right;
 }
-/* Frontage, depth and floors are measured numbers, so they line up with the area beside them. */
-.inventory-table [data-column='frontage'],
+/* Frontage, depth and floors are measured numbers, so they line up with the area beside them. Each
+   heading is wide enough for its longest label and the arrow beside it - a Vietnamese label is the
+   longest of the two, and a fixed width narrower than it paints the arrow under the neighbouring
+   column. */
+.inventory-table [data-column='frontage'] {
+  width: 125px;
+  text-align: right;
+}
 .inventory-table [data-column='depth'] {
-  width: 90px;
+  width: 110px;
   text-align: right;
 }
 .inventory-table [data-column='floors'] {
-  width: 85px;
+  width: 95px;
   text-align: right;
 }
 .inventory-table [data-column='creator'] {
@@ -264,9 +270,6 @@
 }
 .inventory-table [data-column='modifiedTime'] {
   width: 125px;
-}
-.inventory-table [data-column='actions'] {
-  width: 150px;
 }
 /* A sortable heading is a button, and the arrow states the direction its column is in: faint while
    the column is not the active order, pointing the way when it is. The button covers the heading's
@@ -333,41 +336,6 @@
   margin-top: var(--space-1);
   font-size: var(--text-xs);
   color: var(--muted);
-}
-.inventory-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-.inventory-actions .btn {
-  padding-inline: var(--space-2);
-}
-.inventory-menu {
-  position: relative;
-}
-.inventory-menu summary {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 44px;
-  cursor: pointer;
-  list-style: none;
-  border-radius: var(--radius-sm);
-}
-.inventory-menu summary::-webkit-details-marker {
-  display: none;
-}
-.inventory-menu[open] > div {
-  position: absolute;
-  right: 0;
-  top: 100%;
-  z-index: 2;
-  width: 190px;
-  padding: var(--space-2);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-raise);
 }
 .inventory-search-help {
   display: flex;
